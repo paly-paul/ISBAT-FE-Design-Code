@@ -221,8 +221,10 @@ export default function SchedulePage() {
             <div className="pg-sub">Set the context in the left panel, then click any open slot on the calendar to schedule</div>
           </div>
           <div className="flex gap-2 tt-no-print">
+            {/* Hidden until their APIs exist (unscheduled lecturers, bulk import).
             <button type="button" className="btn btn-neu btn-sm" disabled title="Not available yet — needs an unscheduled-lecturers API"><i className="lni lni-warning"></i> Unscheduled</button>
             <button type="button" className="btn btn-neu btn-sm" disabled title="Not available yet — needs a bulk import API"><i className="lni lni-upload"></i> Bulk Import</button>
+            */}
             <button type="button" className="btn btn-primary btn-sm" onClick={() => window.print()}><i className="lni lni-printer"></i> Print</button>
           </div>
         </div>

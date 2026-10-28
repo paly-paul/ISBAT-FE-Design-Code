@@ -1482,22 +1482,21 @@ body {
   grid-template-columns: repeat(5, 1fr)
 }
 
-/* Batch Summary dropped its "Full Batches" tile (no capacity field to
-   compute it from — see academic/batch-summary/page.tsx) so it's down to 3
-   live stat tiles; the base .stats-row's repeat(4,1fr) would leave a bare
-   gap on the right instead of filling the row. */
-#page-batch-summary .stats-row {
+/* Batch Management has 3 stat tiles (Batch Summary's "Full Batches" tile was
+   dropped: no capacity field to compute it from); the base .stats-row's
+   repeat(4,1fr) would leave a bare gap on the right instead of filling the row. */
+#page-batch-management .stats-row {
   grid-template-columns: repeat(3, 1fr)
 }
 
 @media(max-width:600px) {
-  #page-batch-summary .stats-row {
+  #page-batch-management .stats-row {
     grid-template-columns: 1fr 1fr
   }
 }
 
 @media(max-width:420px) {
-  #page-batch-summary .stats-row {
+  #page-batch-management .stats-row {
     grid-template-columns: 1fr
   }
 }

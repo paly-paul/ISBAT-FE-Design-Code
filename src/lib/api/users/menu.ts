@@ -429,7 +429,7 @@ export interface MenuResult {
 }
 
 // Batch Summary was merged into Batch Management (2026-10-21) — the head
-// count view is now the "Head Count" tab there, and /academic/batch-summary
+// count is now a column there, and /academic/batch-summary
 // just redirects to it. Drops the leaf if the backend menu still registers
 // it, so the sidebar shows a single Batch Management entry.
 function removeBatchSummary(menu: MenuNode[]): MenuNode[] {

@@ -1,15 +1,7 @@
 'use client'
-import { useEffect, useState } from 'react'
 import { ModalProps } from '../types'
-import { SuccessPopup } from '../shared/SuccessPopup'
 import { FailurePopup } from '../shared/FailurePopup'
 import { useBatch } from '@/hooks/academic/useBatches'
-import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
-import { useIntakes } from '@/hooks/academic/useIntakes'
-import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
-import { useStreams } from '@/hooks/config/useStreams'
-import { useBatchTimes } from '@/hooks/config/useBatchTimes'
-import { useEmployeeDropdown } from '@/hooks/employee/useEmployees'
 import { AuthError } from '@/lib/api/client'
 
 interface ViewBatchModalProps extends ModalProps {
@@ -27,42 +19,15 @@ function Field({ label, value, mono, wide }: { label: string; value: React.React
   )
 }
 
-export function ViewBatchModal({ isOpen, onClose, showToast, batchGuid, onEdit, canEdit }: ViewBatchModalProps) {
+// Every label comes pre-resolved on GET /academic/batches/:guid (programName,
+// semesterName, streamName, batchTimeName, intakeDescription, bInChargeName,
+// pHeadName), so nothing is looked up against the master lists — those
+// lookups missed batches whose programme isn't in the Programme Master list
+// (e.g. an older "- S22" programme) and showed "—".
+export function ViewBatchModal({ isOpen, onClose, batchGuid, onEdit, canEdit }: ViewBatchModalProps) {
   const { data: batch, isLoading, isError, error } = useBatch(batchGuid, isOpen)
-  const { data: programs = [] }   = useProgramMasters(isOpen)
-  const { data: intakes = [] }    = useIntakes(isOpen)
-  const { data: streams = [] }    = useStreams()
-  const { data: batchTimes = [] } = useBatchTimes()
-  const { data: employees = [] }  = useEmployeeDropdown(isOpen)
-
-  const [programGuid, setProgramGuid] = useState('')
-  const { data: semesters = [] } = useSemestersForProgram(programGuid, !!programGuid)
-
-  const [intakeGuid, setIntakeGuid]       = useState('')
-  const [semesterGuid, setSemesterGuid]   = useState('')
-  const [streamGuid, setStreamGuid]       = useState('')
-  const [batchTimeGuid, setBatchTimeGuid] = useState('')
-  const [inChargeIdx, setInChargeIdx]     = useState('')
-  const [startDate, setStartDate]         = useState('')
-  const [endDate, setEndDate]             = useState('')
-
-  useEffect(() => {
-    if (!isOpen || !batch) return
-    setProgramGuid(batch.programGuid)
-    setIntakeGuid('')
-    setSemesterGuid(batch.semesterGuid)
-    setStreamGuid(batch.streamGuid)
-    setBatchTimeGuid(batch.batchTimeGuid)
-    setInChargeIdx('')
-    setStartDate(batch.bStartDate ? batch.bStartDate.slice(0, 10) : '')
-    setEndDate(batch.bEndDate ? batch.bEndDate.slice(0, 10) : '')
-  }, [isOpen, batch])
 
   if (!isOpen) return null
-
-  function handleClose() {
-    onClose()
-  }
 
   if (isError) {
     return (
@@ -71,7 +36,7 @@ export function ViewBatchModal({ isOpen, onClose, showToast, batchGuid, onEdit, 
           <FailurePopup
             title="Couldn't Load Batch"
             subtitle={error instanceof AuthError ? (error.message || 'Failed to load batch details.') : 'Failed to load batch details.'}
-            onClose={handleClose}
+            onClose={onClose}
           />
         </div>
       </div>
@@ -84,7 +49,7 @@ export function ViewBatchModal({ isOpen, onClose, showToast, batchGuid, onEdit, 
         <div className="modal modal-xl modal-flex" onClick={e => e.stopPropagation()}>
           <div className="modal-hdr modal-hdr-blue">
             <div className="modal-title"><i className="lni lni-eye"></i> View Batch</div>
-            <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
+            <button className="modal-close" onClick={onClose}><i className="lni lni-close"></i></button>
           </div>
           <div className="modal-scroll" style={{ flex: '1 1 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 180 }}>
             <span style={{ color: 'var(--g400)' }}>Loading batch details…</span>
@@ -94,36 +59,39 @@ export function ViewBatchModal({ isOpen, onClose, showToast, batchGuid, onEdit, 
     )
   }
 
+  // Names can carry trailing spaces from the source data ("AGATHA KIBUKAIRE ").
+  const text = (v?: string | null) => v?.trim() || '—'
+
   return (
     <div className="modal-overlay open" id="edit-batch-modal">
       <div className="modal modal-lg modal-flex" onClick={e => e.stopPropagation()}>
         <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title"><i className="lni lni-eye"></i> View Batch — <span className="font-mono">{batch.batchCode}</span></div>
-          <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
+          <button className="modal-close" onClick={onClose}><i className="lni lni-close"></i></button>
         </div>
 
         <div className="modal-scroll" style={{ padding: '20px clamp(14px, 4vw, 22px)' }}>
           <div className="view-detail-grid">
             <Field label="Batch Code" value={batch.batchCode} mono />
             <Field label="Status" value={<span className={`badge ${batch.active ? 'badge-green' : 'badge-grey'}`}>{batch.active ? 'Active' : 'Inactive'}</span>} />
-            <Field label="Intake" value={batch.intakeDescription || intakes.find(i => i.intakeGuid === batch.intakeGuid)?.description || '—'} />
-            
-            <div style={{ gridColumn: '1 / -1', height: '1px', background: 'var(--g200)', margin: '8px 0' }} />
-
-            <Field label="Programme" value={programs.find(p => p.programGuid === programGuid)?.programName || '—'} />
-            <Field label="Semester" value={semesters.find(s => s.semesterGuid === semesterGuid)?.semName || '—'} />
-            <Field label="Specialization" value={streams.find(s => s.streamGuid === streamGuid)?.streamName || '—'} />
-            
-            <div style={{ gridColumn: '1 / -1', height: '1px', background: 'var(--g200)', margin: '8px 0' }} />
-            
-            <Field label="Batch Time" value={batchTimes.find(b => b.batchTimeGuid === batchTimeGuid)?.batchTime || '—'} />
-            <Field label="Start Date" value={startDate || '—'} />
-            <Field label="End Date" value={endDate || '—'} />
+            <Field label="Intake" value={text(batch.intakeDescription)} />
 
             <div style={{ gridColumn: '1 / -1', height: '1px', background: 'var(--g200)', margin: '8px 0' }} />
 
-            <Field label="Batch In-Charge" value={employees.find(e => e.employeeGuid === batch.bInCharge)?.displayName || '—'} />
-            <Field label="Programme Head" value={employees.find(e => e.employeeGuid === batch.pHead)?.displayName || '—'} />
+            <Field label="Programme" value={text(batch.programName)} />
+            <Field label="Semester" value={text(batch.semesterName)} />
+            <Field label="Specialization" value={text(batch.streamName)} />
+
+            <div style={{ gridColumn: '1 / -1', height: '1px', background: 'var(--g200)', margin: '8px 0' }} />
+
+            <Field label="Batch Time" value={text(batch.batchTimeName)} />
+            <Field label="Start Date" value={batch.bStartDate ? batch.bStartDate.slice(0, 10) : '—'} />
+            <Field label="End Date" value={batch.bEndDate ? batch.bEndDate.slice(0, 10) : '—'} />
+
+            <div style={{ gridColumn: '1 / -1', height: '1px', background: 'var(--g200)', margin: '8px 0' }} />
+
+            <Field label="Batch In-Charge" value={text(batch.bInChargeName)} />
+            <Field label="Programme Head" value={text(batch.pHeadName)} />
           </div>
         </div>
 
@@ -134,7 +102,7 @@ export function ViewBatchModal({ isOpen, onClose, showToast, batchGuid, onEdit, 
               <i className="lni lni-pencil"></i> Edit
             </button>
           )}
-          <button className="btn btn-primary" onClick={handleClose}>Close</button>
+          <button className="btn btn-primary" onClick={onClose}>Close</button>
         </div>
       </div>
     </div>
