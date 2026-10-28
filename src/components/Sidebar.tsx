@@ -248,9 +248,7 @@ export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSection
   const activeDef = RAIL_DEFS.find(d => d.id === activeRail)!
 
   // renderRailSlot(def) returns null for a module the user has no access to
-  // (moduleByName.get(def.name) misses) — everything else here (the locked
-  // "Coming Soon" Analytics placeholder, the loading skeleton) always
-  // renders something. Dividers used to be hardcoded between every pair of
+  // (moduleByName.get(def.name) misses). Dividers used to be hardcoded between every pair of
   // slots regardless, so a null slot (e.g. no Config access) left two
   // .rail-dividers stacked back-to-back with nothing between them — a
   // visibly doubled line right above whatever module happened to follow
@@ -263,16 +261,6 @@ export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSection
     { key: 'finance', node: renderRailSlot(RAIL_DEFS[2]) },
     { key: 'student', node: renderRailSlot(RAIL_DEFS[3]) },
     { key: 'attendance', node: renderRailSlot(RAIL_DEFS[4]) },
-    {
-      key: 'analytics',
-      node: (
-        <div className="rail-item locked" data-mod="analytics">
-          <span className="rail-icon"><i className="lni lni-bar-chart"></i></span>
-          <span className="rail-label">Analytics</span>
-          <span className="rail-tooltip">Analytics · Coming Soon</span>
-        </div>
-      ),
-    },
     { key: 'employee', node: renderRailSlot(RAIL_DEFS[5]) },
     { key: 'assessment', node: renderRailSlot(RAIL_DEFS[6]) },
     { key: 'config', node: renderRailSlot(RAIL_DEFS[7]) },

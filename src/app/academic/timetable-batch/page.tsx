@@ -22,8 +22,11 @@ export default function BatchViewPage() {
   const [shown, setShown] = useState<{ batchGuid: string; intakeGuid: string; term: number } | null>(null)
 
   useEffect(() => {
-    if (!intakeGuid && ttIntakes?.currentIntakeGuid) setIntakeGuid(ttIntakes.currentIntakeGuid)
-  }, [intakeGuid, ttIntakes])
+    if (!intakeGuid) {
+      const defaultGuid = ttIntakes?.currentIntakeGuid || intakes.find(i => i.currentIntake)?.intakeGuid || intakes[0]?.intakeGuid
+      if (defaultGuid) setIntakeGuid(defaultGuid)
+    }
+  }, [intakeGuid, ttIntakes, intakes])
 
   // Batches of the chosen intake (batches/dropdown?intakeGuid=) — code only.
   const batchQuery = useQuery({
