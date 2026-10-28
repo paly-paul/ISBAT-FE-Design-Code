@@ -8,9 +8,9 @@ const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 // mocking (or un-mocking) everything else too. NEXT_PUBLIC_RBAC_MOCK lets the
 // menu source be flipped on its own; when unset it just follows AUTH_MOCK, so
 // existing .env files keep working with no change.
-const MOCK_MENU = process.env.NEXT_PUBLIC_RBAC_MOCK !== undefined
-  ? process.env.NEXT_PUBLIC_RBAC_MOCK === 'true'
-  : MOCK_AUTH
+// Trimmed so a stray space after the value in .env.local doesn't turn it off.
+const RBAC_MOCK_ENV = process.env.NEXT_PUBLIC_RBAC_MOCK?.trim()
+const MOCK_MENU = RBAC_MOCK_ENV ? RBAC_MOCK_ENV === 'true' : MOCK_AUTH
 
 // Per-action flags on a leaf node (e.g. { add, edit, delete, get }). Shape is
 // backend-defined and not yet standardized across domains — treat as a loose
@@ -31,12 +31,23 @@ export interface MenuNode {
   children: MenuNode[]
 }
 
+// Mock mode is full access: every action key any page checks (CRUD plus the
+// workflow actions — print, export, approve, cancel…), so nothing is hidden
+// or refused while testing against the mock menu.
+const MOCK_FULL_ACCESS: MenuPermissions = {
+  get: true, view: true, add: true, create: true, edit: true, update: true, delete: true,
+  print: true, export: true, import: true, download: true, send: true,
+  approve: true, reject: true, hold: true, verify: true, assign: true, submit: true,
+  register: true, execute: true, cancel: true,
+  learningMode: true, refugee: true, sponsor: true,
+}
+
 function leaf(name: string, icon: string, url: string | null): MenuNode {
   return {
     name,
     icon: `lni lni-${icon}`,
     url,
-    permissions: url ? { add: true, edit: true, delete: true, get: true } : {},
+    permissions: url ? { ...MOCK_FULL_ACCESS } : {},
     children: [],
   }
 }

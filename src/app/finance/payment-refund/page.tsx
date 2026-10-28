@@ -44,13 +44,9 @@ function readStoredMockMode(): boolean {
 // pick-one-ledger-line flow (RefundLedgerPicker in ./_components/shared);
 // Category 2 is a bulk, multi-student flow with its own component.
 
-// Permission gating on this page's Submit/bulk-refund buttons is commented
-// out per request — every tab's `permissionsCreate` prop below is hardcoded
-// `true` instead of reading `permissions.add`, in both Mock Data and Live
-// API mode (the toggle only ever swapped what feeds the data, never touched
-// this permission source, so the same override covers both). Restore real
-// gating by swapping the commented line back in below.
-const FORCE_ENABLE_REFUND_BUTTONS = true
+// Each tab's Submit/bulk-refund buttons follow the menu's `add` permission
+// (`permissionsCreate`). The earlier always-on override was removed
+// 2026-10-29 so the page matches /me/menu.
 
 type Tab = 'rejected' | 'passout' | 'fake-cert'
 const TABS: { id: Tab; label: string; icon: string }[] = [
@@ -149,13 +145,13 @@ export default function PaymentRefundPage() {
 
         <div key={activeTab} className="tab-panel-in">
           {activeTab === 'rejected' && (
-            <RejectedTab showToast={showToast} permissionsCreate={FORCE_ENABLE_REFUND_BUTTONS /* was: permissions.add */} onRefunded={handleRefunded} useMock={useMock} />
+            <RejectedTab showToast={showToast} permissionsCreate={!!permissions.add} onRefunded={handleRefunded} useMock={useMock} />
           )}
           {activeTab === 'passout' && (
-            <PassoutLibraryDepositTab showToast={showToast} permissionsCreate={FORCE_ENABLE_REFUND_BUTTONS /* was: permissions.add */} useMock={useMock} />
+            <PassoutLibraryDepositTab showToast={showToast} permissionsCreate={!!permissions.add} useMock={useMock} />
           )}
           {activeTab === 'fake-cert' && (
-            <FakeCertTab showToast={showToast} permissionsCreate={FORCE_ENABLE_REFUND_BUTTONS /* was: permissions.add */} onRefunded={handleRefunded} useMock={useMock} />
+            <FakeCertTab showToast={showToast} permissionsCreate={!!permissions.add} onRefunded={handleRefunded} useMock={useMock} />
           )}
         </div>
       </div>

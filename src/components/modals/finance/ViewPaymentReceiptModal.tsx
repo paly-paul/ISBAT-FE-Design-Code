@@ -3,6 +3,8 @@ import { useEffect } from 'react'
 import { ModalProps } from '../types'
 import type { PaymentHistoryListEntry } from '@/hooks/finance/usePaymentConsole'
 import { formatDate } from '@/lib/date'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
+import { useActionGuard } from '@/hooks/users/useActionGuard'
 
 interface ViewPaymentReceiptModalProps extends ModalProps {
   entry: PaymentHistoryListEntry | null
@@ -16,15 +18,19 @@ function fmtAmount(n: number) {
   return n.toLocaleString('en-US', { maximumFractionDigits: 2 })
 }
 
-export function ViewPaymentReceiptModal({ isOpen, onClose, entry, autoPrint }: ViewPaymentReceiptModalProps) {
+export function ViewPaymentReceiptModal({ isOpen, onClose, showToast, entry, autoPrint }: ViewPaymentReceiptModalProps) {
+  // Printing follows the opening page's menu `print` permission.
+  const permissions = usePagePermissions()
+  const guard = useActionGuard(showToast)
+  const canPrint = !!permissions.print
   // Fires window.print() once the modal (and its .receipt-print-area, see
   // globals.css) has actually painted — a same-tick call right after
   // setState risks printing the pre-open DOM on some browsers.
   useEffect(() => {
-    if (!isOpen || !autoPrint) return
+    if (!isOpen || !autoPrint || !canPrint) return
     const t = setTimeout(() => window.print(), 120)
     return () => clearTimeout(t)
-  }, [isOpen, autoPrint])
+  }, [isOpen, autoPrint, canPrint])
 
   if (!isOpen || !entry) return null
 
@@ -102,7 +108,11 @@ export function ViewPaymentReceiptModal({ isOpen, onClose, entry, autoPrint }: V
 
         <div className="modal-footer no-print" style={{ flexShrink: 0 }}>
           <button className="btn btn-neu flex-1 justify-center" onClick={onClose}>Close</button>
-          <button className="btn btn-primary flex-1 justify-center" onClick={() => window.print()}>
+          {/* Always shown; without `print` it explains instead of printing. */}
+          <button
+            className="btn btn-primary flex-1 justify-center"
+            onClick={() => guard('print', () => window.print(), 'receipts')}
+          >
             <i className="lni lni-printer"></i> Print Receipt
           </button>
         </div>
