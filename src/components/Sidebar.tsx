@@ -261,26 +261,6 @@ export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSection
     { key: 'academic', node: renderRailSlot(RAIL_DEFS[1]) },
     { key: 'finance', node: renderRailSlot(RAIL_DEFS[2]) },
     { key: 'student', node: renderRailSlot(RAIL_DEFS[3]) },
-    {
-      key: 'attendance',
-      node: (
-        <div className="rail-item locked" data-mod="attendance">
-          <span className="rail-icon"><i className="lni lni-alarm-clock"></i></span>
-          <span className="rail-label">Attendance</span>
-          <span className="rail-tooltip">Attendance · Coming Soon</span>
-        </div>
-      ),
-    },
-    {
-      key: 'analytics',
-      node: (
-        <div className="rail-item locked" data-mod="analytics">
-          <span className="rail-icon"><i className="lni lni-bar-chart"></i></span>
-          <span className="rail-label">Analytics</span>
-          <span className="rail-tooltip">Analytics · Coming Soon</span>
-        </div>
-      ),
-    },
     { key: 'employee', node: renderRailSlot(RAIL_DEFS[4]) },
     { key: 'assessment', node: renderRailSlot(RAIL_DEFS[5]) },
     { key: 'config', node: renderRailSlot(RAIL_DEFS[6]) },

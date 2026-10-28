@@ -17,8 +17,11 @@ export default function LecturerViewPage() {
   const [shown, setShown] = useState<{ lecturerGuid: string; intakeGuid: string; term: number } | null>(null)
 
   useEffect(() => {
-    if (!intakeGuid && ttIntakes?.currentIntakeGuid) setIntakeGuid(ttIntakes.currentIntakeGuid)
-  }, [intakeGuid, ttIntakes])
+    if (!intakeGuid) {
+      const defaultGuid = ttIntakes?.currentIntakeGuid || intakes.find(i => i.currentIntake)?.intakeGuid || intakes[0]?.intakeGuid
+      if (defaultGuid) setIntakeGuid(defaultGuid)
+    }
+  }, [intakeGuid, ttIntakes, intakes])
 
   const { data: lecturers = [], isLoading: lecturersLoading } = useTimetableLecturers(intakeGuid || null, +term)
   const { days } = useTeachingDays()
