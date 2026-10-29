@@ -131,18 +131,101 @@ export interface BatchScope {
 
 // Lists batches (paginated), ordered by batch code. search matches batch
 // code, programme code/name, semester, stream and batch time server-side.
-export function getBatches(pageNumber = 1, pageSize = 20, search = '', scope: BatchScope = {}): Promise<BatchListResult> {
+export function getBatches(pageNumber = 1, pageSize = 20, search = '', scope: BatchScope = {}, filters: BatchColumnFilters = {}): Promise<BatchListResult> {
   const q = search.trim()
   if (MOCK_AUTH) {
-    const filtered = q ? mockBatches.filter(b => b.batchCode.toLowerCase().includes(q.toLowerCase())) : mockBatches
-    return Promise.resolve({ items: filtered, totalCount: filtered.length, pageNumber, pageSize })
+    const filtered = mockBatches.filter(b => (!q || b.batchCode.toLowerCase().includes(q.toLowerCase())) && mockMatches(b, filters))
+    return Promise.resolve({ items: filtered.slice((pageNumber - 1) * pageSize, pageNumber * pageSize), totalCount: filtered.length, pageNumber, pageSize })
   }
-  const params = new URLSearchParams({ pageNumber: String(pageNumber), pageSize: String(pageSize) })
-  if (q) params.set('search', q)
-  if (scope.intakeGuid) params.set('intakeGuid', scope.intakeGuid)
-  if (scope.campusGuid) params.set('campusGuid', scope.campusGuid)
+  const params = batchQuery(q, scope, filters)
+  params.set('pageNumber', String(pageNumber))
+  params.set('pageSize', String(pageSize))
   return apiGet<BatchListResult | null>(`/api/v1/academic/batches?${params.toString()}`)
     .then(data => data ?? { items: [], totalCount: 0, pageNumber, pageSize })
+}
+
+// Column filters for the batch list (get-batches.md multi-select params).
+// Values inside one param are OR'd, different params AND'd. Only values the
+// filter-options endpoint returned should go in — a malformed guid or
+// semCode answers 500.
+export interface BatchColumnFilters {
+  batchCodes?: string[]
+  programGuids?: string[]
+  semCodes?: number[]
+  streamGuids?: string[]
+  batchTimeGuids?: string[]
+  bInChargeGuids?: string[]
+  pHeadGuids?: string[]
+  // With pHeadGuids it matches either; alone, only batches with no head.
+  noProgramHead?: boolean
+  active?: 0 | 1
+}
+
+// Shared by the list and filter-options: search, scope and filters, with
+// each multi-select value repeated and empty ones left out.
+function batchQuery(search: string, scope: BatchScope, f: BatchColumnFilters) {
+  const params = new URLSearchParams()
+  if (search) params.set('search', search)
+  if (scope.intakeGuid) params.set('intakeGuid', scope.intakeGuid)
+  if (scope.campusGuid) params.set('campusGuid', scope.campusGuid)
+  const lists: [string, (string | number)[] | undefined][] = [
+    ['batchCodes', f.batchCodes], ['programGuids', f.programGuids], ['semCodes', f.semCodes], ['streamGuids', f.streamGuids],
+    ['batchTimeGuids', f.batchTimeGuids], ['bInChargeGuids', f.bInChargeGuids], ['pHeadGuids', f.pHeadGuids],
+  ]
+  for (const [key, vals] of lists) for (const v of vals ?? []) params.append(key, String(v))
+  if (f.noProgramHead) params.set('noProgramHead', 'true')
+  if (f.active !== undefined) params.set('active', String(f.active))
+  return params
+}
+
+// get-batch-filter-options.md — the distinct values for each column filter,
+// narrowed by every other applied filter (each column ignores its own).
+export interface BatchFilterOptions {
+  batchCodes: string[]
+  programs: { programGuid: string; programCode?: string | null; programName: string | null }[]
+  semesters: { semCode: number; semesterName: string | null }[]
+  streams: { streamGuid: string; streamName: string | null }[]
+  batchTimes: { batchTimeGuid: string; batchTimeCode?: string | null; batchTimeName: string | null }[]
+  batchInCharges: { employeeGuid: string; employeeName: string | null }[]
+  programHeads: { employeeGuid: string; employeeName: string | null }[]
+  hasBatchesWithoutProgramHead: boolean
+}
+
+const EMPTY_FILTER_OPTIONS: BatchFilterOptions = {
+  batchCodes: [], programs: [], semesters: [], streams: [], batchTimes: [], batchInCharges: [], programHeads: [], hasBatchesWithoutProgramHead: false,
+}
+
+export function getBatchFilterOptions(search = '', scope: BatchScope = {}, filters: BatchColumnFilters = {}): Promise<BatchFilterOptions> {
+  const q = search.trim()
+  if (MOCK_AUTH) {
+    const rows = mockBatches.filter(b => !q || b.batchCode.toLowerCase().includes(q.toLowerCase()))
+    // Each column ignores its own filter, as the real endpoint does.
+    const without = (k: keyof BatchColumnFilters) => rows.filter(b => mockMatches(b, { ...filters, [k]: undefined, ...(k === 'pHeadGuids' ? { noProgramHead: undefined } : {}) }))
+    const uniq = <T,>(items: T[], key: (t: T) => string) => [...new Map(items.map(i => [key(i), i])).values()]
+    return Promise.resolve({
+      batchCodes: [...new Set(without('batchCodes').map(b => b.batchCode))].sort(),
+      programs: uniq(without('programGuids').filter(b => b.programGuid).map(b => ({ programGuid: b.programGuid!, programName: b.programName ?? null })), p => p.programGuid),
+      semesters: uniq(without('semCodes').filter(b => b.semCode).map(b => ({ semCode: b.semCode!, semesterName: b.semesterName ?? null })), s => String(s.semCode)).sort((a, b) => a.semCode - b.semCode),
+      streams: uniq(without('streamGuids').filter(b => b.streamGuid).map(b => ({ streamGuid: b.streamGuid!, streamName: b.streamName ?? null })), s => s.streamGuid),
+      batchTimes: uniq(without('batchTimeGuids').filter(b => b.batchTimeGuid).map(b => ({ batchTimeGuid: b.batchTimeGuid!, batchTimeName: b.batchTimeName ?? null })), t => t.batchTimeGuid),
+      batchInCharges: uniq(without('bInChargeGuids').filter(b => b.bInCharge && b.bInCharge !== EMPTY_GUID).map(b => ({ employeeGuid: b.bInCharge!, employeeName: b.bInChargeName ?? null })), e => e.employeeGuid),
+      programHeads: uniq(without('pHeadGuids').filter(b => b.pHead && b.pHead !== EMPTY_GUID).map(b => ({ employeeGuid: b.pHead!, employeeName: b.pHeadName ?? null })), e => e.employeeGuid),
+      hasBatchesWithoutProgramHead: without('pHeadGuids').some(b => !b.pHead || b.pHead === EMPTY_GUID),
+    })
+  }
+  return apiGet<Partial<BatchFilterOptions> | null>(`/api/v1/academic/batches/filter-options?${batchQuery(q, scope, filters).toString()}`)
+    .then(d => ({ ...EMPTY_FILTER_OPTIONS, ...(d ?? {}) }))
+}
+
+function mockMatches(b: Batch, f: BatchColumnFilters) {
+  const has = <T,>(vals: T[] | undefined, v: T | null | undefined) => !vals?.length || (v != null && vals.includes(v))
+  const noHead = !b.pHead || b.pHead === EMPTY_GUID
+  const headOk = !f.pHeadGuids?.length && !f.noProgramHead
+    ? true
+    : (!!f.pHeadGuids?.length && has(f.pHeadGuids, b.pHead)) || (!!f.noProgramHead && noHead)
+  return has(f.batchCodes, b.batchCode) && has(f.programGuids, b.programGuid) && has(f.semCodes, b.semCode)
+    && has(f.streamGuids, b.streamGuid) && has(f.batchTimeGuids, b.batchTimeGuid) && has(f.bInChargeGuids, b.bInCharge)
+    && headOk && (f.active === undefined || Number(!!b.active) === f.active)
 }
 
 export interface BatchDropdownItem {

@@ -1,7 +1,28 @@
 import { useMutation, useQueries, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
-import { createBatch, deleteBatch, getBatchById, getBatchDropdown, getBatches, getStudentCountsByBatch, updateBatch, Batch, BatchCreateInput, BatchDetail, BatchScope, BatchUpdateInput } from '@/lib/api/academic/batch'
+import { createBatch, deleteBatch, getBatchById, getBatchDropdown, getBatchFilterOptions, getBatches, getStudentCountsByBatch, updateBatch, Batch, BatchColumnFilters, BatchCreateInput, BatchDetail, BatchScope, BatchUpdateInput } from '@/lib/api/academic/batch'
 
 const BATCHES_KEY = ['batches']
+
+// Batch Management's table: one server page, with search and the
+// Excel-style column filters applied server-side. Keeps the previous page
+// on screen while the next one loads.
+export function useFilteredBatches(pageNumber: number, pageSize: number, search: string, scope: BatchScope, filters: BatchColumnFilters) {
+  return useQuery({
+    queryKey: [...BATCHES_KEY, 'filtered', pageNumber, pageSize, search, scope.intakeGuid ?? '', scope.campusGuid ?? '', JSON.stringify(filters)],
+    queryFn: () => getBatches(pageNumber, pageSize, search, scope, filters),
+    placeholderData: keepPreviousData,
+  })
+}
+
+// Options for each column filter, re-fetched whenever search, scope or any
+// filter changes (the options narrow to what's still reachable).
+export function useBatchFilterOptions(search: string, scope: BatchScope, filters: BatchColumnFilters) {
+  return useQuery({
+    queryKey: [...BATCHES_KEY, 'filter-options', search, scope.intakeGuid ?? '', scope.campusGuid ?? '', JSON.stringify(filters)],
+    queryFn: () => getBatchFilterOptions(search, scope, filters),
+    placeholderData: keepPreviousData,
+  })
+}
 
 // No intakeGuid in scope = the current admission intake only (see BatchScope).
 export function useBatches(pageNumber: number, pageSize: number, search = '', enabled = true, scope: BatchScope = {}) {
@@ -89,22 +110,6 @@ export function useCreateBatch() {
   })
 }
 
-// Every batch for a campus + intake in one call. Batch Management searches,
-// column-filters (multi-select, like the other Academic tables) and pages
-// these rows client-side — GET /batches' own column filters take one value
-// each — and totals them for the stat tiles. Under BATCHES_KEY so
-// create/update/delete refresh it. pageSize is sent explicitly — the
-// endpoint defaults to 20. intakeGuid null = the current admission intake
-// (the endpoint's default).
-const SCOPE_PAGE_SIZE = 10000
-export function useBatchesInScope(scope: BatchScope) {
-  return useQuery({
-    queryKey: [...BATCHES_KEY, 'scope', scope.campusGuid ?? '', scope.intakeGuid ?? ''],
-    queryFn: () => getBatches(1, SCOPE_PAGE_SIZE, '', scope),
-    // Keep the previous scope's table up while the next one loads.
-    placeholderData: keepPreviousData,
-  })
-}
 
 // Fetches a single batch for the Edit modal. Only enabled while the modal
 // is actually open with a guid.

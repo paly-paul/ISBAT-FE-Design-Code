@@ -1,5 +1,5 @@
 'use client'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
 import { TableSearch } from '@/components/TableSearch'
@@ -10,14 +10,14 @@ import { Toast } from '@/components/Toast'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
-import { useBatchesInScope, useCreateBatch, useUpdateBatch, useDeleteBatch, useBatchStudentCount, Batch } from '@/hooks/academic/useBatches'
+import { useBatchFilterOptions, useCreateBatch, useFilteredBatches, useUpdateBatch, useDeleteBatch, useBatchStudentCount, Batch } from '@/hooks/academic/useBatches'
 import { useEmployeeDropdown } from '@/hooks/employee/useEmployees'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { SearchSelect } from '@/components/SearchSelect'
 import { useIntakesDropdown } from '@/hooks/academic/useIntakes'
 import { useCampusDropdown } from '@/hooks/config/useCampuses'
 import { IntakeDropdownItem } from '@/lib/api/academic/intake'
-import { EMPTY_GUID } from '@/lib/api/academic/batch'
+import { EMPTY_GUID, type BatchColumnFilters } from '@/lib/api/academic/batch'
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
@@ -42,6 +42,26 @@ function semesterName(r: Batch) {
   return r.semesterName || (r.semCode ? semesterLabelFromCode(r.semCode) : '—')
 }
 
+interface FilterOpt { value: string; label: string }
+
+// The "None" program-head option (sends noProgramHead=true).
+const NO_HEAD = '__no_program_head__'
+
+function uniqueLabels(opts: FilterOpt[]): FilterOpt[] {
+  const count = new Map<string, number>()
+  for (const o of opts) count.set(o.label, (count.get(o.label) ?? 0) + 1)
+  return opts.map(o => (count.get(o.label)! > 1 ? { ...o, label: `${o.label} (${o.value.slice(0, 8)})` } : o))
+}
+
+function useDebounced<T>(value: T, ms: number): T {
+  const [v, setV] = useState(value)
+  useEffect(() => {
+    const t = setTimeout(() => setV(value), ms)
+    return () => clearTimeout(t)
+  }, [value, ms])
+  return v
+}
+
 // 10 rows/page — same convention as the other master pages (Intake
 // Master, Programme Group, Repetition Tag).
 const PAGE_SIZE = 10
@@ -62,7 +82,7 @@ export default function Page() {
   const [page, setPage] = useState(1)
   const [editingBatchGuid, setEditingBatchGuid] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Batch | null>(null)
-  const [filters, setFilters] = useState<Record<string, string[]>>({})
+  const [filters, setFilters] = useState<Record<string, FilterOpt[]>>({})
   const [openFilter, setOpenFilter] = useState<string | null>(null)
 
   // ---- Scope: campus + intake ----
@@ -78,21 +98,10 @@ export default function Page() {
     { value: '', label: 'Current Intake' },
     ...intakes.map((i: IntakeDropdownItem) => ({ value: i.intakeGuid, label: `${i.intakeCode} — ${i.description}` })),
   ], [intakes])
-  const { data, isLoading, isPlaceholderData } = useBatchesInScope({ campusGuid: campusGuid || null, intakeGuid: intakeGuid || null })
-  const scopeRows = useMemo(() => data?.items ?? [], [data])
   const scopeLabel = [
     campusGuid ? (campuses.find(c => c.campusGuid === campusGuid)?.campusName ?? 'This campus') : 'All campuses',
     intakeGuid ? 'Selected intake' : 'Current intake',
   ].join(' · ')
-
-  // Tiles total the campus + intake scope, not the search/column filters.
-  const totalStudents = scopeRows.reduce((sum, r) => sum + (r.headCount ?? 0), 0)
-  const avgBatchSize = scopeRows.length ? Math.round(totalStudents / scopeRows.length) : 0
-
-  // bInChargeName/pHeadName come pre-resolved on the row; the employee list
-  // is only fetched if a row has a guid without its name.
-  const needsEmployeeLookup = scopeRows.some(r => (isSet(r.bInCharge) && !r.bInChargeName) || (isSet(r.pHead) && !r.pHeadName))
-  const { data: employees = [] } = useEmployeeDropdown(needsEmployeeLookup)
 
   function isSet(guid?: string | null) {
     return !!guid && guid !== EMPTY_GUID
@@ -103,70 +112,101 @@ export default function Page() {
     return employees.find(e => e.employeeGuid === guid)?.displayName || '—'
   }
 
-  // The display value each filterable column filters on — same "filter on
-  // what's shown" convention as the other Academic tables' FilterTh columns.
-  const columnValue: Record<string, (r: Batch) => string> = {
-    batchCode: r => r.batchCode || '—',
-    programme: r => r.programName || '—',
-    semester: semesterName,
-    stream: r => r.streamName || '—',
-    batchTime: r => r.batchTimeName || '—',
-    inCharge: r => employeeName(r.bInChargeName, r.bInCharge),
-    pHead: r => employeeName(r.pHeadName, r.pHead),
-    startDate: r => formatDisplayDate(r.bStartDate),
-    endDate: r => formatDisplayDate(r.bEndDate),
-    status: r => (r.active ? 'Active' : 'Inactive'),
-  }
-
-  // Search, column filters and paging all run over the whole scope (every
-  // batch for the campus + intake is loaded), so they cover every page, not
-  // just the one on screen. Search matches the same fields GET /batches'
-  // own search does.
+  // ---- Search, column filters and paging: all server-side ----
+  // GET /academic/batches takes the search and the Excel-style multi-select
+  // column filters; GET /batches/filter-options returns each column's
+  // options for the same search + scope + filters (each column ignores its
+  // own selection, so picking one value never hides its siblings). The
+  // selections are kept as {value, label} so the API gets guids/codes and
+  // the filter shows names. Start/End Date have no list filter, so they're
+  // plain columns; Status maps to `active`.
   const searchTrimmed = search.trim()
-  const activeSearch = searchTrimmed.length >= MIN_SEARCH_CHARS ? searchTrimmed.toLowerCase() : ''
-  const searchedRows = activeSearch
-    ? scopeRows.filter(r => [r.batchCode, r.programCode, r.programName, r.semesterName, r.streamName, r.batchTimeName].some(v => v?.toLowerCase().includes(activeSearch)))
-    : scopeRows
-  const filteredRows = searchedRows.filter(r =>
-    Object.entries(filters).every(([col, vals]) => !vals.length || vals.includes(columnValue[col](r))),
-  )
-  const hasColumnFilters = Object.values(filters).some(v => v.length > 0)
+  const debouncedSearch = useDebounced(searchTrimmed.length >= MIN_SEARCH_CHARS ? searchTrimmed : '', 300)
+  const scope = useMemo(() => ({ campusGuid: campusGuid || null, intakeGuid: intakeGuid || null }), [campusGuid, intakeGuid])
+  const apiFilters = useMemo<BatchColumnFilters>(() => {
+    const v = (col: string) => (filters[col] ?? []).map(o => o.value)
+    const heads = v('pHead')
+    const status = v('status')
+    return {
+      batchCodes: v('batchCode'),
+      programGuids: v('programme'),
+      semCodes: v('semester').map(Number),
+      streamGuids: v('stream'),
+      batchTimeGuids: v('batchTime'),
+      bInChargeGuids: v('inCharge'),
+      pHeadGuids: heads.filter(h => h !== NO_HEAD),
+      noProgramHead: heads.includes(NO_HEAD) || undefined,
+      active: status.length === 1 ? (Number(status[0]) as 0 | 1) : undefined,
+    }
+  }, [filters])
+  const listQ = useFilteredBatches(page, PAGE_SIZE, debouncedSearch, scope, apiFilters)
+  const optionsQ = useBatchFilterOptions(debouncedSearch, scope, apiFilters)
 
-  const totalCount = filteredRows.length
+  const pageItems = listQ.data?.items ?? []
+  const totalCount = listQ.data?.totalCount ?? 0
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
   const safePage = Math.min(page, totalPages)
-  const pageItems = filteredRows.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
+  const hasColumnFilters = Object.values(filters).some(v => v.length > 0)
+  const refetching = listQ.isPlaceholderData
 
-  // Live preview in the search dropdown — the searched rows, ignoring the
-  // column filters, capped to a handful (same as Intake Master).
-  const searchMatches = activeSearch ? searchedRows.slice(0, 8) : []
+  // No scope-wide fetch any more (it pulled every batch at pageSize 10000):
+  // Total Batches is the list's own totalCount; Total Students and Avg Batch
+  // Size need head counts across every batch, so they show "—" until the
+  // backend returns totals (requested: e.g. totalStudents on GET /batches).
+  const totalBatches = listQ.data ? totalCount : null
 
-  // Options are the distinct values among the loaded rows, sorted; dates in
-  // date order rather than alphabetically.
-  function opts(col: string) {
-    const values = [...new Set(scopeRows.map(columnValue[col]))]
-    if (col === 'startDate' || col === 'endDate') {
-      const field = col === 'startDate' ? 'bStartDate' : 'bEndDate'
-      const time = new Map(scopeRows.map(r => [formatDisplayDate(r[field]), r[field] ? new Date(r[field]!).getTime() : 0]))
-      return values.sort((a, b) => (time.get(a) ?? 0) - (time.get(b) ?? 0))
+  // bInChargeName/pHeadName come pre-resolved on the row; the employee list
+  // is only fetched if a row on this page has a guid without its name.
+  const needsEmployeeLookup = pageItems.some(r => (isSet(r.bInCharge) && !r.bInChargeName) || (isSet(r.pHead) && !r.pHeadName))
+  const { data: employees = [] } = useEmployeeDropdown(needsEmployeeLookup)
+
+  // Live preview in the search dropdown — the server's matches for the
+  // current search (already applied to the list), capped to a handful.
+  const activeSearch = searchTrimmed.length >= MIN_SEARCH_CHARS
+  const searchMatches = activeSearch && debouncedSearch === searchTrimmed ? pageItems.slice(0, 8) : []
+
+  // Each column's options from filter-options, as {value, label}. Labels must
+  // be unique (FilterTh works on labels), so repeats get a short id suffix.
+  const columnOpts = useMemo<Record<string, FilterOpt[]>>(() => {
+    const o = optionsQ.data
+    if (!o) return {} as Record<string, FilterOpt[]>
+    const person = (e: { employeeGuid: string; employeeName: string | null }) => ({ value: e.employeeGuid, label: e.employeeName?.trim() || 'Unknown' })
+    return {
+      batchCode: o.batchCodes.map(c => ({ value: c, label: c })),
+      programme: uniqueLabels(o.programs.map(p => ({ value: p.programGuid, label: p.programName?.trim() || p.programCode || 'Unnamed programme' }))),
+      semester: o.semesters.map(s => ({ value: String(s.semCode), label: s.semesterName?.trim() || semesterLabelFromCode(s.semCode) })),
+      stream: uniqueLabels(o.streams.map(s => ({ value: s.streamGuid, label: s.streamName?.trim() || 'Unnamed' }))),
+      batchTime: uniqueLabels(o.batchTimes.map(t => ({ value: t.batchTimeGuid, label: t.batchTimeName?.trim() || t.batchTimeCode || 'Unnamed' }))),
+      inCharge: uniqueLabels(o.batchInCharges.map(person)),
+      pHead: [...(o.hasBatchesWithoutProgramHead ? [{ value: NO_HEAD, label: 'None' }] : []), ...uniqueLabels(o.programHeads.map(person))],
+      status: [{ value: '1', label: 'Active' }, { value: '0', label: 'Inactive' }],
     }
-    return values.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
-  }
+  }, [optionsQ.data])
 
   function fth(label: string, col: string) {
+    const selected = filters[col] ?? []
+    const available = columnOpts[col] ?? []
+    // A selection the other filters have since narrowed away stays listed,
+    // so it can still be unticked.
+    const all = [...available, ...selected.filter(s => !available.some(a => a.value === s.value))]
     return (
       <FilterTh
         label={label}
-        opts={opts(col)}
+        opts={all.map(o => o.label)}
         isOpen={openFilter === col}
-        activeFilter={filters[col] ?? []}
+        activeFilter={selected.map(o => o.label)}
         onToggle={(e) => { e.stopPropagation(); setOpenFilter(p => p === col ? null : col) }}
-        onSelect={(vals) => { setFilters(f => ({ ...f, [col]: vals })); setOpenFilter(null); setPage(1) }}
+        onSelect={(labels) => {
+          const picked = labels.map(l => all.find(o => o.label === l)).filter((o): o is FilterOpt => !!o)
+          setFilters(f => ({ ...f, [col]: picked })); setOpenFilter(null); setPage(1)
+        }}
         onClear={() => { setFilters(f => ({ ...f, [col]: [] })); setOpenFilter(null); setPage(1) }}
         onClose={() => setOpenFilter(null)}
       />
     )
   }
+  // ScrollTable's "filters applied" bar reads labels.
+  const filterLabels = useMemo(() => Object.fromEntries(Object.entries(filters).map(([c, v]) => [c, v.map(o => o.label)])), [filters])
 
   const createBatch = useCreateBatch()
   const updateBatch = useUpdateBatch()
@@ -237,10 +277,10 @@ export default function Page() {
           />
         </div>
 
-        <div className="stats-row" style={{ opacity: isPlaceholderData ? 0.45 : 1, transition: 'opacity .15s ease' }}>
-          <div className="stat-card"><div className="stat-lbl">Total Batches</div><div className="stat-num" style={{ color: 'var(--b700)' }}>{data ? scopeRows.length.toLocaleString() : '—'}</div><div className="stat-sub">{scopeLabel}</div></div>
-          <div className="stat-card [--b700:var(--green)] [--b400:#34d399]"><div className="stat-lbl">Total Students</div><div className="stat-num" style={{ color: 'var(--green)' }}>{data ? totalStudents.toLocaleString() : '—'}</div><div className="stat-sub up">Across these batches</div></div>
-          <div className="stat-card"><div className="stat-lbl">Avg Batch Size</div><div className="stat-num">{data ? avgBatchSize : '—'}</div><div className="stat-sub">students / batch</div></div>
+        <div className="stats-row" style={{ opacity: refetching ? 0.45 : 1, transition: 'opacity .15s ease' }}>
+          <div className="stat-card"><div className="stat-lbl">Total Batches</div><div className="stat-num" style={{ color: 'var(--b700)' }}>{totalBatches != null ? totalBatches.toLocaleString() : '—'}</div><div className="stat-sub">{hasColumnFilters || debouncedSearch ? `${scopeLabel} · filtered` : scopeLabel}</div></div>
+          <div className="stat-card [--b700:var(--green)] [--b400:#34d399]"><div className="stat-lbl">Total Students</div><div className="stat-num" style={{ color: 'var(--green)' }}>—</div><div className="stat-sub" title="Needs a total from the batches API">Not available yet</div></div>
+          <div className="stat-card"><div className="stat-lbl">Avg Batch Size</div><div className="stat-num">—</div><div className="stat-sub" title="Needs a total from the batches API">Not available yet</div></div>
         </div>
 
         <div className="card">
@@ -255,13 +295,13 @@ export default function Page() {
               onSelect={(r) => openViewModal(r.id)}
             />
           </div>
-          <div className={`tbl-refetch-wrap${isPlaceholderData ? ' is-refetching' : ''}`} aria-busy={isPlaceholderData}>
-            {isPlaceholderData && (
+          <div className={`tbl-refetch-wrap${refetching ? ' is-refetching' : ''}`} aria-busy={refetching}>
+            {refetching && (
               <div className="tbl-refetch-pill" role="status">
                 <i className="lni lni-reload" aria-hidden="true" /> Loading batches…
               </div>
             )}
-            <ScrollTable filters={filters} onResetFilters={() => { setFilters({}); setPage(1) }}>
+            <ScrollTable filters={filterLabels} onResetFilters={() => { setFilters({}); setPage(1) }}>
               <table>
                 <thead>
                   <tr>
@@ -275,14 +315,16 @@ export default function Page() {
                     {fth('Batch In-Charge', 'inCharge')}
                     {fth('Programme Head', 'pHead')}
                     <th>Head Count</th>
-                    {fth('Start Date', 'startDate')}
-                    {fth('End Date', 'endDate')}
+                    <th>Start Date</th>
+                    <th>End Date</th>
                     {fth('Status', 'status')}
                   </tr>
                 </thead>
                 <tbody>
-                  {isLoading
+                  {listQ.isLoading
                     ? <TableLoadingState colSpan={13} />
+                    : listQ.isError
+                      ? <tr><td colSpan={13} className="tbl-empty-cell"><div className="tbl-empty-inner" role="alert"><div className="tbl-empty-title">Couldn&apos;t load batches</div><button className="btn btn-neu btn-sm" onClick={() => listQ.refetch()}><i className="lni lni-reload"></i> Retry</button></div></td></tr>
                     : pageItems.length === 0
                       ? <EmptyState colSpan={13} hasFilters={!!searchTrimmed || hasColumnFilters} onClearFilters={clearFilters} />
                       : pageItems.map((r, i) => {
