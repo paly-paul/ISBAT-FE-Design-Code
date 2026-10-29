@@ -55,8 +55,11 @@ interface Props extends ModalProps {
   }
   onReject: () => void
   // The vet and wait endpoints have no permission check server-side (see
-  // post-vet-application.md), so the UI is the only gate. Defaults to true.
-  canVet?: boolean
+  // post-vet-application.md), so the UI is the only gate. One flag per
+  // action (the menu's approve / reject / hold keys); each defaults to true.
+  canApprove?: boolean
+  canReject?: boolean
+  canHold?: boolean
   // False when opened from the Waiting List — the application is already
   // waiting, so only Approve/Reject are offered. Defaults to true.
   allowWait?: boolean
@@ -64,7 +67,9 @@ interface Props extends ModalProps {
 
 const WAIT_REMARKS_MAX = 500
 
-export function VettingReviewModal({ isOpen, onClose, showToast, applicationGuid, vetApplication, onReject, canVet = true, allowWait = true }: Props) {
+export function VettingReviewModal({ isOpen, onClose, showToast, applicationGuid, vetApplication, onReject, canApprove = true, canReject = true, canHold = true, allowWait: allowWaitProp = true }: Props) {
+  const allowWait = allowWaitProp && canHold
+  const canVet = canApprove || canReject || allowWait
   const { data: detail, isLoading, isError, error } = useVettingApplicationDetail(applicationGuid, isOpen)
   const waitApplication = useWaitApplication()
 
@@ -375,7 +380,7 @@ export function VettingReviewModal({ isOpen, onClose, showToast, applicationGuid
                 )}
               </section>
 
-              {allowWait && canVet && (
+              {allowWait && (
                 <section className="vd-panel accent">
                   <h3 className="vd-panel-title"><i className="lni lni-timer" aria-hidden="true" /> Put on Hold</h3>
                   <div className="fg">
@@ -393,10 +398,13 @@ export function VettingReviewModal({ isOpen, onClose, showToast, applicationGuid
         </div>
 
         <div className="modal-footer" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 10 }}>
-          {approveBlockedReason && canVet && (
+          {approveBlockedReason && canApprove && (
             <div className="warn-box" role="note" style={{ fontSize: 13 }}>
               <i className="lni lni-lock" aria-hidden="true" style={{ marginTop: 2 }}></i>
-              <span>{approveBlockedReason} {allowWait ? 'You can still reject it or place it on hold.' : 'You can still reject it.'}</span>
+              <span>
+                {approveBlockedReason}
+                {canReject && allowWait ? ' You can still reject it or place it on hold.' : canReject ? ' You can still reject it.' : allowWait ? ' You can still place it on hold.' : ''}
+              </span>
             </div>
           )}
           {!canVet ? (
@@ -407,16 +415,18 @@ export function VettingReviewModal({ isOpen, onClose, showToast, applicationGuid
           ) : (
             // Reject sits apart on the left; Approve is the one primary action.
             <div className="vd-actions">
-              <button type="button" className="btn btn-danger" onClick={onReject}><i className="lni lni-close" aria-hidden="true" /> Reject Application</button>
+              {canReject ? <button type="button" className="btn btn-danger" onClick={onReject}><i className="lni lni-close" aria-hidden="true" /> Reject Application</button> : <span />}
               <div className="vd-actions-end">
                 {allowWait && (
                   <button type="button" className="btn btn-neu" disabled={waitApplication.isPending} onClick={handleWait}>
                     <i className="lni lni-timer" aria-hidden="true" /> {waitApplication.isPending ? 'Saving…' : 'Wait for Original Documents'}
                   </button>
                 )}
-                <button type="button" className="btn btn-success" disabled={vetApplication.isPending || !!approveBlockedReason} title={approveBlockedReason ?? undefined} onClick={handleApprove}>
-                  <i className="lni lni-checkmark" aria-hidden="true" /> {vetApplication.isPending ? 'Approving…' : 'Approve & Issue Provisional Letter'}
-                </button>
+                {canApprove && (
+                  <button type="button" className="btn btn-success" disabled={vetApplication.isPending || !!approveBlockedReason} title={approveBlockedReason ?? undefined} onClick={handleApprove}>
+                    <i className="lni lni-checkmark" aria-hidden="true" /> {vetApplication.isPending ? 'Approving…' : 'Approve & Issue Provisional Letter'}
+                  </button>
+                )}
               </div>
             </div>
           )}

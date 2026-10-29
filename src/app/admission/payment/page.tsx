@@ -1041,12 +1041,16 @@ function PaymentPageContent() {
               <i className="lni lni-download" /> Import from Enquiry
             </button>
             */}
-            <button className="btn btn-neu btn-sm" onClick={() => openModal('import-odel')}>
-              <i className="lni lni-cloud-download" /> Import from ODel App
-            </button>
-            <button className="btn btn-primary btn-sm" onClick={() => openModal('import-crm')}>
-              <i className="lni lni-download" /> Import from CRM
-            </button>
+            {permissions.import && (
+              <>
+                <button className="btn btn-neu btn-sm" onClick={() => openModal('import-odel')}>
+                  <i className="lni lni-cloud-download" /> Import from ODel App
+                </button>
+                <button className="btn btn-primary btn-sm" onClick={() => openModal('import-crm')}>
+                  <i className="lni lni-download" /> Import from CRM
+                </button>
+              </>
+            )}
           </div>
         </div>
 
@@ -1412,7 +1416,7 @@ function PaymentPageContent() {
               </div>
               <div className="flex items-center gap-3 mt-4 flex-wrap">
                 {/* Hidden for exemption payments — they have no receipt (400). */}
-                {savedReceipt.printable && savedReceipt.paymentGuid && (
+                {savedReceipt.printable && savedReceipt.paymentGuid && permissions.print && (
                   <button className="btn btn-neu btn-sm" disabled={printingReceipt} onClick={() => printReceipt(savedReceipt.paymentGuid!, String(savedReceipt.receiptNo ?? ''))}>
                     <i className={`lni ${printingReceipt ? 'lni-spinner-arrow spin' : 'lni-printer'}`} /> {printingReceipt ? 'Opening…' : 'Print Receipt'}
                   </button>

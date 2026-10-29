@@ -77,7 +77,7 @@ export default function RegistrationPage() {
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
 
   const searchMatches = search.trim() ? items.slice(0, 8) : []
-  const colSpan = permissions.add ? 5 : 4
+  const colSpan = permissions.register ? 5 : 4
 
   function handleRegister(applicationGuid: string) {
     setSelectedApplicationGuid(applicationGuid)
@@ -137,7 +137,7 @@ export default function RegistrationPage() {
               onChange={updateSearch}
               results={searchMatches.map(r => ({ id: r.applicationGuid, primary: r.appRefNo, secondary: r.studentName }))}
               // Picking a suggestion opens that registration straight away.
-              onSelect={permissions.add ? (r => { updateSearch(r.primary); handleRegister(r.id) }) : undefined}
+              onSelect={permissions.register ? (r => { updateSearch(r.primary); handleRegister(r.id) }) : undefined}
             />
             {currentIntake.data && (
               <span
@@ -160,7 +160,7 @@ export default function RegistrationPage() {
           <table>
             <thead>
               <tr>
-                {permissions.add && <th><span className="sr-only">Actions</span></th>}
+                {permissions.register && <th><span className="sr-only">Actions</span></th>}
                 <th>App. Ref</th>
                 <th>Student Name</th>
                 <th>Programme</th>
@@ -184,9 +184,9 @@ export default function RegistrationPage() {
                   {/* Register is no longer gated on r.regPaid (per request,
                       2026-09-10) — Reg. Fee is shown as information only.
                       It creates a student and can't be undone, so it needs
-                      the page's add permission. A direct button now: the
+                      the page's register permission. A direct button now: the
                       one-item Actions menu cost an extra click per row. */}
-                  {permissions.add && (
+                  {permissions.register && (
                     <td>
                       <button type="button" className="btn btn-neu btn-sm" onClick={() => handleRegister(r.applicationGuid)} aria-label={`Register ${orDash(r.studentName)}`}>
                         <i className="lni lni-graduation" aria-hidden="true" /> Register
@@ -195,7 +195,7 @@ export default function RegistrationPage() {
                   )}
                   <td className="text-sm tabular-nums">{orDash(r.appRefNo)}</td>
                   <td>
-                    {permissions.add
+                    {permissions.register
                       ? <button type="button" className="vd-name-btn" onClick={() => handleRegister(r.applicationGuid)}>{orDash(r.studentName)}</button>
                       : <span className="font-semibold text-g900">{orDash(r.studentName)}</span>}
                   </td>

@@ -1,7 +1,10 @@
-// Class Attendance (class-attendance-frontend-spec.md, Attendance service).
-// UI-ONLY FOR NOW: no network calls. Every function below works on the
-// in-memory mock store, shaped exactly like the spec's request/response
-// DTOs, so swapping in the real endpoints later only touches this file:
+import { apiDelete, apiGet, apiPost, AuthError } from '../client'
+import { getBatchDropdown } from '../academic/batch'
+import { getCourseUnits } from '../academic/courseUnit'
+import { getTimetableByGuid, getTimetableByLecturer, type TimetableEntry } from '../academic/timetable'
+
+// Class Attendance (class-attendance-frontend-spec.md, Attendance service;
+// confirmed live on the gateway, not yet in erp-docs):
 //   GET    /api/v1/attendance/sessions/pending-outlines?timetableGuid=
 //   GET    /api/v1/attendance/sessions/by-timetable-date?timetableGuid=&date=
 //   GET    /api/v1/attendance/sessions/outlines/by-unit?courseUnitGuid=
@@ -10,6 +13,13 @@
 //   GET    /api/v1/attendance/sessions?page=&pageSize=&batchGuid=&courseUnitGuid=
 //   DELETE /api/v1/attendance/sessions/{guid}
 // Dates are YYYY-MM-DD, times HH:mm:ss (24-hour).
+//
+// The spec names no timetable-list endpoint, so timetables come from the
+// academic timetable API: a lecturer's slots for an intake and term
+// (/academic/timetables/by-lecturer), or one slot by guid (its detail, then
+// the same lecturer list for the names and times). NEXT_PUBLIC_AUTH_MOCK
+// keeps everything on the in-memory mock store further down.
+const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
 export const SESSION_STATUS_META: Record<number, { label: string; badge: string }> = {
   0: { label: 'Scheduled', badge: 'badge-blue' },
@@ -113,6 +123,9 @@ export interface AttendanceTimetable {
   term: number
   termStart: string
   termEnd: string
+  // Every (unit, batch, semester) the slot teaches; one timetable entry can
+  // teach several batches. Absent on the mock store (one batch each).
+  links?: { courseUnitGuid: string; batchGuid: string; semesterGuid: string }[]
 }
 
 // ── Date helpers (local time) ──
@@ -145,8 +158,10 @@ function shift(ymd: string, days: number) {
   return toYmd(d)
 }
 
+// An unrecognised day code never flags a special class.
 function isOffDay(t: AttendanceTimetable, ymd: string) {
-  return parseYmd(ymd).getDay() !== DAY_INDEX[t.dayCode]
+  const day = DAY_INDEX[(t.dayCode ?? '').slice(0, 3).toUpperCase()]
+  return day !== undefined && parseYmd(ymd).getDay() !== day
 }
 
 export function isBeforeStart(ymd: string, startTime: string) {
@@ -241,21 +256,89 @@ function toListItem(s: StoredSession): AttendanceSessionListItem {
 }
 
 // ── Functions ──
+
+// The mock store's full list (used by the mock paths and the reports' mock).
 export function getTimetables(): Promise<AttendanceTimetable[]> {
   return delay(TIMETABLES)
 }
 
-export function getAttendanceBatches(): Promise<{ value: string; label: string }[]> {
-  return delay([...new Map(TIMETABLES.map(t => [t.batchGuid, { value: t.batchGuid, label: t.batchCode }])).values()])
+function toAttendanceTimetable(e: TimetableEntry, term: number): AttendanceTimetable {
+  const first = e.batches[0]
+  const join = (vals: (string | null)[]) => Array.from(new Set(vals.filter(Boolean))).join(' / ')
+  return {
+    timetableGuid: e.timetableGuid,
+    courseUnitGuid: first?.courseUnitGuid ?? '',
+    courseUnitCode: join(e.batches.map(b => b.courseUnitCode)) || '—',
+    courseUnitName: join(e.batches.map(b => b.courseUnitName)) || '—',
+    batchGuid: first?.batchGuid ?? '',
+    batchCode: Array.from(new Set(e.batches.map(b => b.batchCode))).join(' + ') || '—',
+    semesterGuid: first?.semesterGuid ?? '',
+    lecturerEmployeeGuid: e.lecturerGuid,
+    lecturerName: e.lecturerName ?? '—',
+    dayCode: e.dayCode,
+    dayName: e.dayName,
+    startTime: e.startTime,
+    endTime: e.endTime,
+    term,
+    termStart: '',
+    termEnd: '',
+    links: e.batches.map(b => ({ courseUnitGuid: b.courseUnitGuid, batchGuid: b.batchGuid, semesterGuid: b.semesterGuid })),
+  }
 }
 
-export function getAttendanceCourseUnits(): Promise<{ value: string; label: string }[]> {
-  return delay([...new Map(TIMETABLES.map(t => [t.courseUnitGuid, { value: t.courseUnitGuid, label: `${t.courseUnitName} (${t.courseUnitCode})` }])).values()])
+// A lecturer's timetabled slots for an intake and term.
+export async function getLecturerTimetables(intakeGuid: string, term: number, lecturerGuid: string): Promise<AttendanceTimetable[]> {
+  if (MOCK_AUTH) return delay(TIMETABLES.filter(t => t.lecturerEmployeeGuid === lecturerGuid))
+  const res = await getTimetableByLecturer(lecturerGuid, intakeGuid, term)
+  return (res.entries ?? [])
+    .map(e => toAttendanceTimetable(e, term))
+    .sort((a, b) => a.courseUnitCode.localeCompare(b.courseUnitCode) || a.dayName.localeCompare(b.dayName))
 }
 
-// A date with nothing recorded yet comes back as a Scheduled session with
-// no guid.
-export function getSessionByTimetableDate(timetableGuid: string, date: string): Promise<AttendanceSession | null> {
+// One slot by guid, for a session opened by link (?timetable=).
+export async function getTimetableForAttendance(guid: string): Promise<AttendanceTimetable | null> {
+  if (MOCK_AUTH) return delay(findTimetable(guid) ?? null)
+  const d = await getTimetableByGuid(guid)
+  const term = d.term ?? 1
+  const res = await getTimetableByLecturer(d.lecturerGuid, d.intakeGuid, term)
+  const e = (res.entries ?? []).find(x => x.timetableGuid === guid)
+  return e ? toAttendanceTimetable(e, term) : null
+}
+
+// Sessions filters. No attendance endpoint lists these, so they come from
+// the academic batch dropdown and course unit list.
+export async function getAttendanceBatches(): Promise<{ value: string; label: string }[]> {
+  if (MOCK_AUTH) return delay([...new Map(TIMETABLES.map(t => [t.batchGuid, { value: t.batchGuid, label: t.batchCode }])).values()])
+  const batches = await getBatchDropdown()
+  return batches.map(b => ({ value: b.batchGuid, label: b.batchCode })).sort((a, b) => a.label.localeCompare(b.label))
+}
+
+export async function getAttendanceCourseUnits(): Promise<{ value: string; label: string }[]> {
+  if (MOCK_AUTH) return delay([...new Map(TIMETABLES.map(t => [t.courseUnitGuid, { value: t.courseUnitGuid, label: `${t.courseUnitName} (${t.courseUnitCode})` }])).values()])
+  const res = await getCourseUnits(1, 1000)
+  return (res.items ?? [])
+    .map(u => ({ value: u.courseUnitGuid, label: `${u.courseUnitName} (${u.courseUnitCode})` }))
+    .sort((a, b) => a.label.localeCompare(b.label))
+}
+
+// The session for a slot and date. A date with nothing recorded yet is a
+// Scheduled session with no guid (built here if the API returns nothing).
+export async function getSessionByTimetableDate(timetable: AttendanceTimetable, date: string): Promise<AttendanceSession | null> {
+  if (MOCK_AUTH) return mockSessionByTimetableDate(timetable.timetableGuid, date)
+  const placeholder: AttendanceSession = {
+    attendanceSessionGuid: null, timetableGuid: timetable.timetableGuid, sessionDate: date, startTime: timetable.startTime, endTime: timetable.endTime,
+    status: 0, isAutomated: false, isSkipped: false, skipReason: null, isSpecialClass: isOffDay(timetable, date), outlines: [],
+  }
+  try {
+    const s = await apiGet<AttendanceSession | null>(`/api/v1/attendance/sessions/by-timetable-date?${new URLSearchParams({ timetableGuid: timetable.timetableGuid, date })}`)
+    return s ? { ...placeholder, ...s, outlines: s.outlines ?? [] } : placeholder
+  } catch (e) {
+    if (e instanceof AuthError && e.code === 'not_found') return placeholder
+    throw e
+  }
+}
+
+function mockSessionByTimetableDate(timetableGuid: string, date: string): Promise<AttendanceSession | null> {
   const t = findTimetable(timetableGuid)
   if (!t) return delay(null)
   const s = SESSIONS.find(x => x.timetableGuid === timetableGuid && x.sessionDate === date)
@@ -269,14 +352,13 @@ export function getSessionByTimetableDate(timetableGuid: string, date: string): 
   })
 }
 
-export function getSessionByGuid(guid: string): Promise<AttendanceSessionListItem | null> {
-  const s = SESSIONS.find(x => x.attendanceSessionGuid === guid)
-  return delay(s ? toListItem(s) : null)
-}
-
 // Saved records when a session exists, otherwise the batch's eligible
-// students (all present by default).
-export function getSessionStudents(timetableGuid: string, date: string): Promise<AttendanceStudent[]> {
+// students (all present by default) — the backend decides which.
+export async function getSessionStudents(timetableGuid: string, date: string): Promise<AttendanceStudent[]> {
+  if (!MOCK_AUTH) {
+    const rows = await apiGet<AttendanceStudent[] | null>(`/api/v1/attendance/sessions/students?${new URLSearchParams({ timetableGuid, date })}`)
+    return rows ?? []
+  }
   const t = findTimetable(timetableGuid)
   if (!t) return delay([])
   const s = SESSIONS.find(x => x.timetableGuid === timetableGuid && x.sessionDate === date)
@@ -284,11 +366,17 @@ export function getSessionStudents(timetableGuid: string, date: string): Promise
   return delay(STUDENTS[t.batchGuid].map(st => ({ ...st, isPresent: saved.size ? !!saved.get(st.studentGuid) : true })))
 }
 
-export function getOutlinesByUnit(courseUnitGuid: string): Promise<OutlineTopic[]> {
-  return delay(OUTLINES[courseUnitGuid] ?? [])
+export async function getOutlinesByUnit(courseUnitGuid: string): Promise<OutlineTopic[]> {
+  if (MOCK_AUTH) return delay(OUTLINES[courseUnitGuid] ?? [])
+  const rows = await apiGet<OutlineTopic[] | null>(`/api/v1/attendance/sessions/outlines/by-unit?${new URLSearchParams({ courseUnitGuid })}`)
+  return rows ?? []
 }
 
-export function getPendingOutlineSessions(timetableGuid: string): Promise<PendingOutlineSession[]> {
+export async function getPendingOutlineSessions(timetableGuid: string): Promise<PendingOutlineSession[]> {
+  if (!MOCK_AUTH) {
+    const rows = await apiGet<PendingOutlineSession[] | null>(`/api/v1/attendance/sessions/pending-outlines?${new URLSearchParams({ timetableGuid })}`)
+    return [...(rows ?? [])].sort((a, b) => b.sessionDate.localeCompare(a.sessionDate))
+  }
   return delay(
     SESSIONS
       .filter(s => s.timetableGuid === timetableGuid && s.status === 1 && s.outlines.length === 0)
@@ -297,7 +385,14 @@ export function getPendingOutlineSessions(timetableGuid: string): Promise<Pendin
   )
 }
 
-export function getAttendanceSessions(page: number, pageSize: number, f: { batchGuid?: string; courseUnitGuid?: string } = {}): Promise<PagedSessions> {
+export async function getAttendanceSessions(page: number, pageSize: number, f: { batchGuid?: string; courseUnitGuid?: string } = {}): Promise<PagedSessions> {
+  if (!MOCK_AUTH) {
+    const qs = new URLSearchParams({ page: String(page), pageSize: String(pageSize) })
+    if (f.batchGuid) qs.set('batchGuid', f.batchGuid)
+    if (f.courseUnitGuid) qs.set('courseUnitGuid', f.courseUnitGuid)
+    const d = await apiGet<(Partial<PagedSessions> & { pageNumber?: number }) | null>(`/api/v1/attendance/sessions?${qs}`)
+    return { items: d?.items ?? [], totalCount: d?.totalCount ?? 0, page: d?.page ?? d?.pageNumber ?? page, pageSize: d?.pageSize ?? pageSize }
+  }
   const rows = SESSIONS
     .filter(s => {
       const t = findTimetable(s.timetableGuid)
@@ -307,8 +402,11 @@ export function getAttendanceSessions(page: number, pageSize: number, f: { batch
   return delay({ items: rows.slice((page - 1) * pageSize, page * pageSize).map(toListItem), totalCount: rows.length, page, pageSize })
 }
 
-// Mirrors the backend's validation rules and messages (spec table).
+// POST /sessions/record. Validation failures come back as the API's own
+// messages (AuthError.message / .errors), which the page lists by the Save
+// button. The mock mirrors the same rules and messages (spec table).
 export function recordAttendance(input: RecordAttendanceInput): Promise<AttendanceSession> {
+  if (!MOCK_AUTH) return apiPost<AttendanceSession>('/api/v1/attendance/sessions/record', input)
   const t = findTimetable(input.timetableGuid)
   const errors: string[] = []
   if (!t) errors.push('Timetable not found.')
@@ -341,6 +439,7 @@ export function recordAttendance(input: RecordAttendanceInput): Promise<Attendan
 }
 
 export function deleteAttendanceSession(guid: string): Promise<boolean> {
+  if (!MOCK_AUTH) return apiDelete<boolean>(`/api/v1/attendance/sessions/${encodeURIComponent(guid)}`)
   const i = SESSIONS.findIndex(s => s.attendanceSessionGuid === guid)
   if (i !== -1) SESSIONS.splice(i, 1)
   return delay(true)

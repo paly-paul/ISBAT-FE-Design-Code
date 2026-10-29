@@ -6,8 +6,9 @@ import { ScrollTable } from '@/components/ScrollTable'
 import { Toast } from '@/components/Toast'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import {
-  useAttendanceTimetables, useAttendanceSession, useAttendanceSessionByGuid, useSessionStudents, useOutlinesByUnit, useRecordAttendance,
+  useAttendanceSession, useSessionStudents, useOutlinesByUnit, useRecordAttendance, useTimetableForAttendance,
 } from '@/hooks/attendance/useClassAttendance'
+import { useTimetableScope } from '@/hooks/attendance/useTimetableScope'
 import { SKIP_REASONS, todayYmd, isBeforeStart, parseYmd } from '@/lib/api/attendance/classAttendance'
 import { fmtDate, fmtTime, timetableLabel, StatusBadge } from '@/components/attendance/attShared'
 
@@ -15,8 +16,10 @@ import { fmtDate, fmtTime, timetableLabel, StatusBadge } from '@/components/atte
 // Same content as the spec's Sections A–E, laid out to fit one screen: the
 // session info is a compact header, the roster scrolls inside its own panel,
 // and Skip Class + Outline Topics sit in a sticky side column. Opened
-// directly (pick a timetable and date), from Pending Outline Sessions
-// (?session=), or from Attendance Sessions (?session=&mode=view|edit).
+// directly (Intake → Term → Lecturer → Timetable, then a date), or by link
+// from Pending Outline Sessions / Attendance Sessions
+// (?timetable=&date=&session=&mode=view|edit). There's no get-session-by-guid
+// endpoint, so a link carries the timetable and date the session is loaded by.
 
 const TOPIC_ERROR = 'Please select at least one outline topic.'
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -33,29 +36,32 @@ export default function Page() {
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 
   // ---- Which session ----
-  const { data: timetables = [] } = useAttendanceTimetables()
+  const scope = useTimetableScope()
   const [timetableGuid, setTimetableGuid] = useState('')
   const [date, setDate] = useState(todayYmd())
-  const [sessionGuid, setSessionGuid] = useState<string | null>(null)
+  // A session opened by link: its timetable and date are fixed.
+  const [linkedGuid, setLinkedGuid] = useState<string | null>(null)
   const [readOnly, setReadOnly] = useState(false)
 
   // Read on mount, not via useSearchParams — the static export would need a
   // Suspense boundary for that.
   useEffect(() => {
     const q = new URLSearchParams(window.location.search)
-    setSessionGuid(q.get('session'))
+    const t = q.get('timetable')
+    if (t) {
+      setLinkedGuid(t)
+      setDate(q.get('date') || todayYmd())
+    }
     setReadOnly(q.get('mode') === 'view')
   }, [])
-  const { data: preloaded } = useAttendanceSessionByGuid(sessionGuid)
-  useEffect(() => {
-    if (!preloaded) return
-    setTimetableGuid(preloaded.timetableGuid)
-    setDate(preloaded.sessionDate)
-  }, [preloaded])
+  const linkedQ = useTimetableForAttendance(linkedGuid)
+  const linked = !!linkedGuid
 
-  const timetable = timetables.find(t => t.timetableGuid === timetableGuid) ?? null
-  const sessionQ = useAttendanceSession(timetableGuid || null, date || null)
-  const studentsQ = useSessionStudents(timetableGuid || null, date || null)
+  const timetable = linked
+    ? linkedQ.data ?? null
+    : scope.timetables.find(t => t.timetableGuid === timetableGuid) ?? null
+  const sessionQ = useAttendanceSession(timetable, date || null)
+  const studentsQ = useSessionStudents(timetable?.timetableGuid ?? null, date || null)
   const outlinesQ = useOutlinesByUnit(timetable?.courseUnitGuid ?? null)
   const session = sessionQ.data ?? null
   const students = studentsQ.data ?? []
@@ -107,6 +113,11 @@ export default function Page() {
     setErrors(problems)
     if (problems.length) return
 
+    // One outline row per covered topic for every (unit, batch, semester) the
+    // slot teaches. lecturerEmployeeGuid is the slot's assigned lecturer.
+    const links = timetable.links?.length
+      ? timetable.links
+      : [{ courseUnitGuid: timetable.courseUnitGuid, batchGuid: timetable.batchGuid, semesterGuid: timetable.semesterGuid }]
     record.mutate({
       attendanceSessionGuid: session?.attendanceSessionGuid ?? null,
       timetableGuid: timetable.timetableGuid,
@@ -114,9 +125,7 @@ export default function Page() {
       sessionDate: date,
       isSkipped,
       skipReason: isSkipped ? +skipReason : null,
-      outlines: isSkipped ? [] : [...topics].map(outlineTlGuid => ({
-        courseUnitGuid: timetable.courseUnitGuid, batchGuid: timetable.batchGuid, semesterGuid: timetable.semesterGuid, outlineTlGuid,
-      })),
+      outlines: isSkipped ? [] : [...topics].flatMap(outlineTlGuid => links.map(l => ({ ...l, outlineTlGuid }))),
       studentRecords: isSkipped ? [] : students.map(s => ({ studentGuid: s.studentGuid, isPresent: !!present[s.studentGuid] })),
     }, {
       onSuccess: () => showToast('Attendance recorded successfully.', 'success'),
@@ -144,6 +153,16 @@ export default function Page() {
 
   const loaded = !!timetable && !!session && !sessionQ.isLoading && !studentsQ.isLoading
 
+  const failed = [linkedQ, sessionQ, studentsQ, outlinesQ].find(q => q.isError)
+  const loadError = failed
+    ? (failed.error as Error & { code?: string })?.code === 'forbidden'
+      ? 'You don’t have permission to view class attendance. Ask an administrator for access.'
+      : (failed.error as Error)?.message || 'Please try again.'
+    : null
+  function retryLoad() {
+    for (const q of [linkedQ, sessionQ, studentsQ, outlinesQ]) if (q.isError) q.refetch()
+  }
+
   return (
     <>
       <div className="page active" id="page-attendance-record">
@@ -156,24 +175,66 @@ export default function Page() {
 
         {/* ── Session Info ── */}
         <section className="card att-head" aria-label="Session info">
-          <div className="att-pickers">
-            <div className="fg m-0 att-pick-tt">
-              <div className="lbl">Timetable</div>
-              <SearchSelect
-                placeholder="— Select timetable —"
-                options={timetables.map(t => ({ value: t.timetableGuid, label: timetableLabel(t) }))}
-                value={timetableGuid}
-                onChange={v => { setTimetableGuid(v); setSessionGuid(null) }}
-                disabled={locked || !!sessionGuid}
-              />
+          {linked ? (
+            <div className="att-pickers">
+              <div className="fg m-0 att-pick-tt">
+                <div className="lbl">Timetable</div>
+                <input
+                  className="ctrl"
+                  readOnly
+                  aria-readonly="true"
+                  value={timetable ? timetableLabel(timetable) : linkedQ.isLoading ? 'Loading timetable…' : 'Timetable not found'}
+                />
+              </div>
+              <div className="fg m-0 att-pick-date">
+                <div className="lbl">Session Date</div>
+                <input className="ctrl" value={fmtDate(date)} readOnly aria-readonly="true" />
+              </div>
             </div>
-            <div className="fg m-0 att-pick-date">
-              <div className="lbl">Session Date</div>
-              {locked || sessionGuid
-                ? <input className="ctrl" value={fmtDate(date)} readOnly aria-readonly="true" />
-                : <DatePicker value={date} onChange={setDate} maxYmd={todayYmd()} />}
+          ) : (
+            <div className="att-pickers att-pickers--scope">
+              <div className="fg m-0">
+                <div className="lbl">Intake</div>
+                <SearchSelect placeholder="Select intake…" options={scope.intakesQ.data ?? []} value={scope.intakeGuid} onChange={v => { scope.setIntake(v); setTimetableGuid('') }} isLoading={scope.intakesQ.isLoading} />
+              </div>
+              <div className="fg m-0">
+                <div className="lbl">Term</div>
+                <SearchSelect
+                  placeholder={scope.intakeGuid ? 'Select term…' : 'Select an intake first'}
+                  options={scope.termsQ.data ?? []}
+                  value={scope.term}
+                  onChange={v => { scope.setTerm(v); setTimetableGuid('') }}
+                  disabled={!scope.intakeGuid}
+                />
+              </div>
+              <div className="fg m-0">
+                <div className="lbl">Lecturer</div>
+                <SearchSelect
+                  placeholder={scope.term ? 'Select lecturer…' : 'Select a term first'}
+                  options={scope.lecturersQ.data ?? []}
+                  value={scope.lecturerGuid}
+                  onChange={v => { scope.setLecturer(v); setTimetableGuid('') }}
+                  disabled={!scope.term}
+                  isLoading={scope.lecturersQ.isLoading}
+                />
+              </div>
+              <div className="fg m-0 att-pick-tt">
+                <div className="lbl">Timetable</div>
+                <SearchSelect
+                  placeholder={!scope.lecturerGuid ? 'Select a lecturer first' : scope.timetablesQ.data?.length === 0 ? 'No timetabled slots' : 'Select timetable…'}
+                  options={scope.timetables.map(t => ({ value: t.timetableGuid, label: timetableLabel(t) }))}
+                  value={timetableGuid}
+                  onChange={setTimetableGuid}
+                  disabled={!scope.lecturerGuid}
+                  isLoading={scope.timetablesQ.isLoading}
+                />
+              </div>
+              <div className="fg m-0 att-pick-date">
+                <div className="lbl">Session Date</div>
+                <DatePicker value={date} onChange={setDate} maxYmd={todayYmd()} />
+              </div>
             </div>
-          </div>
+          )}
 
           {timetable && session && (
             <div className="att-strip">
@@ -209,12 +270,31 @@ export default function Page() {
           )}
         </section>
 
-        {!timetable ? (
-          <div className="card att-placeholder">
-            <span className="att-placeholder-icon"><i className="lni lni-calendar" aria-hidden="true"></i></span>
-            <div className="att-placeholder-title">Select a timetable and date</div>
-            <div className="att-placeholder-sub">The session, its outline topics and the student list load once both are chosen.</div>
+        {loadError ? (
+          // Shown once; only the user's Retry sends the requests again.
+          <div className="card att-placeholder" role="alert">
+            <span className="att-placeholder-icon att-placeholder-icon--amber"><i className="lni lni-warning" aria-hidden="true"></i></span>
+            <div className="att-placeholder-title">Couldn&apos;t load this session</div>
+            <div className="att-placeholder-sub">{loadError}</div>
+            <button type="button" className="btn btn-neu btn-sm" onClick={retryLoad}><i className="lni lni-reload" aria-hidden="true"></i> Retry</button>
           </div>
+        ) : !timetable ? (
+          linked && linkedQ.isLoading ? (
+            <div className="card att-placeholder" role="status">
+              <span className="att-placeholder-icon"><i className="lni lni-spinner-arrow spin" aria-hidden="true"></i></span>
+              <div className="att-placeholder-title">Loading session…</div>
+            </div>
+          ) : (
+            <div className="card att-placeholder">
+              <span className="att-placeholder-icon"><i className="lni lni-calendar" aria-hidden="true"></i></span>
+              <div className="att-placeholder-title">{linked ? 'Timetable not found' : 'Select a timetable and date'}</div>
+              <div className="att-placeholder-sub">
+                {linked
+                  ? 'This session’s timetable entry no longer exists. Open Record Attendance from the sidebar to pick another.'
+                  : 'Pick the intake, term and lecturer, then the timetable slot. The session, its outline topics and the student list load once a date is chosen.'}
+              </div>
+            </div>
+          )
         ) : !loaded ? (
           <div className="card att-placeholder" role="status">
             <span className="att-placeholder-icon"><i className="lni lni-spinner-arrow spin" aria-hidden="true"></i></span>
@@ -254,6 +334,12 @@ export default function Page() {
                         <p className="att-tally-text" aria-live="polite">
                           {presentCount} Present / {absentCount} Absent out of {students.length} students
                         </p>
+                        {!isAutomated && !locked && (
+                          <p className="att-howto">
+                            <i className="lni lni-information" aria-hidden="true"></i>
+                            Everyone starts as <strong>Present</strong>. Switch off anyone who is absent, then save.
+                          </p>
+                        )}
                         <div className="att-tools">
                           <div className="att-seg" role="tablist" aria-label="Show students">
                             {(['all', 'present', 'absent'] as const).map(f => (
@@ -285,7 +371,7 @@ export default function Page() {
                             <th style={{ width: 52 }}>#</th>
                             <th style={{ width: 150 }}>Student Number</th>
                             <th>Student Name</th>
-                            <th style={{ width: 190 }}>{isAutomated ? 'Status' : 'Present'}</th>
+                            <th style={{ width: 170 }}>{isAutomated ? 'Status' : 'Attendance'}</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -311,10 +397,20 @@ export default function Page() {
                                       <i className={`lni ${isIn ? 'lni-checkmark' : 'lni-close'}`} aria-hidden="true"></i> {isIn ? 'Present' : 'Absent'}
                                     </span>
                                   ) : (
-                                    <span className="att-toggle" role="group" aria-label={`Attendance for ${s.fullName}`}>
-                                      <button type="button" aria-pressed={isIn} className={`att-toggle-opt att-toggle-opt--in${isIn ? ' on' : ''}`} onClick={() => setPresent(p => ({ ...p, [s.studentGuid]: true }))}><i className="lni lni-checkmark" aria-hidden="true"></i> Present</button>
-                                      <button type="button" aria-pressed={!isIn} className={`att-toggle-opt att-toggle-opt--out${!isIn ? ' on' : ''}`} onClick={() => setPresent(p => ({ ...p, [s.studentGuid]: false }))}><i className="lni lni-close" aria-hidden="true"></i> Absent</button>
-                                    </span>
+                                    // One switch per student (on = present). A Present/Absent
+                                    // pair of buttons read as an action still to take,
+                                    // since everyone starts as Present.
+                                    <button
+                                      type="button"
+                                      role="switch"
+                                      aria-checked={isIn}
+                                      aria-label={`Present: ${s.fullName}`}
+                                      className={`att-mark${isIn ? ' is-in' : ' is-out'}`}
+                                      onClick={() => setPresent(p => ({ ...p, [s.studentGuid]: !isIn }))}
+                                    >
+                                      <span className="att-mark-track" aria-hidden="true"><span className="att-mark-knob" /></span>
+                                      <span className="att-mark-lbl" aria-hidden="true">{isIn ? 'Present' : 'Absent'}</span>
+                                    </button>
                                   )}
                                 </td>
                               </tr>

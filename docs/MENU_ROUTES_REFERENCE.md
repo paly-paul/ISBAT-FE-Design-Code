@@ -1016,6 +1016,9 @@ New module (2026-10-28). Its rail sits between Student and Employee.
 | Class Attendance | Record Attendance | `/attendance/record` | `get` `add` `edit` | `add` `edit` | `add` = save attendance for a new session (or skip it with a reason); `edit` = change an already recorded session |
 | Class Attendance | Pending Outlines | `/attendance/pending-outlines` | `get` | none | Sessions still waiting for attendance; each row links to Record Attendance |
 | Management | Attendance Sessions | `/attendance/sessions` | `get` `edit` `delete` | `edit` `delete` | `edit` opens the session in Record Attendance; automated and cancelled sessions can't be edited |
+| Reports | Attendance by Date | `/attendance/reports/by-date` | `get` `export` | `export` | Sessions of one timetable slot with summary + Download PDF (`export`). Wired to `/attendance/reports/by-date/{preview,pdf}`; the API itself checks `assessment.attendancereport.get` |
+| Reports | Student Attendance % | `/attendance/reports/student-pct` | `get` `export` | `export` | Students' attendance for an intake + term, optionally by lecturer / course unit, + Download PDF (`export`). Wired to `/attendance/reports/*-pct/{preview,pdf}`; the API itself checks `assessment.attendancereport.get` |
+| Reports | Faculty Attendance % | `/attendance/reports/faculty-pct` | `get` `export` | `export` | Sessions conducted vs scheduled per lecturer and course unit for an intake + term, optionally one lecturer, + Download PDF (`export`). Wired to `/attendance/reports/*-pct/{preview,pdf}`; the API itself checks `assessment.attendancereport.get` |
 
 ```json
 {
@@ -1057,6 +1060,35 @@ New module (2026-10-28). Its rail sits between Student and Employee.
           "icon": "lni lni-calendar",
           "url": "/attendance/sessions",
           "permissions": { "get": true, "edit": true, "delete": true },
+          "children": []
+        }
+      ]
+    },
+    {
+      "name": "Reports",
+      "icon": null,
+      "url": null,
+      "permissions": null,
+      "children": [
+        {
+          "name": "Attendance by Date",
+          "icon": "lni lni-bar-chart",
+          "url": "/attendance/reports/by-date",
+          "permissions": { "get": true, "export": true },
+          "children": []
+        },
+        {
+          "name": "Student Attendance %",
+          "icon": "lni lni-users",
+          "url": "/attendance/reports/student-pct",
+          "permissions": { "get": true, "export": true },
+          "children": []
+        },
+        {
+          "name": "Faculty Attendance %",
+          "icon": "lni lni-briefcase",
+          "url": "/attendance/reports/faculty-pct",
+          "permissions": { "get": true, "export": true },
           "children": []
         }
       ]

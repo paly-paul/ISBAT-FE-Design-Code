@@ -4,20 +4,37 @@ import {
   getAttendanceBatches,
   getAttendanceCourseUnits,
   getAttendanceSessions,
+  getLecturerTimetables,
   getOutlinesByUnit,
   getPendingOutlineSessions,
-  getSessionByGuid,
   getSessionByTimetableDate,
   getSessionStudents,
-  getTimetables,
+  getTimetableForAttendance,
   recordAttendance,
+  type AttendanceTimetable,
   RecordAttendanceInput,
 } from '@/lib/api/attendance/classAttendance'
 
 const KEY = ['classAttendance']
 
-export function useAttendanceTimetables() {
-  return useQuery({ queryKey: [...KEY, 'timetables'], queryFn: getTimetables, staleTime: Infinity })
+// A lecturer's slots for an intake and term (the timetable pickers).
+export function useLecturerTimetables(intakeGuid: string | null, term: number, lecturerGuid: string | null) {
+  return useQuery({
+    queryKey: [...KEY, 'timetables', intakeGuid, term, lecturerGuid],
+    queryFn: () => getLecturerTimetables(intakeGuid as string, term, lecturerGuid as string),
+    enabled: !!intakeGuid && !!term && !!lecturerGuid,
+    staleTime: Infinity,
+  })
+}
+
+// One slot by guid (a session opened by link, a Sessions row's class).
+export function useTimetableForAttendance(guid: string | null) {
+  return useQuery({
+    queryKey: [...KEY, 'timetable', guid],
+    queryFn: () => getTimetableForAttendance(guid as string),
+    enabled: !!guid,
+    staleTime: Infinity,
+  })
 }
 
 export function useAttendanceBatches() {
@@ -28,19 +45,11 @@ export function useAttendanceCourseUnits() {
   return useQuery({ queryKey: [...KEY, 'courseUnits'], queryFn: getAttendanceCourseUnits, staleTime: Infinity })
 }
 
-export function useAttendanceSession(timetableGuid: string | null, date: string | null) {
+export function useAttendanceSession(timetable: AttendanceTimetable | null, date: string | null) {
   return useQuery({
-    queryKey: [...KEY, 'session', timetableGuid, date],
-    queryFn: () => getSessionByTimetableDate(timetableGuid as string, date as string),
-    enabled: !!timetableGuid && !!date,
-  })
-}
-
-export function useAttendanceSessionByGuid(guid: string | null) {
-  return useQuery({
-    queryKey: [...KEY, 'byGuid', guid],
-    queryFn: () => getSessionByGuid(guid as string),
-    enabled: !!guid,
+    queryKey: [...KEY, 'session', timetable?.timetableGuid ?? null, date],
+    queryFn: () => getSessionByTimetableDate(timetable as AttendanceTimetable, date as string),
+    enabled: !!timetable && !!date,
   })
 }
 

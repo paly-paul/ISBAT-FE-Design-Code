@@ -12,6 +12,7 @@ import { useApplicants, useExportApplicationsCsv, ApplicantListItem, ApplicantSt
 import { ViewApplicantModal } from '@/components/modals/admission/ViewApplicantModal'
 import { downloadBlob } from '@/lib/downloadBlob'
 import { AuthError } from '@/lib/api/client'
+import { useActionGuard } from '@/hooks/users/useActionGuard'
 
 const PAGE_SIZE = 10
 // Don't narrow the table (or open the search dropdown) until the user's
@@ -88,7 +89,12 @@ export default function ApplicantsPage() {
   // table itself shows" scope get-export-csv.md's optional intake/programme/
   // date params would otherwise narrow.
   const exportCsv = useExportApplicationsCsv()
+  // Button stays visible; without the menu's `export` key, a toast explains.
+  const guard = useActionGuard(showToast)
   function handleExport() {
+    guard('export', runExport, 'applicants')
+  }
+  function runExport() {
     exportCsv.mutate({}, {
       onSuccess: ({ blob, filename }) => {
         downloadBlob(blob, filename)

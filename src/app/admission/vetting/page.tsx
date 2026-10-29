@@ -216,7 +216,8 @@ export default function VettingPage() {
   const rejHasFilters = !!(rejCommittedSearch || rejIntake || rejCampus || rejProgram)
   // Revert has no server-side permission check either — the action column
   // only shows with edit permission.
-  const rejColSpan = permissions.edit ? 9 : 8
+  // Revert undoes a rejection, so it follows the menu's `reject` key.
+  const rejColSpan = permissions.reject ? 9 : 8
   function clearRejFilters() { setRejSearch(''); setRejCommittedSearch(''); setRejIntake(''); setRejCampus(''); setRejProgram(''); setRejPage(1) }
 
   // ---- Waiting list (GET /admissions/vetting/waiting-list) ----
@@ -505,7 +506,7 @@ export default function VettingPage() {
               <table>
                 <thead>
                   <tr>
-                    {permissions.edit && <th><span className="sr-only">Actions</span></th>}
+                    {permissions.reject && <th><span className="sr-only">Actions</span></th>}
                     <th>App. Ref</th>
                     <th>Applicant</th>
                     <th>Contact</th>
@@ -530,7 +531,7 @@ export default function VettingPage() {
                       : null}
                   {rejItems.map(r => (
                     <tr key={r.applicationGuid}>
-                      {permissions.edit && (
+                      {permissions.reject && (
                         <td><button type="button" className="btn btn-neu btn-sm" onClick={() => handleRevert(r)} aria-label={`Revert rejection of ${orDash(r.studentName)}`}><i className="lni lni-reload" aria-hidden="true" /> Revert</button></td>
                       )}
                       <td className="text-sm tabular-nums">{orDash(r.appRefNo)}</td>
@@ -564,7 +565,9 @@ export default function VettingPage() {
         applicationGuid={selectedApplicationGuid}
         vetApplication={vetApplicationMutation}
         onReject={handleReject}
-        canVet={permissions.edit}
+        canApprove={!!permissions.approve}
+        canReject={!!permissions.reject}
+        canHold={!!permissions.hold}
         allowWait={!reviewFromWaiting}
       />
       <RevertRejectionModal

@@ -388,6 +388,14 @@ const mockMenu: MenuNode[] = [
     section('Management', [
       leaf('Attendance Sessions', 'calendar', '/attendance/sessions'),
     ]),
+    // attendance-report-pages-design.md, 2026-10-28; wired to
+    // /attendance/reports/* (attendanceReports.ts). Real mode shows it once
+    // /me/menu returns it.
+    section('Reports', [
+      leaf('Attendance by Date', 'bar-chart', '/attendance/reports/by-date'),
+      leaf('Student Attendance %', 'users', '/attendance/reports/student-pct'),
+      leaf('Faculty Attendance %', 'briefcase', '/attendance/reports/faculty-pct'),
+    ]),
   ]),
   module_('Employee', 'briefcase', [
     section('Employee Records', [
