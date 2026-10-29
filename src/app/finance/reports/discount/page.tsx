@@ -1,23 +1,19 @@
 'use client'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { ScrollTable } from '@/components/ScrollTable'
 import { SearchSelect } from '@/components/SearchSelect'
 import { MultiSelect } from '@/components/MultiSelect'
 import DatePicker from '@/components/DatePicker'
 import { useIntakesDropdown } from '@/hooks/academic/useIntakes'
 import { useProgramDropdown } from '@/hooks/academic/useProgramMaster'
-import { AuthError } from '@/lib/api/client'
 import { scrollToFirstError } from '@/lib/scrollToFirstError'
-import { simulateReportStatus } from '@/lib/notificationsHub'
-import { REPORT_JOBS_KEY, downloadReportJob, trackInline, upsertReportJob } from '@/lib/reportDownloads'
+import { ReportExportControls } from '@/components/finance/ReportExportControls'
 import {
   DiscountReportFilters, DiscountReportRow,
   DISCOUNT_REPORT_MAX_PROGRAMMES, DISCOUNT_REPORT_MAX_SEARCH,
-  exportDiscountReport, getDiscountDropdown, getDiscountReportPreview, getReportJobs, REPORT_STATUS,
+  exportDiscountReport, getDiscountDropdown, getDiscountReportPreview,
 } from '@/lib/api/finance/discountReport'
-
-const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
 // Discount Report — erp-docs/pages/finance/discount-report-page.md.
 // Process → page 1 (summary + 15 rows) → infinite scroll (includeSummary=false)
@@ -109,8 +105,6 @@ export default function DiscountReportPage() {
   function handleProcess() {
     if (!validate()) return
     setSaved(toFilters(form))
-    setExportJobGuid(null)
-    setExportError(null)
     setRunId(r => r + 1)
     setFiltersOpen(false)
   }
@@ -174,69 +168,8 @@ export default function DiscountReportPage() {
     return chips
   }, [saved, intakeOptions, discountOptions, programOptions])
 
-  // ── Export ──────────────────────────────────────────────────────────────
-  // The button follows the job it started: Export to Excel → Processing… →
-  // Download (or an inline error with Try again). No toasts here; the job
-  // also appears in the header's Downloads list, which skips its own toast
-  // for a job this page is showing (trackInline).
-  const queryClient = useQueryClient()
-  const jobsQuery = useQuery({ queryKey: REPORT_JOBS_KEY, queryFn: () => getReportJobs(1, 15) })
-  const [exportJobGuid, setExportJobGuid] = useState<string | null>(null)
-  const [exportError, setExportError] = useState<string | null>(null)
-  const [exporting, setExporting] = useState(false)
-  const [downloading, setDownloading] = useState(false)
-  const exportJob = exportJobGuid ? jobsQuery.data?.items.find(j => j.reportJobGuid === exportJobGuid) : undefined
-  useEffect(() => (exportJobGuid ? trackInline(exportJobGuid) : undefined), [exportJobGuid])
-
-  const exportPhase: 'idle' | 'processing' | 'ready' | 'failed' =
-    exporting || exportJob?.status.value === REPORT_STATUS.Queued || exportJob?.status.value === REPORT_STATUS.Processing ? 'processing'
-    : exportJob?.status.value === REPORT_STATUS.Completed && !exportJob.isExpired ? 'ready'
-    : exportJob?.status.value === REPORT_STATUS.Failed ? 'failed'
-    : 'idle'
-
-  async function handleExport() {
-    if (!saved) return
-    setExporting(true)
-    setExportError(null)
-    try {
-      // The SAVED filters from Process, never the live form.
-      const { job } = await exportDiscountReport(saved)
-      upsertReportJob(queryClient, job)   // same guid on a duplicate export → updated, not added twice
-      setExportJobGuid(job.reportJobGuid)
-      if (MOCK_AUTH) {
-        const base = { reportJobGuid: job.reportJobGuid, reportName: job.reportName, fileName: null, downloadUrl: null, downloadUrlExpiresAtUtc: null, errorMessage: null }
-        setTimeout(() => simulateReportStatus({ ...base, status: 2, statusName: "Processing", occurredAtUtc: new Date().toISOString() }), 1200)
-        setTimeout(() => simulateReportStatus({ ...base, status: 3, statusName: "Completed", fileName: "Discount_Report.xlsx", downloadUrl: "#", downloadUrlExpiresAtUtc: new Date(Date.now() + 600_000).toISOString(), occurredAtUtc: new Date().toISOString() }), 4200)
-      }
-    } catch (err) {
-      const code = err instanceof AuthError ? err.code : undefined
-      setExportError(code === "employee_required"
-        ? "Your account isn’t linked to an employee record, so it can’t export. Ask an administrator to link it."
-        : errorMessage(err, "Couldn’t start the export. Please try again."))
-    } finally {
-      setExporting(false)
-    }
-  }
-
-  async function handleDownload() {
-    if (!exportJobGuid) return
-    setDownloading(true)
-    setExportError(null)
-    try {
-      const opened = await downloadReportJob(exportJobGuid)
-      if (!opened) setExportError("Mock mode: there’s no real file to download.")
-    } catch (err) {
-      if (err instanceof AuthError && err.code === "report_expired") {
-        setExportJobGuid(null)
-        setExportError("This report has expired. Please export it again.")
-        jobsQuery.refetch()
-      } else {
-        setExportError(errorMessage(err, "Couldn’t get the download link. Please try again."))
-      }
-    } finally {
-      setDownloading(false)
-    }
-  }
+  // Export: the shared ReportExportControls (same as the Transaction /
+  // Outstanding reports) — permission check, progress and error toasts.
 
   // ── Render ──────────────────────────────────────────────────────────────
   return (
@@ -348,31 +281,11 @@ export default function DiscountReportPage() {
               <div className="rpt-count">
                 <strong>{fmtCount(totalCount)}</strong> rows · <strong>{fmtCount(summary?.totalStudents ?? 0)}</strong> students
               </div>
-              <div className="rpt-export">
-                {exportError && <span className="rpt-export-msg err" role="alert">{exportError}</span>}
-                {exportPhase === 'failed' && !exportError && (
-                  <span className="rpt-export-msg err" role="alert">{exportJob?.errorMessage || 'The report could not be generated.'}</span>
-                )}
-                {exportPhase === 'processing' && <span className="rpt-export-msg" aria-live="polite">Building the Excel file…</span>}
-                {exportPhase === 'ready' && !exportError && (
-                  <span className="rpt-export-msg ok" aria-live="polite">
-                    {exportJob?.rowCount != null ? `Ready · ${fmtCount(exportJob.rowCount)} rows` : 'Ready'}
-                  </span>
-                )}
-                {exportPhase === 'processing' ? (
-                  <button type="button" className="btn btn-primary btn-sm" disabled aria-busy="true">
-                    <i className="lni lni-spinner-arrow spin" aria-hidden="true" /> Processing…
-                  </button>
-                ) : exportPhase === 'ready' ? (
-                  <button type="button" className="btn btn-success btn-sm" onClick={handleDownload} disabled={downloading}>
-                    <i className={`lni ${downloading ? 'lni-spinner-arrow spin' : 'lni-download'}`} aria-hidden="true" /> Download Excel
-                  </button>
-                ) : (
-                  <button type="button" className="btn btn-primary btn-sm" onClick={handleExport}>
-                    <i className={`lni ${exportPhase === 'failed' ? 'lni-reload' : 'lni-download'}`} aria-hidden="true" /> {exportPhase === 'failed' ? 'Try again' : 'Export to Excel'}
-                  </button>
-                )}
-              </div>
+              <ReportExportControls
+                resetKey={runId}
+                mockFileName="Discount_Report.xlsx"
+                startExport={() => exportDiscountReport(saved!)}
+              />
             </div>
 
             <ScrollTable className="rpt-scroll">

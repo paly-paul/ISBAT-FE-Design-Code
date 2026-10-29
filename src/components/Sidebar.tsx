@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useMenu } from '@/hooks/users/useMenu'
 import { MenuNode } from '@/lib/api/users/menu'
 
-export type RailId = 'admission' | 'academic' | 'finance' | 'student' | 'employee' | 'assessment' | 'config' | 'activity-log'
+export type RailId = 'admission' | 'academic' | 'finance' | 'student' | 'attendance' | 'employee' | 'assessment' | 'config' | 'activity-log'
 
 interface SidebarProps {
   panelOpen: boolean
@@ -30,6 +30,7 @@ const RAIL_DEFS: RailDef[] = [
   { id: 'academic', name: 'Academic', fallbackIcon: 'lni lni-graduation', footer: 'S2 · Academic Service' },
   { id: 'finance', name: 'Finance', fallbackIcon: 'lni lni-dollar', footer: 'S5 · Finance Service' },
   { id: 'student', name: 'Student', fallbackIcon: 'lni lni-user', footer: 'S10 · Student Service' },
+  { id: 'attendance', name: 'Attendance', fallbackIcon: 'lni lni-alarm-clock', footer: 'S6 · Attendance Service' },
   { id: 'employee', name: 'Employee', fallbackIcon: 'lni lni-briefcase', footer: 'S4 · Employee Service' },
   { id: 'assessment', name: 'Assessment', fallbackIcon: 'lni lni-pencil-alt', footer: 'S4 · Evaluation Lifecycle' },
   { id: 'config', name: 'Config', fallbackIcon: 'lni lni-cog', footer: 'S0 · Core Config' },
@@ -247,9 +248,7 @@ export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSection
   const activeDef = RAIL_DEFS.find(d => d.id === activeRail)!
 
   // renderRailSlot(def) returns null for a module the user has no access to
-  // (moduleByName.get(def.name) misses) — everything else here (the two
-  // locked "Coming Soon" placeholders, the loading skeleton) always
-  // renders something. Dividers used to be hardcoded between every pair of
+  // (moduleByName.get(def.name) misses). Dividers used to be hardcoded between every pair of
   // slots regardless, so a null slot (e.g. no Config access) left two
   // .rail-dividers stacked back-to-back with nothing between them — a
   // visibly doubled line right above whatever module happened to follow
@@ -261,10 +260,11 @@ export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSection
     { key: 'academic', node: renderRailSlot(RAIL_DEFS[1]) },
     { key: 'finance', node: renderRailSlot(RAIL_DEFS[2]) },
     { key: 'student', node: renderRailSlot(RAIL_DEFS[3]) },
-    { key: 'employee', node: renderRailSlot(RAIL_DEFS[4]) },
-    { key: 'assessment', node: renderRailSlot(RAIL_DEFS[5]) },
-    { key: 'config', node: renderRailSlot(RAIL_DEFS[6]) },
-    { key: 'activity-log', node: renderRailSlot(RAIL_DEFS[7]) },
+    { key: 'attendance', node: renderRailSlot(RAIL_DEFS[4]) },
+    { key: 'employee', node: renderRailSlot(RAIL_DEFS[5]) },
+    { key: 'assessment', node: renderRailSlot(RAIL_DEFS[6]) },
+    { key: 'config', node: renderRailSlot(RAIL_DEFS[7]) },
+    { key: 'activity-log', node: renderRailSlot(RAIL_DEFS[8]) },
   ]
   const visibleRailSlots = railSlots.filter(s => s.node)
 

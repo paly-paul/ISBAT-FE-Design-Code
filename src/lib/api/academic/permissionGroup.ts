@@ -1,4 +1,4 @@
-import { apiGet, apiPost, apiPut } from '../client'
+import { apiDelete, apiGet, apiPost, apiPut } from '../client'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
@@ -145,4 +145,17 @@ export function updatePermissionGroup(id: string, input: PermissionGroupInput): 
     description: input.description,
     permissionIds: input.permissions,
   }).then(fromApi)
+}
+
+// DELETE /api/v1/users/admin/permission-groups/{guid}
+// (delete-permission-group.md) — soft delete, returns true. It does NOT
+// un-assign the group from employees who already have it.
+export function deletePermissionGroup(id: string): Promise<boolean> {
+  if (MOCK_AUTH) {
+    const index = mockPermissionGroups.findIndex(g => g.id === id)
+    if (index === -1) return Promise.reject(new Error('Permission group not found'))
+    mockPermissionGroups.splice(index, 1)
+    return Promise.resolve(true)
+  }
+  return apiDelete<boolean>(`/api/v1/users/admin/permission-groups/${id}`)
 }

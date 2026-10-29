@@ -8,6 +8,7 @@ import { BaselinePanel } from '@/components/student/BaselinePanel'
 import { useStudentRefugeeDetails, useAssignRefugeeStatus, useUpdateRefugeeStatus, useRemoveRefugeeStatus } from '@/hooks/student/useRefugee'
 import { useCountries } from '@/hooks/config/useCountries'
 import { StudentDto } from '@/lib/api/student/student'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 // Finance's own entry point to the refugee-status workflow — the same
 // grant / view / edit / remove operations as Student Master's
@@ -17,6 +18,8 @@ import { StudentDto } from '@/lib/api/student/student'
 
 export default function FinanceRefugeeStatusPage() {
   const router = useRouter()
+  // Grant → add, Edit → edit, Remove → delete (menu permissions).
+  const permissions = usePagePermissions()
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 
@@ -185,19 +188,26 @@ export default function FinanceRefugeeStatusPage() {
                 <div className="flex gap-2" style={{ justifyContent: 'flex-end', marginTop: 8 }}>
                   {hasStatus && !editing ? (
                     <>
-                      <button className="btn btn-neu" onClick={startEdit} disabled={removeRefugeeStatus.isPending}>
-                        <i className="lni lni-pencil"></i> Edit
-                      </button>
-                      <button className="btn btn-primary" style={{ background: 'var(--red)' }} onClick={handleRemove} disabled={removeRefugeeStatus.isPending}>
-                        <i className="lni lni-close"></i> {removeRefugeeStatus.isPending ? 'Removing…' : 'Remove Status'}
-                      </button>
+                      {permissions.edit && (
+                        <button className="btn btn-neu" onClick={startEdit} disabled={removeRefugeeStatus.isPending}>
+                          <i className="lni lni-pencil"></i> Edit
+                        </button>
+                      )}
+                      {permissions.delete && (
+                        <button className="btn btn-primary" style={{ background: 'var(--red)' }} onClick={handleRemove} disabled={removeRefugeeStatus.isPending}>
+                          <i className="lni lni-close"></i> {removeRefugeeStatus.isPending ? 'Removing…' : 'Remove Status'}
+                        </button>
+                      )}
                     </>
                   ) : (
                     <>
                       {editing && <button className="btn btn-neu" onClick={() => setEditing(false)} disabled={saving}>Cancel</button>}
-                      <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
-                        <i className="lni lni-checkmark"></i> {saving ? 'Saving…' : editing ? 'Save Changes' : 'Grant Status'}
-                      </button>
+                      {/* Edit mode is only reachable through Edit (edit); granting is add. */}
+                      {(editing || permissions.add) && (
+                        <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
+                          <i className="lni lni-checkmark"></i> {saving ? 'Saving…' : editing ? 'Save Changes' : 'Grant Status'}
+                        </button>
+                      )}
                     </>
                   )}
                 </div>

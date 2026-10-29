@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { Toast } from '@/components/Toast'
+import { useActionGuard } from '@/hooks/users/useActionGuard'
 
 const SEMESTERS = ['Spring 2026 (20261)', 'Fall 2025 (20252)', 'Spring 2025 (20251)']
 
@@ -21,6 +22,7 @@ const CLEARANCE_DISTRIBUTION = [
 export default function Page() {
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
+  const guard = useActionGuard(showToast)
 
   const [semester, setSemester] = useState(SEMESTERS[0])
 
@@ -36,7 +38,7 @@ export default function Page() {
             <select className="ctrl w-auto" value={semester} onChange={e => setSemester(e.target.value)}>
               {SEMESTERS.map(s => <option key={s}>{s}</option>)}
             </select>
-            <button className="btn btn-neu btn-sm" onClick={() => showToast(`Exporting ${semester} report to Excel…`, 'success')}>
+            <button className="btn btn-neu btn-sm" onClick={() => guard('export', () => showToast(`Exporting ${semester} report to Excel…`, 'success'), 'this report')}>
               <i className="lni lni-upload"></i> Export Excel
             </button>
           </div>

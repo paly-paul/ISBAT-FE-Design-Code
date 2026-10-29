@@ -11,7 +11,7 @@ import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
-import { usePermissionGroups, useCreatePermissionGroup, useUpdatePermissionGroup, PermissionGroup } from '@/hooks/config/usePermissionGroups'
+import { usePermissionGroups, useCreatePermissionGroup, useUpdatePermissionGroup, useDeletePermissionGroup, PermissionGroup } from '@/hooks/config/usePermissionGroups'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
@@ -33,6 +33,16 @@ export default function Page() {
   const sortedRows = [...rows].reverse()
   const createPermissionGroup = useCreatePermissionGroup()
   const updatePermissionGroup = useUpdatePermissionGroup()
+  const deletePermissionGroup = useDeletePermissionGroup()
+  const [deleteTarget, setDeleteTarget] = useState<PermissionGroup | null>(null)
+
+  function confirmDeleteGroup() {
+    if (!deleteTarget) return
+    deletePermissionGroup.mutate(deleteTarget.id, {
+      onSuccess: () => { setDeleteTarget(null); showToast('Permission group deleted successfully', 'success') },
+      onError: (error: Error) => showToast(error.message || 'Failed to delete permission group', 'danger'),
+    })
+  }
 
   // Live preview shown in the search dropdown as the user types — matches
   // the same group/description test as the table's own search filter below.
@@ -119,6 +129,11 @@ export default function Page() {
                             <i className="lni lni-pencil"></i> Edit
                           </button>
                         )}
+                        {permissions.delete && (
+                          <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}>
+                            <i className="lni lni-trash-can"></i> Delete
+                          </button>
+                        )}
                       </ActionMenu>
                     </td>
                     <td><strong>{r.group}</strong></td>
@@ -158,6 +173,24 @@ export default function Page() {
         onEdit={() => { closeModal('view-permission-modal'); if (viewingGroup) openEditModal(viewingGroup) }}
       />
       <Toast toast={toast} />
+
+      {deleteTarget && (
+        <div className="perm-delete-overlay" style={{ position: 'fixed', zIndex: 500 }}>
+          <div className="perm-delete-card tab-panel-in" role="alertdialog" aria-labelledby="pg-del-title" aria-describedby="pg-del-sub" onClick={e => e.stopPropagation()}>
+            <div className="perm-delete-icon"><i className="lni lni-trash-can"></i></div>
+            <div className="perm-delete-title" id="pg-del-title">Delete {deleteTarget.group}?</div>
+            <div className="perm-delete-sub" id="pg-del-sub">
+              This permission group will be deleted. Employees already assigned to it keep the assignment, so remove it from them in Employee Master if they shouldn&apos;t have this access.
+            </div>
+            <div className="perm-delete-actions">
+              <button className="btn btn-neu" onClick={() => setDeleteTarget(null)} disabled={deletePermissionGroup.isPending}>Cancel</button>
+              <button className="btn btn-danger" disabled={deletePermissionGroup.isPending} onClick={confirmDeleteGroup}>
+                <i className="lni lni-trash-can"></i> {deletePermissionGroup.isPending ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }

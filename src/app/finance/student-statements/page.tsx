@@ -13,6 +13,7 @@ import { useStudentStatementSearch, useStudentStatement, useStudentFeeSummary } 
 import { getStudentStatementPdfUrl } from '@/lib/api/student/studentStatement'
 import { PAYMENT_CATEGORY_LABELS, type PaymentHistoryListEntry } from '@/lib/api/finance/paymentConsole'
 import { useExchangeRatesByDates, type ExchangeRate } from '@/hooks/finance/useExchangeRates'
+import { useActionGuard } from '@/hooks/users/useActionGuard'
 
 // Category options for standard SearchSelect dropdown
 const CATEGORY_OPTIONS = [
@@ -249,6 +250,10 @@ export default function StudentStatementPage() {
     )
   }
 
+  // Print actions stay visible; without the menu's `print` permission they
+  // show a toast instead of printing (useActionGuard).
+  const guard = useActionGuard(showToast)
+
   function openReceipt(p: (typeof paymentHistory)[0], print: boolean) {
     const entry: PaymentHistoryListEntry = {
       paymentGuid: p.paymentGuid || `STU-REC-${p.receipt || p.paymentCode || '001'}`,
@@ -343,7 +348,7 @@ export default function StudentStatementPage() {
             <button type="button" className="btn btn-neu btn-sm" onClick={() => openReceipt(p, false)}>
               <i className="lni lni-eye" /> View Receipt
             </button>
-            <button type="button" className="btn btn-neu btn-sm" onClick={() => openReceipt(p, true)}>
+            <button type="button" className="btn btn-neu btn-sm" onClick={() => guard('print', () => openReceipt(p, true), 'receipts')}>
               <i className="lni lni-printer" /> Print Receipt
             </button>
             {p.receipt && (
@@ -569,11 +574,14 @@ export default function StudentStatementPage() {
               </button>
             </div>
 
-            {/* Print & PDF Export Buttons */}
+            {/* Print & PDF Export Buttons — both produce the printable
+                statement, so both follow the menu's `print` permission.
+                Always shown; without it, clicking shows a toast instead of
+                printing. */}
             <button
               type="button"
               className="btn btn-neu btn-sm"
-              onClick={() => window.print()}
+              onClick={() => guard('print', () => window.print(), 'student statements')}
               disabled={!selectedGuid}
               title="Print official statement"
             >
@@ -584,12 +592,12 @@ export default function StudentStatementPage() {
             <button
               type="button"
               className="btn btn-primary btn-sm"
-              onClick={() => {
+              onClick={() => guard('print', () => {
                 if (selectedGuid) {
                   window.open(getStudentStatementPdfUrl(selectedGuid), '_blank')
                   showToast('Opening official signed statement PDF…', 'success')
                 }
-              }}
+              }, 'student statements')}
               disabled={!selectedGuid}
               title="Download signed PDF statement"
             >

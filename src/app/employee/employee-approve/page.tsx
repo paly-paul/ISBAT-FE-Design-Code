@@ -86,7 +86,7 @@ export default function Page() {
                         <td>{r.sex === 1 ? 'Male' : 'Female'}</td>
                         <td><span className="badge badge-amber"><span className="bdot"></span>Pending</span></td>
                         <td>
-                          {permissions.edit && (
+                          {permissions.approve && (
                             <button className="btn btn-primary btn-sm" onClick={() => setConfirmTarget({ employeeGuid: r.employeeGuid, name: `${r.firstName} ${r.surname}` })}>
                               <i className="lni lni-checkmark"></i> Approve
                             </button>

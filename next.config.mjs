@@ -41,6 +41,10 @@ const serverConfig = {
   pageExtensions: ['tsx', 'ts', 'jsx', 'js'],
   // Read by src/lib/documentViewer.ts — only server builds have /doc-proxy.
   env: { NEXT_PUBLIC_DOC_PROXY: 'true' },
+  // `next dev` only: Next 16 blocks its dev assets (/_next/*, HMR) for any
+  // origin but localhost, so http://127.0.0.1:3000 never hydrated. Opening
+  // the app on both hosts gives two cookie jars — two logins side by side.
+  allowedDevOrigins: ['127.0.0.1'],
   // Skipped when API_GATEWAY_URL isn't set — interpolating an unset env var
   // produces the literal string "undefined", which Next.js rejects as an
   // invalid rewrite destination and fails the whole build.

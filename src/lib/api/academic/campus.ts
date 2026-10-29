@@ -48,6 +48,10 @@ export interface Campus {
   location: string
   address: string
   contact: string
+  // "Is biometric enabled for campus" — sessions there are recorded from
+  // biometrics (Class Attendance). Seen on the live GET /campus list
+  // (2026-10-28); not in the erp-docs campus docs yet.
+  isAutomated?: boolean
   intCampus?: number
   campusId?: number
   id?: string | number

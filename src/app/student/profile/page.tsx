@@ -14,7 +14,7 @@ import { useDropoutStudents } from '@/hooks/student/useDropoutRejoin'
 import { useCountries } from '@/hooks/config/useCountries'
 import { useIntakesDropdown } from '@/hooks/academic/useIntakes'
 import { formatDate } from '@/lib/date'
-// import { usePagePermissions } from '@/hooks/users/usePagePermissions'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
@@ -85,8 +85,7 @@ function formatDiscount(detail: Pick<StudentDetailDto, 'discountStatus' | 'calcT
 function StudentProfileContent() {
   // Permission checks disabled for now — every action is allowed. Restore the
   // line below (and the import above) to gate actions by the menu permissions again.
-  // const permissions = usePagePermissions()
-  const permissions = { add: true, edit: true, delete: true }
+  const permissions = usePagePermissions()
   const router = useRouter()
   const searchParams = useSearchParams()
   // Student Master's "View" row action links here as

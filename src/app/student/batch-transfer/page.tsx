@@ -12,7 +12,7 @@ import { useStudent } from '@/hooks/student/useStudents'
 import { useBatchTransferDetail, useEligibleBatches, useBatchTransferHistory, useExecuteBatchTransfer } from '@/hooks/student/useBatchTransfer'
 import { formatDateTime } from '@/lib/date'
 import { scrollToFirstError } from '@/lib/scrollToFirstError'
-// import { usePagePermissions } from '@/hooks/users/usePagePermissions'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 // Ported from isbat_student_module.html's Batch Transfer page. Confirmed
 // via students/batch-transfer/*.md (2026-08-19) — a real, dedicated batch-
@@ -37,8 +37,7 @@ const REASONS = ['Dropout Rejoin', 'Deferment', 'Job / Relocation', 'Medical', '
 function BatchTransferContent() {
   // Permission checks disabled for now — every action is allowed. Restore the
   // line below (and the import above) to gate actions by the menu permissions again.
-  // const permissions = usePagePermissions()
-  const permissions = { add: true, edit: true, delete: true }
+  const permissions = usePagePermissions()
   const router = useRouter()
   const searchParams = useSearchParams()
   // Student Profile's action menu links here as

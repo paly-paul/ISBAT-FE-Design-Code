@@ -13,7 +13,7 @@ import {
 import { useCountries } from '@/hooks/config/useCountries'
 import { downloadDocument } from '@/lib/documentViewer'
 import { DocumentPreviewModal } from '@/components/modals/shared/DocumentPreviewModal'
-// import { usePagePermissions } from '@/hooks/users/usePagePermissions'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 // Approval queue for refugee-status requests raised from Student Master /
 // Finance > Refugee Status. Same list → review shape as Learning Mode Approval:
@@ -39,8 +39,7 @@ function initials(name: string | null) {
 function RefugeeApprovalContent() {
   // Permission checks disabled for now — every action is allowed. Restore the
   // line below (and the import above) to gate actions by the menu permissions again.
-  // const permissions = usePagePermissions()
-  const permissions = { add: true, edit: true, delete: true }
+  const permissions = usePagePermissions()
   const router = useRouter()
   const searchParams = useSearchParams()
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
