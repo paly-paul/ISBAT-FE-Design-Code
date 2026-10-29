@@ -15,7 +15,7 @@ import {
 import type { Weekday } from '@/lib/api/academic/weekday'
 import {
   TERM_OPTIONS, useTeachingDays, allowedDayCodes, shiftHint, shiftBadge, slotRange,
-  intakeOptionLabel, isOverCapacity, entryUnits, entryBatches, TimetableMatrix, TtCard,
+  intakeOptionLabel, isOverCapacity, entryUnits, entryBatches, studentCount, TimetableMatrix, TtCard,
 } from '@/components/timetable/ttShared'
 import { TimetableSlotModal, SlotModalState, SlotBatch } from '@/components/timetable/TimetableSlotModal'
 
@@ -194,7 +194,7 @@ export default function SchedulePage() {
           name={u.name}
           over={isOverCapacity(e)}
           metaLeft={calView === 'room' ? (e.lecturerName ?? '—') : entryBatches(e)}
-          metaRight={calView === 'room' ? `${e.headCount} pax` : e.roomCode}
+          metaRight={calView === 'room' ? studentCount(e.headCount) : e.roomCode}
         />
       </>
     )
@@ -305,7 +305,6 @@ export default function SchedulePage() {
               <div className="fg">
                 <div className="tt-ctx-row-lbl">
                   <label className="lbl">Lecturer <span className="req">*</span></label>
-                  {lecturerGuid && <span className="tt-load-badge"><i className="lni lni-alarm-clock" aria-hidden="true"></i>{load?.totalLoad ?? '…'} hrs this term</span>}
                 </div>
                 <SearchSelect
                   placeholder={!intakeGuid ? 'Pick a session first' : lecturersLoading ? 'Loading…' : lecturers.length === 0 ? 'No lecturers planned for this term' : '— Select lecturer —'}
@@ -330,8 +329,19 @@ export default function SchedulePage() {
                   />
                 </div>
                 <div className="fg">
-                  <label className="lbl">Load (hrs)</label>
-                  <input className="ctrl" value="On save" readOnly aria-label="Load is calculated by the server on save" title="Calculated by the server from the units' credits" style={{ color: 'var(--g500)' }} />
+                  <label className="lbl" htmlFor="tt-load">Load (hrs)</label>
+                  {/* The lecturer's total load this term — the only figure the
+                      load API returns. It used to sit as a badge above the
+                      Lecturer field while this box just said "On save". */}
+                  <input
+                    id="tt-load"
+                    className="ctrl"
+                    readOnly
+                    value={!lecturerGuid ? '' : load ? String(load.totalLoad) : 'Loading…'}
+                    placeholder="Select a lecturer"
+                    title="Lecturer's total teaching hours this term. Calculated by the server from the units' credits; updates after each save."
+                    style={{ color: load ? 'var(--g900)' : 'var(--g500)', fontVariantNumeric: 'tabular-nums' }}
+                  />
                 </div>
               </div>
 
@@ -358,7 +368,7 @@ export default function SchedulePage() {
                           <span className="tt-batch-code">{b.batchCode}</span>
                           <span className="tt-batch-sub">{b.courseUnitCode ?? ''}{b.semesterName ? ` · ${b.semesterName}` : ''}</span>
                         </span>
-                        <span className="tt-batch-pax">{b.studentCount} pax</span>
+                        <span className="tt-batch-pax">{studentCount(b.studentCount)}</span>
                       </label>
                     )
                   })}
@@ -453,7 +463,7 @@ export default function SchedulePage() {
                       <td style={{ fontWeight: 600 }}>{e.lecturerName ?? '—'}</td>
                       <td><span className={`badge ${shiftBadge(e.batchTimeName)}`}>{e.batchTimeName}</span></td>
                       <td><strong>{e.dayName}</strong><br /><span className="text-g400" style={{ fontSize: 'var(--fs-xs)' }}>{slotRange(e.startTime, e.endTime, true)}</span></td>
-                      <td><strong className="text-b700">{u.code}</strong><br /><span className="text-g400" style={{ fontSize: 'var(--fs-xs)' }}>{entryBatches(e)} ({e.headCount} pax)</span></td>
+                      <td><strong className="text-b700">{u.code}</strong><br /><span className="text-g400" style={{ fontSize: 'var(--fs-xs)' }}>{entryBatches(e)} ({studentCount(e.headCount)})</span></td>
                       <td>{e.roomCode}{e.roomCapacity != null ? ` (${e.roomCapacity})` : ''} {isOverCapacity(e) && <span className="badge badge-red" style={{ fontSize: 9, padding: '1px 5px' }}>Over</span>}</td>
                       <td style={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{e.load} hrs</td>
                       <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }} className="tt-no-print">

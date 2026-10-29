@@ -201,6 +201,9 @@ export interface CourseUnitInput {
   cwWeightage: number
   ueWeightage: number
   syllabus?: File | null
+  // Update only: clear the currently attached syllabus (ignored when a new
+  // `syllabus` file is sent — that replaces it instead).
+  removeSyllabus?: boolean
 }
 
 let mockCourseUnitSeq = mockCourseUnits.length + 1
@@ -389,6 +392,9 @@ export function getCourseUnitWithDetails(guid: string): Promise<CourseUnitWithDe
 // multipart/form-data to the same .../courseunits/:guid endpoint used for
 // GET. syllabus is only appended when the user picks a new file — omitting
 // it leaves the existing attachment untouched rather than clearing it.
+// removeSyllabus=true asks the backend to clear it instead. PENDING BACKEND
+// SUPPORT (2026-10-29): the PUT has no documented way to clear a syllabus
+// yet; until the backend reads this field, the old file stays attached.
 // Details-only, same as createCourseUnit — see the note above on why the
 // outlines chaining this used to do was removed. Callers that need the
 // merged shape (details + real outlines) should re-fetch via
@@ -407,6 +413,7 @@ export async function updateCourseUnit(guid: string, input: CourseUnitInput): Pr
     existing.cw = input.cw
     existing.ca = input.ca
     if (input.syllabus) existing.syllabus = input.syllabus.name
+    else if (input.removeSyllabus) existing.syllabus = null
     return Promise.resolve(existing)
   }
 
@@ -426,6 +433,7 @@ export async function updateCourseUnit(guid: string, input: CourseUnitInput): Pr
   formData.append('cwWeightage', String(input.cwWeightage))
   formData.append('ueWeightage', String(input.ueWeightage))
   if (input.syllabus) formData.append('syllabus', input.syllabus)
+  else if (input.removeSyllabus) formData.append('removeSyllabus', 'true')
   return apiPutForm<CourseUnit>(`/api/v1/academic/courseunits/${guid}`, formData)
 }
 

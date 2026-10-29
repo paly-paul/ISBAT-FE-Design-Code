@@ -132,5 +132,5 @@ Three Google Fonts loaded with CSS variables: `--font-serif` (Source Serif 4), `
 
 | Variable | Purpose |
 |---|---|
-| `NEXT_PUBLIC_API_GATEWAY_URL` | Base URL for API calls (empty string in dev uses relative paths) |
+| `API_GATEWAY_URL` | Backend gateway URL, server-side only — the `/api/*` and `/hubs/*` rewrite target for `next dev` / Vercel. The browser always calls relative `/api/*`; never expose the gateway via a `NEXT_PUBLIC_*` var (it would be inlined into the client bundle) |
 | `NEXT_PUBLIC_AUTH_MOCK` | Set to `"true"` to skip real API calls and use hardcoded mock responses |

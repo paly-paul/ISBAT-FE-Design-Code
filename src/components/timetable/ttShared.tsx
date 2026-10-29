@@ -96,6 +96,12 @@ export function capacityState(headCount: number, capacity: number | null | undef
   return 'ok'
 }
 
+// Head count for display — spelled out, not "pax", which users didn't read
+// as "students".
+export function studentCount(n: number) {
+  return `${n} ${n === 1 ? 'student' : 'students'}`
+}
+
 export function isOverCapacity(e: Pick<TimetableEntry, 'headCount' | 'roomCapacity'>) {
   return capacityState(e.headCount, e.roomCapacity) === 'over'
 }

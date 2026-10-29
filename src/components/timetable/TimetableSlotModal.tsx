@@ -1,9 +1,9 @@
 'use client'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { SearchSelect } from '@/components/SearchSelect'
 import { useAvailableRooms, useCreateTimetable, useUpdateTimetable, TimeSlotDropdownItem } from '@/hooks/academic/useTimetable'
 import type { Weekday } from '@/lib/api/academic/weekday'
-import { allowedDayCodes, capacityState, shiftHint, slotName, slotRange } from './ttShared'
+import { allowedDayCodes, capacityState, shiftHint, slotName, slotRange, studentCount } from './ttShared'
 
 // One checked batch row, carried in from the Allocation Context (Add) or
 // from the entry being edited. The triple is what's saved.
@@ -32,6 +32,20 @@ export interface SlotModalState {
   url?: string | null
 }
 
+// Optional field, so empty is valid. Otherwise an absolute http(s) link with a
+// real domain (a dot and a letters-only TLD), so "1234" or "teams" is refused.
+function isValidMeetingUrl(value: string): boolean {
+  const v = value.trim()
+  if (!v) return true
+  if (/\s/.test(v)) return false
+  try {
+    const u = new URL(v)
+    return (u.protocol === 'https:' || u.protocol === 'http:') && /\.[a-z]{2,}$/i.test(u.hostname)
+  } catch {
+    return false
+  }
+}
+
 // timetable-page.md → Slot modal. Weekday and Time Slot are real, editable
 // fields (the API requires both), pre-filled from the clicked cell. The room
 // list is the rooms free at that batch time, slot and weekday; capacity is a
@@ -49,6 +63,8 @@ export function TimetableSlotModal({ state, onClose, intakeGuid, term, days, slo
   const [timeSlotGuid, setTimeSlotGuid] = useState('')
   const [roomGuid, setRoomGuid] = useState('')
   const [url, setUrl] = useState('')
+  const [urlTouched, setUrlTouched] = useState(false)
+  const urlInputRef = useRef<HTMLInputElement>(null)
   const [clash, setClash] = useState<string | null>(null)
 
   useEffect(() => {
@@ -57,6 +73,7 @@ export function TimetableSlotModal({ state, onClose, intakeGuid, term, days, slo
     setTimeSlotGuid(state.timeSlotGuid)
     setRoomGuid(state.roomGuid ?? '')
     setUrl(state.url ?? '')
+    setUrlTouched(false)
     setClash(null)
   }, [state])
 
@@ -89,10 +106,19 @@ export function TimetableSlotModal({ state, onClose, intakeGuid, term, days, slo
   const cap = room ? capacityState(pax, room.capacity) : null
   const day = days.find(d => d.weekDayGuid === weekDayGuid)
   const slot = slots.find(s => s.timeSlotGuid === timeSlotGuid)
+  // `type="url"` alone never validates here — there's no <form> submit — so
+  // "1234" used to save as the meeting link. Save stays enabled; clicking it
+  // with a bad link explains what's wrong on the field instead.
+  const urlInvalid = !isValidMeetingUrl(url)
   const canSave = !!weekDayGuid && !!timeSlotGuid && !!roomGuid && state.batches.length > 0 && !saving
 
   function handleSave() {
     if (!state || !canSave) return
+    if (urlInvalid) {
+      setUrlTouched(true)
+      urlInputRef.current?.focus()
+      return
+    }
     setClash(null)
     const input = {
       batchTimeGuid: state.batchTimeGuid,
@@ -149,7 +175,7 @@ export function TimetableSlotModal({ state, onClose, intakeGuid, term, days, slo
               </div>
               <div>
                 <div className="tt-ctx-kv"><span>Shift</span><span>{state.batchTimeName}</span></div>
-                <div className="tt-ctx-kv"><span>Students</span><span>{pax} students</span></div>
+                <div className="tt-ctx-kv"><span>Students</span><span>{studentCount(pax)}</span></div>
                 <div className="tt-ctx-kv"><span>Load</span><span className="text-g500" style={{ fontWeight: 600 }}>Calculated on save</span></div>
               </div>
             </div>
@@ -190,7 +216,7 @@ export function TimetableSlotModal({ state, onClose, intakeGuid, term, days, slo
               <label className="lbl">Capacity Status</label>
               <div className={`tt-cap${cap ? ` ${cap}` : ''}`} aria-live="polite">
                 {!room ? <span>Pick a room to check</span>
-                  : !cap ? <><span>No capacity recorded</span><span>{pax} students</span></>
+                  : !cap ? <><span>No capacity recorded</span><span>{studentCount(pax)}</span></>
                     : <><span>{cap === 'over' ? 'Over capacity' : cap === 'near' ? 'Near capacity' : 'Fits'}</span><span>{pax} / {room.capacity}</span></>}
               </div>
               {cap === 'over' && <p className="text-g500" style={{ fontSize: 'var(--fs-xs)', marginTop: 4 }}>Warning only — the slot can still be saved.</p>}
@@ -199,7 +225,28 @@ export function TimetableSlotModal({ state, onClose, intakeGuid, term, days, slo
 
           <div className="fg">
             <label className="lbl">Online URL <span className="text-g400" style={{ textTransform: 'none', letterSpacing: 0, fontWeight: 400 }}>(optional)</span></label>
-            <input className="ctrl" type="url" placeholder="https://teams.microsoft.com/…" value={url} onChange={e => setUrl(e.target.value)} />
+            <input
+              ref={urlInputRef}
+              className="ctrl"
+              type="url"
+              inputMode="url"
+              placeholder="https://teams.microsoft.com/…"
+              value={url}
+              onChange={e => setUrl(e.target.value)}
+              onBlur={() => setUrlTouched(true)}
+              aria-invalid={urlTouched && urlInvalid}
+              aria-describedby={urlTouched && urlInvalid ? 'tt-url-err' : undefined}
+              style={urlTouched && urlInvalid ? { borderColor: 'var(--red)' } : undefined}
+            />
+            {urlTouched && urlInvalid && (
+              <p id="tt-url-err" role="alert" className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4, display: 'flex', gap: 6, alignItems: 'flex-start' }}>
+                <i className="lni lni-warning" aria-hidden="true" style={{ marginTop: 2 }}></i>
+                <span>
+                  That doesn&apos;t look like a valid link. Paste the full meeting link, starting with https://
+                  (e.g. https://teams.microsoft.com/l/meetup-join/…), or leave this field empty.
+                </span>
+              </p>
+            )}
           </div>
 
           <div className="tt-repeat">

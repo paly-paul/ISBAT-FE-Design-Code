@@ -346,9 +346,12 @@ const mockMenu: MenuNode[] = [
       leaf('ODL Applications', 'world', '/academic/odl-applications'),
       leaf('Payment Reconciliation', 'credit-cards', '/academic/odl-reconciliation'),
     ]),
-    section('Cross-Module', [
-      leaf('Student Lookup', 'user', '/academic/student-lookup'),
-    ]),
+    // Student Lookup hidden from the sidebar per request, 2026-10-29 — page
+    // still exists on disk. Commented out whole (its only leaf) since
+    // Sidebar.tsx renders a childless section as a disabled "Soon" item.
+    // section('Cross-Module', [
+    //   leaf('Student Lookup', 'user', '/academic/student-lookup'),
+    // ]),
   ]),
   module_('Finance', 'dollar', [
     ...FINANCE_PAYMENT_SECTIONS,
@@ -530,32 +533,33 @@ function stripUnintegratedPages(menu: MenuNode[]): MenuNode[] {
     '/assessment/weight-config',
     '/assessment/schedule',
     '/assessment/service-tickets',
+    // Hidden from the sidebar per request, 2026-10-29 — page still exists.
+    '/academic/student-lookup',
   ]
   // The real /me/menu may send bare slugs ("weight-config"), so match on
-  // the last path segment too.
-  const hiddenSlugs = hiddenUrls.map(u => u.slice(u.lastIndexOf('/') + 1))
-  const isHidden = (url: string | null) => !!url && (hiddenUrls.includes(url) || hiddenSlugs.includes(url))
+  // the last path segment too — but only within the hidden URL's own module,
+  // so a same-named slug elsewhere isn't caught.
+  const isHidden = (modBase: string, url: string | null) =>
+    !!url && hiddenUrls.some(u => url === u || (u.startsWith(modBase + '/') && url === u.slice(modBase.length + 1)))
 
-  const assessIdx = menu.findIndex(n => n.name === 'Assessment')
-  if (assessIdx === -1) return menu
-
-  const assessModule = menu[assessIdx]
   let changed = false
-  const sections = assessModule.children.flatMap(s => {
-    const kept = s.children.filter(l => !isHidden(l.url))
-    if (kept.length === s.children.length) return [s]
+  const merged = menu.map(mod => {
+    const modBase = '/' + mod.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
+    let modChanged = false
+    const sections = mod.children.flatMap(s => {
+      const kept = s.children.filter(l => !isHidden(modBase, l.url))
+      if (kept.length === s.children.length) return [s]
+      modChanged = true
+      // Sidebar.tsx renders a childless section as a disabled "Soon" item, so
+      // drop a section this emptied.
+      return kept.length ? [{ ...s, children: kept }] : []
+    })
+    if (!modChanged) return mod
     changed = true
-    // Sidebar.tsx renders a childless section as a disabled "Soon" item, so
-    // drop a section this emptied.
-    return kept.length ? [{ ...s, children: kept }] : []
+    return { ...mod, children: sections }
   })
 
-  if (!changed) return menu
-
-  const mergedAssess = { ...assessModule, children: sections }
-  const mergedMenu = [...menu]
-  mergedMenu[assessIdx] = mergedAssess
-  return mergedMenu
+  return changed ? merged : menu
 }
 
 export interface AppPage {

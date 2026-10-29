@@ -1,5 +1,10 @@
 import { PHASE_DEVELOPMENT_SERVER } from 'next/constants.js'
 
+// Server-side only (rewrites below) — never a NEXT_PUBLIC_* var, which would
+// be inlined into the client bundle and expose the backend URL. The
+// NEXT_PUBLIC_ name is still read as a fallback so an environment that
+// hasn't renamed it yet keeps working; nothing in src/ reads it any more, so
+// it's no longer shipped to the browser either way.
 const configuredGatewayUrl = (process.env.API_GATEWAY_URL ?? process.env.NEXT_PUBLIC_API_GATEWAY_URL ?? '').trim()
 // The gateway may be given as the host or the /api root (the GitLab pipeline
 // uses …/api/). The rewrites below append /api and /hubs, so drop a trailing

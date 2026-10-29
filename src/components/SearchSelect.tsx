@@ -1,5 +1,5 @@
 'use client'
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useLayoutEffect } from 'react'
 import { createPortal } from 'react-dom'
 
 type Opt = { value: string; label: string; disabled?: boolean }
@@ -52,7 +52,7 @@ export function SearchSelect({
   )
   const [open, setOpen]     = useState(false)
   const [search, setSearch] = useState('')
-  const [pos, setPos]       = useState<{ top?: number, bottom?: number, left: number, width: number, maxHeight: number }>({ top: 0, left: 0, width: 0, maxHeight: 200 })
+  const [pos, setPos]       = useState<{ top?: number, bottom?: number, left: number, width: number, maxWidth: number, maxHeight: number }>({ top: 0, left: 0, width: 0, maxWidth: 360, maxHeight: 200 })
 
   const triggerRef = useRef<HTMLButtonElement>(null)
   const dropRef    = useRef<HTMLDivElement>(null)
@@ -88,23 +88,39 @@ export function SearchSelect({
     const r = triggerRef.current.getBoundingClientRect()
     const spaceBelow = window.innerHeight - r.bottom - 10
     const spaceAbove = r.top - 10
-    
+    // Grow past the trigger up to 360px, but never wider than the viewport
+    // (less an 8px gutter each side) — on a phone a 360px popup anchored at
+    // the trigger's left edge ran off the right of the screen.
+    const maxWidth = Math.min(Math.max(r.width, 360), window.innerWidth - 16)
+    const width = Math.min(r.width, maxWidth)
+
     if (spaceBelow < 200 && spaceAbove > spaceBelow) {
-      setPos({ 
-        bottom: window.innerHeight - r.top + 4, 
-        left: r.left, 
-        width: r.width, 
+      setPos({
+        bottom: window.innerHeight - r.top + 4,
+        left: r.left,
+        width,
+        maxWidth,
         maxHeight: Math.min(spaceAbove - 40, 300) // -40 for search input
       })
     } else {
-      setPos({ 
-        top: r.bottom + 4, 
-        left: r.left, 
-        width: r.width, 
+      setPos({
+        top: r.bottom + 4,
+        left: r.left,
+        width,
+        maxWidth,
         maxHeight: Math.min(spaceBelow - 40, 300)
       })
     }
   }
+
+  // The popup's width is `max-content`, so whether it overflows the right
+  // edge is only known once it has rendered: shift it left just enough to
+  // fit. Runs before paint, so there's no visible jump.
+  useLayoutEffect(() => {
+    if (!open || !dropRef.current) return
+    const overflow = dropRef.current.getBoundingClientRect().right - (window.innerWidth - 8)
+    if (overflow > 0) setPos(p => ({ ...p, left: Math.max(8, p.left - overflow) }))
+  }, [open, pos])
 
   function openDrop() {
     calcPos()
@@ -196,7 +212,7 @@ export function SearchSelect({
         disabled={disabled}
         onClick={() => (open ? setOpen(false) : openDrop())}
       >
-        <span className={`ss-label${isEmpty ? ' ss-placeholder' : ''}`}>{displayLabel}</span>
+        <span className={`ss-label${isEmpty ? ' ss-placeholder' : ''}`} title={displayLabel || undefined}>{displayLabel}</span>
         {clearable && (
           <span
             role="button"
@@ -228,7 +244,7 @@ export function SearchSelect({
           // here plus `.ss-drop`'s `overflow: hidden` was silently cutting
           // "Diploma in Networking" off mid-word rather than wrapping or
           // ellipsizing it.
-          style={{ position: 'fixed', top: pos.top, bottom: pos.bottom, left: pos.left, minWidth: pos.width, width: 'max-content', maxWidth: Math.max(pos.width, 360), zIndex: 9999 }}
+          style={{ position: 'fixed', top: pos.top, bottom: pos.bottom, left: pos.left, minWidth: pos.width, width: 'max-content', maxWidth: pos.maxWidth, zIndex: 9999 }}
         >
           <div className="ss-search">
             <input
@@ -264,6 +280,7 @@ export function SearchSelect({
                     className={`col-filter-opt${current === o.value ? ' fil-active' : ''}${o.disabled ? ' fil-disabled' : ''}`}
                     onClick={() => { if (!o.disabled) select(o.value) }}
                     aria-disabled={o.disabled}
+                    title={o.label}
                   >
                     {o.label}
                   </div>

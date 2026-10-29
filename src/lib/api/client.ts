@@ -1,20 +1,16 @@
 import { loginUrlForCurrentPage } from '../loginNext'
 
-const NEXT_PUBLIC_API_BASE =(process.env.NEXT_PUBLIC_API_GATEWAY_URL ?? '').trim()
-const SERVER_API_GATEWAY_URL = (process.env.API_GATEWAY_URL ?? '').trim()
-const API_BASE = SERVER_API_GATEWAY_URL || NEXT_PUBLIC_API_BASE
-const USE_API_PROXY = Boolean(API_BASE)
-
 // Skip ngrok's browser warning page for local gateway requests.
 const NGROK_HEADERS = { 'ngrok-skip-browser-warning': 'true' }
 
+// Every request stays same-origin (`/api/...`): CloudFront routes /api/* to
+// the gateway in production, and next.config.mjs's rewrite does it for
+// `next dev` / Vercel. Same-origin also lets httpOnly cookies like
+// erp_refresh be sent. The gateway URL is deliberately never read here — a
+// NEXT_PUBLIC_* var is inlined into the client bundle, which exposed the
+// backend URL to anyone viewing the JS.
 function buildUrl(path: string): string {
-  // When the gateway URL is configured in Next.js, `/api/*` is rewritten by
-  // next.config.mjs through the dev server to the real backend. Keep browser
-  // requests same-origin so httpOnly cookies like erp_refresh can be sent.
-  if (USE_API_PROXY && path.startsWith('/api/')) return path
-  if (!API_BASE) return path
-  return `${API_BASE}${path}`
+  return path
 }
 
 export class AuthError extends Error {
