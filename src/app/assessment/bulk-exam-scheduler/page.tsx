@@ -23,7 +23,7 @@ import {
   getBulkScheduleInit,
   getBulkCwScheduleStatus,
   getBulkTestScheduleStatus,
-  getBulkUeScheduleStatus,
+  // getBulkUeScheduleStatus,
   getBulkMockScheduleStatus,
 } from '@/lib/api/assessment/iaBulkSchedule'
 
@@ -212,20 +212,20 @@ export default function BulkExamSchedulerPage() {
         .catch(() => { })
 
       // UE Status (ia-bulk-ue-schedule/status)
-      getBulkUeScheduleStatus({
-        academicIntakeGuid: intakeGuid,
-        programGuid: progGuid,
-        semesterGuid: semGuid,
-      })
-        .then(res => {
-          if (active && res) {
-            setStatusOverrides(prev => ({
-              ...prev,
-              [row.sessionGuid]: { ...(prev[row.sessionGuid] || {}), UE: res.isFullyScheduled },
-            }))
-          }
-        })
-        .catch(() => { })
+      // getBulkUeScheduleStatus({
+      //   academicIntakeGuid: intakeGuid,
+      //   programGuid: progGuid,
+      //   semesterGuid: semGuid,
+      // })
+      //   .then(res => {
+      //     if (active && res) {
+      //       setStatusOverrides(prev => ({
+      //         ...prev,
+      //         [row.sessionGuid]: { ...(prev[row.sessionGuid] || {}), UE: res.isFullyScheduled },
+      //       }))
+      //     }
+      //   })
+      //   .catch(() => { })
 
       // Mock Status (ia-bulk-mock-schedule/status)
       getBulkMockScheduleStatus({
@@ -519,7 +519,7 @@ export default function BulkExamSchedulerPage() {
                       </th>
 
                       {/* 4. Schedule All (UE) Header Trigger */}
-                      <th className="py-2.5 px-2.5 min-w-[140px] text-center border-r border-blue-400/30">
+                      {/* <th className="py-2.5 px-2.5 min-w-[140px] text-center border-r border-blue-400/30">
                         <button
                           type="button"
                           onClick={() => handleOpenHeaderBulkSchedule('UE')}
@@ -528,7 +528,7 @@ export default function BulkExamSchedulerPage() {
                         >
                           <span>Schedule All (UE)</span>
                         </button>
-                      </th>
+                      </th> */}
 
                       {/* 5. Schedule All (Mock) Header Trigger */}
                       <th className="py-2.5 px-2.5 min-w-[140px] text-center">
@@ -559,7 +559,7 @@ export default function BulkExamSchedulerPage() {
                         const cwScheduled = isCellScheduled(row, 'CW')
                         const testScheduled = isCellScheduled(row, 'CLASS_TEST')
                         const caScheduled = isCellScheduled(row, 'CA')
-                        const ueScheduled = isCellScheduled(row, 'UE')
+                        // const ueScheduled = isCellScheduled(row, 'UE')
                         const mockScheduled = isCellScheduled(row, 'MOCK')
 
                         return (
@@ -630,7 +630,7 @@ export default function BulkExamSchedulerPage() {
                             </td>
 
                             {/* 4. UE Button */}
-                            <td className="py-2 px-2.5 text-center border-r border-slate-100">
+                            {/* <td className="py-2 px-2.5 text-center border-r border-slate-100">
                               <button
                                 type="button"
                                 onClick={() => handleOpenRowSchedule(row, 'UE')}
@@ -641,7 +641,7 @@ export default function BulkExamSchedulerPage() {
                               >
                                 {ueScheduled ? 'Scheduled' : 'Schedule'}
                               </button>
-                            </td>
+                            </td> */}
 
                             {/* 5. Mock Button */}
                             <td className="py-2 px-2.5 text-center">
