@@ -158,7 +158,7 @@ export default function EnquiryFollowupMasterPage() {
             results={searchMatches.map(r => ({ id: r.enquiryGuid, primary: r.enquiryCode, secondary: r.studentName }))}
             loading={searchPending}
             minChars={MIN_SEARCH_CHARS}
-            onSelect={permissions.edit ? (r) => openViewModal(r.id) : undefined}
+            onSelect={(r) => openViewModal(r.id)}
           />
         </div>
         <ScrollTable>
@@ -175,10 +175,12 @@ export default function EnquiryFollowupMasterPage() {
                   <td>
                     <ActionMenu>
                       <button className="btn btn-neu btn-sm" onClick={() => router.push(`/admission/payment?enquiryGuid=${r.enquiryGuid}`)}><i className="lni lni-arrow-right" /> Convert</button>
-                      <button className="btn btn-neu btn-sm" onClick={() => handleCreateFollowUp(r)}>
-                        <i className="lni lni-phone" /> Create Follow-up Status
-                      </button>
-                      {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openViewModal(r.enquiryGuid)}><i className="lni lni-eye" /> View</button>}
+                      {permissions.add && (
+                        <button className="btn btn-neu btn-sm" onClick={() => handleCreateFollowUp(r)}>
+                          <i className="lni lni-phone" /> Create Follow-up Status
+                        </button>
+                      )}
+                      <button className="btn btn-neu btn-sm" onClick={() => openViewModal(r.enquiryGuid)}><i className="lni lni-eye" /> View</button>
                     </ActionMenu>
                   </td>
                   <td className="font-mono text-sm">{r.enquiryCode}</td>
@@ -212,6 +214,7 @@ export default function EnquiryFollowupMasterPage() {
       <EnquiryAssignModal
         isOpen={openModals.has('enquiry-assign-modal')}
         onClose={() => closeModal('enquiry-assign-modal')}
+          canAssign={!!permissions.assign}
         showToast={showToast}
         enquiryGuid={viewingGuid}
         updateEnquiry={updateEnquiry}

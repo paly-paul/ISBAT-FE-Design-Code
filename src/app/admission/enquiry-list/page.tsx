@@ -221,7 +221,7 @@ export default function EnquiryListPage() {
               // View is edit-gated below (same as the row action) — a picker
               // without edit rights just fills the search box instead, same
               // as TableSearch's own default behavior.
-              onSelect={permissions.edit ? (r) => openViewModal(r.id) : undefined}
+              onSelect={(r) => openViewModal(r.id)}
             />
             <SearchSelect className="w-36" options={channelOptions} value={channel} onChange={v => { setChannel(v); setPage(1) }} />
             <SearchSelect
@@ -253,7 +253,7 @@ export default function EnquiryListPage() {
                   <td>
                     <ActionMenu>
                       <button className="btn btn-neu btn-sm" onClick={() => router.push(`/admission/payment?enquiryGuid=${r.enquiryGuid}`)}><i className="lni lni-arrow-right" /> Convert</button>
-                      {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openViewModal(r.enquiryGuid)}><i className="lni lni-eye" /> View</button>}
+                      <button className="btn btn-neu btn-sm" onClick={() => openViewModal(r.enquiryGuid)}><i className="lni lni-eye" /> View</button>
                       {/* No "Verify Email" here any more: email is verified before
                           an enquiry can be created (2026-10), and the per-enquiry
                           verify endpoints were removed. Older unverified rows keep
@@ -303,6 +303,7 @@ export default function EnquiryListPage() {
         <EnquiryAssignModal
           isOpen
           onClose={() => closeModal('enquiry-assign-modal')}
+          canAssign={!!permissions.assign}
           showToast={showToast}
           enquiryGuid={viewingGuid}
           updateEnquiry={updateEnquiry}

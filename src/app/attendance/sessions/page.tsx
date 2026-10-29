@@ -1,7 +1,7 @@
 'use client'
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { useQuery } from '@tanstack/react-query'
+import { useQueries, useQuery } from '@tanstack/react-query'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
 import { SearchSelect } from '@/components/SearchSelect'
@@ -11,9 +11,11 @@ import { Pagination } from '@/components/Pagination'
 import { Toast } from '@/components/Toast'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import {
-  useAttendanceBatches, useAttendanceCourseUnits, useAttendanceSessions, useAttendanceTimetables, useDeleteAttendanceSession,
+  useAttendanceBatches, useAttendanceCourseUnits, useAttendanceSessions, useDeleteAttendanceSession,
 } from '@/hooks/attendance/useClassAttendance'
-import { getAttendanceSessions, parseYmd, skipReasonLabel, type AttendanceSessionListItem } from '@/lib/api/attendance/classAttendance'
+import {
+  getAttendanceSessions, getTimetableForAttendance, parseYmd, skipReasonLabel, type AttendanceSessionListItem, type AttendanceTimetable,
+} from '@/lib/api/attendance/classAttendance'
 import { fmtDate, fmtTime, StatusBadge, TypeChip } from '@/components/attendance/attShared'
 
 // Attendance Sessions (class-attendance-frontend-spec.md, Screen 3) — the
@@ -21,7 +23,6 @@ import { fmtDate, fmtTime, StatusBadge, TypeChip } from '@/components/attendance
 // the first-column action menu, like the app's other tables.
 
 const PAGE_SIZES = [10, 25, 50].map(n => ({ value: String(n), label: String(n) }))
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 const WEEKDAYS_LONG = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 
 export default function Page() {
@@ -32,23 +33,23 @@ export default function Page() {
 
   const { data: batches = [] } = useAttendanceBatches()
   const { data: courseUnits = [] } = useAttendanceCourseUnits()
-  const { data: timetables = [] } = useAttendanceTimetables()
-  const timetableByGuid = useMemo(() => new Map(timetables.map(t => [t.timetableGuid, t])), [timetables])
 
-  // Filters apply on Apply, not as they change.
+  // Filters apply as they change, like Batch Management's scope dropdowns.
   const [batchGuid, setBatchGuid] = useState('')
   const [courseUnitGuid, setCourseUnitGuid] = useState('')
-  const [applied, setApplied] = useState<{ batchGuid?: string; courseUnitGuid?: string }>({})
+  const applied = useMemo(
+    () => ({ batchGuid: batchGuid || undefined, courseUnitGuid: courseUnitGuid || undefined }),
+    [batchGuid, courseUnitGuid],
+  )
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
   const [deleteTarget, setDeleteTarget] = useState<AttendanceSessionListItem | null>(null)
 
   const { data, isLoading, isPlaceholderData } = useAttendanceSessions(page, pageSize, applied)
-  const rows = data?.items ?? []
+  const rows = useMemo(() => data?.items ?? [], [data])
   const totalCount = data?.totalCount ?? 0
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize))
   const hasFilters = !!applied.batchGuid || !!applied.courseUnitGuid
-  const pending = batchGuid !== (applied.batchGuid ?? '') || courseUnitGuid !== (applied.courseUnitGuid ?? '')
 
   // Totals for the summary chips, over every session matching the filters.
   const { data: all } = useQuery({
@@ -68,20 +69,31 @@ export default function Page() {
 
   const deleteSession = useDeleteAttendanceSession()
 
-  function apply() {
-    setApplied({ batchGuid: batchGuid || undefined, courseUnitGuid: courseUnitGuid || undefined })
-    setPage(1)
-  }
-
   function clear() {
     setBatchGuid('')
     setCourseUnitGuid('')
-    setApplied({})
     setPage(1)
   }
 
+  // The list gives each session's timetable guid only; its class (unit,
+  // batch) is looked up once per timetable on the page and cached.
+  const pageTimetableGuids = useMemo(() => Array.from(new Set(rows.map(r => r.timetableGuid).filter(Boolean))), [rows])
+  const timetableLookups = useQueries({
+    queries: pageTimetableGuids.map(guid => ({
+      queryKey: ['classAttendance', 'timetable', guid],
+      queryFn: () => getTimetableForAttendance(guid),
+      staleTime: Infinity,
+    })),
+  })
+  const timetableByGuid = new Map<string, { data?: AttendanceTimetable | null; isPending: boolean }>(
+    pageTimetableGuids.map((g, i) => [g, timetableLookups[i]]),
+  )
+
+  // No get-session-by-guid endpoint: Record Attendance loads a session by
+  // its timetable and date, so the link carries both.
   function open(r: AttendanceSessionListItem, mode: 'view' | 'edit') {
-    router.push(`/attendance/record?session=${r.attendanceSessionGuid}&mode=${mode}`)
+    const q = new URLSearchParams({ timetable: r.timetableGuid, date: r.sessionDate.slice(0, 10), session: r.attendanceSessionGuid, mode })
+    router.push(`/attendance/record?${q}`)
   }
 
   function confirmDelete() {
@@ -119,40 +131,35 @@ export default function Page() {
           ))}
         </div>
 
+        {/* Scope for the chips and the table, in Batch Management's style:
+            an inline label and fixed-width dropdowns that apply on change,
+            sitting between the chips and the table. */}
+        <div className="flex items-center gap-2 flex-wrap mb-3">
+          <span className="text-sm font-semibold text-g600">Showing sessions for</span>
+          <SearchSelect
+            style={{ width: 200 }}
+            placeholder="All Batches"
+            options={batches}
+            value={batchGuid}
+            onChange={v => { setBatchGuid(v); setPage(1) }}
+          />
+          <SearchSelect
+            style={{ width: 280 }}
+            placeholder="All Course Units"
+            options={courseUnits}
+            value={courseUnitGuid}
+            onChange={v => { setCourseUnitGuid(v); setPage(1) }}
+          />
+        </div>
+
         <div className="card as-panel">
-          {/* ── Filters ── */}
-          <div className="as-filters">
-            <div className="fg m-0 as-filter">
-              <div className="lbl">Batch</div>
-              <SearchSelect placeholder="— Select Batch —" options={batches} value={batchGuid} onChange={setBatchGuid} />
-            </div>
-            <div className="fg m-0 as-filter">
-              <div className="lbl">Course Unit</div>
-              <SearchSelect placeholder="— Select Course Unit —" options={courseUnits} value={courseUnitGuid} onChange={setCourseUnitGuid} />
-            </div>
-            <div className="as-filter-actions">
-              <button type="button" className="btn btn-primary" onClick={apply} disabled={!pending}><i className="lni lni-search-alt" aria-hidden="true"></i> Apply</button>
-              <button type="button" className="btn btn-neu" onClick={clear} disabled={!hasFilters && !batchGuid && !courseUnitGuid}><i className="lni lni-close" aria-hidden="true"></i> Clear</button>
-            </div>
-          </div>
-
-          {hasFilters && (
-            <div className="as-applied">
-              <i className="lni lni-funnel" aria-hidden="true"></i>
-              Showing
-              {applied.batchGuid && <span className="as-applied-tag">{batches.find(b => b.value === applied.batchGuid)?.label}</span>}
-              {applied.courseUnitGuid && <span className="as-applied-tag">{courseUnits.find(c => c.value === applied.courseUnitGuid)?.label}</span>}
-              <span className="as-applied-count">· {totalCount} session{totalCount === 1 ? '' : 's'}</span>
-            </div>
-          )}
-
           <div className={`tbl-refetch-wrap${isPlaceholderData ? ' is-refetching' : ''}`} aria-busy={isPlaceholderData}>
             <ScrollTable>
-              <table className="as-table">
+              <table>
                 <thead>
                   <tr>
                     <th style={{ width: 48 }}></th>
-                    <th style={{ width: 56 }}>##</th>
+                    <th>#</th>
                     <th>Date</th>
                     <th>Class</th>
                     <th>Start</th>
@@ -168,7 +175,8 @@ export default function Page() {
                     <EmptyState colSpan={8} hasFilters={hasFilters} onClearFilters={clear} title={hasFilters ? undefined : 'No sessions recorded yet'} />
                   ) : rows.map((r, i) => {
                     const canEdit = permissions.edit && !r.isAutomated && r.status !== 2
-                    const t = timetableByGuid.get(r.timetableGuid)
+                    const lookup = timetableByGuid.get(r.timetableGuid)
+                    const t = lookup?.data ?? null
                     const d = parseYmd(r.sessionDate)
                     return (
                       <tr key={r.attendanceSessionGuid}>
@@ -179,36 +187,26 @@ export default function Page() {
                             {permissions.delete && <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}><i className="lni lni-trash-can"></i> Delete</button>}
                           </ActionMenu>
                         </td>
-                        <td className="text-g500 tabular-nums">{(page - 1) * pageSize + i + 1}</td>
+                        <td className="text-g400">{(page - 1) * pageSize + i + 1}</td>
                         <td>
-                          <div className="as-date">
-                            <span className="as-date-tile" aria-hidden="true">
-                              <span className="as-date-mon">{MONTHS[d.getMonth()]}</span>
-                              <span className="as-date-day tabular-nums">{d.getDate()}</span>
-                            </span>
-                            <span className="as-date-text">
-                              <span className="as-date-full">{fmtDate(r.sessionDate)}</span>
-                              <span className="as-date-sub">{WEEKDAYS_LONG[d.getDay()]}</span>
-                            </span>
-                          </div>
+                          <strong>{fmtDate(r.sessionDate)}</strong><br />
+                          <span className="text-g400" style={{ fontSize: 'var(--fs-xs)' }}>{WEEKDAYS_LONG[d.getDay()]}</span>
                         </td>
                         <td>
                           {t ? (
-                            <div className="as-class">
-                              <span className="as-class-name"><span className="as-code">{t.courseUnitCode}</span> {t.courseUnitName}</span>
-                              <span className="as-class-batch"><i className="lni lni-users" aria-hidden="true"></i> {t.batchCode}</span>
-                            </div>
-                          ) : <span className="text-g400">—</span>}
+                            <>
+                              <strong className="text-b700">{t.courseUnitCode}</strong> {t.courseUnitName}<br />
+                              <span className="text-g400" style={{ fontSize: 'var(--fs-xs)' }}>{t.batchCode}</span>
+                            </>
+                          ) : lookup?.isPending ? <span className="fd-skel" style={{ width: 160 }} /> : <span className="text-g400">—</span>}
                         </td>
-                        <td className="as-time tabular-nums">{fmtTime(r.startTime)}</td>
-                        <td className="as-time tabular-nums">{fmtTime(r.endTime)}</td>
+                        <td>{fmtTime(r.startTime)}</td>
+                        <td>{fmtTime(r.endTime)}</td>
                         <td>
-                          <div className="as-status">
-                            <StatusBadge status={r.status} />
-                            {r.isSkipped && (
-                              <span className="as-skip"><i className="lni lni-information" aria-hidden="true"></i> {skipReasonLabel(r.skipReason) ?? 'Skipped'}</span>
-                            )}
-                          </div>
+                          <StatusBadge status={r.status} />
+                          {r.isSkipped && (
+                            <><br /><span className="text-g400" style={{ fontSize: 'var(--fs-xs)' }}>{skipReasonLabel(r.skipReason) ?? 'Skipped'}</span></>
+                          )}
                         </td>
                         <td><TypeChip automated={r.isAutomated} /></td>
                       </tr>

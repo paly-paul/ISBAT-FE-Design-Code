@@ -12,6 +12,7 @@ import { canPrintPaidReceipt } from '@/lib/api/admission/paidStudents'
 import { getApplicationPaymentReceiptPdf } from '@/lib/api/admission/applicationPayment'
 import { APPLICATION_STAGES, STAGE_IN_PROGRESS } from '@/lib/api/admission/applicationStatusReport'
 import { AuthError } from '@/lib/api/client'
+import { useActionGuard } from '@/hooks/users/useActionGuard'
 import { openPdfInNewTab } from '@/lib/openPdf'
 
 // Paid Students — GET /admissions/application-payments/paid-students
@@ -89,6 +90,7 @@ export default function PaidStudentsPage() {
   function clearFilters() { setStage(''); setSearch(''); setSearchTerm(''); setPaymentKind('Paid'); setPage(1) }
 
   const [printing, setPrinting] = useState<string | null>(null)
+  const guard = useActionGuard(showToast)
   async function printReceipt(r: PaidStudent) {
     if (printing) return
     setPrinting(r.paymentGuid)
@@ -182,7 +184,7 @@ export default function PaidStudentsPage() {
                         <button
                           type="button"
                           className="btn btn-neu btn-sm"
-                          onClick={() => printReceipt(r)}
+                          onClick={() => guard('print', () => { void printReceipt(r) }, 'receipts')}
                           disabled={!!printing}
                           aria-label={`Print receipt ${r.receiptNo} for ${name || 'this applicant'}`}
                           title="Print receipt"

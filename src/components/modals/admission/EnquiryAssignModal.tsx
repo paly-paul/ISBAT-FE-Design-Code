@@ -20,6 +20,9 @@ interface EnquiryAssignModalProps extends ModalProps {
     mutate: (variables: { guid: string; input: EnquiryUpdateInput }, options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => void
     isPending: boolean
   }
+  // The menu's `assign` key. Without it the details are view-only: the
+  // fields are disabled and Save Assignment is hidden. Defaults to true.
+  canAssign?: boolean
 }
 
 // put-enquiry.md: campusGuid required; enquiryStatusGuid, programGuid and
@@ -29,7 +32,7 @@ interface EnquiryAssignModalProps extends ModalProps {
 // action, not a full edit of the enquiry's original details, which are
 // shown read-only above the editable fields. enquiryStatus is left out —
 // see the note on EnquiryUpdateInput in lib/api/admission/enquiry.ts.
-export function EnquiryAssignModal({ isOpen, onClose, showToast, enquiryGuid, updateEnquiry }: EnquiryAssignModalProps) {
+export function EnquiryAssignModal({ isOpen, onClose, showToast, enquiryGuid, updateEnquiry, canAssign = true }: EnquiryAssignModalProps) {
   const { data: enquiry, isLoading, isError, error } = useEnquiry(enquiryGuid, isOpen)
   const { data: employees = [] } = useEmployees(isOpen)
   const { data: campuses = [] }  = useCampuses(isOpen)
@@ -210,7 +213,8 @@ export function EnquiryAssignModal({ isOpen, onClose, showToast, enquiryGuid, up
           <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
         </div>
 
-        <div className="modal-scroll">
+        {/* A disabled fieldset disables every control inside it at once. */}
+        <fieldset className="modal-scroll" disabled={!canAssign} style={{ border: 0, margin: 0, minWidth: 0 }}>
           {/* Read-only — the update endpoint doesn't accept these fields at all */}
           <div className="g2" style={{ marginBottom: 18 }}>
             <div className="fg m-0"><div className="lbl">Name</div><div style={{ fontSize: 13.5, color: 'var(--g700)' }}>{enquiry.studentName}</div></div>
@@ -262,13 +266,22 @@ export function EnquiryAssignModal({ isOpen, onClose, showToast, enquiryGuid, up
               {errors.campusGuid && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.campusGuid}</p>}
             </div>
           </div>
-        </div>
+        </fieldset>
 
         <div className="modal-footer">
-          <button className="btn btn-neu" onClick={handleClose}>Cancel</button>
-          <button className="btn btn-primary" disabled={updateEnquiry.isPending} onClick={handleSubmit}>
-            <i className="lni lni-checkmark"></i> {updateEnquiry.isPending ? 'Saving…' : 'Save Assignment'}
-          </button>
+          {canAssign ? (
+            <>
+              <button className="btn btn-neu" onClick={handleClose}>Cancel</button>
+              <button className="btn btn-primary" disabled={updateEnquiry.isPending} onClick={handleSubmit}>
+                <i className="lni lni-checkmark"></i> {updateEnquiry.isPending ? 'Saving…' : 'Save Assignment'}
+              </button>
+            </>
+          ) : (
+            <>
+              <span className="text-sm text-g500 mr-auto"><i className="lni lni-eye" aria-hidden="true"></i> View only. You don&apos;t have permission to assign enquiries.</span>
+              <button className="btn btn-neu" onClick={handleClose}>Close</button>
+            </>
+          )}
         </div>
       </div>
     </div>

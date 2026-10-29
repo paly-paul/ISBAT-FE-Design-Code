@@ -1696,7 +1696,8 @@ export default function FilingPage() {
                         )}
                         <button
                           className={`btn btn-primary btn-submit-ready${!canSubmit ? ' opacity-75' : ''}`}
-                          disabled={submitApplication.isPending || !permissions.add}
+                          disabled={submitApplication.isPending || !permissions.submit}
+                          title={!permissions.submit ? 'You don’t have permission to submit applications for vetting.' : undefined}
                           onClick={handleSubmitApplication}
                         >
                           <i className="lni lni-checkmark" /> {submitApplication.isPending ? 'Submitting…' : 'Submit Application for Vetting'}
