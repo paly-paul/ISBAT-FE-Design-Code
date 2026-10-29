@@ -3,10 +3,17 @@
 Reference for the permission-driven sidebar menu API, `GET /api/v1/users/me/menu`.
 Each node has the shape `{ name, icon, url, permissions, children }`.
 
-**Last updated: 2026-10-21.** The tree below is generated from the live frontend menu
+**Last updated: 2026-10-29.** The tree below matches the frontend's mock menu
 (`mockMenu` in `src/lib/api/users/menu.ts`), so it lists every page that is in the
 sidebar today. The events on each page come from reading the buttons and actions in
 that page's code.
+
+**The frontend no longer adds pages to the menu (since 2026-10-28).** In real mode the
+sidebar shows exactly what `/me/menu` returns. A page that isn't in the response is
+hidden from the sidebar, and opening its URL shows the Access Denied screen. Every page
+in this doc must be registered in the menu API for a role to reach it. The frontend
+still removes and renames a few entries itself (see
+[Pages hidden from the sidebar](#pages-hidden-from-the-sidebar) and the change notes).
 
 ## Node shapes
 
@@ -27,7 +34,7 @@ Icon library: **[LineIcons 4.0](https://lineicons.com/icons)**, loaded from a CD
 Full path from the app root (`/config/faculty-master`). The frontend also accepts a
 bare slug (`payment-console`), which it resolves against the module name
 (`/finance/payment-console`). Finance's Payment Collection and Reports & Statements
-pages are bare slugs in the frontend fallback today. Full paths are preferred.
+pages are bare slugs in the frontend mock menu. Full paths are preferred.
 
 ## `permissions` — page events
 
@@ -58,14 +65,36 @@ details. Every page with a URL has `get`.
 | `generate` | Generate a document or result |
 | `publish` | Publish or push results and marks |
 
-Student Master also uses its own per-row flags: `view`, `learningMode`, `refugee` and
-`sponsor`. The page already reads these keys, so they keep their existing names.
+Student Master also uses its own per-row flags: `view`, `learningmode`, `refugee` and
+`sponsor`. The page already reads these keys, so they keep their existing names. Note
+the frontend reads **`learningmode` in lowercase**; a camelCase `learningMode` key is
+ignored and the button falls back to `edit`.
+
+### How the frontend reads the bag
+
+- **Aliases.** `add` and `create` are the same permission, as are `edit` and
+  `update`, and `get` and `view`. Sending either key of a pair grants both.
+- **`approve` falls back to `edit`.** If the bag has no `approve` key at all, the
+  frontend uses the `edit` value for it. To deny approving to a role that can edit,
+  send `"approve": false` explicitly.
+- **Some buttons stay visible.** On a few pages (Payment Console, Payment History,
+  Student Statement, Financial Reports, and the Discount, Transaction, Outstanding,
+  Enquiry and Application Status reports) the print/export button is always shown, and
+  clicking it without the permission shows a "You don't have permission…" message
+  instead of running it.
+- **Menu call fails:** nothing is granted. The sidebar shows "Couldn't load menu" and
+  every page shows "Couldn't check your access" with a Retry button. There is no
+  fallback menu anymore.
+- **Page missing from the response, or sent with `get: false`:** the page shows
+  Access Denied. A whole module missing from the response blocks every page under it.
+  Routes that aren't menu pages (profile, detail pages such as `/student/profile`) are
+  always allowed; their APIs still authorize each call.
 
 ### Frontend checks today: please read before changing keys
 
 Each module table has a **Frontend checks today** column listing the keys that page's
 code actually reads right now. Most pages read the same keys as their events. On
-**18 pages** the code still gates an event on an older generic key. For example,
+**17 pages** the code still gates an event on an older generic key. For example,
 Learning Mode Approval's Approve button checks `edit`, not `approve`.
 
 On those pages, **send both the event keys and the keys in "Frontend checks today"**
@@ -77,11 +106,10 @@ The pages that need this are:
 
 | Page | URL | Frontend checks | Events |
 |---|---|---|---|
-| Programme Approval | `/academic/programme-approval` | `edit` `delete` | `approve` `delete` |
+| Vetting Desk | `/admission/vetting` | `edit` | `approve` `reject` `hold` |
+| Registrar's Desk | `/admission/registration` | `add` | `register` `print` |
 | Payment Reconciliation | `/academic/odl-reconciliation` | `edit` `delete` | `approve` `reject` |
-| Discount Allocation | `/finance/discount-allocation` | `add` `edit` `delete` | `add` `edit` `cancel` |
-| Advanced Payments | `/finance/advanced-payments` | `create` | `add` |
-| Student Master | `/student/student-master` | also `get`, `edit` as fallbacks | `view` `learningMode` `refugee` `sponsor` |
+| Student Master | `/student/student-master` | `learningmode` `refugee` `sponsor`, with `edit` as fallback | `view` `learningmode` `refugee` `sponsor` |
 | Batch Transfer | `/student/batch-transfer` | `edit` | `execute` |
 | Programme Transfer | `/student/prog-transfer` | `edit` | `execute` |
 | Learning Mode | `/student/learning-mode` | `edit` | `submit` |
@@ -93,11 +121,11 @@ The pages that need this are:
 | Passout Confirmation | `/student/passout-confirmation` | `edit` | `approve` |
 | Send Communication | `/student/communications` | `add` | `send` |
 | Specialization Management | `/student/specialization` | `edit` | `assign` |
-| Employee Approvals | `/employee/employee-approve` | `edit` | `approve` |
 | UE Material Print | `/assessment/university-exam-material-print` | `add` | `print` |
+| UE QP/Booklet Print | `/assessment/university-exam-qp-booklet-print` | `add` `delete` | `print` `generate` `delete` |
 
-If the menu call fails, or a page isn't in the response, the frontend shows every
-action. Real access control still has to be enforced by each API.
+Hiding a button only changes the UI. Real access control still has to be enforced by
+each API.
 
 ## Rail (top-level module) icons
 
@@ -107,6 +135,7 @@ action. Real access control still has to be enforced by each API.
 | Academic | `lni lni-graduation` |
 | Finance | `lni lni-dollar` |
 | Student | `lni lni-user` |
+| Attendance | `lni lni-alarm-clock` |
 | Employee | `lni lni-briefcase` |
 | Assessment | `lni lni-pencil-alt` |
 | Config | `lni lni-cog` |
@@ -124,14 +153,14 @@ action. Real access control still has to be enforced by each API.
 | Enquiry | Enquiry List | `/admission/enquiry-list` | `get` `add` `edit` `assign` `verify` | `add` `edit` | `assign` = assign counsellor; `verify` = verify enquirer email |
 | Enquiry | Enquiry Followup Master | `/admission/enquiry-followup-master` | `get` `add` `edit` `assign` | `add` `edit` | `add` = log follow-up; `assign` = assign counsellor |
 | Enquiry | Enquiry Followup | `/admission/enquiry-followup` | `get` `edit` `assign` | `edit` | `assign` = assign counsellor |
-| Enquiry | Enquiry Report | `/admission/reports/enquiry` | `get` `export` | none | Preview + Excel export; exports land in the shared Downloads list |
+| Enquiry | Enquiry Report | `/admission/reports/enquiry` | `get` `export` | `export` | Preview + Excel export; exports land in the shared Downloads list |
 | Admission Flow | Dashboard | `/admission/dashboard` | `get` | none |  |
 | Admission Flow | Application Payment | `/admission/payment` | `get` `add` `import` `print` | `add` | `import` = from Enquiry / ODeL / CRM; `print` = receipt PDF after saving (normal payments only, not exemptions) |
 | Admission Flow | Application Filing | `/admission/filing` | `get` `add` `delete` `submit` | `add` `delete` | `submit` = submit application for vetting |
-| Admission Flow | Vetting Desk | `/admission/vetting` | `get` `approve` `reject` `hold` | none | `hold` = Wait (awaiting original documents) |
-| Admission Flow | Registrar's Desk | `/admission/registration` | `get` `register` `print` | none | `print` = onboarding print-out |
+| Admission Flow | Vetting Desk | `/admission/vetting` | `get` `approve` `reject` `hold` | `edit` | `hold` = Wait (awaiting original documents) |
+| Admission Flow | Registrar's Desk | `/admission/registration` | `get` `register` `print` | `add` | `print` = onboarding print-out |
 | Records | All Applicants | `/admission/applicants` | `get` `export` | none |  |
-| Records | Application Status Report | `/admission/reports/application-status` | `get` `export` | none | Preview with count per stage + Excel export; exports land in the shared Downloads list |
+| Records | Application Status Report | `/admission/reports/application-status` | `get` `export` | `export` | Preview with count per stage + Excel export; exports land in the shared Downloads list |
 | Records | Paid Students | `/admission/paid-students` | `get` `print` | none | Paid / exempted applicants per intake with their application stage; `print` = reprint the application payment receipt PDF (paid rows with a receipt only) |
 | Records | Receipts | *(none)* | — | — | no page yet |
 | Records | Reports | *(none)* | — | — | no page yet |
@@ -297,19 +326,19 @@ action. Real access control still has to be enforced by each API.
 | Section | Page | URL | Events | Frontend checks today | Notes |
 |---|---|---|---|---|---|
 | Overview | Dashboard | `/academic/acad-dashboard` | `get` `export` | none |  |
-| Academic Core | Intake Master | `/academic/intake-master` | `get` `add` `edit` `delete` `export` | `add` `edit` `delete` |  |
-| Academic Core | Bulk Intake Edit | `/academic/bulk-intake-edit` | `get` `edit` | none |  |
+| Academic Core | Intake Master | `/academic/intake-master` | `get` `add` `edit` `delete` `export` | `get` `add` `edit` `delete` |  |
+| Academic Core | Bulk Intake Edit | `/academic/bulk-intake-edit` | `get` `edit` | `get` `edit` |  |
 | Academic Core | Skill Management | `/academic/skill-master` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
 | Academic Core | Batch Management | `/academic/batch-management` | `get` `add` `edit` `delete` | `add` `edit` `delete` | Includes the former Batch Summary as the Head Count tab (2026-10-21) |
 | Academic Core | Room Management | `/academic/room-management` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
 | Academic Core | Session Movement | `/academic/session-movement` | `get` `execute` | none | `execute` = single and bulk Move Session |
 | Course Unit Master | Repetition Tag | `/academic/repetition-tag` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
 | Course Unit Master | Course Units | `/academic/course-units` | `get` `add` `edit` `delete` `export` | `add` `edit` `delete` |  |
-| Course Unit Master | Course Allocation | `/academic/course-allocation` | `get` `add` `delete` | `add` `delete` | `delete` = remove allocation |
+| Course Unit Master | Course Allocation | `/academic/course-allocation` | `get` `add` `edit` `delete` | `add` `edit` `delete` | `edit` = update an allocation; `delete` = remove allocation |
 | Programme Master | Programme Level | `/academic/programme-level` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
 | Programme Master | Programme Group | `/academic/programme-group` | `get` `add` `edit` `delete` `export` | `add` `edit` `delete` |  |
 | Programme Master | Programme Master | `/academic/programme-master` | `get` `add` `edit` `delete` `export` | `add` `edit` `delete` | `edit` also covers Renew; `add` covers New Version |
-| Programme Master | Programme Approval | `/academic/programme-approval` | `get` `delete` `approve` | `edit` `delete` |  |
+| Programme Master | Programme Approval | `/academic/programme-approval` | `get` `delete` `approve` | `approve` `delete` |  |
 | Programme Master | Fee Structure | `/academic/fee-structure` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
 | Timetable | Schedule Timetable | `/academic/timetable` | `get` `add` `edit` `delete` | `add` `edit` `delete` | Current or next intake only. Print uses the browser. Bulk Import is shown disabled (no API), so `import` is no longer used |
 | Timetable | Lecturer View | `/academic/timetable-lecturer` | `get` `export` | none | `export` = PDF (browser print) |
@@ -317,7 +346,6 @@ action. Real access control still has to be enforced by each API.
 | Timetable | Time Slot Audit | `/academic/timetable-slot-audit` | `get` `export` | none | `export` = PDF (browser print) and Excel (CSV built in the browser) |
 | ODL Applications | ODL Applications | `/academic/odl-applications` | `get` `export` | none |  |
 | ODL Applications | Payment Reconciliation | `/academic/odl-reconciliation` | `get` `approve` `reject` | `edit` `delete` | `approve` = confirm reconciliation |
-| Cross-Module | Student Lookup | `/academic/student-lookup` | `get` `edit` | `edit` |  |
 
 ```json
 {
@@ -415,7 +443,7 @@ action. Real access control still has to be enforced by each API.
           "name": "Course Allocation",
           "icon": "lni lni-agenda",
           "url": "/academic/course-allocation",
-          "permissions": { "get": true, "add": true, "delete": true },
+          "permissions": { "get": true, "add": true, "edit": true, "delete": true },
           "children": []
         }
       ]
@@ -520,21 +548,6 @@ action. Real access control still has to be enforced by each API.
           "children": []
         }
       ]
-    },
-    {
-      "name": "Cross-Module",
-      "icon": null,
-      "url": null,
-      "permissions": null,
-      "children": [
-        {
-          "name": "Student Lookup",
-          "icon": "lni lni-user",
-          "url": "/academic/student-lookup",
-          "permissions": { "get": true, "edit": true },
-          "children": []
-        }
-      ]
     }
   ]
 }
@@ -547,20 +560,20 @@ action. Real access control still has to be enforced by each API.
 | Section | Page | URL | Events | Frontend checks today | Notes |
 |---|---|---|---|---|---|
 | Payment Collection | Dashboard | `/finance/dashboard` | `get` | none |  |
-| Payment Collection | Payment Console | `/finance/payment-console` | `get` `add` `edit` `print` | `add` `edit` | `add` = save payment / apply advance; `edit` = edit a saved payment |
+| Payment Collection | Payment Console | `/finance/payment-console` | `get` `add` `edit` `print` | `add` `edit` `print` | `add` = save payment / apply advance; `edit` = edit a saved payment |
 | Payment Collection | Payment Refund | `/finance/payment-refund` | `get` `add` | `add` | `add` = submit refund |
-| Payment Collection | NCHE & Guild Payment | `/finance/nche-guild-payment` | `get` `add` `edit` `delete` | `edit` `delete` |  |
-| Payment Collection | Discount Allocation | `/finance/discount-allocation` | `get` `add` `edit` `cancel` | `add` `edit` `delete` | `cancel` = cancel discount (now or from next semester) |
-| Payment Collection | Refugee Status | `/finance/refugee-status` | `get` `add` `edit` `delete` | none | `add` = grant status; `delete` = remove status |
-| Payment Collection | Payment History | `/finance/payment-history` | `get` `edit` `print` | `edit` |  |
+| Payment Collection | NCHE & Guild Payment | `/finance/nche-guild-payment` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
+| Payment Collection | Discount Allocation | `/finance/discount-allocation` | `get` `add` `edit` `cancel` | `add` `edit` `cancel` | `cancel` = cancel discount (now or from next semester) |
+| Payment Collection | Refugee Status | `/finance/refugee-status` | `get` `add` `edit` `delete` | `add` `edit` `delete` | `add` = grant status; `delete` = remove status |
+| Payment Collection | Payment History | `/finance/payment-history` | `get` `edit` `print` | `edit` `print` |  |
 | Payment Collection | Ledger Adjustments | `/finance/ledger-adjustments` | `get` `edit` | `edit` | `edit` = adjust ledger line |
 | Payment Collection | Exchange Rates | `/finance/exchange-rates` | `get` `add` `edit` `delete` | `add` `edit` `delete` | `edit` = save rates |
-| Payment Collection | Advanced Payments | `/finance/advanced-payments` | `get` `add` | `create` | `add` = new deposit |
-| Reports & Statements | Financial Reports | `/finance/financial-reports` | `get` `export` | none |  |
-| Reports & Statements | Discount Report | `/finance/reports/discount` | `get` `export` | none | Preview + Excel export; each user sees only their own exports. Downloads icon lives in the app header |
-| Reports & Statements | Transaction Report | `/finance/reports/transaction` | `get` `export` | none | Same preview + Excel export flow as Discount Report; exports land in the shared Downloads list |
-| Reports & Statements | Outstanding Report | `/finance/reports/outstanding` | `get` `export` | none | Same preview + Excel export flow as Discount Report; exports land in the shared Downloads list |
-| Reports & Statements | Student Statement | `/finance/student-statements` | `get` `print` | none |  |
+| Payment Collection | Advanced Payments | `/finance/advanced-payments` | `get` `add` | `create` (same as `add`) | `add` = new deposit |
+| Reports & Statements | Financial Reports | `/finance/financial-reports` | `get` `export` | `export` |  |
+| Reports & Statements | Discount Report | `/finance/reports/discount` | `get` `export` | `export` | Preview + Excel export; each user sees only their own exports. Downloads icon lives in the app header |
+| Reports & Statements | Transaction Report | `/finance/reports/transaction` | `get` `export` | `export` | Same preview + Excel export flow as Discount Report; exports land in the shared Downloads list |
+| Reports & Statements | Outstanding Report | `/finance/reports/outstanding` | `get` `export` | `export` | Same preview + Excel export flow as Discount Report; exports land in the shared Downloads list |
+| Reports & Statements | Student Statement | `/finance/student-statements` | `get` `print` | `print` |  |
 | Finance Core | Cooperates | `/finance/cooperates` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
 | Finance Core | Discounts | `/finance/discounts` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
 | Finance Core | Ledgers | `/finance/ledgers` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
@@ -804,7 +817,7 @@ action. Real access control still has to be enforced by each API.
 
 | Section | Page | URL | Events | Frontend checks today | Notes |
 |---|---|---|---|---|---|
-| Student Records | Student Master | `/student/student-master` | `get` `view` `learningMode` `refugee` `sponsor` | `get` `view` `edit` `learningMode` `refugee` `sponsor` | row actions use their own flags: View, Learning Mode, Refugee Status, Sponsor |
+| Student Records | Student Master | `/student/student-master` | `get` `view` `learningmode` `refugee` `sponsor` | `get` `view` `edit` `learningmode` `refugee` `sponsor` | row actions use their own flags: View, Learning Mode, Refugee Status, Sponsor |
 | Operations | Student Profile | `/student/profile` | `get` `edit` `send` `print` `download` | `edit` | `print`/`download` = ID card; `send` = credentials via email/WhatsApp |
 | Operations | Batch Transfer | `/student/batch-transfer` | `get` `execute` | `edit` |  |
 | Operations | Programme Transfer | `/student/prog-transfer` | `get` `execute` | `edit` |  |
@@ -839,7 +852,7 @@ action. Real access control still has to be enforced by each API.
           "name": "Student Master",
           "icon": "lni lni-graduation",
           "url": "/student/student-master",
-          "permissions": { "get": true, "view": true, "learningMode": true, "refugee": true, "sponsor": true },
+          "permissions": { "get": true, "view": true, "learningmode": true, "refugee": true, "sponsor": true },
           "children": []
         }
       ]
@@ -994,12 +1007,72 @@ action. Real access control still has to be enforced by each API.
 
 ---
 
+## Attendance
+
+New module (2026-10-28). Its rail sits between Student and Employee.
+
+| Section | Page | URL | Events | Frontend checks today | Notes |
+|---|---|---|---|---|---|
+| Class Attendance | Record Attendance | `/attendance/record` | `get` `add` `edit` | `add` `edit` | `add` = save attendance for a new session (or skip it with a reason); `edit` = change an already recorded session |
+| Class Attendance | Pending Outlines | `/attendance/pending-outlines` | `get` | none | Sessions still waiting for attendance; each row links to Record Attendance |
+| Management | Attendance Sessions | `/attendance/sessions` | `get` `edit` `delete` | `edit` `delete` | `edit` opens the session in Record Attendance; automated and cancelled sessions can't be edited |
+
+```json
+{
+  "name": "Attendance",
+  "icon": "lni lni-alarm-clock",
+  "url": null,
+  "permissions": null,
+  "children": [
+    {
+      "name": "Class Attendance",
+      "icon": null,
+      "url": null,
+      "permissions": null,
+      "children": [
+        {
+          "name": "Record Attendance",
+          "icon": "lni lni-checkmark-circle",
+          "url": "/attendance/record",
+          "permissions": { "get": true, "add": true, "edit": true },
+          "children": []
+        },
+        {
+          "name": "Pending Outlines",
+          "icon": "lni lni-list",
+          "url": "/attendance/pending-outlines",
+          "permissions": { "get": true },
+          "children": []
+        }
+      ]
+    },
+    {
+      "name": "Management",
+      "icon": null,
+      "url": null,
+      "permissions": null,
+      "children": [
+        {
+          "name": "Attendance Sessions",
+          "icon": "lni lni-calendar",
+          "url": "/attendance/sessions",
+          "permissions": { "get": true, "edit": true, "delete": true },
+          "children": []
+        }
+      ]
+    }
+  ]
+}
+```
+
+---
+
 ## Employee
 
 | Section | Page | URL | Events | Frontend checks today | Notes |
 |---|---|---|---|---|---|
 | Employee Records | Employee Master | `/employee/employee-master` | `get` `add` `edit` `assign` | `add` `edit` `assign` | `assign` = assign/edit employee permissions |
-| Employee Records | Employee Approvals | `/employee/employee-approve` | `get` `approve` | `edit` |  |
+| Employee Records | Employee Approvals | `/employee/employee-approve` | `get` `approve` | `approve` |  |
 
 ```json
 {
@@ -1058,7 +1131,7 @@ action. Real access control still has to be enforced by each API.
 | University Exam (UE) | Hall Ticket Print | `/assessment/hall-print` | `get` `print` | none |  |
 | University Exam (UE) | Hall Ticket Print All | `/assessment/hall-ticket-print-all` | `get` `print` | none |  |
 | University Exam (UE) | UE Material Print | `/assessment/university-exam-material-print` | `get` `print` | `add` |  |
-| University Exam (UE) | UE QP/Booklet Print | `/assessment/university-exam-qp-booklet-print` | `get` `print` `generate` | none |  |
+| University Exam (UE) | UE QP/Booklet Print | `/assessment/university-exam-qp-booklet-print` | `get` `print` `generate` `delete` | `add` `delete` | `delete` = delete a Practical QP; both print buttons check `add` today |
 | University Exam (UE) | UE Practical QP Print | `/assessment/university-exam-practical-qp-print` | `get` `delete` `print` `download` `generate` | none |  |
 | University Exam (UE) | UE Project Booklet Print | `/assessment/university-exam-project-booklet-print` | `get` `print` `download` | none |  |
 | University Exam (UE) | Resit Question Print | `/assessment/resit-question-print` | `get` `delete` `print` `generate` | none |  |
@@ -1259,7 +1332,7 @@ action. Real access control still has to be enforced by each API.
           "name": "UE QP/Booklet Print",
           "icon": "lni lni-printer",
           "url": "/assessment/university-exam-qp-booklet-print",
-          "permissions": { "get": true, "print": true, "generate": true },
+          "permissions": { "get": true, "print": true, "generate": true, "delete": true },
           "children": []
         },
         {
@@ -1477,7 +1550,7 @@ action. Real access control still has to be enforced by each API.
 | Admissions | Followup Status | `/config/followup-status` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
 | Admissions | Followup Mode | `/config/followup-mode` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
 | Admissions | Interest Level | `/config/interest-level` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
-| Access Control | Permission Master | `/config/permission-master` | `get` `add` `edit` | `add` `edit` | no delete on this page |
+| Access Control | Permission Master | `/config/permission-master` | `get` `add` `edit` `delete` | `add` `edit` `delete` | `delete` = delete a permission group |
 
 ```json
 {
@@ -1661,7 +1734,7 @@ action. Real access control still has to be enforced by each API.
           "name": "Permission Master",
           "icon": "lni lni-lock",
           "url": "/config/permission-master",
-          "permissions": { "get": true, "add": true, "edit": true },
+          "permissions": { "get": true, "add": true, "edit": true, "delete": true },
           "children": []
         }
       ]
@@ -1709,13 +1782,14 @@ action. Real access control still has to be enforced by each API.
 ## Pages hidden from the sidebar
 
 These pages still exist in the code but are deliberately left out of the menu. Don't
-add them to the menu response. If they are sent, the frontend removes Weight
-Configuration, Assessment Schedule, Service Tickets and the four Resit & Disputes
+add them to the menu response. If they are sent, the frontend removes Student Lookup,
+Weight Configuration, Assessment Schedule, Service Tickets and the four Resit & Disputes
 ones itself (`stripUnintegratedPages`, which also drops a section left empty), and
 removes any "Lecturer Master" / "Lecture Master" node (`stripLectureMaster`).
 
 | Module | Page | URL |
 |---|---|---|
+| Academic | Student Lookup | `/academic/student-lookup` (was Academic › Cross-Module, the section's only page) |
 | Academic | Batch Summary | `/academic/batch-summary` (redirects to Batch Management's Head Count tab; dropped by `removeBatchSummary`) |
 | Student | Learning Mode Report | `/student/learning-mode-report` |
 | Student | Student Services | `/student/services` |
@@ -1737,7 +1811,47 @@ removes any "Lecturer Master" / "Lecture Master" node (`stripLectureMaster`).
 | Assessment | Pending QP Upload | `/assessment/rpt-pending-qp` |
 | Assessment | Faculty Summary | `/assessment/rpt-faculty` |
 
-## Changes since the previous version (2026-10-19)
+## Changes since the previous version (2026-10-21)
+
+- **The frontend no longer adds pages to the menu.** Until now it inserted pages the
+  menu API hadn't registered yet (the "until then the frontend adds it" notes below).
+  That stopped on 2026-10-28, because it gave every role holding a module or section
+  full access to all the added pages. **Please register every page in this doc in the
+  menu API**, in particular the ones the older notes below say the frontend was adding:
+  Paid Students, Enquiry Report, Application Status Report, Transaction Report,
+  Outstanding Report, Mark Verify — UE, and the Lecturer View, Batch View and Time Slot
+  Audit timetable pages. Until they are registered they're hidden and show Access
+  Denied. The frontend still renames IA Creation → Assessment Scheduler and Timetable →
+  Schedule Timetable, and still removes the pages listed under
+  [Pages hidden from the sidebar](#pages-hidden-from-the-sidebar).
+- **Added the Attendance module** (`lni lni-alarm-clock`, between Student and
+  Employee) with **Record Attendance**, **Pending Outlines** and **Attendance
+  Sessions**. The old locked "Attendance · Coming Soon" and "Analytics · Coming Soon"
+  rail placeholders are gone.
+- **Pages are now blocked, not just hidden.** Opening a menu page the response leaves
+  out (or sends with `get: false`) shows Access Denied. A failed menu call grants
+  nothing and shows a Retry screen; there is no fallback menu anymore. See
+  [How the frontend reads the bag](#how-the-frontend-reads-the-bag).
+- **Key aliases.** `add`/`create`, `edit`/`update` and `get`/`view` are now treated as
+  the same key, and a missing `approve` falls back to `edit`. Send `"approve": false`
+  to deny approving to a role that can edit.
+- **Frontend checks updated.** Programme Approval and Employee Approvals now check
+  `approve`, Discount Allocation checks `cancel`, and Payment Console, Payment History,
+  Student Statement and the Finance and Admission reports now check `print` /
+  `export`. NCHE & Guild Payment, Refugee Status, Intake Master and Bulk Intake Edit
+  now gate their buttons too. Vetting Desk (`edit`) and Registrar's Desk (`add`) are
+  added to the "send both keys" list; Programme Approval, Discount Allocation, Advanced
+  Payments and Employee Approvals are off it.
+- **Events added** for buttons that exist on the page: Course Allocation `edit`
+  (update an allocation), Permission Master `delete` (delete a group) and UE QP/Booklet
+  Print `delete` (delete a Practical QP).
+- **Hid Academic › Cross-Module › Student Lookup** (`/academic/student-lookup`) from
+  the sidebar. The page still exists. Please remove it (and the now-empty Cross-Module
+  section) from the menu response; until then the frontend strips it itself.
+- **Student Master's Learning Mode key is `learningmode` (lowercase)**, matching what
+  the page reads. A camelCase `learningMode` key is ignored.
+
+## Changes in the 2026-10-21 version (since 2026-10-19)
 
 - **Academic › Academic Core › Batch Summary** is removed from the menu. It is now
   the **Head Count** tab of **Batch Management** (`/academic/batch-management`),

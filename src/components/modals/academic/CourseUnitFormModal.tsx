@@ -77,6 +77,8 @@ export function CourseUnitFormModal({ isOpen, onClose, showToast, mode, courseUn
   const [committedRepetitionTagSearch, setCommittedRepetitionTagSearch] = useState('')
   const [repetitionTagPickerOpen, setRepetitionTagPickerOpen] = useState(false)
   const [syllabusFile, setSyllabusFile] = useState<File | null>(null)
+  // Edit only: the attached syllabus is marked for removal on the next save.
+  const [removeSyllabus, setRemoveSyllabus] = useState(false)
   // Cleared on Remove so picking the same file again still fires onChange.
   const syllabusInputRef = useRef<HTMLInputElement>(null)
   const [syllabusLinkLoading, setSyllabusLinkLoading] = useState(false)
@@ -243,6 +245,7 @@ export function CourseUnitFormModal({ isOpen, onClose, showToast, mode, courseUn
           : [blankChapter()]
       )
       setSyllabusFile(null)
+      setRemoveSyllabus(false)
       setCodeTaken(null); setNameWarning(null)
       setStep(1)
       setActiveChapterIdx(0)
@@ -399,6 +402,7 @@ export function CourseUnitFormModal({ isOpen, onClose, showToast, mode, courseUn
     setTopicTaughtByErrors(new Set())
     setUnitCode(''); setUnitName(''); setNumChapters(''); setCredits(''); setRepetitionTagGuid('')
     setSyllabusFile(null)
+    setRemoveSyllabus(false)
     setIncludeCW(true); setIncludeCBT(true); setIncludeMid(true)
     setCwAssessed('25'); setCbtAssessed('50'); setUeAssessed('100')
     setCwFinal('15'); setCbtFinal('15'); setUeFinal('70')
@@ -504,7 +508,7 @@ export function CourseUnitFormModal({ isOpen, onClose, showToast, mode, courseUn
       if (!courseUnitGuid || !courseUnit) return
 
       const snap = step1SnapshotRef.current
-      const hasChanges = !snap || syllabusFile !== null
+      const hasChanges = !snap || syllabusFile !== null || removeSyllabus
         || unitCode !== snap.unitCode
         || unitName !== snap.unitName
         || numChapters !== snap.numChapters
@@ -539,6 +543,7 @@ export function CourseUnitFormModal({ isOpen, onClose, showToast, mode, courseUn
             cwWeightage: +cwFinal || 0,
             ueWeightage: +ueFinal || 0,
             syllabus: syllabusFile,
+            removeSyllabus,
           },
         },
         { onSuccess: advanceToStep2, onError: handleStep1Error },
@@ -981,7 +986,7 @@ export function CourseUnitFormModal({ isOpen, onClose, showToast, mode, courseUn
                 already-loaded copy can easily be dead by the time the user
                 actually clicks. Edit only — Create has no existing document
                 to show yet. */}
-            {isEdit && !syllabusFile && courseUnit?.syllabus && (
+            {isEdit && !syllabusFile && courseUnit?.syllabus && !removeSyllabus && (
               <div
                 className="flex items-center justify-between gap-3"
                 style={{ background: 'var(--white)', border: '1.5px solid var(--green-bd)', borderRadius: 'var(--rsm)', padding: '10px 14px', marginBottom: 10 }}
@@ -1007,7 +1012,31 @@ export function CourseUnitFormModal({ isOpen, onClose, showToast, mode, courseUn
                   >
                     <i className="lni lni-download"></i> Download
                   </button>
+                  <button
+                    type="button"
+                    className="btn btn-neu btn-sm"
+                    onClick={() => setRemoveSyllabus(true)}
+                    disabled={syllabusLinkLoading}
+                    aria-label="Remove the currently attached syllabus"
+                  >
+                    <i className="lni lni-trash-can"></i> Remove
+                  </button>
                 </div>
+              </div>
+            )}
+            {/* Removal only takes effect on save, so it can still be undone. */}
+            {isEdit && !syllabusFile && courseUnit?.syllabus && removeSyllabus && (
+              <div
+                className="flex items-center justify-between gap-3"
+                style={{ background: 'var(--red-bg)', border: '1.5px solid var(--red-bd)', borderRadius: 'var(--rsm)', padding: '10px 14px', marginBottom: 10 }}
+              >
+                <div className="flex items-center gap-2" style={{ minWidth: 0 }}>
+                  <i className="lni lni-trash-can" style={{ color: 'var(--red)', fontSize: 18, flexShrink: 0 }}></i>
+                  <span style={{ fontSize: 'var(--fs-sm)', fontWeight: 600, color: 'var(--g700)' }}>Syllabus will be removed when you save</span>
+                </div>
+                <button type="button" className="btn btn-neu btn-sm" style={{ flexShrink: 0 }} onClick={() => setRemoveSyllabus(false)}>
+                  <i className="lni lni-reload"></i> Undo
+                </button>
               </div>
             )}
             {/* Picked-but-not-saved file, with a way to drop it. Outside the
@@ -1043,7 +1072,7 @@ export function CourseUnitFormModal({ isOpen, onClose, showToast, mode, courseUn
               <p>
                 {syllabusFile
                   ? syllabusFile.name
-                  : isEdit && courseUnit?.syllabus
+                  : isEdit && courseUnit?.syllabus && !removeSyllabus
                     ? 'Replace the currently attached syllabus (optional)'
                     : 'Upload approved syllabus document (PDF / Word)'}
               </p>

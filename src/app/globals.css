@@ -4156,6 +4156,15 @@ tr.flagged td {
   overflow-y: auto;
 }
 
+/* A label longer than .ss-drop's max-width cap (e.g. a full programme name)
+   wraps onto more lines instead of being ellipsized out of sight. Scoped to
+   the dropdown so the column-filter menus keep their single-line rows. */
+.ss-opts .col-filter-opt {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.35;
+}
+
 .ss-no-match {
   padding: 6px 10px;
   font-size: 12px;
