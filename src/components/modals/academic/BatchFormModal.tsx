@@ -7,14 +7,13 @@ import { SearchSelect } from '@/components/SearchSelect'
 import DatePicker from '@/components/DatePicker'
 import { BatchCreateInput, BatchUpdateInput, EMPTY_GUID } from '@/lib/api/academic/batch'
 import { useBatch } from '@/hooks/academic/useBatches'
-import { useProgramMasterByGuid, useSearchProgramMastersInfinite } from '@/hooks/academic/useProgramMaster'
+import { useProgramMasterByGuid, useProgramDropdown } from '@/hooks/academic/useProgramMaster'
 import { useCurrentAcademicIntake, useIntake } from '@/hooks/academic/useIntakes'
 import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
-import { useSearchStreamsInfinite, useStream } from '@/hooks/config/useStreams'
-import { useBatchTimes } from '@/hooks/config/useBatchTimes'
-import { useEmployee, useSearchEmployeesInfinite } from '@/hooks/employee/useEmployees'
+import { useSpecializationsDropdown, useStream } from '@/hooks/config/useStreams'
+import { useBatchTimesDropdown } from '@/hooks/config/useBatchTimes'
+import { useEmployee, useEmployeeDropdown } from '@/hooks/employee/useEmployees'
 import { AuthError } from '@/lib/api/client'
-import { flattenUniquePages } from '@/lib/pagination'
 import { scrollToFirstError } from '@/lib/scrollToFirstError'
 
 // Create and Edit share this form — same fields, just different prefill,
@@ -103,23 +102,22 @@ export function BatchFormModal({ isOpen, onClose, showToast, mode, batchGuid, cr
   const selectedEmployee = useEmployee(inChargeGuid || null)
   const selectedHead = useEmployee(pHeadGuid || null)
 
-  const programQuery = useSearchProgramMastersInfinite(committedProgramSearch, 20, isOpen && programPickerOpen)
+  const { data: programDropdownItems = [], isLoading: isProgramLoading } = useProgramDropdown(undefined, isOpen)
   // Create only allows the current intake (POST /batches rejects any other
   // with "Batches can only be created for the current intake"), so the
   // dropdown offers just that one — via the intakes list's currentIntake
   // filter. Edit keeps the batch's own (locked) intake, whatever it is.
   const currentIntake = useCurrentAcademicIntake(isOpen && !isEdit)
-  const streamQuery = useSearchStreamsInfinite(committedStreamSearch, 20, isOpen && streamPickerOpen)
-  const employeeQuery = useSearchEmployeesInfinite(committedEmployeeSearch, 20, isOpen && employeePickerOpen)
+  const { data: specializationDropdownItems = [], isLoading: isSpecializationLoading } = useSpecializationsDropdown(isOpen)
+  const { data: employeeDropdownItems = [], isLoading: isEmployeesLoading } = useEmployeeDropdown(isOpen)
 
   const programOptions = useMemo(() => {
-    const arr = flattenUniquePages(programQuery.data?.pages ?? [], p => p.programGuid)
-      .map(p => ({ value: p.programGuid, label: `${p.programName} (${p.programCode})` }))
+    const arr = programDropdownItems.map(p => ({ value: p.programGuid, label: `${p.programName} (${p.programCode})` }))
     if (programGuid && !arr.some(option => option.value === programGuid) && selectedProgram.data) {
       arr.unshift({ value: programGuid, label: `${selectedProgram.data.programName} (${selectedProgram.data.programCode})` })
     }
     return arr
-  }, [programGuid, programQuery.data, selectedProgram.data])
+  }, [programDropdownItems, programGuid, selectedProgram.data])
 
   const intakeOptions = useMemo(() => {
     const intake = isEdit ? selectedIntake.data : currentIntake.data
@@ -132,17 +130,18 @@ export function BatchFormModal({ isOpen, onClose, showToast, mode, batchGuid, cr
   }, [isOpen, isEdit, intakeGuid, currentIntake.data])
 
   const streamOptions = useMemo(() => {
-    const arr = flattenUniquePages(streamQuery.data?.pages ?? [], s => s.streamGuid)
-      .map(s => ({ value: s.streamGuid, label: s.streamName }))
+    const arr = specializationDropdownItems.map(s => ({
+      value: s.guid || s.streamGuid || '',
+      label: s.name || s.streamName || '',
+    }))
     if (streamGuid && !arr.some(option => option.value === streamGuid) && selectedStream.data) {
       arr.unshift({ value: streamGuid, label: selectedStream.data.streamName })
     }
     return arr
-  }, [streamGuid, streamQuery.data, selectedStream.data])
+  }, [specializationDropdownItems, streamGuid, selectedStream.data])
 
   const advisorOptions = useMemo(() => {
-    const arr = flattenUniquePages(employeeQuery.data?.pages ?? [], e => e.employeeGuid)
-      .map(e => ({ value: e.employeeGuid, label: e.empName }))
+    const arr = employeeDropdownItems.map(e => ({ value: e.employeeGuid, label: e.displayName }))
     if (inChargeGuid && !arr.some(option => option.value === inChargeGuid) && selectedEmployee.data) {
       arr.unshift({ value: inChargeGuid, label: selectedEmployee.data.empName })
     }
@@ -150,11 +149,11 @@ export function BatchFormModal({ isOpen, onClose, showToast, mode, batchGuid, cr
       arr.unshift({ value: pHeadGuid, label: selectedHead.data.empName })
     }
     return arr
-  }, [employeeQuery.data, inChargeGuid, pHeadGuid, selectedEmployee.data, selectedHead.data])
+  }, [employeeDropdownItems, inChargeGuid, pHeadGuid, selectedEmployee.data, selectedHead.data])
 
   const { data: semesters = [] } = useSemestersForProgram(programGuid, !!programGuid)
 
-  const { data: batchTimes = [] } = useBatchTimes(isOpen)
+  const { data: batchTimes = [], isLoading: isBatchTimesLoading } = useBatchTimesDropdown(isOpen)
 
   const semesterOptions  = semesters.map(s => ({ value: s.semesterGuid, label: s.semName }))
   const batchTimeOptions = batchTimes.map(b => ({ value: b.batchTimeGuid, label: b.batchTime }))
@@ -434,12 +433,7 @@ export function BatchFormModal({ isOpen, onClose, showToast, mode, batchGuid, cr
               options={programOptions}
               value={programGuid}
               disabled={isEdit}
-              onSearch={setProgramSearch}
-              onOpenChange={setProgramPickerOpen}
-              isLoading={programQuery.isLoading}
-              hasNextPage={programQuery.hasNextPage}
-              isFetchingNextPage={programQuery.isFetchingNextPage}
-              onLoadMore={() => programQuery.fetchNextPage()}
+              isLoading={isProgramLoading}
               onChange={isEdit ? undefined : (val => { setProgramGuid(val); setSemesterGuid(''); if (errors.programGuid) setErrors(p => ({ ...p, programGuid: '' })) })}
             />
             {errors.programGuid && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.programGuid}</p>}
@@ -456,19 +450,14 @@ export function BatchFormModal({ isOpen, onClose, showToast, mode, batchGuid, cr
               options={streamOptions}
               value={streamGuid}
               disabled={isEnded}
-              onSearch={setStreamSearch}
-              onOpenChange={setStreamPickerOpen}
-              isLoading={streamQuery.isLoading}
-              hasNextPage={streamQuery.hasNextPage}
-              isFetchingNextPage={streamQuery.isFetchingNextPage}
-              onLoadMore={() => streamQuery.fetchNextPage()}
+              isLoading={isSpecializationLoading}
               onChange={isEnded ? undefined : (val => { setStreamGuid(val); clearError('streamGuid') })}
             />
             {errors.streamGuid && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.streamGuid}</p>}
           </div>
           <div className="fg">
             <div className="lbl">Batch Time <span className="req">*</span></div>
-            <SearchSelect placeholder="— Select batch time —" options={batchTimeOptions} value={batchTimeGuid} disabled={isEdit} onChange={isEdit ? undefined : (val => { setBatchTimeGuid(val); if (errors.batchTimeGuid) setErrors(p => ({ ...p, batchTimeGuid: '' })) })} />
+            <SearchSelect placeholder="— Select batch time —" options={batchTimeOptions} value={batchTimeGuid} disabled={isEdit} isLoading={isBatchTimesLoading} onChange={isEdit ? undefined : (val => { setBatchTimeGuid(val); if (errors.batchTimeGuid) setErrors(p => ({ ...p, batchTimeGuid: '' })) })} />
             {errors.batchTimeGuid && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.batchTimeGuid}</p>}
           </div>
           <div className="fg">
@@ -478,12 +467,7 @@ export function BatchFormModal({ isOpen, onClose, showToast, mode, batchGuid, cr
               options={advisorOptionsList}
               value={inChargeGuid}
               disabled={isEnded}
-              onSearch={setEmployeeSearch}
-              onOpenChange={setEmployeePickerOpen}
-              isLoading={employeeQuery.isLoading}
-              hasNextPage={employeeQuery.hasNextPage}
-              isFetchingNextPage={employeeQuery.isFetchingNextPage}
-              onLoadMore={() => employeeQuery.fetchNextPage()}
+              isLoading={isEmployeesLoading}
               onChange={isEnded ? undefined : (val => { setInChargeGuid(val); clearError('inChargeGuid') })}
             />
             {errors.inChargeGuid && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.inChargeGuid}</p>}
@@ -495,12 +479,7 @@ export function BatchFormModal({ isOpen, onClose, showToast, mode, batchGuid, cr
               options={advisorOptionsList}
               value={pHeadGuid}
               disabled={isEnded}
-              onSearch={setEmployeeSearch}
-              onOpenChange={setEmployeePickerOpen}
-              isLoading={employeeQuery.isLoading}
-              hasNextPage={employeeQuery.hasNextPage}
-              isFetchingNextPage={employeeQuery.isFetchingNextPage}
-              onLoadMore={() => employeeQuery.fetchNextPage()}
+              isLoading={isEmployeesLoading}
               onChange={isEnded ? undefined : setPHeadGuid}
             />
           </div>

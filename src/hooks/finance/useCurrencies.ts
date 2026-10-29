@@ -1,5 +1,5 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Currency, CurrencyInput, createCurrency, deleteCurrency, getCurrencies, getCurrenciesPaged, getCurrencyById, updateCurrency } from '@/lib/api/finance/currencyMaster'
+import { Currency, CurrencyInput, createCurrency, deleteCurrency, getCurrencies, getCurrenciesPaged, getCurrencyById, updateCurrency, getCurrenciesDropdown, CurrencyDropdownItem } from '@/lib/api/finance/currencyMaster'
 import { getNextPageParam } from '@/lib/pagination'
 
 const CURRENCIES_KEY = ['currencies']
@@ -72,3 +72,13 @@ export function useDeleteCurrency() {
 }
 
 export type { Currency, CurrencyInput }
+
+export function useCurrenciesDropdown(enabled = true) {
+  return useQuery<CurrencyDropdownItem[]>({
+    queryKey: [...CURRENCIES_KEY, 'dropdown'],
+    queryFn: () => getCurrenciesDropdown(),
+    staleTime: Infinity,
+    gcTime: Infinity,
+    enabled,
+  })
+}

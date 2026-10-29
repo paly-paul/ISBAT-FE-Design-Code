@@ -5,13 +5,12 @@ import { SuccessPopup } from '../shared/SuccessPopup'
 import { FailurePopup } from '../shared/FailurePopup'
 import { SearchSelect } from '@/components/SearchSelect'
 import { stripLeadingZeros } from '@/lib/errorMessages'
-import { useSearchProgramMastersInfinite } from '@/hooks/academic/useProgramMaster'
+import { useProgramDropdown } from '@/hooks/academic/useProgramMaster'
 import { useIntakesByGuids, useCurrentAcademicIntake } from '@/hooks/academic/useIntakes'
 import { IntakeSearchPicker } from '@/components/IntakeSearchPicker'
-import { useSearchCurrenciesInfinite } from '@/hooks/finance/useCurrencies'
-import { useFinanceCurrencies } from '@/hooks/finance/useFinanceCurrencies'
+import { useCurrenciesDropdown } from '@/hooks/finance/useCurrencies'
 import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
-import { useLedgers } from '@/hooks/finance/useLedgers'
+import { useLedgersDropdown } from '@/hooks/finance/useLedgers'
 import { flattenUniquePages } from '@/lib/pagination'
 import {
   useSaveProgramFeeStructureComplete,
@@ -99,16 +98,16 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
   const [currencyPickerOpen, setCurrencyPickerOpen] = useState(false)
   const saveFeeStructureComplete   = useSaveProgramFeeStructureComplete()
   const updateFeeStructureComplete = useUpdateProgramFeeStructureComplete()
-  const programQuery = useSearchProgramMastersInfinite(committedProgramSearch, 20, isOpen && programPickerOpen)
+  const { data: programDropdownItems = [], isLoading: isProgramLoading } = useProgramDropdown(undefined, isOpen)
   const copyQuery = useSearchProgramFeeStructuresInfinite(committedCopySearch, 20, isOpen && copyPickerOpen)
-  const currencyQuery = useSearchCurrenciesInfinite(committedCurrencySearch, 20, isOpen && currencyPickerOpen)
+  const { data: currencyDropdownItems = [], isLoading: isCurrenciesLoading } = useCurrenciesDropdown(isOpen)
   // Real fetch-by-guid now — GET fee-lines/:feeHdGuid, same convention as
   // the rest of the app's real Edit modals. Header fields (feeCode,
   // calcType, lef/cef/ace, intakeGuid, etc.) come from editData itself (the
   // list row the page already fetched), not from this endpoint — it only
   // ever returns the line items.
   const { data: feeLines, isLoading: feeLinesLoading, isError: feeLinesError } = useProgramFeeLines(editData?.feeHdGuid ?? null, isOpen && mode === 'edit' && !!editData)
-  const programs = useMemo(() => flattenUniquePages(programQuery.data?.pages ?? [], p => p.programGuid), [programQuery.data])
+  const programs = programDropdownItems
   const allFeeStructures = useMemo(() => flattenUniquePages(copyQuery.data?.pages ?? [], f => f.feeHdGuid), [copyQuery.data])
   // Per-source-guid on-demand fetch of the picked structure's real fee
   // lines — the GET-all list only ever returns header fields, never the
@@ -122,16 +121,18 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
   // already used on /academic/intake-master), shown read-only.
   const { data: currentAcademicIntake } = useCurrentAcademicIntake(isOpen)
 
-  const programOptions = programs.map(p => ({ value: p.programGuid, label: `${p.programName} (${p.programCode})` }))
+  const programOptions = programDropdownItems.map(p => ({ value: p.programGuid, label: `${p.programName} (${p.programCode})` }))
   // Lec/Cec/Acec carry the currency's intCurrency (a plain int), not its
   // GUID — confirmed via the real save-complete payload. Rows without one
   // are left out rather than collapsing onto a shared empty key.
+  const financeCurrencies = currencyDropdownItems
   const currencyIntOptions = useMemo(
-    () => flattenUniquePages(currencyQuery.data?.pages ?? [], c => String(c.intCurrency ?? ''))
+    () => currencyDropdownItems
       .filter(c => c.intCurrency != null)
       .map(c => ({ value: String(c.intCurrency), label: `${c.currencyCode} — ${c.currencyName}` })),
-    [currencyQuery.data],
+    [currencyDropdownItems],
   )
+
 
   useEffect(() => {
     const timer = setTimeout(() => setCommittedProgramSearch(programSearch.trim()), 300)
@@ -318,11 +319,11 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
   // Real semesters for the currently selected programme (`semesters`, above)
   // drive the per-semester accordion below instead of a fixed Sem 1-6 range.
   // Every hook here must stay above the `if (!isOpen) return null` below.
-  const { data: financeCurrencies = [] } = useFinanceCurrencies(isOpen)
-  const financeCurrencyOptions = financeCurrencies.map(c => ({ value: c.currencyGuid, label: `${c.currencyCode} — ${c.currencyName}` }))
+  
+  const financeCurrencyOptions = financeCurrencies.filter(c => c.currencyGuid).map(c => ({ value: c.currencyGuid!, label: `${c.currencyCode} — ${c.currencyName}` }))
   // Base Currency keeps holding a currency code (its existing value shape).
   const baseCurrencyOptions = financeCurrencies.map(c => ({ value: c.currencyCode, label: `${c.currencyCode} (${c.currencyName})` }))
-  const { data: ledgers = [] } = useLedgers(isOpen)
+  const { data: ledgers = [] } = useLedgersDropdown(isOpen)
   // Base options from the Ledger master list, PLUS a synthesized option for
   // any ledgerGuid already sitting on a loaded fee item (from GET fee-lines
   // or a Copy Fee Code source) that isn't in that list — using the real
@@ -703,12 +704,7 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
                 onChange={val => { updateStructureMeta('programme', val); setCopySourceId(''); appliedCopyRef.current = null }}
                 options={programOptions}
                 disabled={mode === 'edit'}
-                onSearch={setProgramSearch}
-                onOpenChange={setProgramPickerOpen}
-                isLoading={programQuery.isLoading}
-                hasNextPage={programQuery.hasNextPage}
-                isFetchingNextPage={programQuery.isFetchingNextPage}
-                onLoadMore={() => programQuery.fetchNextPage()}
+                isLoading={isProgramLoading}
               />
             </div>
 
@@ -832,12 +828,7 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
                     options={currencyIntOptions}
                     value={active.lefCurrency}
                     onChange={updateSharedFeeCurrency}
-                    onSearch={setCurrencySearch}
-                    onOpenChange={setCurrencyPickerOpen}
-                    isLoading={currencyQuery.isLoading}
-                    hasNextPage={currencyQuery.hasNextPage}
-                    isFetchingNextPage={currencyQuery.isFetchingNextPage}
-                    onLoadMore={() => currencyQuery.fetchNextPage()}
+                    isLoading={isCurrenciesLoading}
                   />
                 </div>
               </div>

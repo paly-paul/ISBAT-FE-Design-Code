@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient, useInfiniteQuery, useQueries } from '@tanstack/react-query'
-import { Stream, StreamInput, createStream, deleteStream, getStreamById, getStreams, getStreamsPaged, updateStream } from '@/lib/api/academic/stream'
+import { Stream, StreamInput, createStream, deleteStream, getStreamById, getStreams, getStreamsPaged, updateStream, getSpecializationsDropdown, SpecializationDropdownItem } from '@/lib/api/academic/stream'
 
 const STREAMS_KEY = ['streams']
 
@@ -109,3 +109,13 @@ export function useDeleteStream() {
 }
 
 export type { Stream, StreamInput }
+
+export function useSpecializationsDropdown(enabled = true) {
+  return useQuery({
+    queryKey: [...STREAMS_KEY, 'dropdown'],
+    queryFn: () => getSpecializationsDropdown(),
+    staleTime: Infinity,
+    gcTime: Infinity,
+    enabled,
+  })
+}

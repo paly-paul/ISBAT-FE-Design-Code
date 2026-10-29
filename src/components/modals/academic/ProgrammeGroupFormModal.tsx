@@ -7,7 +7,7 @@ import { FailurePopup } from '../shared/FailurePopup'
 import { SearchSelect } from '@/components/SearchSelect'
 import { ProgramGroupInput } from '@/lib/api/academic/programGroup'
 import { useProgramGroup } from '@/hooks/academic/useProgramGroups'
-import { useSearchProgramLevelsInfinite } from '@/hooks/academic/useProgramLevels'
+import { useProgramLevelsDropdown } from '@/hooks/academic/useProgramLevels'
 import { AuthError } from '@/lib/api/client'
 import { flattenUniquePages } from '@/lib/pagination'
 import { scrollToFirstError } from '@/lib/scrollToFirstError'
@@ -40,22 +40,13 @@ export function ProgrammeGroupFormModal({ isOpen, onClose, showToast, mode, prog
   const [groupCode, setGroupCode]     = useState('')
   const [groupName, setGroupName]     = useState('')
   const [programLevel, setProgramLevel] = useState('')
-  const [levelSearch, setLevelSearch] = useState('')
-  const [committedLevelSearch, setCommittedLevelSearch] = useState('')
-  const [levelPickerOpen, setLevelPickerOpen] = useState(false)
+
   const [errors, setErrors]           = useState<Record<string, string>>({})
 
-  const levelQuery = useSearchProgramLevelsInfinite(committedLevelSearch, 20, isOpen && levelPickerOpen)
-  const programLevels = useMemo(
-    () => flattenUniquePages(levelQuery.data?.pages ?? [], level => level.programLevelGuid),
-    [levelQuery.data],
-  )
-  const programLevelOptions = programLevels.map(l => ({ value: l.programLevelGuid, label: l.levelName }))
+  const levelQuery = useProgramLevelsDropdown(isOpen)
+  const programLevels = useMemo(() => levelQuery.data ?? [], [levelQuery.data])
+  const programLevelOptions = programLevels.map(l => ({ value: l.guid, label: l.name }))
 
-  useEffect(() => {
-    const timer = setTimeout(() => setCommittedLevelSearch(levelSearch.trim()), 300)
-    return () => clearTimeout(timer)
-  }, [levelSearch])
 
   // Prefill on edit once the group loads; re-runs per guid since react-query resets `programGroup` to undefined between them.
   useEffect(() => {
@@ -213,12 +204,7 @@ export function ProgrammeGroupFormModal({ isOpen, onClose, showToast, mode, prog
                 placeholder="Select programme level…"
                 options={programLevelOptions}
                 value={programLevel}
-                onSearch={setLevelSearch}
-                onOpenChange={setLevelPickerOpen}
                 isLoading={levelQuery.isLoading}
-                hasNextPage={levelQuery.hasNextPage}
-                isFetchingNextPage={levelQuery.isFetchingNextPage}
-                onLoadMore={() => levelQuery.fetchNextPage()}
                 onChange={v => { setProgramLevel(v); clearError('programLevel') }}
               />
               {errors.programLevel && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.programLevel}</p>}
@@ -255,12 +241,7 @@ export function ProgrammeGroupFormModal({ isOpen, onClose, showToast, mode, prog
                 placeholder="Select programme level…"
                 options={programLevelOptions}
                 value={programLevel}
-                onSearch={setLevelSearch}
-                onOpenChange={setLevelPickerOpen}
                 isLoading={levelQuery.isLoading}
-                hasNextPage={levelQuery.hasNextPage}
-                isFetchingNextPage={levelQuery.isFetchingNextPage}
-                onLoadMore={() => levelQuery.fetchNextPage()}
                 onChange={v => { setProgramLevel(v); clearError('programLevel') }}
               />
               {errors.programLevel && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.programLevel}</p>}

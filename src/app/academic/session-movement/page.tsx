@@ -10,9 +10,8 @@ import { BulkSessionMovementModal } from '@/components/modals/academic/BulkSessi
 import { Toast } from '@/components/Toast'
 import { SearchSelect } from '@/components/SearchSelect'
 import { AdmissionIntakeReminderModal } from '@/components/modals/academic/AdmissionIntakeReminderModal'
-import { useCurrentAcademicIntake, useCurrentAdmissionIntake, useSearchIntakesInfinite } from '@/hooks/academic/useIntakes'
-import { useSearchCampusesInfinite } from '@/hooks/config/useCampuses'
-import { flattenUniquePages } from '@/lib/pagination'
+import { useCurrentAcademicIntake, useCurrentAdmissionIntake, useIntakesDropdown } from '@/hooks/academic/useIntakes'
+import { useCampusDropdown } from '@/hooks/config/useCampuses'
 import {
   useSessions,
   useExecuteSessionMove,
@@ -76,36 +75,26 @@ export default function SessionMovementPage() {
   const [intakeGuid, setIntakeGuid] = useState('')
   const [campusGuid, setCampusGuid] = useState('')
   const [page, setPage] = useState(1)
-  const [intakeSearch, setIntakeSearch] = useState('')
-  const [campusSearch, setCampusSearch] = useState('')
-  const [committedIntakeSearch, setCommittedIntakeSearch] = useState('')
-  const [committedCampusSearch, setCommittedCampusSearch] = useState('')
-  const [intakePickerOpen, setIntakePickerOpen] = useState(false)
-  const [campusPickerOpen, setCampusPickerOpen] = useState(false)
-
-  useEffect(() => {
-    const timer = setTimeout(() => setCommittedIntakeSearch(intakeSearch.trim()), 300)
-    return () => clearTimeout(timer)
-  }, [intakeSearch])
-
-  useEffect(() => {
-    const timer = setTimeout(() => setCommittedCampusSearch(campusSearch.trim()), 300)
-    return () => clearTimeout(timer)
-  }, [campusSearch])
-
-  const intakeQuery = useSearchIntakesInfinite(committedIntakeSearch, 20, intakePickerOpen || !intakeGuid)
-  const campusQuery = useSearchCampusesInfinite(committedCampusSearch, 20, campusPickerOpen)
+  const { data: intakeDropdownItems = [], isLoading: isIntakesLoading } = useIntakesDropdown()
+  const { data: campuses = [], isLoading: isCampusesLoading } = useCampusDropdown()
   const { data: currentIntake } = useCurrentAcademicIntake()
   const { data: currentAdmissionIntake } = useCurrentAdmissionIntake()
   // Reminder shown once on entering the page: advance the admission intake
   // before moving sessions.
   const [reminderOpen, setReminderOpen] = useState(true)
   const intakes = useMemo(() => {
-    const items = flattenUniquePages(intakeQuery.data?.pages ?? [], i => i.intakeGuid)
-    if (currentIntake && !items.some(i => i.intakeGuid === currentIntake.intakeGuid)) items.unshift(currentIntake)
+    const items = [...intakeDropdownItems]
+    if (currentIntake && !items.some(i => i.intakeGuid === currentIntake.intakeGuid)) {
+      items.unshift({
+        intakeGuid: currentIntake.intakeGuid,
+        intakeCode: currentIntake.intakeCode,
+        description: currentIntake.description,
+        currentIntake: true,
+        currentAdmissionIntake: false,
+      })
+    }
     return items
-  }, [currentIntake, intakeQuery.data])
-  const campuses = useMemo(() => flattenUniquePages(campusQuery.data?.pages ?? [], c => c.campusGuid), [campusQuery.data])
+  }, [currentIntake, intakeDropdownItems])
 
   // Default to whichever intake is flagged current, once intakes load — same
   // "don't make the user hunt for today's session" convenience Intake
@@ -240,12 +229,7 @@ export default function SessionMovementPage() {
               <SearchSelect
                 options={intakes.map(i => ({ value: i.intakeGuid, label: `${i.description} (${i.intakeCode})` }))}
                 value={intakeGuid}
-                onSearch={setIntakeSearch}
-                onOpenChange={setIntakePickerOpen}
-                isLoading={intakeQuery.isLoading}
-                hasNextPage={intakeQuery.hasNextPage}
-                isFetchingNextPage={intakeQuery.isFetchingNextPage}
-                onLoadMore={() => intakeQuery.fetchNextPage()}
+                isLoading={isIntakesLoading}
                 onChange={setIntakeGuid}
               />
             </div>
@@ -255,12 +239,7 @@ export default function SessionMovementPage() {
                 placeholder="All Campuses"
                 options={campuses.map(c => ({ value: c.campusGuid, label: c.campusName }))}
                 value={campusGuid}
-                onSearch={setCampusSearch}
-                onOpenChange={setCampusPickerOpen}
-                isLoading={campusQuery.isLoading}
-                hasNextPage={campusQuery.hasNextPage}
-                isFetchingNextPage={campusQuery.isFetchingNextPage}
-                onLoadMore={() => campusQuery.fetchNextPage()}
+                isLoading={isCampusesLoading}
                 onChange={setCampusGuid}
               />
             </div>

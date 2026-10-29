@@ -12,7 +12,7 @@ import { stripLeadingZeros } from '@/lib/errorMessages'
 import { StreamMultiSearchPicker } from '@/components/StreamMultiSearchPicker'
 import { useStreamsByGuids } from '@/hooks/config/useStreams'
 import { ProgramMasterInput } from '@/lib/api/academic/programMaster'
-import { useSearchProgramLevelsInfinite } from '@/hooks/academic/useProgramLevels'
+import { useProgramLevelsDropdown, useProgramLevel } from '@/hooks/academic/useProgramLevels'
 import { useSearchProgramGroupsInfinite } from '@/hooks/academic/useProgramGroups'
 import { useSearchCurrenciesInfinite } from '@/hooks/finance/useCurrencies'
 import { useFinanceCurrencies } from '@/hooks/finance/useFinanceCurrencies'
@@ -413,10 +413,6 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     return () => clearTimeout(timer)
   }, [programGroupSearch])
 
-  useEffect(() => {
-    const timer = setTimeout(() => setCommittedProgramLevelSearch(programLevelSearch.trim()), 300)
-    return () => clearTimeout(timer)
-  }, [programLevelSearch])
 
   useEffect(() => {
     const timer = setTimeout(() => setCommittedCurrencySearch(currencySearch.trim()), 300)
@@ -428,11 +424,9 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     20,
     isOpen && programGroupPickerOpen,
   )
-  const programLevelQuery = useSearchProgramLevelsInfinite(
-    committedProgramLevelSearch,
-    20,
-    isOpen && programLevelPickerOpen,
-  )
+  const programLevelQuery = useProgramLevelsDropdown(isOpen)
+  const selectedProgramLevelQuery = useProgramLevel(programLevelGuid, isOpen && !!programLevelGuid)
+  const selectedProgramLevel = selectedProgramLevelQuery.data
   const currencyQuery = useSearchCurrenciesInfinite(committedCurrencySearch, 20, isOpen && currencyPickerOpen)
 
   const programGroups = useMemo(() => {
@@ -443,14 +437,16 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     return items
   }, [programGroupGuid, programGroupLabel, programGroupQuery.data, programLevelGuid])
   const programLevels = useMemo(() => {
-    const items = flattenUniquePages(programLevelQuery.data?.pages ?? [], p => p.programLevelGuid)
-    if (programLevelGuid && programLevelLabel && !items.some(p => p.programLevelGuid === programLevelGuid)) {
-      items.unshift({ programLevelGuid, levelName: programLevelLabel } as typeof items[number])
+    const items = (programLevelQuery.data ?? []).map(p => ({
+      guid: p.guid,
+      name: p.name,
+    }))
+    if (programLevelGuid && programLevelLabel && !items.some(p => p.guid === programLevelGuid)) {
+      items.unshift({ guid: programLevelGuid, name: programLevelLabel })
     }
     return items
   }, [programLevelGuid, programLevelLabel, programLevelQuery.data])
-  const programLevelOptions = programLevels.map(p => ({ value: p.programLevelGuid, label: p.levelName }))
-  const selectedProgramLevel = programLevels.find(p => p.programLevelGuid === programLevelGuid)
+  const programLevelOptions = programLevels.map(p => ({ value: p.guid, label: p.name }))
   const programGroupOptions = programGroups.map(g => ({ value: g.programGroupGuid, label: `${g.groupCode} — ${g.groupName}` }))
 
   // Faculty picker (Step 1) — optional, per post-program-master.md
@@ -1024,7 +1020,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     // at a level programLevelOptions has no entry for, and the dropdown
     // would silently show its placeholder instead of the real selection.
     const group = programGroups.find(g => g.programGroupGuid === guid)
-    if (group?.programLevelGuid && programLevels.some(l => l.programLevelGuid === group.programLevelGuid)) {
+    if (group?.programLevelGuid && programLevels.some(l => l.guid === group.programLevelGuid)) {
       selectProgramLevel(group.programLevelGuid)
     }
   }
@@ -1032,28 +1028,16 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   function selectProgramLevel(guid: string) {
     setProgramLevelGuid(guid)
     if (step1Errors.programLevelGuid) setStep1Errors(p => ({ ...p, programLevelGuid: '' }))
-    const level = programLevels.find(p => p.programLevelGuid === guid)
-    if (level) {
-      // A level with no fee set comes back as 0. Leave the box empty then,
-      // so the user types the real fee instead of saving a default 0.
-      setAppFee(level.appFee ? String(level.appFee) : '')
-      setLateFee(level.lateFee ? String(level.lateFee) : '')
-      // Level.currencyGuid itself is unconfirmed on GET (see the comment on
-      // ProgramLevel.currencyGuid in programLevel.ts) — resolve the level's
-      // own currencyCode against useFinanceCurrencies() instead, same
-      // code→real-guid matching selectFeeItemCurrency() already uses below.
-      // Only auto-fills when a match is found, so an unmatched/blank level
-      // currency leaves whatever Currency the user already picked alone.
-      const fc = financeCurrencies.find(c => c.currencyCode === level.currencyCode)
-      if (fc) setCurrencyGuid(fc.currencyGuid)
-      // Size Step 2/3 to the level's own semester count for a new programme
-      // (Edit mode instead sizes off the real program-course-units data —
-      // see the fullDetails effect above). resizeSemesters keeps whatever's
-      // already in each surviving slot, so this never discards Step 2 work
-      // already done under a previously-picked level — it only grows/shrinks.
-      if (mode !== 'edit' && level.semCount > 0) resizeSemesters(level.semCount)
-    }
   }
+
+  useEffect(() => {
+    if (mode === 'edit' || !selectedProgramLevel) return
+    setAppFee(selectedProgramLevel.appFee ? String(selectedProgramLevel.appFee) : '')
+    setLateFee(selectedProgramLevel.lateFee ? String(selectedProgramLevel.lateFee) : '')
+    const fc = financeCurrencies.find(c => c.currencyCode === selectedProgramLevel.currencyCode)
+    if (fc) setCurrencyGuid(fc.currencyGuid)
+    if (selectedProgramLevel.semCount > 0) resizeSemesters(selectedProgramLevel.semCount)
+  }, [mode, selectedProgramLevel, financeCurrencies])
 
   // Header rules from the program-master validator: code ≤ 25, name ≤ 150,
   // level required, unitCount > 0 when given, appFee ≥ 0. The backend does
@@ -2048,12 +2032,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                     value={programLevelGuid}
                     onChange={selectProgramLevel}
                     options={programLevelOptions}
-                    onSearch={setProgramLevelSearch}
-                    onOpenChange={setProgramLevelPickerOpen}
                     isLoading={programLevelQuery.isLoading}
-                    hasNextPage={programLevelQuery.hasNextPage}
-                    isFetchingNextPage={programLevelQuery.isFetchingNextPage}
-                    onLoadMore={() => programLevelQuery.fetchNextPage()}
                   />
                   {step1Errors.programLevelGuid && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{step1Errors.programLevelGuid}</p>}
                   <div className="flex gap-2 flex-wrap mt-2">

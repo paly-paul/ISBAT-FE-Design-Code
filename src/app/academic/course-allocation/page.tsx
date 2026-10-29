@@ -10,13 +10,12 @@ import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { CourseUnitSearchPicker, CourseUnitPickOption } from '@/components/CourseUnitSearchPicker'
 import { useIntakesDropdown } from '@/hooks/academic/useIntakes'
-import { useSearchEmployeesInfinite } from '@/hooks/employee/useEmployees'
-import { useSearchFacultiesInfinite } from '@/hooks/config/useFaculties'
+import { useEmployeeDropdown } from '@/hooks/employee/useEmployees'
+import { useFacultyDropdown } from '@/hooks/config/useFaculties'
 import { useProgramPlannings, useCreateProgramPlanning, useUpdateProgramPlanning, useDeleteProgramPlanning } from '@/hooks/academic/useProgramPlannings'
 import type { ProgramPlanningDto } from '@/lib/api/academic/programPlanning'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { AuthError } from '@/lib/api/client'
-import { flattenUniquePages } from '@/lib/pagination'
 import { scrollToFirstError } from '@/lib/scrollToFirstError'
 
 // Confirmed via allocation/*.md — real endpoints now (was UI-only mock
@@ -47,28 +46,10 @@ export default function CourseAllocationPage() {
   const [courseUnit, setCourseUnit] = useState<CourseUnitPickOption | null>(null)
   const [load, setLoad] = useState('')
   const [errors, setErrors] = useState<Record<string, string>>({})
-  const [lecturerPickerOpen, setLecturerPickerOpen] = useState(false)
-  const [facultyPickerOpen, setFacultyPickerOpen] = useState(false)
-  const [lecturerSearch, setLecturerSearch] = useState('')
-  const [facultySearch, setFacultySearch] = useState('')
-  const [committedLecturerSearch, setCommittedLecturerSearch] = useState('')
-  const [committedFacultySearch, setCommittedFacultySearch] = useState('')
-
-  useEffect(() => {
-    const timer = setTimeout(() => setCommittedLecturerSearch(lecturerSearch.trim()), 300)
-    return () => clearTimeout(timer)
-  }, [lecturerSearch])
-
-  useEffect(() => {
-    const timer = setTimeout(() => setCommittedFacultySearch(facultySearch.trim()), 300)
-    return () => clearTimeout(timer)
-  }, [facultySearch])
-
   const { data: intakeDropdownItems = [], isLoading: isIntakesLoading } = useIntakesDropdown()
-  const lecturerQuery = useSearchEmployeesInfinite(committedLecturerSearch, 20, lecturerPickerOpen)
-  const facultyQuery = useSearchFacultiesInfinite(committedFacultySearch, 20, facultyPickerOpen)
-  const employees = useMemo(() => flattenUniquePages(lecturerQuery.data?.pages ?? [], employee => employee.employeeGuid), [lecturerQuery.data])
-  const faculties = useMemo(() => flattenUniquePages(facultyQuery.data?.pages ?? [], faculty => faculty.facultyGuid), [facultyQuery.data])
+  const { data: facultyDropdownItems = [], isLoading: isFacultiesLoading } = useFacultyDropdown(null)
+  const { data: employeeDropdownItems = [], isLoading: isLecturersLoading } = useEmployeeDropdown()
+
   // While editing, the row's own session / school are kept in their lists
   // (labelled from the row) — the pickers only load options once opened.
   const [editingRow, setEditingRow] = useState<ProgramPlanningDto | null>(null)
@@ -79,17 +60,29 @@ export default function CourseAllocationPage() {
     }
     return list
   }, [intakeDropdownItems, editingRow, intakeGuid])
-  // The options are only the current search's results, and closing the
-  // picker resets the search — so a lecturer picked from a search would drop
-  // out of the list and the field would fall back to the placeholder. Keep
-  // the picked option and pin it into the list.
+
   const [pickedLecturer, setPickedLecturer] = useState<{ value: string; label: string } | null>(null)
-  const lecturerOptions = employees.map(e => ({ value: e.employeeGuid, label: `${e.empName} (${e.shortCode})` }))
-  if (pickedLecturer && pickedLecturer.value === lecturerGuid && !lecturerOptions.some(o => o.value === lecturerGuid)) lecturerOptions.unshift(pickedLecturer)
-  const facultyOptions = faculties.map(f => ({ value: f.facultyGuid, label: `${f.facultyCode} — ${f.facultyName}` }))
-  if (editingRow && schoolGuid === editingRow.schoolGuid && !facultyOptions.some(o => o.value === schoolGuid)) {
-    facultyOptions.unshift({ value: editingRow.schoolGuid, label: [editingRow.facultyCode, editingRow.facultyName].filter(Boolean).join(' — ') || 'School' })
-  }
+  const lecturerOptions = useMemo(() => {
+    const list = employeeDropdownItems.map(e => ({ value: e.employeeGuid, label: e.displayName }))
+    if (pickedLecturer && pickedLecturer.value === lecturerGuid && !list.some(o => o.value === lecturerGuid)) {
+      list.unshift(pickedLecturer)
+    }
+    if (editingRow && lecturerGuid === editingRow.lecturerGuid && !list.some(o => o.value === lecturerGuid)) {
+      list.unshift({ value: editingRow.lecturerGuid, label: editingRow.employeeName || 'Lecturer' })
+    }
+    return list
+  }, [employeeDropdownItems, pickedLecturer, lecturerGuid, editingRow])
+
+  const facultyOptions = useMemo(() => {
+    const list = facultyDropdownItems.map(f => ({
+      value: f.facultyGuid,
+      label: f.facultyCode ? `${f.facultyCode} — ${f.facultyName}` : f.facultyName,
+    }))
+    if (editingRow && schoolGuid === editingRow.schoolGuid && !list.some(o => o.value === schoolGuid)) {
+      list.unshift({ value: editingRow.schoolGuid, label: [editingRow.facultyCode, editingRow.facultyName].filter(Boolean).join(' — ') || 'School' })
+    }
+    return list
+  }, [facultyDropdownItems, editingRow, schoolGuid])
 
   const [search, setSearch] = useState('')
   const searchTrimmed = search.trim().toLowerCase()
@@ -335,12 +328,7 @@ export default function CourseAllocationPage() {
               placeholder="— Select School / Faculty —"
               options={facultyOptions}
               value={schoolGuid}
-              onSearch={setFacultySearch}
-              onOpenChange={setFacultyPickerOpen}
-              isLoading={facultyQuery.isLoading}
-              hasNextPage={facultyQuery.hasNextPage}
-              isFetchingNextPage={facultyQuery.isFetchingNextPage}
-              onLoadMore={() => facultyQuery.fetchNextPage()}
+              isLoading={isFacultiesLoading}
               onChange={val => { setSchoolGuid(val); if (errors.schoolGuid) setErrors(p => ({ ...p, schoolGuid: '' })) }}
             />
             {errors.schoolGuid && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.schoolGuid}</p>}
@@ -351,14 +339,7 @@ export default function CourseAllocationPage() {
               placeholder="— Select Lecturer —"
               options={lecturerOptions}
               value={lecturerGuid}
-              onSearch={setLecturerSearch}
-              onOpenChange={setLecturerPickerOpen}
-              // Also loading while the 300ms debounce is pending — otherwise
-              // the old results are filtered by the new text and flash "No matches".
-              isLoading={(lecturerQuery.isFetching && !lecturerQuery.isFetchingNextPage) || lecturerSearch.trim() !== committedLecturerSearch}
-              hasNextPage={lecturerQuery.hasNextPage}
-              isFetchingNextPage={lecturerQuery.isFetchingNextPage}
-              onLoadMore={() => lecturerQuery.fetchNextPage()}
+              isLoading={isLecturersLoading}
               onChange={val => { setPickedLecturer(lecturerOptions.find(o => o.value === val) ?? null); setLecturerGuid(val); setErrors(p => ({ ...p, lecturerGuid: '', courseUnit: p.courseUnit === DUPLICATE_MESSAGE ? '' : p.courseUnit })) }}
             />
             {errors.lecturerGuid && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.lecturerGuid}</p>}
