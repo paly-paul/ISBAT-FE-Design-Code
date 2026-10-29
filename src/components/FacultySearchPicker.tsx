@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { useSearchFacultiesInfinite } from '@/hooks/config/useFaculties'
+import { useFacultyDropdown } from '@/hooks/config/useFaculties'
 
 export interface FacultyPickOption {
   facultyGuid: string
@@ -24,7 +24,6 @@ interface FacultySearchPickerProps {
   disabled?: boolean
 }
 
-const PAGE_SIZE = 20
 
 // Same closed-button/portal-dropdown chrome as SearchSelect/ProgramSearchPicker/
 // IntakeSearchPicker (2026-09-10) — replaces ProgrammeModal/ViewProgrammeModal's
@@ -34,7 +33,6 @@ const PAGE_SIZE = 20
 export function FacultySearchPicker({ selectedLabel, onSelect, onClear, placeholder = '— Select faculty —', className, disabled }: FacultySearchPickerProps) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
-  const [committedSearch, setCommittedSearch] = useState('')
   const [pos, setPos] = useState<{ top?: number; bottom?: number; left: number; width: number; maxHeight: number }>({ top: 0, left: 0, width: 0, maxHeight: 200 })
 
   const triggerRef = useRef<HTMLButtonElement>(null)
@@ -42,10 +40,6 @@ export function FacultySearchPicker({ selectedLabel, onSelect, onClear, placehol
   const inputRef = useRef<HTMLInputElement>(null)
   const optsRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    const t = setTimeout(() => setCommittedSearch(search.trim()), 300)
-    return () => clearTimeout(t)
-  }, [search])
 
   function calcPos() {
     if (!triggerRef.current) return
@@ -69,7 +63,6 @@ export function FacultySearchPicker({ selectedLabel, onSelect, onClear, placehol
       inputRef.current?.focus()
     } else {
       setSearch('')
-      setCommittedSearch('')
     }
   }, [open])
 
@@ -89,24 +82,15 @@ export function FacultySearchPicker({ selectedLabel, onSelect, onClear, placehol
     }
   }, [open])
 
-  const {
-    data, fetchNextPage, hasNextPage, isFetchingNextPage, isFetching, isError,
-  } = useSearchFacultiesInfinite(committedSearch, PAGE_SIZE, open && !disabled)
+  const { data: dropdownItems = [], isLoading, isError } = useFacultyDropdown(null, open && !disabled)
 
-  // De-duped by facultyGuid — same "don't trust server pagination blindly"
-  // safety net ProgramSearchPicker/IntakeSearchPicker use.
-  const seenGuids = new Set<string>()
-  const items = (data?.pages.flatMap(p => p.items) ?? []).filter(f => {
-    if (seenGuids.has(f.facultyGuid)) return false
-    seenGuids.add(f.facultyGuid)
-    return true
-  })
-
-  function handleScroll(e: React.UIEvent<HTMLDivElement>) {
-    if (!hasNextPage || isFetchingNextPage) return
-    const el = e.currentTarget
-    if (el.scrollTop > 0 && el.scrollHeight - el.scrollTop - el.clientHeight < 48) fetchNextPage()
-  }
+  const searchTokens = search.trim().toLowerCase().split(/\s+/).filter(Boolean)
+  const items = searchTokens.length > 0
+    ? dropdownItems.filter(f => {
+        const text = `${f.facultyCode ?? ''} ${f.facultyName}`.toLowerCase()
+        return searchTokens.every(tok => text.includes(tok))
+      })
+    : dropdownItems
 
   function pick(f: FacultyPickOption) {
     onSelect(f)
@@ -170,27 +154,24 @@ export function FacultySearchPicker({ selectedLabel, onSelect, onClear, placehol
               onClick={e => e.stopPropagation()}
             />
           </div>
-          <div className="ss-opts" ref={optsRef} style={{ maxHeight: pos.maxHeight }} onScroll={handleScroll}>
-            {isFetching && items.length === 0 ? (
+          <div className="ss-opts" ref={optsRef} style={{ maxHeight: pos.maxHeight }}>
+            {isLoading && items.length === 0 ? (
               <div className="ss-no-match">Searching…</div>
             ) : isError ? (
               <div className="ss-no-match"><i className="lni lni-warning"></i> Search failed. Please try again.</div>
             ) : items.length === 0 ? (
-              <div className="ss-no-match">{committedSearch ? 'No matching faculties.' : 'No faculties available.'}</div>
+              <div className="ss-no-match">{search ? 'No matching faculties.' : 'No faculties available.'}</div>
             ) : (
               <>
                 {items.map(f => (
                   <div
                     key={f.facultyGuid}
                     className="col-filter-opt"
-                    onClick={() => pick({ facultyGuid: f.facultyGuid, facultyCode: f.facultyCode, facultyName: f.facultyName })}
+                    onClick={() => pick({ facultyGuid: f.facultyGuid, facultyCode: f.facultyCode ?? '', facultyName: f.facultyName })}
                   >
-                    <span className="font-mono text-b700">{f.facultyCode}</span> — {f.facultyName}
+                    {f.facultyCode && <><span className="font-mono text-b700">{f.facultyCode}</span> — </>}{f.facultyName}
                   </div>
                 ))}
-                {isFetchingNextPage && (
-                  <div className="ss-no-match">Loading more…</div>
-                )}
               </>
             )}
           </div>

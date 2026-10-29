@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createLedger, deleteLedger, getLedgerById, getLedgers, Ledger, LedgerInput, updateLedger } from '@/lib/api/finance/ledger'
+import { createLedger, deleteLedger, getLedgerById, getLedgers, Ledger, LedgerInput, updateLedger, getLedgersDropdown, LedgerDropdownItem } from '@/lib/api/finance/ledger'
 
 const LEDGERS_KEY = ['ledgers']
 
@@ -7,7 +7,7 @@ const LEDGERS_KEY = ['ledgers']
 // fetching exactly as before — only a caller that shouldn't hit the network
 // until it's actually open (e.g. a modal) needs to pass enabled={isOpen}.
 export function useLedgers(enabled = true) {
-  return useQuery({
+  return useQuery<Ledger[]>({
     queryKey: LEDGERS_KEY,
     queryFn: () => getLedgers(),
     // Never treat the cached list as stale on its own — only refetch when a
@@ -60,3 +60,13 @@ export function useDeleteLedger() {
 }
 
 export type { Ledger, LedgerInput }
+
+export function useLedgersDropdown(enabled = true) {
+  return useQuery<LedgerDropdownItem[]>({
+    queryKey: [...LEDGERS_KEY, 'dropdown'],
+    queryFn: () => getLedgersDropdown(),
+    staleTime: Infinity,
+    gcTime: Infinity,
+    enabled,
+  })
+}

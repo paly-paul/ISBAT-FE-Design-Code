@@ -135,3 +135,18 @@ export function deleteCurrency(guid: string): Promise<boolean> {
   }
   return apiDelete<boolean>(`/api/v1/finance/currencies/${guid}`)
 }
+
+export interface CurrencyDropdownItem {
+  intCurrency: number
+  currencyGuid?: string
+  currencyCode: string
+  currencyName: string
+  isDefault?: number
+}
+
+export function getCurrenciesDropdown(search = ''): Promise<CurrencyDropdownItem[]> {
+  if (MOCK_AUTH) return Promise.resolve(mockCurrencies)
+  const q = search.trim() ? `?search=${encodeURIComponent(search.trim())}` : ''
+  return apiGet<CurrencyDropdownItem[] | null>(`/api/v1/finance/currencies/dropdown${q}`)
+    .then((data: any) => Array.isArray(data) ? data : (data && typeof data === 'object' ? (data.items || Object.values(data).find(Array.isArray) || []) : []))
+}

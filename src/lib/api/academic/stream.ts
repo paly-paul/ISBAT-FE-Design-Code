@@ -112,3 +112,25 @@ export function deleteStream(guid: string): Promise<boolean> {
   }
   return apiDelete<boolean>(`/api/v1/academic/specializations/${guid}`)
 }
+
+export interface SpecializationDropdownItem {
+  guid?: string
+  streamGuid?: string
+  id?: number
+  name?: string
+  streamName?: string
+}
+
+export function getSpecializationsDropdown(search = ''): Promise<SpecializationDropdownItem[]> {
+  if (MOCK_AUTH) {
+    return Promise.resolve(mockStreams.map(s => ({
+      guid: s.streamGuid,
+      streamGuid: s.streamGuid,
+      name: s.streamName,
+      streamName: s.streamName
+    })))
+  }
+  const q = search.trim() ? `?search=${encodeURIComponent(search.trim())}` : ''
+  return apiGet<SpecializationDropdownItem[] | null>(`/api/v1/academic/specializations/dropdown${q}`)
+    .then((data: any) => Array.isArray(data) ? data : (data && typeof data === 'object' ? (data.items || Object.values(data).find(Array.isArray) || []) : []))
+}

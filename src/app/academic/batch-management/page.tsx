@@ -14,9 +14,9 @@ import { useBatchesInScope, useCreateBatch, useUpdateBatch, useDeleteBatch, useB
 import { useEmployeeDropdown } from '@/hooks/employee/useEmployees'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { SearchSelect } from '@/components/SearchSelect'
-import { InfiniteSearchSelect } from '@/components/InfiniteSearchSelect'
+import { useIntakesDropdown } from '@/hooks/academic/useIntakes'
 import { useCampusDropdown } from '@/hooks/config/useCampuses'
-import { getIntakesPaged } from '@/lib/api/academic/intake'
+import { IntakeDropdownItem } from '@/lib/api/academic/intake'
 import { EMPTY_GUID } from '@/lib/api/academic/batch'
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -73,6 +73,11 @@ export default function Page() {
   const [campusGuid, setCampusGuid] = useState('')
   const [intakeGuid, setIntakeGuid] = useState('')
   const { data: campuses = [] } = useCampusDropdown()
+  const { data: intakes = [], isLoading: isIntakesLoading } = useIntakesDropdown()
+  const intakeOptions = useMemo(() => [
+    { value: '', label: 'Current Intake' },
+    ...intakes.map((i: IntakeDropdownItem) => ({ value: i.intakeGuid, label: `${i.intakeCode} — ${i.description}` })),
+  ], [intakes])
   const { data, isLoading, isPlaceholderData } = useBatchesInScope({ campusGuid: campusGuid || null, intakeGuid: intakeGuid || null })
   const scopeRows = useMemo(() => data?.items ?? [], [data])
   const scopeLabel = [
@@ -222,16 +227,14 @@ export default function Page() {
             value={campusGuid}
             onChange={v => { setCampusGuid(v); setFilters({}); setPage(1) }}
           />
-          <div style={{ width: 220 }}>
-            <InfiniteSearchSelect
-              queryKey={['intakes', 'batch-management']}
-              fetchPage={getIntakesPaged}
-              toOption={i => ({ value: i.intakeGuid, label: `${i.intakeCode} — ${i.description}` })}
-              allLabel="Current Intake"
-              value={intakeGuid}
-              onChange={v => { setIntakeGuid(v); setFilters({}); setPage(1) }}
-            />
-          </div>
+          <SearchSelect
+            style={{ width: 220 }}
+            placeholder="Current Intake"
+            options={intakeOptions}
+            value={intakeGuid}
+            isLoading={isIntakesLoading}
+            onChange={v => { setIntakeGuid(v); setFilters({}); setPage(1) }}
+          />
         </div>
 
         <div className="stats-row" style={{ opacity: isPlaceholderData ? 0.45 : 1, transition: 'opacity .15s ease' }}>

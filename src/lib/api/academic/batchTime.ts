@@ -67,3 +67,16 @@ export function deleteBatchTime(guid: string): Promise<boolean> {
   }
   return apiDelete<boolean>(`/api/v1/academic/batchtimes/${guid}`)
 }
+
+export interface BatchTimeDropdownItem {
+  batchTimeGuid: string
+  batchTime: string
+  batchTimeCode: string
+}
+
+export function getBatchTimesDropdown(search = ''): Promise<BatchTimeDropdownItem[]> {
+  if (MOCK_AUTH) return Promise.resolve(mockBatchTimes)
+  const q = search.trim() ? `?search=${encodeURIComponent(search.trim())}` : ''
+  return apiGet<BatchTimeDropdownItem[] | null>(`/api/v1/academic/batchtimes/dropdown${q}`)
+    .then((data: any) => Array.isArray(data) ? data : (data && typeof data === 'object' ? (data.items || Object.values(data).find(Array.isArray) || []) : []))
+}

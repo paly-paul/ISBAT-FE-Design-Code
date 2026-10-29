@@ -115,8 +115,29 @@ export function useIntake(intakeGuid: string | null, enabled: boolean) {
 // page load while still populating the card labels and status.
 export function useCurrentAcademicIntake(enabled = true) {
   return useQuery({
-    queryKey: [...INTAKES_KEY, 'current-academic'],
-    queryFn: () => getCurrentIntake('currentIntake'),
+    queryKey: [...INTAKES_KEY, 'dropdown'],
+    queryFn: getIntakesDropdown,
+    select: (items) => {
+      const match = items?.find(i => Boolean(i.currentIntake))
+      if (!match) return null
+      return {
+        intakeGuid: match.intakeGuid,
+        intakeCode: match.intakeCode,
+        description: match.description,
+        financialYear: 0,
+        examYear: 0,
+        intakes: 0,
+        examMonth: 0,
+        month: '',
+        durationInWeeks: 0,
+        lastDateForReRegistration: null,
+        currentIntake: true,
+        grievanceStartDate: null,
+        currentAdmissionIntake: Boolean(match.currentAdmissionIntake),
+        grievanceEndDate: null,
+        academicCalendar: [],
+      } as Intake
+    },
     staleTime: Infinity,
     gcTime: Infinity,
     enabled,
@@ -125,8 +146,29 @@ export function useCurrentAcademicIntake(enabled = true) {
 
 export function useCurrentAdmissionIntake(enabled = true) {
   return useQuery({
-    queryKey: [...INTAKES_KEY, 'current-admission'],
-    queryFn: () => getCurrentIntake('currentAdmissionIntake'),
+    queryKey: [...INTAKES_KEY, 'dropdown'],
+    queryFn: getIntakesDropdown,
+    select: (items) => {
+      const match = items?.find(i => Boolean(i.currentAdmissionIntake))
+      if (!match) return null
+      return {
+        intakeGuid: match.intakeGuid,
+        intakeCode: match.intakeCode,
+        description: match.description,
+        financialYear: 0,
+        examYear: 0,
+        intakes: 0,
+        examMonth: 0,
+        month: '',
+        durationInWeeks: 0,
+        lastDateForReRegistration: null,
+        currentIntake: Boolean(match.currentIntake),
+        grievanceStartDate: null,
+        currentAdmissionIntake: true,
+        grievanceEndDate: null,
+        academicCalendar: [],
+      } as Intake
+    },
     staleTime: Infinity,
     gcTime: Infinity,
     enabled,

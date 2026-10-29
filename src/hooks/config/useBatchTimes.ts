@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createBatchTime, deleteBatchTime, getBatchTimeById, getBatchTimes, updateBatchTime, BatchTime, BatchTimeInput } from '@/lib/api/academic/batchTime'
+import { createBatchTime, deleteBatchTime, getBatchTimeById, getBatchTimes, updateBatchTime, getBatchTimesDropdown, BatchTime, BatchTimeInput, BatchTimeDropdownItem } from '@/lib/api/academic/batchTime'
 
 const BATCH_TIMES_KEY = ['batchTimes']
 
@@ -57,3 +57,13 @@ export function useDeleteBatchTime() {
 }
 
 export type { BatchTime, BatchTimeInput }
+
+export function useBatchTimesDropdown(enabled = true) {
+  return useQuery({
+    queryKey: [...BATCH_TIMES_KEY, 'dropdown'],
+    queryFn: () => getBatchTimesDropdown(),
+    staleTime: Infinity,
+    gcTime: Infinity,
+    enabled,
+  })
+}

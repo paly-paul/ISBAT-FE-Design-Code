@@ -98,3 +98,18 @@ export function deleteLedger(guid: string): Promise<boolean> {
   }
   return apiDelete<boolean>(`/api/v1/finance/ledgers/${guid}`)
 }
+
+export interface LedgerDropdownItem {
+  ledgerGuid: string
+  ledgerCode: string
+  ledgerName: string
+  intLedger?: number
+  ledgerNum?: number
+}
+
+export function getLedgersDropdown(search = ''): Promise<LedgerDropdownItem[]> {
+  if (MOCK_AUTH) return Promise.resolve(mockLedgers)
+  const q = search.trim() ? `?search=${encodeURIComponent(search.trim())}` : ''
+  return apiGet<LedgerDropdownItem[] | null>(`/api/v1/finance/ledgers/dropdown${q}`)
+    .then((data: any) => Array.isArray(data) ? data : (data && typeof data === 'object' ? (data.items || Object.values(data).find(Array.isArray) || []) : []))
+}

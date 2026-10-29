@@ -5,7 +5,7 @@ import { SuccessPopup } from '../shared/SuccessPopup'
 import { FailurePopup } from '../shared/FailurePopup'
 import { SearchSelect } from '@/components/SearchSelect'
 import { MultiSelect } from '@/components/MultiSelect'
-import { useEmployee, useSearchEmployeesInfinite } from '@/hooks/employee/useEmployees'
+import { useEmployee, useEmployeeDropdown } from '@/hooks/employee/useEmployees'
 import { useSearchSkillMastersInfinite } from '@/hooks/config/useSkillMaster'
 import { useLecturerSkill } from '@/hooks/academic/useLecturerSkills'
 import { CreateLecturerSkillInput } from '@/lib/api/users/skills'
@@ -47,19 +47,13 @@ export function LecturerSkillFormModal({ isOpen, onClose, showToast, mode, lectu
   const [skillIds, setSkillIds]     = useState<string[]>([])
   const [proficiency, setProficiency] = useState('1')
   const [errors, setErrors]         = useState<Record<string, string>>({})
-  const [employeeSearch, setEmployeeSearch] = useState('')
-  const [committedEmployeeSearch, setCommittedEmployeeSearch] = useState('')
   const [skillSearch, setSkillSearch] = useState('')
   const [committedSkillSearch, setCommittedSkillSearch] = useState('')
 
   const selectedEmployee = useEmployee(employeeGuid || null)
-  const employeeQuery = useSearchEmployeesInfinite(committedEmployeeSearch, 20, isOpen)
+  const employeeDropdownQuery = useEmployeeDropdown(isOpen)
   const skillQuery = useSearchSkillMastersInfinite(committedSkillSearch, 20, isOpen)
 
-  useEffect(() => {
-    const timer = setTimeout(() => setCommittedEmployeeSearch(employeeSearch.trim()), 300)
-    return () => clearTimeout(timer)
-  }, [employeeSearch])
 
   useEffect(() => {
     const timer = setTimeout(() => setCommittedSkillSearch(skillSearch.trim()), 300)
@@ -82,13 +76,15 @@ export function LecturerSkillFormModal({ isOpen, onClose, showToast, mode, lectu
   }, [isOpen, isEdit, skill])
 
   const employeeOptions = useMemo(() => {
-    const arr = flattenUniquePages(employeeQuery.data?.pages ?? [], e => e.employeeGuid)
-      .map(e => ({ value: e.employeeGuid, label: e.empName }))
+    const arr = (employeeDropdownQuery.data ?? []).map(e => ({
+      value: e.employeeGuid,
+      label: e.displayName,
+    }))
     if (employeeGuid && !arr.some(option => option.value === employeeGuid) && selectedEmployee.data) {
       arr.unshift({ value: employeeGuid, label: selectedEmployee.data.empName })
     }
     return arr
-  }, [employeeGuid, employeeQuery.data, selectedEmployee.data])
+  }, [employeeGuid, employeeDropdownQuery.data, selectedEmployee.data])
 
   const skillOptions = useMemo(() => {
     const arr = flattenUniquePages(skillQuery.data?.pages ?? [], s => s.skillGuid)
@@ -216,11 +212,7 @@ export function LecturerSkillFormModal({ isOpen, onClose, showToast, mode, lectu
               placeholder="— Select faculty member —"
               options={employeeOptions}
               value={employeeGuid}
-              onSearch={setEmployeeSearch}
-              isLoading={employeeQuery.isLoading}
-              hasNextPage={employeeQuery.hasNextPage}
-              isFetchingNextPage={employeeQuery.isFetchingNextPage}
-              onLoadMore={() => employeeQuery.fetchNextPage()}
+              isLoading={employeeDropdownQuery.isLoading}
               onChange={v => { setEmployeeGuid(v); clearError('employeeGuid') }}
             />
             {errors.employeeGuid && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.employeeGuid}</p>}
