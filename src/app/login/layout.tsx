@@ -34,7 +34,13 @@ export default function LoginLayout({ children }: { children: React.ReactNode })
       // The dashboard itself, not '/academic' — that's only a redirect page,
       // which never settles if the menu lookup above failed.
       const target = await resolvePostLoginTarget(queryClient, '/academic/acad-dashboard')
-      if (!cancelled) window.location.replace(target)
+      if (!cancelled) {
+        if (getSessionIdentity()) {
+          window.location.replace(target)
+        } else {
+          setRedirecting(false)
+        }
+      }
     }
 
     function onPageShow(e: PageTransitionEvent) {

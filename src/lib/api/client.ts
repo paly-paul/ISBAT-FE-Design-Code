@@ -1,4 +1,5 @@
 import { loginUrlForCurrentPage } from '../loginNext'
+import { clearSessionIdentity } from '../session'
 
 const NEXT_PUBLIC_API_BASE =(process.env.NEXT_PUBLIC_API_GATEWAY_URL ?? '').trim()
 const SERVER_API_GATEWAY_URL = (process.env.API_GATEWAY_URL ?? '').trim()
@@ -70,6 +71,8 @@ function redirectToLogin(triggeredBy: string, cause: unknown) {
   // and this context would otherwise be lost, making a "why did I get logged
   // out on this page" report impossible to root-cause after the fact.
   if (typeof window !== 'undefined') {
+    clearSessionIdentity()
+    if (window.location.pathname.startsWith('/login')) return
     console.warn(
       `[auth] Redirecting to /login/staff — refresh failed after a 401 from "${triggeredBy}".`,
       cause,
@@ -103,14 +106,23 @@ function redirectToLogin(triggeredBy: string, cause: unknown) {
 // of the proactive timer skipped it and logged users out on the very first
 // racy collision instead of retrying, which is exactly the failure this was
 // built to prevent.
-export async function refreshAccessTokenWithRetry(): Promise<RefreshData> {
-  try {
-    return await refreshAccessToken()
-  } catch (err) {
-    if (!(err instanceof AuthError)) throw err
-    await new Promise(resolve => setTimeout(resolve, 500))
-    return await refreshAccessToken()
+let refreshRetryInFlight: Promise<RefreshData> | null = null
+
+export function refreshAccessTokenWithRetry(): Promise<RefreshData> {
+  if (!refreshRetryInFlight) {
+    refreshRetryInFlight = (async () => {
+      try {
+        return await refreshAccessToken()
+      } catch (err) {
+        if (!(err instanceof AuthError) || err.code === 'rate_limited') throw err
+        await new Promise(resolve => setTimeout(resolve, 500))
+        return await refreshAccessToken()
+      }
+    })().finally(() => {
+      refreshRetryInFlight = null
+    })
   }
+  return refreshRetryInFlight
 }
 
 // `triggeredBy` is the path of the original request whose 401 kicked this
