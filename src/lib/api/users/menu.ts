@@ -243,10 +243,10 @@ const ASSESSMENT_SECTIONS: MenuNode[] = [
     leaf('UE Mark Import', 'upload', '/assessment/ue-mark-import'),
   ]),
   section('Mark Entry & Results', [
-    // leaf('Mark Entry — CW', 'pencil-alt', '/assessment/mark-cw'),
-    // leaf('Mark Entry — CBT', 'pencil-alt', '/assessment/mark-cbt'),
-    leaf('Mark Entry — UE', 'pencil-alt', '/assessment/mark-ue'),
-    leaf('Mark Verify — UE', 'shield', '/assessment/mark-ue-verify'),
+    // leaf('Mark Entry CW', 'pencil-alt', '/assessment/mark-cw'),
+    // leaf('Mark Entry CBT', 'pencil-alt', '/assessment/mark-cbt'),
+    leaf('Mark Entry UE', 'pencil-alt', '/assessment/mark-ue'),
+    leaf('Mark Verify UE', 'shield', '/assessment/mark-ue-verify'),
     leaf('Result & Moderation', 'bar-chart', '/assessment/moderation'),
     leaf('Exam Mark Import', 'upload', '/assessment/exam-mark-import'),
     leaf('Generate Result', 'cogs', '/assessment/generate-result'),
@@ -655,6 +655,14 @@ function findLeafPermissions(menu: MenuNode[], path: string): MenuPermissions | 
   return undefined
 }
 
+function cleanMenuLabel(label: string): string {
+  return label
+    .replace(/\s*(?:â€”|â€“|\uFFFD|—|–)\s*/g, ' ')
+    .replace(/\s+\?\s+/g, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+}
+
 function renameIaCreation(menu: MenuNode[]): MenuNode[] {
   return menu.map(mod => {
     if (mod.name !== 'Assessment') return mod
@@ -662,15 +670,26 @@ function renameIaCreation(menu: MenuNode[]): MenuNode[] {
       ...mod,
       children: mod.children.map(sec => ({
         ...sec,
+        name: cleanMenuLabel(sec.name),
         children: sec.children.map(leafNode => {
-          if (
-            leafNode.name === 'IA Creation' ||
-            leafNode.url === '/assessment/ia-creation' ||
-            leafNode.url === 'ia-creation'
-          ) {
+          const slug = leafNode.url?.split('/').filter(Boolean).pop() ?? ''
+          if (leafNode.name === 'IA Creation' || slug === 'ia-creation') {
             return { ...leafNode, name: 'Assessment Scheduler' }
           }
-          return leafNode
+          if (slug === 'mark-ue') {
+            return { ...leafNode, name: 'Mark Entry UE' }
+          }
+          if (slug === 'mark-ue-verify') {
+            return { ...leafNode, name: 'Mark Verify UE' }
+          }
+          if (slug === 'mark-cw') {
+            return { ...leafNode, name: 'Mark Entry CW' }
+          }
+          if (slug === 'mark-cbt') {
+            return { ...leafNode, name: 'Mark Entry CBT' }
+          }
+          const cleaned = cleanMenuLabel(leafNode.name)
+          return cleaned !== leafNode.name ? { ...leafNode, name: cleaned } : leafNode
         }),
       })),
     }

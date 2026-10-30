@@ -36,7 +36,7 @@ export default function MarkEntryCwPage() {
     <div className="page active">
       <div className="pg-hdr">
         <div>
-          <div className="pg-title">Mark Entry — Coursework</div>
+          <div className="pg-title">Mark Entry CW</div>
           <div className="pg-sub">Enter raw marks out of 25 · Prorated automatically to course weightage</div>
         </div>
         <div className="pg-actions flex items-center gap-3">

@@ -27,7 +27,7 @@ export default function MarkEntryCbtPage() {
     <div className="page active">
       <div className="pg-hdr">
         <div>
-          <div className="pg-title">Mark Entry — Class Test (CBT)</div>
+          <div className="pg-title">Mark Entry CBT</div>
           <div className="pg-sub">System-generated marks (view-only) · <span className="text-red-500 font-medium">Registrar override only</span></div>
         </div>
         <div className="pg-actions">
