@@ -322,29 +322,53 @@ export default function AssessmentDashboard() {
   // ---------------------------------------------------------------------------
   const liveScheduledExams = resit?.scheduledExams?.items ?? []
   const scheduledExamsTotal = resit?.scheduledExams?.totalCount ?? 0
-  const scheduledExamsPages = Math.ceil(scheduledExamsTotal / 5) || 1
 
   const lecturerSchedules = lecturer?.schedules ?? []
+  const [scheduleSourceTab, setScheduleSourceTab] = useState<'intake' | 'resit'>('intake')
 
-  // Purely dynamic live data: displays live exams from resit or lecturer schedules
+  const hasBothScheduleSources =
+    !isViewingTeaching && lecturerSchedules.length > 0 && liveScheduledExams.length > 0
+
+  const showingLecturerSchedules =
+    isViewingTeaching ||
+    (lecturerSchedules.length > 0 && (!hasBothScheduleSources || scheduleSourceTab === 'intake'))
+
+  const activeScheduleTotal = showingLecturerSchedules
+    ? lecturerSchedules.length
+    : scheduledExamsTotal
+  const scheduledExamsPages = Math.ceil(activeScheduleTotal / 5) || 1
+
+  // Purely dynamic live data: displays lecturer intake schedules (with real courseUnitCode/Name & publishStatus)
+  // or resit scheduled exams when selected / when lecturer schedules are empty
   const displayExams = useMemo(() => {
-    if (liveScheduledExams.length > 0) {
-      return liveScheduledExams
-    }
-    if (lecturerSchedules.length > 0) {
-      return lecturerSchedules.map(s => ({
+    if (showingLecturerSchedules) {
+      const start = (examPage - 1) * 5
+      return lecturerSchedules.slice(start, start + 5).map((s: any) => ({
         scheduleGuid: s.scheduleGuid,
-        examType: s.scheduleType,
-        courseUnitCode: s.courseUnitCode,
-        courseUnitName: s.courseUnitName,
+        examType: s.scheduleType ?? s.examType,
+        number: s.number ?? null,
+        courseUnitCode: s.courseUnitCode ?? s.unitCode ?? null,
+        courseUnitName: s.courseUnitName ?? s.unitName ?? null,
         startDateTime: s.startDateTime,
         endDateTime: s.endDateTime,
-        publishStatus: 1,
+        publishStatus: s.publishStatus ?? 0,
         maxMark: s.maxMark,
+        isResit: false,
+      }))
+    }
+    if (liveScheduledExams.length > 0) {
+      return liveScheduledExams.map((item: any) => ({
+        ...item,
+        examType: item.examType ?? item.scheduleType,
+        number: item.number ?? null,
+        courseUnitCode: item.courseUnitCode ?? item.unitCode ?? null,
+        courseUnitName: item.courseUnitName ?? item.unitName ?? null,
+        publishStatus: item.publishStatus ?? 0,
+        isResit: true,
       }))
     }
     return []
-  }, [liveScheduledExams, lecturerSchedules])
+  }, [showingLecturerSchedules, lecturerSchedules, liveScheduledExams, examPage])
 
   // ---------------------------------------------------------------------------
   // 5. Export Summary handler
@@ -381,12 +405,17 @@ export default function AssessmentDashboard() {
     showToast('Summary report downloaded successfully', 'success')
   }
 
-  const getExamTypeLabel = (type: number) => {
+  const getExamTypeLabel = (type: number, num?: number | null) => {
     switch (type) {
       case 1:
-        return { label: 'Class Test', badgeClass: 'badge-amber' }
+        return { label: num && num > 1 ? `Class Test ${num}` : 'Class Test', badgeClass: 'badge-amber' }
       case 2:
-        return { label: 'Coursework', badgeClass: 'badge-blue' }
+        if (num === 2) return { label: 'Class Activity (CW2)', badgeClass: 'badge-cyan' }
+        return { label: num === 1 ? 'Coursework 1' : 'Coursework', badgeClass: 'badge-blue' }
+      case 3:
+        return { label: 'Class Activity (CW2)', badgeClass: 'badge-cyan' }
+      case 4:
+        return { label: 'Practical / Mock', badgeClass: 'badge-grey' }
       case 5:
         return { label: 'University Exam', badgeClass: 'bg-purple-50 text-purple-700 border border-purple-200' }
       default:
@@ -742,16 +771,50 @@ export default function AssessmentDashboard() {
             <div className="card-title flex items-center gap-2 min-w-0">
               <i className="lni lni-calendar text-indigo-600 shrink-0" />
               <span className="truncate">Upcoming Scheduled Exams</span>
-              <span className="adm-count shrink-0 bg-white border border-slate-200 shadow-2xs">{displayExams.length}</span>
+              <span className="adm-count shrink-0 bg-white border border-slate-200 shadow-2xs">{activeScheduleTotal}</span>
             </div>
-            <button
-              type="button"
-              className="btn btn-neu btn-sm shrink-0 ml-auto flex items-center gap-1.5 whitespace-nowrap bg-white"
-              onClick={() => router.push('/assessment/bulk-exam-scheduler')}
-            >
-              <span>Scheduler</span>
-              <i className="lni lni-arrow-right" />
-            </button>
+            <div className="flex items-center gap-2 shrink-0 ml-auto">
+              {hasBothScheduleSources && (
+                <div className="flex items-center bg-white p-0.5 rounded-md border border-slate-200 text-[11px]">
+                  <button
+                    type="button"
+                    onClick={() => { setScheduleSourceTab('intake'); setExamPage(1) }}
+                    className={`px-2 py-0.5 rounded font-semibold transition-all ${
+                      scheduleSourceTab === 'intake'
+                        ? 'bg-indigo-50 text-indigo-700'
+                        : 'text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    Intake ({lecturerSchedules.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setScheduleSourceTab('resit'); setExamPage(1) }}
+                    className={`px-2 py-0.5 rounded font-semibold transition-all ${
+                      scheduleSourceTab === 'resit'
+                        ? 'bg-emerald-50 text-emerald-700'
+                        : 'text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    Resit ({scheduledExamsTotal})
+                  </button>
+                </div>
+              )}
+              <button
+                type="button"
+                className="btn btn-neu btn-sm flex items-center gap-1.5 whitespace-nowrap bg-white"
+                onClick={() =>
+                  router.push(
+                    showingLecturerSchedules
+                      ? '/assessment/bulk-exam-scheduler'
+                      : '/assessment/resit-scheduling'
+                  )
+                }
+              >
+                <span>Scheduler</span>
+                <i className="lni lni-arrow-right" />
+              </button>
+            </div>
           </div>
 
           <div className="p-4 flex-1 flex flex-col justify-between">
@@ -772,7 +835,7 @@ export default function AssessmentDashboard() {
                     </thead>
                     <tbody>
                       {displayExams.map((exam, idx) => {
-                        const typeBadge = getExamTypeLabel(exam.examType)
+                        const typeBadge = getExamTypeLabel(exam.examType, exam.number)
                         const isPublished = exam.publishStatus === 1
                         const durationStr = formatDuration(exam.startDateTime, exam.endDateTime)
                         const monthShort = getMonthShort(exam.startDateTime)
@@ -796,10 +859,10 @@ export default function AssessmentDashboard() {
                             </td>
                             <td className="py-2.5 px-3 align-middle">
                               <div className="font-semibold text-g900 text-[13px]">
-                                {exam.courseUnitCode || 'Intake Schedule'}
+                                {exam.courseUnitCode || (exam.isResit ? (resit?.refCode || 'Resit Schedule') : 'All Course Units')}
                               </div>
                               <div className="text-[11px] text-g500 truncate max-w-[190px]" title={exam.courseUnitName || undefined}>
-                                {exam.courseUnitName || 'Intake-wide schedule'}
+                                {exam.courseUnitName || (exam.isResit ? 'Resit window schedule' : 'Common schedule')}
                               </div>
                             </td>
                             <td className="py-2.5 px-3 align-middle">
@@ -853,12 +916,12 @@ export default function AssessmentDashboard() {
               )}
             </div>
 
-            {scheduledExamsTotal > 5 && displayExams.length > 5 && (
+            {activeScheduleTotal > 5 && (
               <div className="mt-3 px-3 pb-2">
                 <Pagination
                   page={examPage}
                   totalPages={scheduledExamsPages}
-                  totalCount={scheduledExamsTotal}
+                  totalCount={activeScheduleTotal}
                   itemLabel="exams"
                   onPageChange={setExamPage}
                 />
@@ -871,7 +934,9 @@ export default function AssessmentDashboard() {
                 Schedule Status
               </span>
               <span className="font-semibold text-g800">
-                {displayExams.length > 0 ? `${scheduledExamsTotal} scheduled exams` : 'No scheduled sessions'}
+                {displayExams.length > 0
+                  ? `${activeScheduleTotal} scheduled exam${activeScheduleTotal === 1 ? '' : 's'}`
+                  : 'No scheduled sessions'}
               </span>
             </div>
           </div>
