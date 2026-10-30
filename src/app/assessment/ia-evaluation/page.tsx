@@ -308,7 +308,7 @@ export default function IaEvaluationPage() {
       return
     }
 
-    const maxAllowed = q.maxMark ?? 100
+    const maxAllowed = q.maxMark ?? 10
     if (numMark > maxAllowed) {
       showToast(`Mark cannot exceed maximum marks (${maxAllowed}).`, 'error')
       return
@@ -332,45 +332,86 @@ export default function IaEvaluationPage() {
 
       // Auto advance to next question if using bottom button
       if (!questionToSave && activeQuestionIndex < localQuestions.length - 1) {
-        setActiveQuestionIndex(prev => prev + 1)
+        const nextIndex = activeQuestionIndex + 1
+        const nextQuestion = localQuestions[nextIndex]
+        setActiveQuestionIndex(nextIndex)
+        setMarkInput(
+          nextQuestion && nextQuestion.mark !== null && nextQuestion.mark !== undefined
+            ? String(nextQuestion.mark)
+            : ''
+        )
       }
     } catch (err: any) {
       showToast(err?.message || 'Failed to save question mark.', 'error')
     }
   }
 
+  // Effective minimum questions required (capped at total available questions for the student)
+  const effectiveMinQuestions = useMemo(() => {
+    if (!selectedStudent) return localQuestions.length
+    const configuredMin = selectedStudent.minQuestion || localQuestions.length
+    return localQuestions.length > 0 ? Math.min(configuredMin, localQuestions.length) : configuredMin
+  }, [selectedStudent, localQuestions.length])
+
   // Finalize student evaluation
   const handleFinalize = async () => {
     if (!selectedCoursework || !selectedStudent) return
 
-    // Auto-save mark on current question if entered but not saved yet
+    let updatedQuestions = localQuestions
+
+    // Auto-save mark on current question if entered
     const trimmedMark = markInput.trim()
     if (currentQuestion && currentQuestion.questionGuid && trimmedMark !== '') {
       const numMark = Number(trimmedMark)
-      if (!isNaN(numMark) && numMark >= 0 && numMark <= (currentQuestion.maxMark ?? 100)) {
-        if (currentQuestion.mark !== numMark) {
-          try {
-            await saveMarkMutation.mutateAsync({
-              category: selectedCoursework.category,
-              courseworkOrTestGuid: selectedCoursework.courseworkOrTestGuid,
-              studentGuid: selectedStudent.studentGuid,
-              questionGuid: currentQuestion.questionGuid,
-              mark: numMark,
-            })
-            setLocalQuestions(prev =>
-              prev.map(item =>
-                item.questionGuid === currentQuestion.questionGuid ? { ...item, mark: numMark } : item
-              )
-            )
-          } catch (err) {
-            console.warn('Could not auto-save mark before finalization:', err)
-          }
+      const maxAllowed = currentQuestion.maxMark ?? 10
+      if (isNaN(numMark)) {
+        showToast('Please enter a valid numeric mark.', 'error')
+        return
+      }
+      if (numMark < 0) {
+        showToast('Mark cannot be negative.', 'error')
+        return
+      }
+      if (numMark > maxAllowed) {
+        showToast(`Mark cannot exceed maximum marks (${maxAllowed}).`, 'error')
+        return
+      }
+
+      if (currentQuestion.mark !== numMark) {
+        try {
+          await saveMarkMutation.mutateAsync({
+            category: selectedCoursework.category,
+            courseworkOrTestGuid: selectedCoursework.courseworkOrTestGuid,
+            studentGuid: selectedStudent.studentGuid,
+            questionGuid: currentQuestion.questionGuid,
+            mark: numMark,
+          })
+          updatedQuestions = localQuestions.map(item =>
+            item.questionGuid === currentQuestion.questionGuid ? { ...item, mark: numMark } : item
+          )
+          setLocalQuestions(updatedQuestions)
+        } catch (err: any) {
+          showToast(err?.message || 'Failed to save current question mark before finalizing.', 'error')
+          return
         }
       }
     }
 
-    const markedCount = localQuestions.filter(q => q.mark !== null && q.mark !== undefined).length
-    const minRequired = selectedStudent.minQuestion || localQuestions.length
+    // Verify no question has a mark exceeding its maximum marks
+    const invalidQuestionIndex = updatedQuestions.findIndex(
+      q => q.mark !== null && q.mark !== undefined && (q.mark < 0 || q.mark > (q.maxMark ?? 10))
+    )
+    if (invalidQuestionIndex !== -1) {
+      const badQ = updatedQuestions[invalidQuestionIndex]
+      showToast(
+        `Question ${invalidQuestionIndex + 1} mark (${badQ.mark}) exceeds maximum marks (${badQ.maxMark ?? 10}).`,
+        'error'
+      )
+      return
+    }
+
+    const markedCount = updatedQuestions.filter(q => q.mark !== null && q.mark !== undefined).length
+    const minRequired = effectiveMinQuestions
 
     if (markedCount < minRequired) {
       showToast(
@@ -1205,7 +1246,7 @@ export default function IaEvaluationPage() {
                     <div className="text-sm font-extrabold text-slate-800">
                       {scorecardStats.markedCount} / {localQuestions.length}
                       <span className="text-[10px] font-normal text-slate-500 ml-1">
-                        (Min: {selectedStudent.minQuestion})
+                        (Min: {effectiveMinQuestions})
                       </span>
                     </div>
                   </div>
@@ -1285,7 +1326,7 @@ export default function IaEvaluationPage() {
           )}
 
           {/* ── Main Question Evaluation Workspace ───────────────────────────── */}
-          {isQuestionsLoading || isQuestionsFetching ? (
+          {isQuestionsLoading || (isQuestionsFetching && localQuestions.length === 0) ? (
             <div className="card p-12 text-center border border-slate-200">
               <div className="tbl-empty-inner">
                 <div className="tbl-loading-icon-wrap">
@@ -1511,21 +1552,30 @@ export default function IaEvaluationPage() {
               {/* Editable Mark Input & Question Save Mark Button */}
               {currentQuestion && (() => {
                 const isLastQuestion = activeQuestionIndex === localQuestions.length - 1
+                const maxAllowed = currentQuestion.maxMark ?? 10
+                const trimmedMarkVal = markInput.trim()
+                const parsedMarkVal = trimmedMarkVal !== '' ? Number(trimmedMarkVal) : null
+                const isOverMaxMark =
+                  parsedMarkVal !== null && !isNaN(parsedMarkVal) && parsedMarkVal > maxAllowed
+                const isNegativeMark =
+                  parsedMarkVal !== null && !isNaN(parsedMarkVal) && parsedMarkVal < 0
+                const hasMarkValidationError = isOverMaxMark || isNegativeMark
+
                 return (
                   <div className="space-y-4 pt-2">
-                    <div className={`grid grid-cols-1 ${isLastQuestion ? 'sm:grid-cols-12' : 'sm:grid-cols-8'} gap-4 items-end`}>
+                    <div className={`grid grid-cols-1 ${isLastQuestion ? 'sm:grid-cols-12' : 'sm:grid-cols-8'} gap-4 items-start`}>
                       {/* Mark Input */}
                       <div className={`${isLastQuestion ? 'sm:col-span-5' : 'sm:col-span-8'} flex flex-col gap-1.5`}>
                         <label className="text-[11.5px] font-bold uppercase tracking-wider text-slate-700">
-                          Mark Scored (Max: {currentQuestion.maxMark ?? 10}) <span className="text-red-500">*</span>
+                          Mark Scored (Max: {maxAllowed}) <span className="text-red-500">*</span>
                         </label>
                         <div className="flex items-center gap-2">
                           <input
                             type="number"
                             step="any"
                             min={0}
-                            max={currentQuestion.maxMark ?? 100}
-                            placeholder={`0 - ${currentQuestion.maxMark ?? 10}`}
+                            max={maxAllowed}
+                            placeholder={`0 - ${maxAllowed}`}
                             value={markInput}
                             onChange={e => setMarkInput(e.target.value)}
                             onKeyDown={e => {
@@ -1534,7 +1584,11 @@ export default function IaEvaluationPage() {
                                 handleSaveMark()
                               }
                             }}
-                            className="ctrl w-full font-bold text-sm text-slate-900 focus:border-blue-500"
+                            className={`ctrl w-full font-bold text-sm text-slate-900 placeholder:text-slate-400 placeholder:font-normal ${
+                              hasMarkValidationError
+                                ? 'border-red-500 focus:border-red-500 bg-red-50/30'
+                                : 'focus:border-blue-500'
+                            }`}
                           />
                           <button
                             type="button"
@@ -1560,6 +1614,16 @@ export default function IaEvaluationPage() {
                             </span>
                           </button>
                         </div>
+                        {isOverMaxMark && (
+                          <span className="text-[11px] font-semibold text-red-600">
+                            Mark cannot exceed maximum marks ({maxAllowed}).
+                          </span>
+                        )}
+                        {isNegativeMark && (
+                          <span className="text-[11px] font-semibold text-red-600">
+                            Mark cannot be negative.
+                          </span>
+                        )}
                       </div>
 
                       {/* Teacher Remarks Box: ONLY SHOWN ON THE LAST QUESTION */}
@@ -1590,7 +1654,7 @@ export default function IaEvaluationPage() {
                     {scorecardStats.markedCount} / {localQuestions.length}
                   </strong>
                   <span className="text-slate-400 ml-2">
-                    (Min required: {selectedStudent.minQuestion || localQuestions.length})
+                    (Min required: {effectiveMinQuestions})
                   </span>
                 </div>
 
