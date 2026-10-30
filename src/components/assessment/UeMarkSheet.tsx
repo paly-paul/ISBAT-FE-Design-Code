@@ -225,7 +225,7 @@ export function UeMarkSheet({ mode }: { mode: UeMarkSheetMode }) {
     <div className="page active">
       <div className="pg-hdr">
         <div>
-          <div className="pg-title">{mode === 'entry' ? 'Mark Entry — University Examination' : 'Mark Verify — University Examination'}</div>
+          <div className="pg-title">{mode === 'entry' ? 'Mark Entry UE' : 'Mark Verify UE'}</div>
           <div className="pg-sub">
             {mode === 'entry'
               ? 'Enter UE marks one student at a time · blind marking by matching code'

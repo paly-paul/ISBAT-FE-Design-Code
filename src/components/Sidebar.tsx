@@ -157,6 +157,14 @@ export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSection
     const displayName =
       item.name === 'IA Creation' || id === 'ia-creation'
         ? 'Assessment Scheduler'
+        : id === 'mark-ue'
+        ? 'Mark Entry UE'
+        : id === 'mark-ue-verify'
+        ? 'Mark Verify UE'
+        : id === 'mark-cw'
+        ? 'Mark Entry CW'
+        : id === 'mark-cbt'
+        ? 'Mark Entry CBT'
         : item.name
     const href = resolveHref(item.url, railId)
     return (

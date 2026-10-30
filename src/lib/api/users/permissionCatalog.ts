@@ -1171,14 +1171,14 @@ const fullCatalog: CatalogModule[] = [
         subModule: 'Mark Entry & Results',
         pages: [
           {
-            page: 'Mark Entry — CW',
+            page: 'Mark Entry CW',
             permissions: [
               { intPermission: 462, permissionName: 'View Mark Entry CW' },
               { intPermission: 463, permissionName: 'Save All CW Marks' },
             ],
           },
           {
-            page: 'Mark Entry — CBT',
+            page: 'Mark Entry CBT',
             permissions: [
               { intPermission: 464, permissionName: 'View Mark Entry CBT' },
               { intPermission: 465, permissionName: 'View CBT Mark Log' },
@@ -1186,7 +1186,7 @@ const fullCatalog: CatalogModule[] = [
             ],
           },
           {
-            page: 'Mark Entry — UE',
+            page: 'Mark Entry UE',
             permissions: [
               { intPermission: 467, permissionName: 'View Mark Entry UE' },
               { intPermission: 468, permissionName: 'Save All UE Marks' },
@@ -1268,5 +1268,16 @@ const fullCatalog: CatalogModule[] = [
 
 export function getPermissionCatalog(): Promise<CatalogModule[]> {
   if (MOCK_AUTH) return Promise.resolve(fullCatalog)
-  return apiGet<CatalogModule[] | null>('/api/v1/users/admin/permission-groups/permissions').then(data => data ?? [])
+  return apiGet<CatalogModule[] | null>('/api/v1/users/admin/permission-groups/permissions').then(data =>
+    (data ?? []).map(m => ({
+      ...m,
+      subModules: m.subModules.map(sm => ({
+        ...sm,
+        pages: sm.pages.map(pg => ({
+          ...pg,
+          page: pg.page.replace(/\s*(?:â€”|â€“|\uFFFD|—|–|\?(?=\s+[A-Z]))\s*/g, ' ').trim(),
+        })),
+      })),
+    }))
+  )
 }
