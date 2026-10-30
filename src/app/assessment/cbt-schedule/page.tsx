@@ -117,7 +117,7 @@ function CbtScheduleContent() {
       } else {
         setDuration(90)
       }
-      setMaxMark(schedule.maxMark ?? '')
+      setMaxMark(schedule.maxMark && schedule.maxMark > 0 ? schedule.maxMark : 15)
       setTestType(schedule.testType ?? 0)
       setPublishStatus(schedule.publishStatus ?? 0)
       if (schedule.examRuleGuid) {
@@ -145,7 +145,11 @@ function CbtScheduleContent() {
       showToast('Duration must be greater than 0', 'error')
       return
     }
-    if (maxMark === '' || maxMark < 0) {
+    if (maxMark === '') {
+      showToast('Max Mark is required', 'error')
+      return
+    }
+    if (Number(maxMark) < 0) {
       showToast('Max Mark cannot be negative', 'error')
       return
     }
