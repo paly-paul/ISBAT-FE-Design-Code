@@ -57,7 +57,7 @@ export function StudentSponsorModal({ isOpen, onClose, showToast, studentGuid, s
   return (
     <div className="modal-overlay open">
       <div className="modal modal-md" onClick={e => e.stopPropagation()}>
-        <div className="modal-hdr"><div className="modal-title"><i className="lni lni-handshake"></i> Sponsor Assignment</div><button className="modal-close" onClick={onClose}>✕</button></div>
+        <div className="modal-hdr modal-hdr-blue"><div className="modal-title"><i className="lni lni-handshake"></i> Sponsor Assignment</div><button className="modal-close" onClick={onClose}>✕</button></div>
         <div>
           {studentName && <div className="fg"><label className="lbl">Student</label><input className="ctrl" readOnly value={studentName} /></div>}
 

@@ -1,5 +1,5 @@
 'use client'
-import { Suspense, useEffect, useState } from 'react'
+import { Suspense, useEffect, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Toast } from '@/components/Toast'
 import { Pagination } from '@/components/Pagination'
@@ -14,7 +14,7 @@ import { DocumentPreviewModal } from '@/components/modals/shared/DocumentPreview
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 // Approval queue for learning-mode change requests raised on
-// /student/learning-mode. Same list → review shape as Dropout Rejoin:
+// /student/learning-mode or from Student Master's row menu. Same list → review shape as Dropout Rejoin:
 //  - List: GET /students/learning-mode/pending-approvals (server-paged,
 //    every campus) — get-pending-learning-mode-approvals.md.
 //  - Review: GET /students/learning-mode/{studentGuid} for the request's
@@ -39,6 +39,16 @@ function LearningModeApprovalContent() {
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 
+  // Success message handed over by Student Master's Learning Mode modal,
+  // which redirects here (?notice=submitted) and would otherwise unmount its
+  // own toast. Ref-guarded so Strict Mode's double effect doesn't show it twice.
+  const noticeShown = useRef(false)
+  useEffect(() => {
+    if (noticeShown.current) return
+    noticeShown.current = true
+    if (searchParams.get('notice') === 'submitted') showToast('Learning mode change submitted — pending approval', 'ok')
+  }, [searchParams])
+
   // ---- List --------------------------------------------------------------
   const [page, setPage] = useState(1)
   const [searchInput, setSearchInput] = useState('')
@@ -56,8 +66,8 @@ function LearningModeApprovalContent() {
   useEffect(() => { if (data && page > totalPages) setPage(totalPages) }, [data, page, totalPages])
 
   // ---- Review ------------------------------------------------------------
-  // Picked from the list, or deep-linked from Learning Mode's "Review it →"
-  // link as ?studentGuid=<guid>.
+  // Picked from the list, or deep-linked as ?studentGuid=<guid> from Learning
+  // Mode's "Review it →" link or Student Master's modal.
   const [selectedGuid, setSelectedGuid] = useState<string | null>(() => searchParams.get('studentGuid'))
   const { data: detail, isLoading: detailLoading, isError: detailError } = useStudentLearningModeDetail(selectedGuid)
   const approve = useApproveLearningModeChange()
@@ -94,9 +104,9 @@ function LearningModeApprovalContent() {
               <div className="card-title"><i className="lni lni-hourglass"></i> Awaiting Approval</div>
               <div className="flex gap-2" style={{ alignItems: 'center' }}>
                 {totalCount > 0 && <span className="badge badge-amber">{totalCount} pending</span>}
-                <div className="inp-wrap w-64">
+                <div className="inp-wrap w-72">
                   <i className="lni lni-search-alt inp-icon"></i>
-                  <input className="ctrl" placeholder="Search by Student No., Reg No. or name…" value={searchInput} onChange={e => setSearchInput(e.target.value)} />
+                  <input className="ctrl" placeholder="Search name, student or reg no." aria-label="Search pending requests by name, student number or reg number" value={searchInput} onChange={e => setSearchInput(e.target.value)} />
                 </div>
               </div>
             </div>
@@ -112,31 +122,42 @@ function LearningModeApprovalContent() {
               </div>
             ) : (
               <>
-                <div className="person-list">
+                <div className="appr-list">
+                  <div className="appr-row appr-head" aria-hidden="true">
+                    <span>Student</span><span>Programme</span><span>Mode change</span><span>Remarks</span><span />
+                  </div>
                   {requests.map(r => (
-                    <div key={r.studentGuid} className="person-row">
-                      <div className="person-row-av">{initials(r.studentName)}</div>
-                      <div className="person-row-main">
-                        <div className="person-row-name">{r.studentName ?? '—'}</div>
-                        <div className="person-row-sub">
-                          {(r.studentNum || r.studentRegNo) && <span className="font-mono">{r.studentNum || r.studentRegNo}</span>}
-                          {(r.studentNum || r.studentRegNo) && (r.programName || r.semesterName || r.batchCode) && ' · '}
-                          {[r.programName, r.semesterName, r.batchCode].filter(Boolean).join(' · ')}
-                        </div>
-                        <div className="person-row-meta">
-                          {r.currentLearningModeLabel && <>
-                            <span>{r.currentLearningModeLabel}</span>
-                            <i className="lni lni-arrow-right" style={{ fontSize: 10 }}></i>
-                          </>}
-                          <span className="badge badge-blue">{r.requestedLearningModeLabel ?? '—'}</span>
-                          {r.remarks && <span className="truncate" style={{ maxWidth: 320 }} title={r.remarks}>· {r.remarks}</span>}
+                    // The whole row opens the review for mouse users; the
+                    // Review button stays the keyboard/screen-reader control.
+                    <div key={r.studentGuid} className="appr-row" onClick={() => setSelectedGuid(r.studentGuid)}>
+                      <div className="appr-student">
+                        <div className="person-row-av">{initials(r.studentName)}</div>
+                        <div style={{ minWidth: 0 }}>
+                          <div className="appr-name" title={r.studentName ?? undefined}>{r.studentName ?? '—'}</div>
+                          {(r.studentNum || r.studentRegNo) && <div className="appr-num">{r.studentNum || r.studentRegNo}</div>}
                         </div>
                       </div>
-                      <button className="btn btn-neu btn-sm" onClick={() => setSelectedGuid(r.studentGuid)}><i className="lni lni-eye"></i> Review</button>
+                      <div className="appr-prog">
+                        <div>{r.programName ?? '—'}</div>
+                        {(r.semesterName || r.batchCode) && <div className="appr-prog-sub">{[r.semesterName, r.batchCode].filter(Boolean).join(' · ')}</div>}
+                      </div>
+                      <div className="appr-change" aria-label={`${r.currentLearningModeLabel ?? 'Current mode'} to ${r.requestedLearningModeLabel ?? 'requested mode'}`}>
+                        {r.currentLearningModeLabel && <>
+                          <span className="badge badge-grey">{r.currentLearningModeLabel}</span>
+                          <i className="lni lni-arrow-right" aria-hidden="true"></i>
+                        </>}
+                        <span className="badge badge-blue">{r.requestedLearningModeLabel ?? '—'}</span>
+                      </div>
+                      <div className={`appr-remarks${r.remarks ? '' : ' empty'}`} title={r.remarks ?? undefined}>{r.remarks || 'No remarks'}</div>
+                      <button className="btn btn-primary btn-sm" onClick={e => { e.stopPropagation(); setSelectedGuid(r.studentGuid) }} aria-label={`Review ${r.studentName ?? 'request'}`}>
+                        <i className="lni lni-eye"></i> Review
+                      </button>
                     </div>
                   ))}
                 </div>
-                <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="pending requests" onPageChange={setPage} />
+                {/* The header badge already carries the count, so the footer
+                    only appears when there's more than one page to move between. */}
+                {totalPages > 1 && <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="pending requests" onPageChange={setPage} />}
               </>
             )}
           </div>

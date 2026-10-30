@@ -1,4 +1,4 @@
-import { apiGet, apiPost, apiPostForm, apiPut } from '../client'
+import { apiGet, apiPost, apiPostForm } from '../client'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
@@ -128,19 +128,6 @@ export function getStudentLearningModeDetail(studentGuid: string): Promise<Stude
     })
   }
   return apiGet<StudentLearningModeDetail>(`/api/v1/students/learning-mode/${studentGuid}`)
-}
-
-export function updateStudentLearningMode(studentGuid: string, learningMode: number): Promise<StudentLearningModeDetail> {
-  if (MOCK_AUTH) {
-    const label = mockOptions.find(o => o.value === learningMode)?.label ?? null
-    const updated: StudentLearningModeDetail = {
-      ...(mockDetails[studentGuid] ?? { studentGuid, studentRegNo: null, studentNum: null, studentName: null, programGuid: null, programName: null, semesterGuid: null, semesterName: null, learningMode: null, learningModeLabel: null }),
-      learningMode, learningModeLabel: label,
-    }
-    mockDetails[studentGuid] = updated
-    return Promise.resolve(updated)
-  }
-  return apiPut<StudentLearningModeDetail>(`/api/v1/students/learning-mode/${studentGuid}`, { learningMode })
 }
 
 // Raises a change request (post-apply-learning-mode-change.md). multipart:

@@ -101,7 +101,7 @@ export default function Page() {
       {activeTicket && (
         <div className="modal-overlay open">
           <div className="modal modal-lg" onClick={e => e.stopPropagation()}>
-            <div className="modal-hdr"><div className="modal-title"><i className="lni lni-ticket" style={{ color: 'var(--b700)' }}></i> Ticket Response — {activeTicket.id}</div><button className="modal-close" onClick={() => setActiveTicket(null)}>✕</button></div>
+            <div className="modal-hdr modal-hdr-blue"><div className="modal-title"><i className="lni lni-ticket"></i> Ticket Response — {activeTicket.id}</div><button className="modal-close" onClick={() => setActiveTicket(null)}>✕</button></div>
             <div>
               <div style={{ background: 'var(--surface)', borderRadius: 'var(--rsm)', padding: '14px 16px', marginBottom: 16, border: '1.5px solid var(--g200)' }}>
                 <div className="flex" style={{ alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>

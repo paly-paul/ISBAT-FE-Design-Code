@@ -2150,49 +2150,9 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                   )}
                   <div style={{ fontSize: 11, color: 'var(--g400)', marginTop: 4 }}>Every specialization this programme offers — picked per course unit in Course Unit Allocation.</div>
                 </div>
-
-                <div className="fg">
-                  <div className="lbl">Status <span className="req">*</span></div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 14, height: 38 }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
-                      <input
-                        type="radio"
-                        name="pgmStatus"
-                        checked={pgmStatus === true}
-                        onChange={() => setPgmStatus(true)}
-                        style={{ cursor: 'pointer' }}
-                      />
-                      <span className="badge badge-green" style={{ fontSize: 11.5 }}>Active</span>
-                    </label>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
-                      <input
-                        type="radio"
-                        name="pgmStatus"
-                        checked={pgmStatus === false}
-                        onChange={() => setPgmStatus(false)}
-                        style={{ cursor: 'pointer' }}
-                      />
-                      <span className="badge badge-grey" style={{ fontSize: 11.5 }}>Inactive</span>
-                    </label>
-                  </div>
-                </div>
-
-                <div className="fg">
-                  <div className="lbl">Internal Assessment</div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, height: 38 }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, userSelect: 'none' }}>
-                      <input
-                        type="checkbox"
-                        checked={noIa}
-                        onChange={e => setNoIa(e.target.checked)}
-                        style={{ width: 17, height: 17, cursor: 'pointer' }}
-                      />
-                      <span style={{ fontWeight: 600, color: noIa ? 'var(--red)' : 'var(--g700)' }}>
-                        {noIa ? 'No IA (Internal Assessment Excluded)' : 'Include Internal Assessment (IA Active)'}
-                      </span>
-                    </label>
-                  </div>
-                </div>
+                {/* Status and Internal Assessment used to be repeated here as a
+                    radio pair and a checkbox, bound to the same pgmStatus/noIa
+                    as the Status & Flags toggles below — removed as duplicates. */}
               </div>
 
               {/* Old repeatable multi-specialization list — superseded by the

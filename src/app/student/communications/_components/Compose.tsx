@@ -511,7 +511,7 @@ export function Compose({ onCancel, onSent, showToast }: Props) {
       {drawerOpen && (
         <div className="modal-overlay open">
           <div className="modal modal-md" onClick={e => e.stopPropagation()}>
-            <div className="modal-hdr"><div className="modal-title">Selected students ({recipientCount.toLocaleString()})</div><button className="modal-close" onClick={() => setDrawerOpen(false)}>✕</button></div>
+            <div className="modal-hdr modal-hdr-blue"><div className="modal-title">Selected students ({recipientCount.toLocaleString()})</div><button className="modal-close" onClick={() => setDrawerOpen(false)}>✕</button></div>
             <div className="cm-selected-list">
               {recipientCount === 0 ? (
                 <div className="empty" style={{ padding: 24 }}><div className="empty-title">No students selected</div></div>

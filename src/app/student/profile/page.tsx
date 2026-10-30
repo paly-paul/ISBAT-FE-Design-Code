@@ -781,7 +781,7 @@ function StudentProfileContent() {
       {docPreviewOpen && refugeeDocUrl && (
         <div className="modal-overlay open">
           <div className="modal modal-xl" onClick={e => e.stopPropagation()}>
-            <div className="modal-hdr"><div className="modal-title"><i className="lni lni-files"></i> Refugee Supporting Document</div><button className="modal-close" onClick={() => setDocPreviewOpen(false)}>✕</button></div>
+            <div className="modal-hdr modal-hdr-blue"><div className="modal-title"><i className="lni lni-files"></i> Refugee Supporting Document</div><button className="modal-close" onClick={() => setDocPreviewOpen(false)}>✕</button></div>
             <div style={{ height: '70vh', background: 'var(--g100)', borderRadius: 'var(--rsm)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               {refugeeDocIsImage
                 ? <img src={refugeeDocUrl} alt="Refugee supporting document" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
