@@ -32,8 +32,11 @@ export interface HallTicketEligibilityDto {
   canIssue: boolean
 }
 
+// The query param must be `academicIntakeGuid` (get-eligibility.md,
+// 2026-10-30) — the API rejects `intakeGuid` with a 400. It must also be the
+// current intake; any other returns 400 "only available for the current intake".
 export function getHallTicketEligibility(studentGuid: string, intakeGuid: string, term: HallTicketTerm): Promise<HallTicketEligibilityDto> {
-  const params = new URLSearchParams({ studentGuid, intakeGuid, term: String(term) })
+  const params = new URLSearchParams({ studentGuid, academicIntakeGuid: intakeGuid, term: String(term) })
   return apiGet<HallTicketEligibilityDto>(`/api/v1/assessment/hall-ticket-issue/eligibility?${params.toString()}`)
 }
 
