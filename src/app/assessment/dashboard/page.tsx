@@ -9,61 +9,104 @@ import {
   useResitDashboard,
   useLecturerDashboard,
 } from '@/hooks/assessment/useAssessmentDashboard'
-import { downloadBlob } from '@/lib/downloadBlob'
 import { formatDate } from '@/lib/date'
 
-// Safe time formatter that never throws on null, undefined or malformed ISO strings
+// Parse raw ISO date/time string without client timezone skew
+interface IsoParts {
+  year: number
+  month: number // 1-12
+  day: number
+  hour: number
+  minute: number
+}
+
+function parseIsoParts(isoString?: string | null): IsoParts | null {
+  if (!isoString) return null
+  const m = String(isoString).match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/)
+  if (!m) return null
+  return {
+    year: parseInt(m[1], 10),
+    month: parseInt(m[2], 10),
+    day: parseInt(m[3], 10),
+    hour: parseInt(m[4], 10),
+    minute: parseInt(m[5], 10),
+  }
+}
+
+const MONTH_NAMES = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC']
+
+function fmt12Hour(hour: number, minute: number): string {
+  const h = hour % 12 || 12
+  const ampm = hour < 12 ? 'AM' : 'PM'
+  const m = String(minute).padStart(2, '0')
+  return `${String(h).padStart(2, '0')}:${m} ${ampm}`
+}
+
 function formatSafeTime(isoString?: string | null): string {
-  if (!isoString) return '—'
-  try {
-    const d = new Date(isoString)
-    if (isNaN(d.getTime())) return '—'
-    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-  } catch {
-    return '—'
-  }
+  const p = parseIsoParts(isoString)
+  if (!p) return '—'
+  return fmt12Hour(p.hour, p.minute)
 }
 
-// Calculate duration between start and end ISO strings (e.g. "3 hrs" or "1h 30m")
-function formatDuration(start?: string | null, end?: string | null): string | null {
-  if (!start || !end) return null
-  try {
-    const t1 = new Date(start).getTime()
-    const t2 = new Date(end).getTime()
-    if (isNaN(t1) || isNaN(t2) || t2 <= t1) return null
-    const diffMinutes = Math.round((t2 - t1) / 60000)
-    const hours = Math.floor(diffMinutes / 60)
-    const mins = diffMinutes % 60
-    if (hours > 0 && mins > 0) return `${hours}h ${mins}m`
-    if (hours > 0) return `${hours} hr${hours > 1 ? 's' : ''}`
-    return `${mins} mins`
-  } catch {
-    return null
+// Formats time range cleanly: same-day shows "01:00 AM – 06:00 PM", cross-day shows "29 Oct, 11:30 PM – 31 Oct, 12:30 PM"
+function formatTimeRange(start?: string | null, end?: string | null): string {
+  const p1 = parseIsoParts(start)
+  if (!p1) return '—'
+  const t1 = fmt12Hour(p1.hour, p1.minute)
+  const p2 = parseIsoParts(end)
+  if (!p2) return t1
+  const t2 = fmt12Hour(p2.hour, p2.minute)
+
+  const isSameDay = p1.year === p2.year && p1.month === p2.month && p1.day === p2.day
+  if (isSameDay) {
+    return `${t1} – ${t2}`
   }
+
+  const m1 = MONTH_NAMES[p1.month - 1]
+  const m2 = MONTH_NAMES[p2.month - 1]
+  const capM1 = m1.charAt(0) + m1.slice(1).toLowerCase()
+  const capM2 = m2.charAt(0) + m2.slice(1).toLowerCase()
+  return `${p1.day} ${capM1}, ${t1} – ${p2.day} ${capM2}, ${t2}`
 }
 
-// Extract uppercase 3-letter month for calendar date tile
+// Calendar day tile display: "30" for single day, "29–31" for multi-day window
+function getDayDisplay(start?: string | null, end?: string | null): string {
+  const p1 = parseIsoParts(start)
+  if (!p1) return '—'
+  const p2 = parseIsoParts(end)
+  if (!p2 || (p1.year === p2.year && p1.month === p2.month && p1.day === p2.day)) {
+    return String(p1.day)
+  }
+  return `${p1.day}–${p2.day}`
+}
+
+// Extract uppercase 3-letter month for calendar date tile directly from string
 function getMonthShort(isoString?: string | null): string {
-  if (!isoString) return 'CAL'
-  try {
-    const d = new Date(isoString)
-    if (isNaN(d.getTime())) return 'CAL'
-    return d.toLocaleDateString('en-US', { month: 'short' }).toUpperCase()
-  } catch {
-    return 'CAL'
-  }
+  const p = parseIsoParts(isoString)
+  if (!p || p.month < 1 || p.month > 12) return 'CAL'
+  return MONTH_NAMES[p.month - 1]
 }
 
-// Extract day of month number for calendar tile
 function getDayNumber(isoString?: string | null): string {
-  if (!isoString) return '—'
-  try {
-    const d = new Date(isoString)
-    if (isNaN(d.getTime())) return '—'
-    return String(d.getDate())
-  } catch {
-    return '—'
-  }
+  const p = parseIsoParts(isoString)
+  if (!p) return '—'
+  return String(p.day)
+}
+
+// Calculate duration accurately without timezone shift
+function formatDuration(start?: string | null, end?: string | null): string | null {
+  const p1 = parseIsoParts(start)
+  const p2 = parseIsoParts(end)
+  if (!p1 || !p2) return null
+  const t1 = Date.UTC(p1.year, p1.month - 1, p1.day, p1.hour, p1.minute)
+  const t2 = Date.UTC(p2.year, p2.month - 1, p2.day, p2.hour, p2.minute)
+  if (isNaN(t1) || isNaN(t2) || t2 <= t1) return null
+  const diffMinutes = Math.round((t2 - t1) / 60000)
+  const hours = Math.floor(diffMinutes / 60)
+  const mins = diffMinutes % 60
+  if (hours > 0 && mins > 0) return `${hours}h ${mins}m`
+  if (hours > 0) return `${hours} hr${hours > 1 ? 's' : ''}`
+  return `${mins} mins`
 }
 
 interface PendingActionItem {
@@ -371,40 +414,6 @@ export default function AssessmentDashboard() {
   }, [showingLecturerSchedules, lecturerSchedules, liveScheduledExams, examPage])
 
   // ---------------------------------------------------------------------------
-  // 5. Export Summary handler
-  // ---------------------------------------------------------------------------
-  const handleExportSummary = () => {
-    const csvLines = [
-      'ISBAT UNIVERSITY ERP - ASSESSMENT DASHBOARD LIVE SUMMARY',
-      `Generated: ${new Date().toLocaleString()}`,
-      `Scope: ${viewSubtitle}`,
-      '',
-      'METRIC,COUNT,STATUS',
-      `Coursework Evaluations Pending,${cwEvaluationPending},Action Required`,
-      `Coursework Submissions Pending,${cwSubmissionPending},Awaiting Submissions`,
-      `Class Test Submissions Pending,${classTestSubmissionPending},Awaiting Submissions`,
-      `Question Papers Awaiting Vetting,${qpVettingPending},Vetting Committee`,
-      `Term 1 Hall Tickets Issued,${term1Issued},Completed`,
-      `Term 1 Hall Tickets Pending,${term1Pending},Not Issued`,
-      `Term 2 Hall Tickets Issued,${term2Issued},Completed`,
-      `Term 2 Hall Tickets Pending,${term2Pending},Not Issued`,
-      `Total Registered Students,${totalRegisteredStudents},Active Intake`,
-      '',
-      'RESIT METRICS,VALUE',
-      `Active Resit Reference,${resit?.refCode ?? 'No active resit window'}`,
-      `Application Window,${formatResitDates() ?? 'None'}`,
-      `Registered Resit Students,${resit?.registeredStudentCount ?? 0}`,
-      `Fee Cleared Resit Students,${resit?.feeClearedStudentCount ?? 0}`,
-      `Registered Course Units,${resit?.registeredCourseUnitCount ?? 0}`,
-      `Fee Cleared Course Units,${resit?.feeClearedCourseUnitCount ?? 0}`,
-      `Upcoming Scheduled Exams,${scheduledExamsTotal || displayExams.length}`,
-    ]
-
-    const blob = new Blob([csvLines.join('\n')], { type: 'text/csv;charset=utf-8;' })
-    downloadBlob(blob, `Assessment_Dashboard_Summary_${new Date().toISOString().slice(0, 10)}.csv`)
-    showToast('Summary report downloaded successfully', 'success')
-  }
-
   const getExamTypeLabel = (type: number, num?: number | null) => {
     switch (type) {
       case 1:
@@ -471,15 +480,6 @@ export default function AssessmentDashboard() {
           <span className={`badge ${roleBadge.class}`}>
             {roleBadge.label}
           </span>
-          <button
-            type="button"
-            className="btn btn-neu btn-sm"
-            onClick={handleExportSummary}
-            title="Download CSV Summary"
-          >
-            <i className="lni lni-download" />
-            <span>Export Summary</span>
-          </button>
         </div>
       </div>
 
@@ -839,7 +839,7 @@ export default function AssessmentDashboard() {
                         const isPublished = exam.publishStatus === 1
                         const durationStr = formatDuration(exam.startDateTime, exam.endDateTime)
                         const monthShort = getMonthShort(exam.startDateTime)
-                        const dayNum = getDayNumber(exam.startDateTime)
+                        const dayNum = getDayDisplay(exam.startDateTime, exam.endDateTime)
 
                         return (
                           <tr
@@ -859,10 +859,10 @@ export default function AssessmentDashboard() {
                             </td>
                             <td className="py-2.5 px-3 align-middle">
                               <div className="font-semibold text-g900 text-[13px]">
-                                {exam.courseUnitCode || (exam.isResit ? (resit?.refCode || 'Resit Schedule') : 'All Course Units')}
+                                {exam.courseUnitCode || '—'}
                               </div>
                               <div className="text-[11px] text-g500 truncate max-w-[190px]" title={exam.courseUnitName || undefined}>
-                                {exam.courseUnitName || (exam.isResit ? 'Resit window schedule' : 'Common schedule')}
+                                {exam.courseUnitName || '—'}
                               </div>
                             </td>
                             <td className="py-2.5 px-3 align-middle">
@@ -873,8 +873,8 @@ export default function AssessmentDashboard() {
                             <td className="py-2.5 px-3 align-middle text-[12px] text-g700">
                               <div className="font-medium text-g800 flex items-center gap-1">
                                 <i className="lni lni-timer text-g400 text-xs" />
-                                <span>
-                                  {formatSafeTime(exam.startDateTime)} – {formatSafeTime(exam.endDateTime)}
+                                <span className="leading-snug">
+                                  {formatTimeRange(exam.startDateTime, exam.endDateTime)}
                                 </span>
                               </div>
                               {durationStr && (
