@@ -33,10 +33,15 @@ export default function QpUploadVettingPage() {
   const [ueType, setUeType] = useState<number>(0) // 0 = Theory, 1 = Practical
   const [activeLevel, setActiveLevel] = useState<number>(1) // 1 = Sec A, 2 = Sec B, 3 = Sec C
 
-  // ── Table Search & Pagination ─────────────────────────────────────────────
+  // ── Table Search & Pagination (Faculty Upload) ────────────────────────────
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const pageSize = 10
+
+  // ── Table Search & Pagination (Vetting Queue) ─────────────────────────────
+  const [vettingSearch, setVettingSearch] = useState('')
+  const [vettingPage, setVettingPage] = useState(1)
+  const [vettingFilters, setVettingFilters] = useState<Record<string, string[]>>({})
 
   // ── Column Filter Dropdowns ───────────────────────────────────────────────
   const [openFilter, setOpenFilter] = useState<string | null>(null)
@@ -44,6 +49,11 @@ export default function QpUploadVettingPage() {
 
   const handleFilterSelect = (col: string, vals: string[]) => {
     setFilters(prev => ({ ...prev, [col]: vals }))
+    setOpenFilter(null)
+  }
+
+  const handleVettingFilterSelect = (col: string, vals: string[]) => {
+    setVettingFilters(prev => ({ ...prev, [col]: vals }))
     setOpenFilter(null)
   }
 
@@ -93,6 +103,15 @@ export default function QpUploadVettingPage() {
   const filteredQuestions = useMemo(() => {
     let list = [...questions]
 
+    // Type column filter
+    const typeFilter = filters['type']
+    if (typeFilter && typeFilter.length > 0) {
+      list = list.filter(item => {
+        const itemType = item.questionType === 1 ? 'MCQ' : 'Descriptive'
+        return typeFilter.includes(itemType)
+      })
+    }
+
     // Status column filter
     const statusFilter = filters['status']
     if (statusFilter && statusFilter.length > 0) {
@@ -136,6 +155,49 @@ export default function QpUploadVettingPage() {
   useEffect(() => {
     setPage(1)
   }, [activeLevel, search, selectedCourseUnitGuid, ueType, filters])
+
+  // ── Vetting Queue Filtering & Pagination ──────────────────────────────────
+  const subjectCodeOptions = useMemo(() => {
+    return Array.from(new Set(courseUnits.map(cu => cu.courseUnitCode || '').filter(Boolean)))
+  }, [courseUnits])
+
+  const filteredVettingUnits = useMemo(() => {
+    let list = [...courseUnits]
+
+    const codeFilter = vettingFilters['code']
+    if (codeFilter && codeFilter.length > 0) {
+      list = list.filter(cu => cu.courseUnitCode && codeFilter.includes(cu.courseUnitCode))
+    }
+
+    if (vettingSearch.trim()) {
+      const q = vettingSearch.trim().toLowerCase()
+      list = list.filter(
+        cu =>
+          (cu.courseUnitName && cu.courseUnitName.toLowerCase().includes(q)) ||
+          (cu.courseUnitCode && cu.courseUnitCode.toLowerCase().includes(q))
+      )
+    }
+
+    return list
+  }, [courseUnits, vettingSearch, vettingFilters])
+
+  const vettingTotalPages = Math.max(1, Math.ceil(filteredVettingUnits.length / pageSize))
+  const paginatedVettingUnits = useMemo(() => {
+    const start = (vettingPage - 1) * pageSize
+    return filteredVettingUnits.slice(start, start + pageSize)
+  }, [filteredVettingUnits, vettingPage])
+
+  const vettingSearchResults: TableSearchResult[] = useMemo(() => {
+    return filteredVettingUnits.slice(0, 8).map(cu => ({
+      id: cu.courseUnitGuid,
+      primary: cu.courseUnitName || '',
+      secondary: cu.courseUnitCode || '',
+    }))
+  }, [filteredVettingUnits])
+
+  useEffect(() => {
+    setVettingPage(1)
+  }, [vettingSearch, vettingFilters])
 
   // ── Actions ───────────────────────────────────────────────────────────────
   const handleOpenAddModal = () => {
@@ -399,7 +461,16 @@ export default function QpUploadVettingPage() {
                   <thead>
                     <tr>
                       <th style={{ width: 44 }}></th>
-                      <th style={{ width: 85 }}>TYPE</th>
+                      <FilterTh
+                        label="TYPE"
+                        opts={['MCQ', 'Descriptive']}
+                        isOpen={openFilter === 'type'}
+                        activeFilter={filters['type'] || []}
+                        onToggle={(e) => { e.stopPropagation(); setOpenFilter(openFilter === 'type' ? null : 'type') }}
+                        onSelect={(vals) => handleFilterSelect('type', vals)}
+                        onClear={() => handleFilterSelect('type', [])}
+                        onClose={() => setOpenFilter(null)}
+                      />
                       <th>QUESTION STATEMENT</th>
                       <th>ANSWER KEY</th>
                       <FilterTh
@@ -422,7 +493,7 @@ export default function QpUploadVettingPage() {
                         colSpan={5}
                         title="No questions found in this section"
                         subtitle={isLocked ? 'Verified questions may be hidden for regular lecturers.' : 'Click "+ Add Question" above to prepare questions.'}
-                        hasFilters={Boolean(search || filters['status']?.length)}
+                        hasFilters={Boolean(search || filters['status']?.length || filters['type']?.length)}
                         onClearFilters={() => { setSearch(''); setFilters({}); }}
                       />
                     ) : (
@@ -515,15 +586,15 @@ export default function QpUploadVettingPage() {
           <div className="card-hdr">
             <div className="card-title">
               <span className="ctitle-icon"><i className="lni lni-users"></i></span> Vetting Queue
-              <span className="card-badge">{courseUnits.length}</span>
+              <span className="card-badge">{filteredVettingUnits.length}</span>
             </div>
             <TableSearch
               className="w-64"
-              placeholder="Search course units..."
-              value={search}
-              onChange={setSearch}
-              results={courseUnits.map(cu => ({ id: cu.courseUnitGuid, primary: cu.courseUnitName || '', secondary: cu.courseUnitCode || '' }))}
-              onSelect={(r) => setSearch(r.primary)}
+              placeholder="Search by code or course unit..."
+              value={vettingSearch}
+              onChange={setVettingSearch}
+              results={vettingSearchResults}
+              onSelect={(r) => setVettingSearch(r.primary || r.secondary || '')}
             />
           </div>
 
@@ -532,7 +603,16 @@ export default function QpUploadVettingPage() {
               <thead>
                 <tr>
                   <th style={{ width: 48 }}></th>
-                  <th style={{ width: 140 }}>SUBJECT CODE</th>
+                  <FilterTh
+                    label="SUBJECT CODE"
+                    opts={subjectCodeOptions}
+                    isOpen={openFilter === 'vetting_code'}
+                    activeFilter={vettingFilters['code'] || []}
+                    onToggle={(e) => { e.stopPropagation(); setOpenFilter(openFilter === 'vetting_code' ? null : 'vetting_code') }}
+                    onSelect={(vals) => handleVettingFilterSelect('code', vals)}
+                    onClear={() => handleVettingFilterSelect('code', [])}
+                    onClose={() => setOpenFilter(null)}
+                  />
                   <th>COURSE UNIT NAME</th>
                   <th style={{ width: 140 }}>INTAKE</th>
                   <th style={{ width: 160 }}>ACTION</th>
@@ -541,10 +621,18 @@ export default function QpUploadVettingPage() {
               <tbody>
                 {isCuLoading ? (
                   <TableLoadingState colSpan={5} title="Loading vetting queue…" />
-                ) : courseUnits.length === 0 ? (
-                  <EmptyState colSpan={5} title="No course units found in queue" />
+                ) : paginatedVettingUnits.length === 0 ? (
+                  <EmptyState
+                    colSpan={5}
+                    title="No course units found in queue"
+                    hasFilters={Boolean(vettingSearch.trim() || vettingFilters['code']?.length)}
+                    onClearFilters={() => {
+                      setVettingSearch('')
+                      setVettingFilters({})
+                    }}
+                  />
                 ) : (
-                  courseUnits.map((cu) => (
+                  paginatedVettingUnits.map((cu) => (
                     <VettingQueueRow
                       key={cu.courseUnitGuid}
                       cu={cu}
@@ -559,13 +647,13 @@ export default function QpUploadVettingPage() {
             </table>
           </ScrollTable>
 
-          {courseUnits.length > pageSize && (
+          {filteredVettingUnits.length > pageSize && (
             <div className="p-3 border-t border-slate-100">
               <Pagination
-                page={page}
-                totalPages={Math.ceil(courseUnits.length / pageSize)}
-                totalCount={courseUnits.length}
-                onPageChange={setPage}
+                page={vettingPage}
+                totalPages={vettingTotalPages}
+                totalCount={filteredVettingUnits.length}
+                onPageChange={setVettingPage}
               />
             </div>
           )}
