@@ -53,7 +53,7 @@ export function CbtScheduleModal({ isOpen, onClose, testGuid, unitCode, unitName
   const [endDate, setEndDate] = useState('')
   const [endTime, setEndTime] = useState('')
   const [duration, setDuration] = useState<number | ''>(90)
-  const [maxMark, setMaxMark] = useState<number | ''>('')
+  const [maxMark, setMaxMark] = useState<number | ''>(15)
   const [testType, setTestType] = useState<number>(0)
   const [publishStatus, setPublishStatus] = useState<number>(0)
   const [examRuleGuid, setExamRuleGuid] = useState<string>('')
@@ -123,7 +123,7 @@ export function CbtScheduleModal({ isOpen, onClose, testGuid, unitCode, unitName
       } else {
         setDuration(90)
       }
-      setMaxMark(schedule.maxMark ?? '')
+      setMaxMark(schedule.maxMark && schedule.maxMark > 0 ? schedule.maxMark : 15)
       setTestType(schedule.testType ?? 0)
       setPublishStatus(schedule.publishStatus ?? 0)
       if (schedule.examRuleGuid) {
@@ -138,7 +138,7 @@ export function CbtScheduleModal({ isOpen, onClose, testGuid, unitCode, unitName
         setEndDate('')
         setEndTime('')
         setDuration(90)
-        setMaxMark('')
+        setMaxMark(15)
         setTestType(0)
         setPublishStatus(0)
         setExamRuleGuid('')
@@ -164,16 +164,13 @@ export function CbtScheduleModal({ isOpen, onClose, testGuid, unitCode, unitName
       showToast('Duration must be greater than 0', 'error')
       return
     }
-    if (maxMark === '' || maxMark < 0) {
-      showToast('Max Mark cannot be negative', 'error')
-      return
-    }
+    const effectiveMaxMark = typeof maxMark === 'number' && maxMark > 0 ? maxMark : (schedule?.maxMark && schedule.maxMark > 0 ? schedule.maxMark : 15)
 
     try {
       await updateMut.mutateAsync({
         scheduledStartDateTime: `${startDate}T${startTime}:00`,
         scheduledEndDateTime: `${endDate}T${endTime}:00`,
-        maxMark: Number(maxMark),
+        maxMark: effectiveMaxMark,
         durationMinutes: Number(duration),
         testType: testType,
         publishStatus,

@@ -50,7 +50,7 @@ export function CwScheduleModal({ isOpen, onClose, courseworkGuid }: CwScheduleM
   const [startTime, setStartTime] = useState('')
   const [endDate, setEndDate] = useState('')
   const [endTime, setEndTime] = useState('')
-  const [maxMark, setMaxMark] = useState<number | ''>('')
+  const [maxMark, setMaxMark] = useState<number | ''>(15)
   const [courseworkType, setCourseworkType] = useState<number>(0)
   const [publishStatus, setPublishStatus] = useState<number>(0)
   const [examRuleGuid, setExamRuleGuid] = useState<string>('')
@@ -114,7 +114,7 @@ export function CwScheduleModal({ isOpen, onClose, courseworkGuid }: CwScheduleM
         setEndDate('')
         setEndTime('')
       }
-      setMaxMark(schedule.maxMark ?? '')
+      setMaxMark(schedule.maxMark && schedule.maxMark > 0 ? schedule.maxMark : 15)
       setCourseworkType(schedule.courseworkType ?? 0)
       setPublishStatus(schedule.publishStatus ?? 0)
       if (schedule.examRuleGuid) {
@@ -128,7 +128,7 @@ export function CwScheduleModal({ isOpen, onClose, courseworkGuid }: CwScheduleM
         setStartTime('')
         setEndDate('')
         setEndTime('')
-        setMaxMark('')
+        setMaxMark(15)
         setCourseworkType(0)
         setPublishStatus(0)
         setExamRuleGuid('')
@@ -150,16 +150,13 @@ export function CwScheduleModal({ isOpen, onClose, courseworkGuid }: CwScheduleM
       showToast('End Date/Time must be after Start Date/Time', 'error')
       return
     }
-    if (maxMark === '' || maxMark < 0) {
-      showToast('Max Mark cannot be negative', 'error')
-      return
-    }
+    const effectiveMaxMark = typeof maxMark === 'number' && maxMark > 0 ? maxMark : (schedule?.maxMark && schedule.maxMark > 0 ? schedule.maxMark : 15)
 
     try {
       await updateMut.mutateAsync({
         scheduledStartDateTime: `${startDate}T${startTime}:00`,
         scheduledEndDateTime: `${endDate}T${endTime}:00`,
-        maxMark: Number(maxMark),
+        maxMark: effectiveMaxMark,
         courseworkType,
         publishStatus,
         examRuleGuid: examRuleGuid || null,

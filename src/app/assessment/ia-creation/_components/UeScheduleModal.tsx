@@ -51,7 +51,7 @@ export function UeScheduleModal({ isOpen, onClose, examGuid, unitCode, unitName 
   const [examDate, setExamDate] = useState<string>(getTodayYmd)
   const [startTime, setStartTime] = useState('')
   const [endTime, setEndTime] = useState('')
-  const [maxMark, setMaxMark] = useState<number | ''>('')
+  const [maxMark, setMaxMark] = useState<number | ''>(70)
   const [examType, setExamType] = useState<number>(0)
   const [universityExamType, setUniversityExamType] = useState<number>(0)
   const [publishStatus, setPublishStatus] = useState<number>(0)
@@ -95,7 +95,7 @@ export function UeScheduleModal({ isOpen, onClose, examGuid, unitCode, unitName 
       
       setStartTime(schedule.startTime ? schedule.startTime.slice(0, 5) : '')
       setEndTime(schedule.endTime ? schedule.endTime.slice(0, 5) : '')
-      setMaxMark(schedule.maxMark ?? '')
+      setMaxMark(schedule.maxMark && schedule.maxMark > 0 ? schedule.maxMark : 70)
       setExamType(schedule.examType ?? 0)
       setUniversityExamType(schedule.universityExamType ?? 0)
       setPublishStatus(schedule.publishStatus ?? 0)
@@ -110,7 +110,7 @@ export function UeScheduleModal({ isOpen, onClose, examGuid, unitCode, unitName 
       setExamDate(getTodayYmd())
       setStartTime('')
       setEndTime('')
-      setMaxMark('')
+      setMaxMark(70)
       setExamType(0)
       setUniversityExamType(0)
       setPublishStatus(0)
@@ -133,7 +133,11 @@ export function UeScheduleModal({ isOpen, onClose, examGuid, unitCode, unitName 
       return
     }
 
-    if (maxMark === '' || maxMark < 0) {
+    if (maxMark === '') {
+      showToast('Max Mark is required', 'error')
+      return
+    }
+    if (Number(maxMark) < 0) {
       showToast('Max Mark cannot be negative', 'error')
       return
     }
