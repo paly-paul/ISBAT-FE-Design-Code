@@ -59,14 +59,14 @@ export default function QuestionBankUploadPage() {
 
   // ── Tab 1: Question Repository Scope (Single Question API) ──────────────────
   // Categories: Class Test (1), Course Work (2), Class Activity (3)
-  const [repoCategory, setRepoCategory] = useState<string>('2')
+  const [repoCategory, setRepoCategory] = useState<string>('')
   const [repoCourseUnitGuid, setRepoCourseUnitGuid] = useState<string>('')
   const [repoFilterType, setRepoFilterType] = useState<'ALL' | 'MCQ' | 'DQ'>('ALL')
   const [repoSearch, setRepoSearch] = useState<string>('')
 
   // ── Tab 2: Bulk Excel Import Scope (Question Bank API) ──────────────────────
   // Categories: CBT (1), Course Work (2), University Exam (5)
-  const [importCategory, setImportCategory] = useState<string>('2')
+  const [importCategory, setImportCategory] = useState<string>('')
   const [importCourseUnitGuid, setImportCourseUnitGuid] = useState<string>('')
   const [file, setFile] = useState<File | null>(null)
   const [sheetNames, setSheetNames] = useState<string[]>([])
@@ -163,29 +163,19 @@ export default function QuestionBankUploadPage() {
     }
   }, [currentIntake, intakes, intakeGuid])
 
-  // ── Auto-select first repo course unit when units load ──────────────────────
+  // ── Reset course units only if previously selected unit is no longer available in intake ──
   useEffect(() => {
-    if (repoCourseUnits && repoCourseUnits.length > 0) {
-      if (!repoCourseUnitGuid || !repoCourseUnits.some(u => u.courseUnitGuid === repoCourseUnitGuid)) {
-        setRepoCourseUnitGuid(repoCourseUnits[0].courseUnitGuid)
-      }
-    } else if (repoCourseUnits && repoCourseUnits.length === 0) {
+    if (repoCourseUnitGuid && repoCourseUnits && !repoCourseUnits.some(u => u.courseUnitGuid === repoCourseUnitGuid)) {
       setRepoCourseUnitGuid('')
     }
   }, [repoCourseUnits, repoCourseUnitGuid])
 
-  // ── Auto-select first import course unit when units load ────────────────────
   useEffect(() => {
-    if (importCourseUnits && importCourseUnits.length > 0) {
-      if (!importCourseUnitGuid || !importCourseUnits.some(u => u.courseUnitGuid === importCourseUnitGuid)) {
-        setImportCourseUnitGuid(importCourseUnits[0].courseUnitGuid)
-      }
-    } else if (importCourseUnits && importCourseUnits.length === 0) {
+    if (importCourseUnitGuid && importCourseUnits && !importCourseUnits.some(u => u.courseUnitGuid === importCourseUnitGuid)) {
       setImportCourseUnitGuid('')
     }
   }, [importCourseUnits, importCourseUnitGuid])
 
-  // ── Reset dependent fields when intake changes ──────────────────────────────
   const handleIntakeChange = (val: string) => {
     setIntakeGuid(val)
     setRepoCourseUnitGuid('')
@@ -409,13 +399,14 @@ export default function QuestionBankUploadPage() {
   }, [repoCourseUnits, repoCourseUnitGuid])
 
   const selectedRepoCategoryObj = useMemo(() => {
+    if (!repoCategory) return null
     const defaultList = [
       { value: 1, name: 'Class Test' },
       { value: 2, name: 'Course Work' },
       { value: 3, name: 'Class Activity' },
     ]
     const list = singleCategories && singleCategories.length > 0 ? singleCategories : defaultList
-    return list.find(c => String(c.value) === String(repoCategory)) || list[1]
+    return list.find(c => String(c.value) === String(repoCategory)) || null
   }, [singleCategories, repoCategory])
 
   // ── Derived Lookups: Tab 2 (Import) ─────────────────────────────────────────
@@ -424,13 +415,14 @@ export default function QuestionBankUploadPage() {
   }, [importCourseUnits, importCourseUnitGuid])
 
   const selectedImportCategoryObj = useMemo(() => {
+    if (!importCategory) return null
     const defaultList = [
       { value: 1, name: 'CBT' },
       { value: 2, name: 'Course Work' },
       { value: 5, name: 'University Exam' },
     ]
     const list = bankCategories && bankCategories.length > 0 ? bankCategories : defaultList
-    return list.find(c => String(c.value) === String(importCategory)) || list[1]
+    return list.find(c => String(c.value) === String(importCategory)) || null
   }, [bankCategories, importCategory])
 
   // ── Global Lookups ──────────────────────────────────────────────────────────
@@ -838,9 +830,11 @@ export default function QuestionBankUploadPage() {
                           {selectedRepoUnit.courseUnitCode}
                         </span>
                       )}
-                      <span className="badge badge-purple text-xs">
-                        {selectedRepoCategoryObj?.name || 'Category'}
-                      </span>
+                      {selectedRepoCategoryObj && (
+                        <span className="badge badge-purple text-xs">
+                          {selectedRepoCategoryObj.name}
+                        </span>
+                      )}
                     </div>
                     <div className="text-xs text-slate-500">
                       Course: <strong className="text-slate-800">{selectedRepoUnit?.courseUnitName || 'Select a course unit'}</strong>
@@ -966,12 +960,20 @@ export default function QuestionBankUploadPage() {
                             <div className="text-xs font-medium">Fetching live questions from repository...</div>
                           </td>
                         </tr>
-                      ) : !repoCourseUnitGuid ? (
+                      ) : !repoCategory || !repoCourseUnitGuid ? (
                         <tr>
                           <td colSpan={7} style={{ textAlign: 'center', padding: '48px 16px', color: 'var(--g500)' }}>
-                            <i className="lni lni-book text-3xl block mb-2 opacity-40"></i>
-                            <div className="text-sm font-semibold text-slate-700">Please select a Course Unit above</div>
-                            <div className="text-xs text-slate-400 mt-1">Choose a planned course unit to inspect active questions.</div>
+                            <i className="lni lni-funnel text-3xl block mb-2 opacity-40"></i>
+                            <div className="text-sm font-semibold text-slate-700">
+                              {!repoCategory && !repoCourseUnitGuid
+                                ? 'Please select Assessment Category and Course Unit above'
+                                : !repoCategory
+                                ? 'Please select an Assessment Category above'
+                                : 'Please select a Course Unit above'}
+                            </div>
+                            <div className="text-xs text-slate-400 mt-1">
+                              Choose your category and course unit to inspect active questions.
+                            </div>
                           </td>
                         </tr>
                       ) : filteredLiveQuestions.length === 0 ? (
@@ -1155,7 +1157,7 @@ export default function QuestionBankUploadPage() {
                       <div className="text-xs text-slate-500">
                         Target: <strong className="text-slate-800 font-mono">{selectedImportUnit?.courseUnitCode || 'Select Course Unit'}</strong>
                         {' • '}
-                        Category: <strong className="text-slate-800">{selectedImportCategoryObj?.name || 'Course Work'}</strong>
+                        Category: <strong className="text-slate-800">{selectedImportCategoryObj?.name || 'Select Category'}</strong>
                       </div>
                     </div>
                   </div>
