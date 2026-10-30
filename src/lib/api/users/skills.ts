@@ -33,7 +33,7 @@ export interface LecturerSkill {
   approvedDate?: string | null
 }
 
-// POST/PUT payload.
+// POST payload (PUT takes a per-skill list — see UpdateLecturerSkillsInput).
 //
 // Confirmed shape (real POST /api/v1/users/skills call — a per-skill
 // `skills: [{skillGuid, proficiency}]` array was tried first but the
@@ -124,19 +124,52 @@ export function getSkillById(guid: string): Promise<LecturerSkill> {
   return apiGet<LecturerSkill>(`/api/v1/users/skills/${guid}`)
 }
 
-// Same payload shape as create (see CreateLecturerSkillInput above) — the
-// spec documents PUT as taking an identical body to POST. skillGuids is
-// still an array on the wire even though Edit only ever targets the single
-// record at :guid; no skillName comes back to update the display name from,
-// so mock mode leaves it as-is.
-export function updateSkill(guid: string, input: CreateLecturerSkillInput): Promise<LecturerSkill> {
+// Legacy imported skills have no catalog link and come back with this
+// skillGuid; they're identified by lecturerSkillGuid instead.
+export const EMPTY_GUID = '00000000-0000-0000-0000-000000000000'
+
+// GET /api/v1/users/skills?employeeGuid=… (get-skills.md) — one employee's
+// complete skill set, which PUT needs to send back in full. Documented as a
+// plain array; tolerates the paged envelope getSkills also handles.
+export function getEmployeeSkills(employeeGuid: string): Promise<LecturerSkill[]> {
+  if (MOCK_AUTH) return Promise.resolve(mockSkills.filter(s => s.employeeGuid === employeeGuid))
+  const params = new URLSearchParams({ employeeGuid, page: '1', pageSize: '1000' })
+  return apiGet<any>(`/api/v1/users/skills?${params.toString()}`)
+    .then(data => (Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : []) as LecturerSkill[])
+}
+
+// PUT /api/v1/users/skills (put-skill.md, 2026-10-30) replaces the
+// employee's whole skill set: items it omits are soft-deleted, and an empty
+// list is rejected. An item with lecturerSkillGuid updates that stored row
+// (skillGuid is then ignored — needed for legacy rows); an item with only
+// skillGuid adds that catalog skill. The old per-row PUT /skills/{guid} was
+// removed in August and returns 405.
+export interface LecturerSkillItemInput {
+  lecturerSkillGuid?: string
+  skillGuid: string
+  proficiency: number
+}
+
+export interface UpdateLecturerSkillsInput {
+  employeeGuid: string
+  skills: LecturerSkillItemInput[]
+}
+
+export function updateSkills(input: UpdateLecturerSkillsInput): Promise<LecturerSkill[]> {
   if (MOCK_AUTH) {
-    const existing = mockSkills.find(s => s.lecturerSkillGuid === guid)
-    if (!existing) return Promise.reject(new Error('Skill not found'))
-    existing.proficiency = input.proficiency
-    return Promise.resolve(existing)
+    const kept = input.skills.map(item => {
+      const existing = item.lecturerSkillGuid ? mockSkills.find(s => s.lecturerSkillGuid === item.lecturerSkillGuid) : undefined
+      if (existing) { existing.proficiency = item.proficiency; return existing }
+      const created: LecturerSkill = { lecturerSkillGuid: crypto.randomUUID(), employeeGuid: input.employeeGuid, skillGuid: item.skillGuid, skillName: `Skill #${item.skillGuid}`, proficiency: item.proficiency, approvalStatus: 'Approved' }
+      mockSkills.push(created)
+      return created
+    })
+    for (let i = mockSkills.length - 1; i >= 0; i--) {
+      if (mockSkills[i].employeeGuid === input.employeeGuid && !kept.includes(mockSkills[i])) mockSkills.splice(i, 1)
+    }
+    return Promise.resolve(kept)
   }
-  return apiPut<LecturerSkill>(`/api/v1/users/skills/${guid}`, input)
+  return apiPut<LecturerSkill[]>('/api/v1/users/skills', input)
 }
 
 export function deleteSkill(guid: string): Promise<void> {

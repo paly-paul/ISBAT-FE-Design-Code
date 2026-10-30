@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
-import { CreateLecturerSkillInput, LecturerSkill, createSkill, deleteSkill, getSkillById, getSkills, updateSkill } from '@/lib/api/users/skills'
+import { CreateLecturerSkillInput, LecturerSkill, UpdateLecturerSkillsInput, createSkill, deleteSkill, getEmployeeSkills, getSkillById, getSkills, updateSkills } from '@/lib/api/users/skills'
 
 const LECTURER_SKILLS_KEY = ['lecturer-skills']
 
@@ -37,14 +37,24 @@ export function useCreateLecturerSkill() {
   })
 }
 
+// One employee's full skill set for the Edit modal. staleTime 0: PUT
+// replaces the whole set, so it must start from what's stored now.
+export function useEmployeeSkills(employeeGuid: string | null, enabled: boolean) {
+  return useQuery({
+    queryKey: [...LECTURER_SKILLS_KEY, 'employee', employeeGuid],
+    queryFn: () => getEmployeeSkills(employeeGuid as string),
+    enabled: enabled && !!employeeGuid,
+    staleTime: 0,
+  })
+}
+
+// Saves an employee's complete skill list via the full-list PUT — skills
+// left out are removed (see updateSkills).
 export function useUpdateLecturerSkill() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ guid, input }: { guid: string; input: CreateLecturerSkillInput }) => updateSkill(guid, input),
-    onSuccess: (_data, { guid }) => {
-      queryClient.invalidateQueries({ queryKey: LECTURER_SKILLS_KEY })
-      queryClient.invalidateQueries({ queryKey: [...LECTURER_SKILLS_KEY, guid] })
-    },
+    mutationFn: (input: UpdateLecturerSkillsInput) => updateSkills(input),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: LECTURER_SKILLS_KEY }),
   })
 }
 
@@ -56,4 +66,4 @@ export function useDeleteLecturerSkill() {
   })
 }
 
-export type { LecturerSkill, CreateLecturerSkillInput }
+export type { LecturerSkill, CreateLecturerSkillInput, UpdateLecturerSkillsInput }
