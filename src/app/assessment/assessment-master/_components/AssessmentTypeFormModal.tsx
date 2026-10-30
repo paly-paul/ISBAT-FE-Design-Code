@@ -64,6 +64,12 @@ export function AssessmentTypeFormModal({ isOpen, onClose, showToast, editingGui
 
   function set(key: keyof typeof EMPTY, value: string) {
     setForm(prev => ({ ...prev, [key]: value }))
+    if (key === 'feeClearance' || key === 'displayFeeClearance') {
+      if (value.trim() !== '' && (isNaN(Number(value)) || Number(value) <= 0)) {
+        setErrors(prev => ({ ...prev, [key]: 'Fee must be greater than zero' }))
+        return
+      }
+    }
     if (errors[key]) setErrors(prev => ({ ...prev, [key]: '' }))
   }
 
@@ -80,13 +86,18 @@ export function AssessmentTypeFormModal({ isOpen, onClose, showToast, editingGui
       if (!form.assessmentCode.trim()) e.assessmentCode = 'Code is required'
       if (!form.assessmentName.trim()) e.assessmentName = 'Name is required'
     }
-    
-    // Fee can be empty (null), but if provided it must be a valid number >= 0
-    if (form.feeClearance && (isNaN(Number(form.feeClearance)) || Number(form.feeClearance) < 0)) {
-      e.feeClearance = 'Must be a valid positive number'
+
+    // Both fee fields are mandatory and must be strictly greater than 0
+    if (!form.feeClearance.trim()) {
+      e.feeClearance = 'Please enter the fee clearance amount'
+    } else if (isNaN(Number(form.feeClearance)) || Number(form.feeClearance) <= 0) {
+      e.feeClearance = 'Fee must be greater than zero'
     }
-    if (form.displayFeeClearance && (isNaN(Number(form.displayFeeClearance)) || Number(form.displayFeeClearance) < 0)) {
-      e.displayFeeClearance = 'Must be a valid positive number'
+
+    if (!form.displayFeeClearance.trim()) {
+      e.displayFeeClearance = 'Please enter the actual fee clearance amount'
+    } else if (isNaN(Number(form.displayFeeClearance)) || Number(form.displayFeeClearance) <= 0) {
+      e.displayFeeClearance = 'Fee must be greater than zero'
     }
 
     setErrors(e)
@@ -98,16 +109,16 @@ export function AssessmentTypeFormModal({ isOpen, onClose, showToast, editingGui
     if (!validate()) return
 
     try {
-      const payloadFee = form.feeClearance ? Number(form.feeClearance) : null
-      const payloadDisplayFee = form.displayFeeClearance ? Number(form.displayFeeClearance) : null
+      const payloadFee = Number(form.feeClearance)
+      const payloadDisplayFee = Number(form.displayFeeClearance)
 
       if (isEditMode && editingGuid) {
         // PUT only updates fees
         await updateMut.mutateAsync({
           guid: editingGuid,
           input: {
-            feeClearance: payloadFee || 0,
-            displayFeeClearance: payloadDisplayFee || 0
+            feeClearance: payloadFee,
+            displayFeeClearance: payloadDisplayFee
           }
         })
         setSaved(true)
@@ -167,8 +178,8 @@ export function AssessmentTypeFormModal({ isOpen, onClose, showToast, editingGui
             </div>
 
             <div className="fg">
-              <label className="lbl">Fee Clearance Amount</label>
-              <input className="ctrl" type="number" min="0" step="0.01" placeholder="0.00" 
+              <label className="lbl">Fee Clearance Amount <span className="req">*</span></label>
+              <input className="ctrl" type="number" min="0.01" step="0.01" placeholder="e.g. 100.00" 
                 value={form.feeClearance}
                 onChange={e => set('feeClearance', e.target.value)}
                 disabled={isSaving}
@@ -177,8 +188,8 @@ export function AssessmentTypeFormModal({ isOpen, onClose, showToast, editingGui
             </div>
 
             <div className="fg">
-              <label className="lbl">Actual Fee Clearance</label>
-              <input className="ctrl" type="number" min="0" step="0.01" placeholder="0.00" 
+              <label className="lbl">Actual Fee Clearance <span className="req">*</span></label>
+              <input className="ctrl" type="number" min="0.01" step="0.01" placeholder="e.g. 100.00" 
                 value={form.displayFeeClearance}
                 onChange={e => set('displayFeeClearance', e.target.value)}
                 disabled={isSaving}
