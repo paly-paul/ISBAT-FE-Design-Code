@@ -3,7 +3,7 @@
 Reference for the permission-driven sidebar menu API, `GET /api/v1/users/me/menu`.
 Each node has the shape `{ name, icon, url, permissions, children }`.
 
-**Last updated: 2026-10-29.** The tree below matches the frontend's mock menu
+**Last updated: 2026-10-30.** The tree below matches the frontend's mock menu
 (`mockMenu` in `src/lib/api/users/menu.ts`), so it lists every page that is in the
 sidebar today. The events on each page come from reading the buttons and actions in
 that page's code.
@@ -329,7 +329,7 @@ each API.
 | Academic Core | Intake Master | `/academic/intake-master` | `get` `add` `edit` `delete` `export` | `get` `add` `edit` `delete` |  |
 | Academic Core | Bulk Intake Edit | `/academic/bulk-intake-edit` | `get` `edit` | `get` `edit` |  |
 | Academic Core | Skill Management | `/academic/skill-master` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
-| Academic Core | Batch Management | `/academic/batch-management` | `get` `add` `edit` `delete` | `add` `edit` `delete` | Includes the former Batch Summary as the Head Count tab (2026-10-21) |
+| Academic Core | Batch Management | `/academic/batch-management` | `get` `add` `edit` `delete` | `add` `edit` `delete` | Includes the former Batch Summary (2026-10-21): head count is a column in the batch table (2026-10-28), with the summary stat tiles on top |
 | Academic Core | Room Management | `/academic/room-management` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
 | Academic Core | Session Movement | `/academic/session-movement` | `get` `execute` | none | `execute` = single and bulk Move Session |
 | Course Unit Master | Repetition Tag | `/academic/repetition-tag` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
@@ -1857,8 +1857,9 @@ removes any "Lecturer Master" / "Lecture Master" node (`stripLectureMaster`).
   Schedule Timetable, and still removes the pages listed under
   [Pages hidden from the sidebar](#pages-hidden-from-the-sidebar).
 - **Added the Attendance module** (`lni lni-alarm-clock`, between Student and
-  Employee) with **Record Attendance**, **Pending Outlines** and **Attendance
-  Sessions**. The old locked "Attendance · Coming Soon" and "Analytics · Coming Soon"
+  Employee) with **Record Attendance**, **Pending Outlines**, **Attendance
+  Sessions**, and a **Reports** section (**Attendance by Date**, **Student Attendance
+  %**, **Faculty Attendance %**). The old locked "Attendance · Coming Soon" and "Analytics · Coming Soon"
   rail placeholders are gone.
 - **Pages are now blocked, not just hidden.** Opening a menu page the response leaves
   out (or sends with `get: false`) shows Access Denied. A failed menu call grants
@@ -1882,6 +1883,15 @@ removes any "Lecturer Master" / "Lecture Master" node (`stripLectureMaster`).
   section) from the menu response; until then the frontend strips it itself.
 - **Student Master's Learning Mode key is `learningmode` (lowercase)**, matching what
   the page reads. A camelCase `learningMode` key is ignored.
+- **Batch Management's Head Count tab is gone.** Head count is now a column in the one
+  batch table. `/academic/batch-summary` redirects to plain `/academic/batch-management`
+  (no `?tab=headcount`). The page's events are unchanged.
+- **Student Master's Learning Mode row action now raises a change request** instead of
+  changing the mode directly. Like Refugee Status, it takes remarks and a required
+  supporting document (`POST /students/learning-mode/{studentGuid}/apply`), then opens
+  Learning Mode Approval with that student's request in review. The frontend no longer
+  calls `PUT /students/learning-mode/{studentGuid}`. The row's `learningmode` key is
+  unchanged.
 
 ## Changes in the 2026-10-21 version (since 2026-10-19)
 

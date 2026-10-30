@@ -99,10 +99,12 @@ function LearningModeContent() {
     if (!permissions.edit || !student) return
     if (!selectedMode) { showToast('Please select a learning mode.', 'warn'); return }
     if (detail?.learningMode != null && String(detail.learningMode) === selectedMode) { showToast('The student is already in this learning mode.', 'warn'); return }
+    // Optional on the API, required here so every request carries a reason.
+    if (!remarks.trim()) { showToast('Remarks are required.', 'warn'); return }
     if (remarks.trim().length > REMARKS_MAX) { showToast(`Remarks must be ${REMARKS_MAX} characters or fewer.`, 'warn'); return }
     if (!docFile) { showToast('A supporting document is required.', 'warn'); return }
     applyChange.mutate(
-      { studentGuid: student.studentGuid, input: { requestedLearningMode: Number(selectedMode), remarks: remarks.trim() || null, document: docFile } },
+      { studentGuid: student.studentGuid, input: { requestedLearningMode: Number(selectedMode), remarks: remarks.trim(), document: docFile } },
       {
         onSuccess: () => { resetForm(); showToast('Mode change submitted for approval.', 'ok') },
         onError: (error: Error) => showToast(error.message || 'Could not submit the request.', 'error'),
@@ -160,14 +162,22 @@ function LearningModeContent() {
                 />
               </div>
               <div className="fg">
-                <label className="lbl">Remarks</label>
+                <label className="lbl">Remarks <span className="req">*</span></label>
                 <textarea className="ctrl" rows={3} maxLength={REMARKS_MAX} placeholder="Reason for changing the learning mode…" value={remarks} onChange={e => setRemarks(e.target.value)} disabled={isPending} />
                 <div style={{ fontSize: 11.5, color: 'var(--g500)', marginTop: 4, textAlign: 'right' }}>{remarks.length}/{REMARKS_MAX}</div>
               </div>
               <div className="fg">
                 <label className="lbl">Supporting Document <span className="req">*</span></label>
-                <input key={fileInputKey} className="ctrl" type="file" onChange={e => setDocFile(e.target.files?.[0] ?? null)} disabled={isPending} />
-                <div style={{ fontSize: 11.5, color: 'var(--g500)', marginTop: 4 }}>Required — e.g. proof of relocation or an employer letter.</div>
+                <div className="file-zone" style={isPending ? { opacity: 0.6, cursor: 'not-allowed' } : undefined}>
+                  <input key={fileInputKey} type="file" onChange={e => setDocFile(e.target.files?.[0] ?? null)} disabled={isPending} />
+                  <div className="file-zone-icon"><i className="lni lni-files"></i></div>
+                  {docFile
+                    // .fz-uploaded is display:none by default (the old
+                    // prototype toggled it from script) — show it here.
+                    ? <p className="fz-uploaded" style={{ display: 'block' }}><i className="lni lni-checkmark-circle"></i> {docFile.name}</p>
+                    : <p>Click to upload a supporting document</p>}
+                  <p className="text-g400" style={{ fontSize: 'var(--fs-xs)' }}>Required — e.g. proof of relocation or an employer letter</p>
+                </div>
               </div>
               <div className="flex gap-2" style={{ justifyContent: 'flex-end' }}>
                 <button className="btn btn-neu" onClick={handleClear}>Cancel</button>

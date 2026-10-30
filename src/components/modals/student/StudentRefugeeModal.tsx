@@ -118,7 +118,7 @@ export function StudentRefugeeModal({ isOpen, onClose, showToast, studentGuid, s
     <>
     <div className="modal-overlay open">
       <div className="modal modal-md" onClick={e => e.stopPropagation()}>
-        <div className="modal-hdr"><div className="modal-title"><i className="lni lni-shield"></i> Refugee Status</div><button className="modal-close" onClick={onClose}>✕</button></div>
+        <div className="modal-hdr modal-hdr-blue"><div className="modal-title"><i className="lni lni-shield"></i> Refugee Status</div><button className="modal-close" onClick={onClose}>✕</button></div>
         <div>
           {studentName && <div className="fg"><label className="lbl">Student</label><input className="ctrl" readOnly value={studentName} /></div>}
 
@@ -150,9 +150,17 @@ export function StudentRefugeeModal({ isOpen, onClose, showToast, studentGuid, s
               <div className="fg"><label className="lbl">Remarks <span className="req">*</span></label><textarea className="ctrl" rows={2} value={remarks} onChange={e => setRemarks(e.target.value)} placeholder="e.g. UNHCR verified" /></div>
               <div className="fg">
                 <label className="lbl">Supporting Document <span className="req">*</span></label>
-                <input className="ctrl" type="file" onChange={e => setDocFile(e.target.files?.[0] ?? null)} />
-                <div style={{ fontSize: 11.5, color: 'var(--g500)', marginTop: 4 }}>
-                  {editing ? 'Required — upload the document again, it replaces the one on record.' : 'Required — the request is rejected without it.'}
+                <div className="file-zone">
+                  <input type="file" onChange={e => setDocFile(e.target.files?.[0] ?? null)} />
+                  <div className="file-zone-icon"><i className="lni lni-files"></i></div>
+                  {docFile
+                    // .fz-uploaded is display:none by default (the old
+                    // prototype toggled it from script) — show it here.
+                    ? <p className="fz-uploaded" style={{ display: 'block' }}><i className="lni lni-checkmark-circle"></i> {docFile.name}</p>
+                    : <p>Click to upload a supporting document</p>}
+                  <p className="text-g400" style={{ fontSize: 'var(--fs-xs)' }}>
+                    {editing ? 'Required — upload the document again, it replaces the one on record' : 'Required — the request is rejected without it'}
+                  </p>
                 </div>
               </div>
             </>
@@ -187,7 +195,7 @@ export function StudentRefugeeModal({ isOpen, onClose, showToast, studentGuid, s
     {docPreviewOpen && refugeeDocUrl && (
       <div className="modal-overlay open">
         <div className="modal modal-xl" onClick={e => e.stopPropagation()}>
-          <div className="modal-hdr"><div className="modal-title"><i className="lni lni-files"></i> Refugee Supporting Document</div><button className="modal-close" onClick={() => setDocPreviewOpen(false)}>✕</button></div>
+          <div className="modal-hdr modal-hdr-blue"><div className="modal-title"><i className="lni lni-files"></i> Refugee Supporting Document</div><button className="modal-close" onClick={() => setDocPreviewOpen(false)}>✕</button></div>
           <div style={{ height: '70vh', background: 'var(--g100)', borderRadius: 'var(--rsm)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             {refugeeDocIsImage
               ? <img src={refugeeDocUrl} alt="Refugee supporting document" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />

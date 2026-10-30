@@ -6,7 +6,6 @@ import {
   getLearningModeReport,
   getPendingLearningModeApprovals,
   getStudentLearningModeDetail,
-  updateStudentLearningMode,
   ApplyLearningModeChangeInput,
   LearningModeReportFilters,
 } from '@/lib/api/student/learningMode'
@@ -44,16 +43,6 @@ function invalidateStudent(queryClient: ReturnType<typeof useQueryClient>, stude
   queryClient.invalidateQueries({ queryKey: [...LEARNING_MODE_KEY, 'detail', studentGuid] })
   queryClient.invalidateQueries({ queryKey: [...LEARNING_MODE_KEY, 'report'] })
   queryClient.invalidateQueries({ queryKey: [...LEARNING_MODE_KEY, 'pending'] })
-}
-
-// Direct update (PUT) — still used by Student Master's row-menu modal.
-export function useUpdateStudentLearningMode() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: ({ studentGuid, learningMode }: { studentGuid: string; learningMode: number }) =>
-      updateStudentLearningMode(studentGuid, learningMode),
-    onSuccess: (_result, { studentGuid }) => invalidateStudent(queryClient, studentGuid),
-  })
 }
 
 export function useApplyLearningModeChange() {
