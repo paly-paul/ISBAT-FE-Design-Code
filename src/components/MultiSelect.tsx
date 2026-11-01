@@ -13,6 +13,7 @@ interface MultiSelectProps {
   className?: string
   style?: React.CSSProperties
   isLoading?: boolean
+  disabled?: boolean
   hasNextPage?: boolean
   isFetchingNextPage?: boolean
   onLoadMore?: () => void
@@ -32,7 +33,7 @@ function normalise(raw: (string | Opt)[]): Opt[] {
 // list is the checkbox pattern already used by FilterTh's column filters
 // (.col-filter-select-all/.col-filter-opt-row), since that's the only
 // multi-pick UI this app already has a shared, correct behavior for.
-export function MultiSelect({ options, value, onChange, onSearch, placeholder, className, style, isLoading = false, hasNextPage = false, isFetchingNextPage = false, onLoadMore }: MultiSelectProps) {
+export function MultiSelect({ options, value, onChange, onSearch, placeholder, className, style, isLoading = false, disabled = false, hasNextPage = false, isFetchingNextPage = false, onLoadMore }: MultiSelectProps) {
   const normalised = normalise(options)
 
   const [open, setOpen]     = useState(false)
@@ -124,10 +125,11 @@ export function MultiSelect({ options, value, onChange, onSearch, placeholder, c
         ref={triggerRef}
         type="button"
         className="ctrl ss-trigger"
+        disabled={disabled}
         onClick={() => (open ? setOpen(false) : openDrop())}
       >
         <span className={`ss-label${isEmpty ? ' ss-placeholder' : ''}`}>{displayLabel}</span>
-        {!isEmpty && (
+        {!isEmpty && !disabled && (
           <span
             role="button"
             tabIndex={0}
