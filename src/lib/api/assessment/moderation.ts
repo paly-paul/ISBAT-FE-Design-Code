@@ -45,8 +45,10 @@ export interface ModerationRow {
 }
 
 export interface UpdateModerationPayload {
-  iaMod: number
-  ueMod: number
+  iaModeration?: number
+  ueModeration?: number
+  iaMod?: number
+  ueMod?: number
 }
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
@@ -131,5 +133,11 @@ export function updateModeration(studentGuid: string, examResultGuid: string, da
   if (MOCK_AUTH) {
     return Promise.resolve({ success: true })
   }
-  return apiPut<{ success: boolean }>(`/api/v1/assessment/exam-results/students/${studentGuid}/${examResultGuid}/moderation`, data)
+  const payload = {
+    iaModeration: data.iaModeration ?? data.iaMod ?? 0,
+    ueModeration: data.ueModeration ?? data.ueMod ?? 0,
+    iaMod: data.iaMod ?? data.iaModeration ?? 0,
+    ueMod: data.ueMod ?? data.ueModeration ?? 0,
+  }
+  return apiPut<{ success: boolean }>(`/api/v1/assessment/exam-results/students/${studentGuid}/${examResultGuid}/moderation`, payload)
 }
