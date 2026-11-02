@@ -72,10 +72,13 @@ export default function StaffLoginPage() {
       }
       // Every success path leaves the page, so loading stays on until it does.
     } catch (err) {
-      // An expired password can't sign in at all, so go straight to the
-      // reset flow with the ID filled in rather than showing an error.
-      if (err instanceof AuthError && err.code === 'password_expired') {
-        router.push(`/login/forgot?expired=1&username=${encodeURIComponent(staffId.trim())}`)
+      if (err instanceof AuthError && (err.code === 'password_expired' || /password.*expired/i.test(err.code || err.message))) {
+        setFlowState({
+          username: staffId.trim(),
+          currentPassword: password,
+          returnTo: '/login/staff',
+        })
+        router.push(`/login/reset-expired-password?username=${encodeURIComponent(staffId.trim())}`)
         return
       }
       setPasswordError(err instanceof AuthError ? authErrorMessage(err.code) : authErrorMessage('unknown'))

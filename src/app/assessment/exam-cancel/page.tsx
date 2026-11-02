@@ -25,8 +25,6 @@ import {
 
 const CATEGORIES: { value: AttemptCategory; label: string }[] = [
   { value: 1, label: 'Class Test' },
-  { value: 2, label: 'CW1' },
-  { value: 3, label: 'CW2' },
 ]
 
 const STATUS_BADGE: Record<number, { cls: string; label: string; icon: string }> = {
@@ -156,7 +154,7 @@ export default function ExamCancelPage() {
         <div className="pg-hdr">
           <div>
             <div className="pg-title">Exam Cancel &amp; Extra Time</div>
-            <div className="pg-sub">Cancel a student&apos;s Class Test or coursework attempt so they can sit it again, or give extra time on the Class Test</div>
+            <div className="pg-sub">Cancel a student&apos;s Class Test attempt so they can sit it again, or give extra time on the Class Test</div>
           </div>
           {studentGuid && (
             <button className="btn btn-neu" onClick={clearAll} disabled={busy}><i className="lni lni-reload"></i> Clear</button>
@@ -286,9 +284,7 @@ export default function ExamCancelPage() {
                   <span className="text-sm text-g800">{status.message}</span>
                 </div>
               ) : null}
-              {category !== 1 && (
-                <div className="text-xs text-g500 mt-2">Only the Class Test has a status; there is none for CW1 or CW2.</div>
-              )}
+              
             </div>
           )}
         </div>

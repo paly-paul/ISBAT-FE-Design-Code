@@ -262,14 +262,11 @@ export default function UniversityExamQpBookletPrintPage() {
 
   return (
     <div className="page active">
-      <div className="pg-hdr flex justify-between items-end">
+      <div className="pg-hdr">
         <div>
           <h1 className="pg-title">University Exam QP/Booklet Print</h1>
           <p className="pg-sub">A leaner, unit-type-agnostic print console for Theory, Practical, Combined, and Project units.</p>
         </div>
-        <button className="btn btn-neu" onClick={reset} disabled={isWorking}>
-          <i className="lni lni-reload" /> Refresh
-        </button>
       </div>
 
       <div className="card mb-5">
