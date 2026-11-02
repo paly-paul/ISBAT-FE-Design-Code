@@ -14,6 +14,7 @@ import { getStudentStatementPdfUrl } from '@/lib/api/student/studentStatement'
 import { PAYMENT_CATEGORY_LABELS, type PaymentHistoryListEntry } from '@/lib/api/finance/paymentConsole'
 import { useExchangeRatesByDates, type ExchangeRate } from '@/hooks/finance/useExchangeRates'
 import { useActionGuard } from '@/hooks/users/useActionGuard'
+import { semesterLabel } from '@/lib/semesterLabel'
 
 // Category options for standard SearchSelect dropdown
 const CATEGORY_OPTIONS = [
@@ -155,6 +156,10 @@ export default function StudentStatementPage() {
   const [tableSearch, setTableSearch] = useState('')
   const [hoveredChartSegment, setHoveredChartSegment] = useState<string | null>(null)
   const [groupBySemester, setGroupBySemester] = useState(true)
+  // Semester groups collapse, keyed `${tab}:${semester}`. Unset means the
+  // default: only the latest (last) semester open. A search opens them all
+  // so no match is hidden.
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({})
   // Payment totals show USD only; this adds the per-currency totals beside it.
   const [showAllCurrencies, setShowAllCurrencies] = useState(false)
 
@@ -364,19 +369,54 @@ export default function StudentStatementPage() {
           </ActionMenu>
         </td>
         <td className="text-center text-g400">{rowNo}</td>
-        <td className="font-mono text-blue font-semibold">{p.paymentCode || dash}</td>
-        <td className="whitespace-nowrap text-g700">
-          {p.payDate
-            ? new Date(p.payDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
-            : dash}
+        {/* Paired cells (code over date, receipt over method, amount over
+            currency) keep the table narrow enough not to scroll sideways. */}
+        <td>
+          <span className="ss-cell-main font-mono text-blue">{p.paymentCode || dash}</span>
+          <span className="ss-cell-sub">
+            {p.payDate ? new Date(p.payDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
+          </span>
         </td>
-        {showSemester && <td className="text-g800 font-medium">{p.semesterName || header?.semesterName || dash}</td>}
-        <td>{p.payType ? <span className="pill pill-blue">{p.payType}</span> : dash}</td>
-        <td className="font-mono text-g700">{p.receipt || dash}</td>
-        <td className="num font-mono font-bold text-green">{formatMoney(p.amount)}</td>
-        <td className="text-g500">{p.currencyName || dash}</td>
+        {showSemester && <td className="text-g800 font-medium">{semesterLabel(p.semesterName || header?.semesterName) || dash}</td>}
+        <td>
+          <span className="ss-cell-main font-mono text-g800">{p.receipt || dash}</span>
+          <span className="ss-cell-sub">{p.payType || '—'}</span>
+        </td>
+        <td className="num">
+          <span className="ss-cell-main font-mono text-green">{formatMoney(p.amount)}</span>
+          <span className="ss-cell-sub">{p.currencyName || '—'}</span>
+        </td>
         <td className="num font-mono font-bold text-g900">{renderUsdCell(p)}</td>
         <td>{renderCategoryBadge(p.category)}</td>
+      </tr>
+    )
+  }
+
+  function isGroupOpen(key: string, isLast: boolean) {
+    if (tableSearch.trim()) return true
+    return openGroups[key] ?? isLast
+  }
+
+  // Collapsible semester header: name, count and the semester's subtotal on
+  // one row (replaces the separate subtotal row under each group).
+  function renderGroupHeader(key: string, isLast: boolean, colSpan: number, icon: string, label: string, count: string, totals: React.ReactNode) {
+    const open = isGroupOpen(key, isLast)
+    return (
+      <tr className={`stmt-group-hdr ss-grp${open ? ' open' : ''}`}>
+        <td colSpan={colSpan}>
+          <button
+            type="button"
+            className="ss-grp-btn"
+            aria-expanded={open}
+            onClick={() => setOpenGroups(prev => ({ ...prev, [key]: !open }))}
+          >
+            <i className="lni lni-chevron-right ss-grp-chev" aria-hidden="true" />
+            <span className="ss-grp-icon" aria-hidden="true"><i className={`lni ${icon}`} /></span>
+            <span className="stmt-group-name">{label}</span>
+            <span className="ss-grp-count">{count}</span>
+            <span className="ss-grp-total">{totals}</span>
+          </button>
+        </td>
       </tr>
     )
   }
@@ -544,34 +584,23 @@ export default function StudentStatementPage() {
 
           <div className="flex items-center gap-2 flex-wrap">
             {/* View Mode Switcher */}
-            <div className="flex items-center gap-1 p-1 bg-g100 rounded-[var(--rsm)] border border-g200">
-              <button
-                type="button"
-                onClick={() => setViewMode('hybrid')}
-                className={`btn btn-sm ${viewMode === 'hybrid' ? 'btn-primary' : 'btn-neu'} border-0`}
-                style={viewMode === 'hybrid' ? undefined : { background: 'transparent', boxShadow: 'none' }}
-              >
-                <i className="lni lni-grid-alt" />
-                <span>Overview</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode('charts')}
-                className={`btn btn-sm ${viewMode === 'charts' ? 'btn-primary' : 'btn-neu'} border-0`}
-                style={viewMode === 'charts' ? undefined : { background: 'transparent', boxShadow: 'none' }}
-              >
-                <i className="lni lni-pie-chart" />
-                <span>Analytics</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode('official')}
-                className={`btn btn-sm ${viewMode === 'official' ? 'btn-primary' : 'btn-neu'} border-0`}
-                style={viewMode === 'official' ? undefined : { background: 'transparent', boxShadow: 'none' }}
-              >
-                <i className="lni lni-files" />
-                <span>Ledger View</span>
-              </button>
+            <div className="ss-seg" role="group" aria-label="Statement view">
+              {([
+                ['hybrid', 'lni-grid-alt', 'Overview'],
+                ['charts', 'lni-pie-chart', 'Analytics'],
+                ['official', 'lni-files', 'Ledger View'],
+              ] as const).map(([mode, icon, label]) => (
+                <button
+                  key={mode}
+                  type="button"
+                  aria-pressed={viewMode === mode}
+                  className={`ss-seg-btn${viewMode === mode ? ' active' : ''}`}
+                  onClick={() => setViewMode(mode)}
+                >
+                  <i className={`lni ${icon}`} />
+                  <span>{label}</span>
+                </button>
+              ))}
             </div>
 
             {/* Print & PDF Export Buttons — both produce the printable
@@ -691,426 +720,310 @@ export default function StudentStatementPage() {
             {/* ══════════════════════════════════════════════════════════════
                 1. ERP CANONICAL STUDENT PROFILE HERO CARD (.pc-hero)
                ══════════════════════════════════════════════════════════════ */}
-            <div className="card p-0 overflow-hidden mb-4">
-              <div className="pc-hero before:!hidden after:!hidden">
-                <div className="pc-hero-top">
-                  <div className="pc-hero-avatar">
-                    {header.studentName ? header.studentName.slice(0, 2).toUpperCase() : 'ST'}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="pc-hero-name truncate">{header.studentName || '—'}</div>
-                    <div className="pc-hero-sub truncate">{header.programName || '—'}</div>
-                    <div className="flex items-center gap-2 mt-2 flex-wrap">
-                      <span className="pc-hero-badge">
-                        <i className="lni lni-bookmark" /> {header.studentRegNo || '—'}
-                      </span>
-                      <span className="pc-hero-badge">
-                        <i className="lni lni-id" /> Student No: {header.studentNum || header.studentRegNo || '—'}
-                      </span>
-                      {header.appRefNo && (
-                        <span className="pc-hero-badge">
-                          <i className="lni lni-file" /> App Ref: {header.appRefNo}
-                        </span>
-                      )}
+            {/* Student header — same white pcx- card as Payment Console, so
+                a student reads the same on both pages. */}
+            {(() => {
+              const name = header.studentName || '—'
+              const initials = name.trim().split(/\s+/).slice(0, 2).map(w => w[0] ?? '').join('').toUpperCase() || 'ST'
+              const sameNo = !!header.studentNum && header.studentNum === header.studentRegNo
+              const facts: { label: string; value: string | null | undefined; mono?: boolean }[] = [
+                ...(sameNo
+                  ? [{ label: 'Student / Reg. no.', value: header.studentNum, mono: true }]
+                  : [
+                      { label: 'Student no.', value: header.studentNum, mono: true },
+                      { label: 'Reg. no.', value: header.studentRegNo, mono: true },
+                    ]),
+                { label: 'Current semester', value: semesterLabel(header.semesterName) },
+                { label: 'Batch', value: header.batchCode },
+                { label: 'Admission type', value: header.admissionTypeLabel ?? 'Regular Student' },
+                { label: 'Application ref.', value: header.appRefNo, mono: true },
+              ]
+              return (
+                <section className="card pcx-student" aria-label="Student">
+                  <div className="pcx-student-top">
+                    <div className="pcx-student-id">
+                      <div className="pcx-avatar" aria-hidden="true">{initials}</div>
+                      <div className="min-w-0">
+                        <div className="pcx-name-row">
+                          <h2 className="pcx-name">{name}</h2>
+                          <span className={`pcx-pill ${balanceDueCurrent <= 0 ? 'pcx-pill-green' : 'pcx-pill-amber'}`}>
+                            <span className="pcx-dot" aria-hidden="true"></span>
+                            {balanceDueCurrent <= 0 ? 'In good standing' : 'Balance pending'}
+                          </span>
+                        </div>
+                        <p className="pcx-sub">{header.programName || '—'}</p>
+                      </div>
                     </div>
-                  </div>
-                  <div className="pc-hero-actions pc-hero-actions-top">
                     <button
                       type="button"
-                      className="pc-hero-action"
+                      className="btn btn-neu btn-sm"
                       onClick={() => copyToClipboard(header.studentRegNo || '', 'Reg No')}
-                      title="Copy Reg No to clipboard"
+                      disabled={!header.studentRegNo}
                     >
-                      <i className="lni lni-clipboard" />
-                      <span>Copy Reg No</span>
+                      <i className="lni lni-clipboard" /> Copy Reg No
                     </button>
                   </div>
-                </div>
-
-                <div className="pc-hero-facts">
-                  <div className="pc-hero-fact">
-                    <span className="pc-hero-fact-lbl">Programme</span>
-                    <span className="pc-hero-fact-val" title={header.programName ?? '—'}>
-                      {header.programName ?? '—'}
-                    </span>
-                  </div>
-                  <div className="pc-hero-fact">
-                    <span className="pc-hero-fact-lbl">Batch</span>
-                    <span className="pc-hero-fact-val" title={header.batchCode ?? '—'}>
-                      {header.batchCode ?? '—'}
-                    </span>
-                  </div>
-                  <div className="pc-hero-fact">
-                    <span className="pc-hero-fact-lbl">Current Semester</span>
-                    <span className="pc-hero-fact-val" title={header.semesterName ?? '—'}>
-                      {header.semesterName ?? '—'}
-                    </span>
-                  </div>
-                  <div className="pc-hero-fact">
-                    <span className="pc-hero-fact-lbl">Admission Type</span>
-                    <span className="pc-hero-fact-val" title={header.admissionTypeLabel ?? 'Regular Student'}>
-                      {header.admissionTypeLabel ?? 'Regular Student'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
+                  <dl
+                    className="pcx-facts"
+                    style={{ '--n': facts.length, '--third': Math.ceil(facts.length / 3) } as React.CSSProperties}
+                  >
+                    {facts.map(f => (
+                      <div key={f.label}>
+                        <dt>{f.label}</dt>
+                        <dd className={f.mono ? 'tabular-nums' : undefined} title={f.value || '—'}>{f.value || '—'}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                </section>
+              )
+            })()}
 
             {/* ══════════════════════════════════════════════════════════════
-                2. SUMMARY STATS ROW (.stats-row)
+                2–3. OVERVIEW — clearance donut on the left, the four KPI
+                tiles as a 2×2 grid on the right (same arrangement as the
+                Finance Dashboard), fee heads full width below. The Ledger
+                view has no charts, so the KPIs stay a single row there.
                ══════════════════════════════════════════════════════════════ */}
-            <div className="stats-row">
-              <div className="stat-card">
-                <div className="stat-lbl">Total Paid</div>
-                <div className="stat-num text-blue">{formatMoney(totalPaid)}</div>
-                <div className="stat-sub">{paymentHistory.length} recorded payments</div>
-              </div>
-
-              <div className="stat-card [--b700:var(--amber)] [--b400:#fbbf24]">
-                <div className="stat-lbl">Current Outstanding</div>
-                <div className="stat-num text-amber">{formatMoney(currentOutstanding)}</div>
-                <div className="stat-sub">{outstandingItems.length} pending dues</div>
-              </div>
-
-              <div className="stat-card">
-                <div className="stat-lbl">Future Payments</div>
-                <div className="stat-num text-blue">{formatMoney(totalFuture)}</div>
-                <div className="stat-sub">{futurePayments.length} upcoming fees</div>
-              </div>
-
-              <div
-                className={`stat-card ${
-                  balanceDueCurrent <= 0
-                    ? '[--b700:var(--green)] [--b400:#34d399]'
-                    : '[--b700:var(--red)] [--b400:#f87171]'
-                }`}
-              >
-                <div className="stat-lbl">Net Balance Due</div>
-                <div className={`stat-num ${balanceDueCurrent <= 0 ? 'text-green' : 'text-red'}`}>
-                  {formatMoney(balanceDueCurrent)}
-                </div>
-                <div className="stat-sub">
-                  {balanceDueCurrent <= 0 ? 'Clearance in good standing' : 'Pending balance payment'}
-                </div>
-              </div>
-            </div>
-
-            {/* ══════════════════════════════════════════════════════════════
-                3. VISUAL ANALYTICS (Overview & Analytics Views)
-               ══════════════════════════════════════════════════════════════ */}
-            {(viewMode === 'hybrid' || viewMode === 'charts') && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                {/* Chart 1: Donut Clearance Ratio (Redesigned - No White Space) */}
-                <div className="card mb-0 flex flex-col justify-between">
-                  <div>
-                    <div className="card-hdr" style={{ marginBottom: 14 }}>
-                      <div>
-                        <div className="card-title">
-                          <span className="ctitle-icon">
-                            <i className="lni lni-pie-chart" />
-                          </span>
-                          Fee Clearance Ratio
-                        </div>
-                        <div className="card-sub">Paid vs. Outstanding vs. Future Assessments</div>
-                      </div>
-                      <span className={`badge ${paidPercent >= 100 ? 'badge-green' : paidPercent >= 50 ? 'badge-blue' : 'badge-amber'}`}>
-                        {paidPercent}% Cleared
+            {(() => {
+              const withCharts = viewMode === 'hybrid' || viewMode === 'charts'
+              // The Finance Dashboard's KPI panel (.fd-kpi*): 2×2 beside the
+              // donut, four across (.abd-kpis) in the Ledger view.
+              const kpiTiles = (
+                <div className={`card fd-kpis ss-kpi-panel${withCharts ? '' : ' abd-kpis'}`}>
+                  {([
+                    { tone: 'blue', icon: 'lni-checkmark-circle', label: 'Total paid', value: totalPaid, sub: `${paymentHistory.length} recorded ${paymentHistory.length === 1 ? 'payment' : 'payments'}` },
+                    { tone: 'amber', icon: 'lni-wallet', label: 'Current outstanding', value: currentOutstanding, sub: `${outstandingItems.length} pending ${outstandingItems.length === 1 ? 'due' : 'dues'}` },
+                    { tone: 'cyan', icon: 'lni-alarm-clock', label: 'Future payments', value: totalFuture, sub: `${futurePayments.length} upcoming ${futurePayments.length === 1 ? 'fee' : 'fees'}` },
+                    balanceDueCurrent <= 0
+                      ? { tone: 'green', icon: 'lni-shield', label: 'Net balance due', value: balanceDueCurrent, sub: 'Clearance in good standing' }
+                      : { tone: 'red', icon: 'lni-warning', label: 'Net balance due', value: balanceDueCurrent, sub: 'Pending balance payment' },
+                  ]).map(k => (
+                    <div key={k.label} className={`fd-kpi fd-kpi-${k.tone}`}>
+                      <span className="fd-kpi-top">
+                        <span className="fd-kpi-ic" aria-hidden="true"><i className={`lni ${k.icon}`}></i></span>
+                        <span className="fd-kpi-lbl">{k.label}</span>
                       </span>
+                      <span className="fd-kpi-num">{formatMoney(k.value)}</span>
+                      <span className="fd-kpi-foot">{k.sub}</span>
                     </div>
-
-                    {/* Side-by-Side: Donut on Left, Breakdown Cards on Right (Fills Full Width) */}
-                    <div className="grid grid-cols-1 sm:grid-cols-[140px_minmax(0,1fr)] gap-4 items-center py-1">
-                      {/* Interactive SVG Donut Chart */}
-                      <div className="relative flex items-center justify-center mx-auto" style={{ width: 140, height: 140 }}>
-                        <svg width="140" height="140" viewBox="0 0 100 100" className="transform -rotate-90">
-                          {/* Background track */}
-                          <circle cx="50" cy="50" r="38" stroke="var(--g100)" strokeWidth="11" fill="transparent" />
-
-                          {/* Future assessments arc (Blue/slate background segment) */}
-                          {totalFuture > 0 && (
-                            <circle
-                              cx="50"
-                              cy="50"
-                              r="38"
-                              stroke="var(--b300)"
-                              strokeWidth="11"
-                              strokeDasharray="238.76"
-                              strokeDashoffset={238.76 - (238.76 * (totalPaid + currentOutstanding + totalFuture)) / chartTotal}
-                              strokeLinecap="round"
-                              fill="transparent"
-                              className="transition-all duration-700"
-                              opacity={hoveredChartSegment === 'future' ? 1 : 0.7}
-                            />
-                          )}
-
-                          {/* Outstanding arc (Red) */}
-                          {currentOutstanding > 0 && (
-                            <circle
-                              cx="50"
-                              cy="50"
-                              r="38"
-                              stroke="var(--red)"
-                              strokeWidth="11"
-                              strokeDasharray="238.76"
-                              strokeDashoffset={238.76 - (238.76 * currentOutstanding) / chartTotal}
-                              style={{
-                                strokeDashoffset: `${238.76 - (238.76 * (totalPaid + currentOutstanding)) / chartTotal}`,
-                              }}
-                              strokeLinecap="round"
-                              fill="transparent"
-                              className="transition-all duration-700 cursor-pointer"
-                              onMouseEnter={() => setHoveredChartSegment('outstanding')}
-                              onMouseLeave={() => setHoveredChartSegment(null)}
-                            />
-                          )}
-
-                          {/* Paid arc (Green) */}
-                          {totalPaid > 0 && (
-                            <circle
-                              cx="50"
-                              cy="50"
-                              r="38"
-                              stroke="var(--green)"
-                              strokeWidth="11"
-                              strokeDasharray="238.76"
-                              strokeDashoffset={238.76 - (238.76 * totalPaid) / chartTotal}
-                              strokeLinecap="round"
-                              fill="transparent"
-                              className="transition-all duration-700 cursor-pointer"
-                              onMouseEnter={() => setHoveredChartSegment('paid')}
-                              onMouseLeave={() => setHoveredChartSegment(null)}
-                            />
-                          )}
-                        </svg>
-
-                        {/* Inner Ring Badge */}
-                        <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none">
-                          <span className="text-xl font-extrabold text-g900 tracking-tight">{paidPercent}%</span>
-                          <span className="text-[10px] font-semibold text-g500 uppercase tracking-wider">
-                            {hoveredChartSegment === 'paid'
-                              ? 'Paid Total'
-                              : hoveredChartSegment === 'outstanding'
-                              ? 'Pending'
-                              : 'Settled'}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Right-Side Structured Metric List (Eliminates White Space) */}
-                      <div className="flex flex-col gap-2">
-                        {/* 1. Paid Tile */}
-                        <div
-                          className="p-2.5 rounded-[var(--rxs)] border border-g100 bg-surface flex items-center justify-between"
-                          style={{ transition: 'all 0.15s ease' }}
-                        >
-                          <div className="flex items-center gap-2 min-w-0">
-                            <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: 'var(--green)' }} />
-                            <div>
-                              <div className="text-xs font-bold text-g800">Total Paid (Settled)</div>
-                              <div className="text-[11px] text-g500">
-                                {chartTotal > 0 ? Math.round((totalPaid / chartTotal) * 100) : 0}% of total assessed
-                              </div>
-                            </div>
-                          </div>
-                          <span className="font-mono font-bold text-green text-xs tabular-nums ml-2">
-                            {formatMoney(totalPaid)}
-                          </span>
-                        </div>
-
-                        {/* 2. Outstanding Tile */}
-                        <div
-                          className={`p-2.5 rounded-[var(--rxs)] border flex items-center justify-between ${
-                            currentOutstanding > 0 ? 'border-red-bd bg-red-bg' : 'border-g100 bg-surface'
-                          }`}
-                          style={{ transition: 'all 0.15s ease' }}
-                        >
-                          <div className="flex items-center gap-2 min-w-0">
-                            <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: 'var(--red)' }} />
-                            <div>
-                              <div className="text-xs font-bold text-g800">Current Outstanding</div>
-                              <div className="text-[11px] text-g500">
-                                {currentOutstanding > 0 ? 'Immediate clearance required' : 'No overdue balance'}
-                              </div>
-                            </div>
-                          </div>
-                          <span className={`font-mono font-bold text-xs tabular-nums ml-2 ${currentOutstanding > 0 ? 'text-red' : 'text-g700'}`}>
-                            {formatMoney(currentOutstanding)}
-                          </span>
-                        </div>
-
-                        {/* 3. Future Tile */}
-                        <div
-                          className="p-2.5 rounded-[var(--rxs)] border border-g100 bg-surface flex items-center justify-between"
-                          style={{ transition: 'all 0.15s ease' }}
-                        >
-                          <div className="flex items-center gap-2 min-w-0">
-                            <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: 'var(--b400)' }} />
-                            <div>
-                              <div className="text-xs font-bold text-g800">Future Assessments</div>
-                              <div className="text-[11px] text-g500">{futurePayments.length} upcoming fees</div>
-                            </div>
-                          </div>
-                          <span className="font-mono font-bold text-g800 text-xs tabular-nums ml-2">
-                            {formatMoney(totalFuture)}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Bottom Clearance Progress Bar & Standing Footnote */}
-                  <div className="pt-3 border-t border-g100 mt-3">
-                    {/* Multi-segment stacked progress bar */}
-                    <div className="w-full bg-g100 h-2 rounded-full overflow-hidden flex mb-2">
-                      <div
-                        className="h-full transition-all duration-500"
-                        style={{ width: `${chartTotal > 0 ? (totalPaid / chartTotal) * 100 : 0}%`, background: 'var(--green)' }}
-                        title={`Paid: ${formatMoney(totalPaid)}`}
-                      />
-                      <div
-                        className="h-full transition-all duration-500"
-                        style={{ width: `${chartTotal > 0 ? (currentOutstanding / chartTotal) * 100 : 0}%`, background: 'var(--red)' }}
-                        title={`Outstanding: ${formatMoney(currentOutstanding)}`}
-                      />
-                      <div
-                        className="h-full transition-all duration-500"
-                        style={{ width: `${chartTotal > 0 ? (totalFuture / chartTotal) * 100 : 0}%`, background: 'var(--b300)' }}
-                        title={`Future: ${formatMoney(totalFuture)}`}
-                      />
-                    </div>
-
-                    <div className="flex items-center justify-between text-xs text-g600 flex-wrap gap-2">
-                      <span className="text-[11.5px]">
-                        Assessed Total: <strong className="font-mono text-g900">{formatMoney(chartTotal)}</strong>
-                      </span>
-                      <span className="flex items-center gap-1.5 text-[11px]">
-                        <span
-                          className="w-2 h-2 rounded-full"
-                          style={{ background: balanceDueCurrent <= 0 ? 'var(--green)' : 'var(--red)' }}
-                        />
-                        <span className="font-semibold" style={{ color: balanceDueCurrent <= 0 ? 'var(--green)' : 'var(--red)' }}>
-                          {balanceDueCurrent <= 0 ? 'Exam Clearance Eligible' : 'Fee Clearance Pending'}
-                        </span>
-                      </span>
-                    </div>
-                  </div>
+                  ))}
                 </div>
+              )
+              if (!withCharts) return kpiTiles
+              return (
+                <>
+                  <div className="ss-overview">
+                    {/* Chart 1: clearance donut — paid / outstanding / future as
+                        separate arcs, with a legend that doubles as the figures. */}
+                    {(() => {
+                      const R = 40
+                      const C = 2 * Math.PI * R
+                      const segs = [
+                        { key: 'paid', label: 'Paid', sub: 'Settled to date', value: totalPaid, color: 'var(--green)' },
+                        { key: 'outstanding', label: 'Outstanding', sub: currentOutstanding > 0 ? 'Due now' : 'Nothing overdue', value: currentOutstanding, color: 'var(--red)' },
+                        { key: 'future', label: 'Future', sub: `${futurePayments.length} upcoming ${futurePayments.length === 1 ? 'fee' : 'fees'}`, value: totalFuture, color: 'var(--b300)' },
+                      ]
+                      const drawn = segs.filter(s => s.value > 0)
+                      const gap = drawn.length > 1 ? 1.6 : 0
+                      let start = 0
+                      const arcs = drawn.map(s => {
+                        const len = (s.value / chartTotal) * C
+                        const arc = { ...s, dash: Math.max(0, len - gap), offset: -start }
+                        start += len
+                        return arc
+                      })
+                      const pct = (v: number) => Math.round((v / chartTotal) * 100)
+                      const focus = segs.find(s => s.key === hoveredChartSegment)
+                      const cleared = balanceDueCurrent <= 0
+                      return (
+                        <div className="card mb-0 ss-panel ss-chart">
+                          <div className="pcx-panel-hdr">
+                            <div>
+                              <h3 className="pcx-panel-title">Fee clearance</h3>
+                              <p className="pcx-panel-sub">Share of everything assessed so far</p>
+                            </div>
+                            <span className={`pcx-pill ${paidPercent >= 100 ? 'pcx-pill-green' : 'pcx-pill-amber'}`}>
+                              <span className="pcx-dot" aria-hidden="true"></span>{paidPercent}% cleared
+                            </span>
+                          </div>
 
-                {/* Chart 2: Fee Head Allocation Breakdown */}
-                <div className="card mb-0 flex flex-col justify-between">
-                  <div>
-                    <div className="card-hdr">
-                      <div className="card-title">
-                        <span className="ctitle-icon">
-                          <i className="lni lni-layers" />
-                        </span>
-                        Fee Head Allocation
-                      </div>
-                      <span className="badge badge-grey">{categoryStats.length} Heads</span>
-                    </div>
-                    <div className="card-sub -mt-3 mb-3">Paid vs. Outstanding across fee categories</div>
-
-                    <div className="space-y-2.5">
-                      {categoryStats.length === 0 ? (
-                        <div className="py-8 text-center text-xs text-g400">No category breakdown available</div>
-                      ) : (
-                        categoryStats.map(cat => {
-                          const total = (cat.paid + cat.due) || 1
-                          const catPaidPct = Math.round((cat.paid / total) * 100)
-                          return (
-                            <div key={cat.label} className="text-xs">
-                              <div className="flex items-center justify-between font-semibold text-g800 mb-1">
-                                <span>{cat.label}</span>
-                                <span className="text-g400 font-mono text-[11px]">
-                                  {cat.paid.toLocaleString()} / {(cat.paid + cat.due).toLocaleString()}
-                                </span>
-                              </div>
-                              <div className="w-full bg-g100 h-2 rounded-full overflow-hidden flex">
-                                <div
-                                  className="h-full transition-all duration-500"
-                                  style={{ width: `${catPaidPct}%`, background: 'var(--green)' }}
-                                  title={`Paid: ${cat.paid.toLocaleString()} (${catPaidPct}%)`}
-                                />
-                                <div
-                                  className="h-full transition-all duration-500"
-                                  style={{ width: `${100 - catPaidPct}%`, background: 'var(--red-bd)' }}
-                                  title={`Outstanding: ${cat.due.toLocaleString()}`}
-                                />
+                          <div className="ss-donut-wrap">
+                            <div className="ss-donut">
+                              <svg viewBox="0 0 100 100" role="img" aria-label={segs.map(s => `${s.label} ${pct(s.value)}%`).join(', ')}>
+                                <circle cx="50" cy="50" r={R} className="ss-donut-track" />
+                                {arcs.map(a => (
+                                  <circle
+                                    key={a.key}
+                                    cx="50" cy="50" r={R}
+                                    stroke={a.color}
+                                    strokeDasharray={`${a.dash} ${C - a.dash}`}
+                                    strokeDashoffset={a.offset}
+                                    className={`ss-donut-arc${hoveredChartSegment && hoveredChartSegment !== a.key ? ' dim' : ''}`}
+                                    onMouseEnter={() => setHoveredChartSegment(a.key)}
+                                    onMouseLeave={() => setHoveredChartSegment(null)}
+                                  />
+                                ))}
+                              </svg>
+                              <div className="ss-donut-center" aria-hidden="true">
+                                <span className="ss-donut-val">{focus ? pct(focus.value) : paidPercent}%</span>
+                                <span className="ss-donut-lbl">{focus ? focus.label : 'Paid'}</span>
                               </div>
                             </div>
-                          )
-                        })
-                      )}
-                    </div>
+
+                            <ul className="ss-legend">
+                              {segs.map(s => (
+                                <li
+                                  key={s.key}
+                                  className={`ss-legend-row${hoveredChartSegment === s.key ? ' active' : ''}`}
+                                  onMouseEnter={() => setHoveredChartSegment(s.key)}
+                                  onMouseLeave={() => setHoveredChartSegment(null)}
+                                >
+                                  <span className="ss-legend-dot" style={{ background: s.color }} aria-hidden="true"></span>
+                                  <span className="ss-legend-txt">
+                                    <span className="ss-legend-name">{s.label} <span className="ss-legend-pct">{pct(s.value)}%</span></span>
+                                    <span className="ss-legend-sub">{s.sub}</span>
+                                  </span>
+                                  <span className={`ss-legend-amt${s.key === 'outstanding' && s.value > 0 ? ' text-red' : ''}`}>{formatMoney(s.value)}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+
+                          <div className="ss-chart-foot">
+                            <span>Assessed total <b>{formatMoney(chartTotal)}</b></span>
+                            <span className={`ss-status ${cleared ? 'ok' : 'due'}`}>
+                              <i className={`lni ${cleared ? 'lni-checkmark-circle' : 'lni-warning'}`} aria-hidden="true"></i>
+                              {cleared ? 'Exam clearance eligible' : 'Fee clearance pending'}
+                            </span>
+                          </div>
+                        </div>
+                      )
+                    })()}
+
+                    {kpiTiles}
                   </div>
 
-                  <div className="flex items-center justify-center gap-4 pt-3 border-t border-g100 text-xs text-g500 mt-2">
-                    <span className="flex items-center gap-1.5">
-                      <span className="w-2.5 h-2.5 rounded-full" style={{ background: 'var(--green)' }} /> Settled
-                    </span>
-                    <span className="flex items-center gap-1.5">
-                      <span className="w-2.5 h-2.5 rounded-full" style={{ background: 'var(--red-bd)' }} /> Balance Remaining
-                    </span>
-                  </div>
-                </div>
-              </div>
-            )}
+                  {/* Chart 2: one row per fee head — paid share of what that
+                      head has billed so far. */}
+                  {(() => {
+                    const HEAD_ICONS: Record<string, string> = {
+                      Tuition: 'lni-graduation', NCHE: 'lni-certificate', Guild: 'lni-users',
+                      Advance: 'lni-coin', 'Application Fee': 'lni-files',
+                    }
+                    // One decimal, and never 100% while anything is still owed
+                    // (99.96% would otherwise round up to "fully paid").
+                    const pctOf = (paid: number, due: number) => {
+                      const total = paid + due
+                      if (due <= 0) return 100
+                      return total > 0 ? Math.min(99.9, Math.round((paid / total) * 1000) / 10) : 0
+                    }
+                    const heads = categoryStats
+                      .map(cat => ({ ...cat, total: cat.paid + cat.due, pct: pctOf(cat.paid, cat.due) }))
+                      // Anything still owed first, largest balance on top.
+                      .sort((a, b) => (b.due > 0 ? 1 : 0) - (a.due > 0 ? 1 : 0) || b.due - a.due)
+                    const headsPaid = heads.reduce((s, c) => s + c.paid, 0)
+                    const headsDue = heads.reduce((s, c) => s + Math.max(0, c.due), 0)
+                    const headsTotal = headsPaid + headsDue
+                    const overallPct = pctOf(headsPaid, headsDue)
+                    const owingCount = heads.filter(h => h.due > 0).length
+                    return (
+                      <div className="card ss-panel ss-chart ss-heads-card">
+                        <div className="pcx-panel-hdr">
+                          <div>
+                            <h3 className="pcx-panel-title">Fee heads</h3>
+                            <p className="pcx-panel-sub">How much of each fee category is paid</p>
+                          </div>
+                          <span className="pcx-chip">{heads.length} {heads.length === 1 ? 'head' : 'heads'}</span>
+                        </div>
+
+                        {heads.length === 0 ? (
+                          <div className="ss-chart-empty">No fee heads billed yet</div>
+                        ) : (
+                          <>
+                            <div className="ss-heads-sum">
+                              <div className="ss-heads-sum-fig">
+                                <span className="ss-heads-sum-pct">{overallPct}%</span>
+                                <span className="ss-heads-sum-lbl">paid overall</span>
+                              </div>
+                              <div className="ss-heads-sum-body">
+                                <div className="ss-heads-sum-bar" role="progressbar" aria-valuenow={overallPct} aria-valuemin={0} aria-valuemax={100} aria-label="Paid across all fee heads">
+                                  <span style={{ width: `${overallPct}%` }}></span>
+                                </div>
+                                <div className="ss-heads-sum-meta">
+                                  <span><b>{formatMoney(headsPaid)}</b> of {formatMoney(headsTotal)} billed</span>
+                                  <span className={headsDue > 0 ? 'ss-heads-sum-due' : 'ss-heads-sum-ok'}>
+                                    {headsDue > 0
+                                      ? `${formatMoney(headsDue)} outstanding on ${owingCount} ${owingCount === 1 ? 'head' : 'heads'}`
+                                      : 'Every head settled'}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+
+                            <ul className="ss-heads">
+                              {heads.map(h => {
+                                const settled = h.due <= 0
+                                const tone = settled ? 'green' : h.paid > 0 ? 'amber' : 'red'
+                                return (
+                                  <li key={h.label} className="ss-head">
+                                    <span className={`ss-head-icon ss-tone-${tone}`} aria-hidden="true"><i className={`lni ${HEAD_ICONS[h.label] ?? 'lni-wallet'}`}></i></span>
+                                    <span className="ss-head-txt">
+                                      <span className="ss-head-name">{h.label}</span>
+                                      <span className="ss-head-sub"><b>{formatMoney(h.paid)}</b> of {formatMoney(h.total)}</span>
+                                    </span>
+                                    <span className="ss-head-bar" role="progressbar" aria-valuenow={h.pct} aria-valuemin={0} aria-valuemax={100} aria-label={`${h.label} paid`}>
+                                      <span className={`ss-tone-${tone}`} style={{ width: `${h.pct}%` }}></span>
+                                    </span>
+                                    <span className={`ss-head-pct ss-tone-${tone}`}>{h.pct}%</span>
+                                    <span className={`ss-head-status ss-tone-${tone}`}>
+                                      {settled ? (
+                                        <><b><i className="lni lni-checkmark-circle" aria-hidden="true"></i> Settled</b><span>Nothing due</span></>
+                                      ) : (
+                                        <><b>{formatMoney(h.due)}</b><span>{h.paid > 0 ? 'still due' : 'not paid yet'}</span></>
+                                      )}
+                                    </span>
+                                  </li>
+                                )
+                              })}
+                            </ul>
+                          </>
+                        )}
+                      </div>
+                    )
+                  })()}
+                </>
+              )
+            })()}
 
             {/* ══════════════════════════════════════════════════════════════
                 4. STATEMENT LEDGER TABS & TABLE (.card)
                ══════════════════════════════════════════════════════════════ */}
             {(viewMode === 'hybrid' || viewMode === 'official') && (
-              <div className="card">
-                {/* Standard ERP Tab Switcher (.pc-tabs) */}
-                <div className="pc-tabs">
-                  <button
-                    type="button"
-                    onClick={() => setTableTab('payments')}
-                    className={`pc-tab-btn ${tableTab === 'payments' ? 'active' : ''}`}
-                  >
-                    <i className="lni lni-credit-cards" />
-                    <span>Payment History</span>
-                    <span
-                      className={`badge ${tableTab === 'payments' ? 'badge-blue' : 'badge-grey'}`}
-                      style={{ fontSize: 11, padding: '1px 6px' }}
+              <div className="card ss-ledger">
+                {/* Underline tabs — one per statement list, each with its count. */}
+                <div className="ss-tabs" role="tablist" aria-label="Statement lists">
+                  {([
+                    ['payments', 'lni-credit-cards', 'Payment History', paymentHistory.length],
+                    ['outstanding', 'lni-wallet', 'Outstanding Items', outstandingItems.length],
+                    ['future', 'lni-alarm-clock', 'Future Payments', futurePayments.length],
+                  ] as const).map(([tab, icon, label, count]) => (
+                    <button
+                      key={tab}
+                      type="button"
+                      role="tab"
+                      aria-selected={tableTab === tab}
+                      className={`ss-tab${tableTab === tab ? ' active' : ''}`}
+                      onClick={() => setTableTab(tab)}
                     >
-                      {paymentHistory.length}
-                    </span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setTableTab('outstanding')}
-                    className={`pc-tab-btn ${tableTab === 'outstanding' ? 'active' : ''}`}
-                  >
-                    <i className="lni lni-wallet" />
-                    <span>Outstanding Items</span>
-                    <span
-                      className={`badge ${tableTab === 'outstanding' ? 'badge-amber' : 'badge-grey'}`}
-                      style={{ fontSize: 11, padding: '1px 6px' }}
-                    >
-                      {outstandingItems.length}
-                    </span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setTableTab('future')}
-                    className={`pc-tab-btn ${tableTab === 'future' ? 'active' : ''}`}
-                  >
-                    <i className="lni lni-alarm-clock" />
-                    <span>Future Payments</span>
-                    <span
-                      className={`badge ${tableTab === 'future' ? 'badge-blue' : 'badge-grey'}`}
-                      style={{ fontSize: 11, padding: '1px 6px' }}
-                    >
-                      {futurePayments.length}
-                    </span>
-                  </button>
+                      <i className={`lni ${icon}`} />
+                      <span>{label}</span>
+                      <span className="ss-tab-count">{count}</span>
+                    </button>
+                  ))}
                 </div>
 
-                {/* Filter & Grouping Controls with Standard Reusable Components */}
-                <div className="flex flex-wrap items-center justify-between gap-3 mb-3.5">
+                {/* Filter & grouping controls */}
+                <div className="ss-toolbar">
                   <div className="flex items-center gap-2 flex-wrap">
                     <TableSearch
                       className="w-64"
@@ -1130,7 +1043,23 @@ export default function StudentStatementPage() {
                     )}
                   </div>
 
-                  <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-4 flex-wrap">
+                    {groupBySemester && !tableSearch.trim() && (() => {
+                      const groups = tableTab === 'payments' ? groupedPayments : tableTab === 'outstanding' ? groupedOutstanding : groupedFuture
+                      if (groups.length < 2) return null
+                      const keys = groups.map(g => `${tableTab}:${g.semester}`)
+                      const allOpen = keys.every((k, i) => isGroupOpen(k, i === keys.length - 1))
+                      return (
+                        <button
+                          type="button"
+                          className="ss-grp-all"
+                          onClick={() => setOpenGroups(prev => ({ ...prev, ...Object.fromEntries(keys.map(k => [k, !allOpen])) }))}
+                        >
+                          <i className={`lni ${allOpen ? 'lni-shrink' : 'lni-expand'}`} aria-hidden="true" />
+                          {allOpen ? 'Collapse all' : 'Expand all'}
+                        </button>
+                      )
+                    })()}
                     {tableTab === 'payments' && (
                       <button
                         type="button"
@@ -1169,13 +1098,10 @@ export default function StudentStatementPage() {
                         <tr>
                           <th style={{ width: 44 }}></th>
                           <th style={{ width: 44, textAlign: 'center' }}>#</th>
-                          <th>Payment Code</th>
-                          <th>Date</th>
+                          <th>Payment · Date</th>
                           {!groupBySemester && <th>Semester</th>}
-                          <th>Pay Type</th>
-                          <th>Receipt #</th>
+                          <th>Receipt · Method</th>
                           <th className="num">Amount</th>
-                          <th>Currency</th>
                           <th className="num" title="Converted at the exchange rate on the payment date">Amount (USD)</th>
                           <th>Category</th>
                         </tr>
@@ -1183,7 +1109,7 @@ export default function StudentStatementPage() {
                       <tbody>
                         {filteredPayments.length === 0 ? (
                           <EmptyState
-                            colSpan={11}
+                            colSpan={groupBySemester ? 7 : 8}
                             title={tableSearch || selectedCategory !== 'all' ? 'No matching payments' : 'No payments recorded'}
                             subtitle={
                               tableSearch || selectedCategory !== 'all'
@@ -1197,44 +1123,21 @@ export default function StudentStatementPage() {
                             }}
                           />
                         ) : groupBySemester ? (
-                          groupedPayments.map((group, groupIdx) => (
-                            <Fragment key={group.semester || groupIdx}>
-                              {/* Semester Group Header Row */}
-                              <tr className="stmt-group-hdr">
-                                <td colSpan={10}>
-                                  <div className="flex items-center gap-2.5">
-                                    <span className="text-b700 font-bold">
-                                      <i className="lni lni-graduation" />
-                                    </span>
-                                    <span className="stmt-group-name">
-                                      {group.semester}
-                                    </span>
-                                    <span className="badge badge-blue">
-                                      {group.items.length} {group.items.length === 1 ? 'Record' : 'Records'}
-                                    </span>
-                                  </div>
-                                </td>
-                              </tr>
-
-                              {/* Rows in this Semester */}
-                              {group.items.map((p, idx) => renderPaymentRow(p, runningNo(groupedPayments, groupIdx, idx), p.paymentGuid || `${groupIdx}-${idx}`, false))}
-
-                              {/* Section Subtotal Row */}
-                              <tr className="stmt-group-total">
-                                <td colSpan={10}>
-                                  <div className="flex items-center justify-between gap-4 flex-wrap">
-                                    <div className="flex items-center gap-2">
-                                      <span className="stmt-group-total-label">Semester Total</span>
-                                    </div>
-                                    <div className="flex items-center gap-3 flex-wrap justify-end">
-                                      {renderCurrencyBreakdown(group.items)}
-                                      {renderUsdTotal(group.items)}
-                                    </div>
-                                  </div>
-                                </td>
-                              </tr>
-                            </Fragment>
-                          ))
+                          groupedPayments.map((group, groupIdx) => {
+                            const key = `payments:${group.semester}`
+                            const isLast = groupIdx === groupedPayments.length - 1
+                            return (
+                              <Fragment key={group.semester || groupIdx}>
+                                {renderGroupHeader(
+                                  key, isLast, 7, 'lni-graduation',
+                                  semesterLabel(group.semester) || group.semester,
+                                  `${group.items.length} ${group.items.length === 1 ? 'payment' : 'payments'}`,
+                                  <>{renderCurrencyBreakdown(group.items)}{renderUsdTotal(group.items)}</>,
+                                )}
+                                {isGroupOpen(key, isLast) && group.items.map((p, idx) => renderPaymentRow(p, runningNo(groupedPayments, groupIdx, idx), p.paymentGuid || `${groupIdx}-${idx}`, false))}
+                              </Fragment>
+                            )
+                          })
                         ) : (
                           filteredPayments.map((p, idx) => renderPaymentRow(p, idx + 1,p.paymentGuid || String(idx), true))
                         )}
@@ -1272,31 +1175,27 @@ export default function StudentStatementPage() {
                             }}
                           />
                         ) : groupBySemester ? (
-                          groupedOutstanding.map((group, groupIdx) => (
+                          groupedOutstanding.map((group, groupIdx) => {
+                            const key = `outstanding:${group.semester}`
+                            const isLast = groupIdx === groupedOutstanding.length - 1
+                            return (
                             <Fragment key={group.semester || groupIdx}>
-                              {/* Semester Group Header Row */}
-                              <tr className="stmt-group-hdr">
-                                <td colSpan={6}>
-                                  <div className="flex items-center gap-2.5">
-                                    <span className="text-b700 font-bold">
-                                      <i className="lni lni-wallet" />
-                                    </span>
-                                    <span className="stmt-group-name">
-                                      {group.semester}
-                                    </span>
-                                    <span className="badge badge-amber">
-                                      {group.items.length} {group.items.length === 1 ? 'Due' : 'Dues'}
-                                    </span>
-                                  </div>
-                                </td>
-                              </tr>
-
-                              {/* Rows in this Semester */}
-                              {group.items.map((o, idx) => (
+                              {renderGroupHeader(
+                                key, isLast, 6, 'lni-wallet',
+                                semesterLabel(group.semester) || group.semester,
+                                `${group.items.length} ${group.items.length === 1 ? 'due' : 'dues'}`,
+                                group.currencyTotals.map(ct => (
+                                  <span key={ct.currency} className="stmt-total-chip is-due">
+                                    <span>{ct.currency}</span>
+                                    <span className="font-mono">{formatMoney(ct.total)}</span>
+                                  </span>
+                                )),
+                              )}
+                              {isGroupOpen(key, isLast) && group.items.map((o, idx) => (
                                 <tr key={o.ledgerGuid || `${groupIdx}-${idx}`}>
                                   <td className="text-center text-g500">{runningNo(groupedOutstanding, groupIdx, idx)}</td>
                                   <td className="font-bold text-g900">{o.description || 'Fee Assessment'}</td>
-                                  <td className="text-g700">{o.semesterName || header?.semesterName || '—'}</td>
+                                  <td className="text-g700">{semesterLabel(o.semesterName || header?.semesterName) || '—'}</td>
                                   <td>{renderCategoryBadge(o.category)}</td>
                                   <td className="num font-mono font-bold text-red">
                                     {formatMoney(o.outstanding)}
@@ -1306,35 +1205,15 @@ export default function StudentStatementPage() {
                                   </td>
                                 </tr>
                               ))}
-
-                              {/* Section Subtotal Row */}
-                              <tr className="stmt-group-total">
-                                <td colSpan={6}>
-                                  <div className="flex items-center justify-between gap-4 flex-wrap">
-                                    <div className="flex items-center gap-2">
-                                      <span className="stmt-group-total-label">Semester Outstanding</span>
-                                    </div>
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                      {group.currencyTotals.map(ct => (
-                                        <div key={ct.currency} className="flex items-center gap-1.5 text-xs">
-                                          <span className="text-g500 font-semibold">{ct.currency}:</span>
-                                          <span className="font-mono font-bold text-red">
-                                            {formatMoney(ct.total)}
-                                          </span>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  </div>
-                                </td>
-                              </tr>
                             </Fragment>
-                          ))
+                            )
+                          })
                         ) : (
                           filteredOutstanding.map((o, idx) => (
                             <tr key={o.ledgerGuid || idx}>
                               <td className="text-center text-g500">{idx + 1}</td>
                               <td className="font-bold text-g900">{o.description || 'Fee Assessment'}</td>
-                              <td className="text-g700">{o.semesterName || header?.semesterName || '—'}</td>
+                              <td className="text-g700">{semesterLabel(o.semesterName || header?.semesterName) || '—'}</td>
                               <td>{renderCategoryBadge(o.category)}</td>
                               <td className="num font-mono font-bold text-red">
                                 {formatMoney(o.outstanding)}
@@ -1375,31 +1254,27 @@ export default function StudentStatementPage() {
                             onClearFilters={() => setTableSearch('')}
                           />
                         ) : groupBySemester ? (
-                          groupedFuture.map((group, groupIdx) => (
+                          groupedFuture.map((group, groupIdx) => {
+                            const key = `future:${group.semester}`
+                            const isLast = groupIdx === groupedFuture.length - 1
+                            return (
                             <Fragment key={group.semester || groupIdx}>
-                              {/* Semester Group Header Row */}
-                              <tr className="stmt-group-hdr">
-                                <td colSpan={5}>
-                                  <div className="flex items-center gap-2.5">
-                                    <span className="text-b700 font-bold">
-                                      <i className="lni lni-alarm-clock" />
-                                    </span>
-                                    <span className="stmt-group-name">
-                                      {group.semester}
-                                    </span>
-                                    <span className="badge badge-blue">
-                                      {group.items.length} {group.items.length === 1 ? 'Scheduled' : 'Scheduled'}
-                                    </span>
-                                  </div>
-                                </td>
-                              </tr>
-
-                              {/* Rows in this Semester */}
-                              {group.items.map((f, idx) => (
+                              {renderGroupHeader(
+                                key, isLast, 5, 'lni-alarm-clock',
+                                semesterLabel(group.semester) || group.semester,
+                                `${group.items.length} scheduled`,
+                                group.currencyTotals.map(ct => (
+                                  <span key={ct.currency} className="stmt-total-chip">
+                                    <span>{ct.currency}</span>
+                                    <span className="font-mono">{formatMoney(ct.total)}</span>
+                                  </span>
+                                )),
+                              )}
+                              {isGroupOpen(key, isLast) && group.items.map((f, idx) => (
                                 <tr key={f.slNo || `${groupIdx}-${idx}`}>
                                   <td className="text-center text-g500">{runningNo(groupedFuture, groupIdx, idx)}</td>
                                   <td className="font-bold text-g900">{f.description}</td>
-                                  <td className="text-g700">{f.semesterName || '—'}</td>
+                                  <td className="text-g700">{semesterLabel(f.semesterName) || '—'}</td>
                                   <td className="num font-mono font-bold text-g900">
                                     {formatMoney(f.amountDue)}
                                   </td>
@@ -1408,35 +1283,15 @@ export default function StudentStatementPage() {
                                   </td>
                                 </tr>
                               ))}
-
-                              {/* Section Subtotal Row */}
-                              <tr className="stmt-group-total">
-                                <td colSpan={5}>
-                                  <div className="flex items-center justify-between gap-4 flex-wrap">
-                                    <div className="flex items-center gap-2">
-                                      <span className="stmt-group-total-label">Semester Scheduled</span>
-                                    </div>
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                      {group.currencyTotals.map(ct => (
-                                        <div key={ct.currency} className="stmt-total-chip">
-                                          <span>{ct.currency}</span>
-                                          <span className="font-mono">
-                                            {formatMoney(ct.total)}
-                                          </span>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  </div>
-                                </td>
-                              </tr>
                             </Fragment>
-                          ))
+                            )
+                          })
                         ) : (
                           filteredFuture.map((f, idx) => (
                             <tr key={f.slNo || idx}>
                               <td className="text-center text-g500">{idx + 1}</td>
                               <td className="font-bold text-g900">{f.description}</td>
-                              <td className="text-g700">{f.semesterName || 'Year Three - Semester Two'}</td>
+                              <td className="text-g700">{semesterLabel(f.semesterName) || '—'}</td>
                               <td className="num font-mono font-bold text-g900">
                                 {formatMoney(f.amountDue)}
                               </td>
@@ -1453,7 +1308,7 @@ export default function StudentStatementPage() {
 
                 {/* ── Active Tab Summary Footer Bar ─────────────────────── */}
                 {tableTab === 'payments' && filteredPayments.length > 0 && (
-                  <div className="flex items-center justify-between flex-wrap gap-2 pt-3.5 mt-3 border-t border-g200 text-xs text-g600">
+                  <div className="ss-foot">
                     <div>
                       Showing <strong className="text-g900">{filteredPayments.length}</strong> of{' '}
                       <strong>{paymentHistory.length}</strong> payment records
@@ -1466,7 +1321,7 @@ export default function StudentStatementPage() {
                 )}
 
                 {tableTab === 'outstanding' && filteredOutstanding.length > 0 && (
-                  <div className="flex items-center justify-between flex-wrap gap-2 pt-3.5 mt-3 border-t border-g200 text-xs text-g600">
+                  <div className="ss-foot">
                     <div>
                       Showing <strong className="text-g900">{filteredOutstanding.length}</strong> of{' '}
                       <strong>{outstandingItems.length}</strong> outstanding items
@@ -1483,7 +1338,7 @@ export default function StudentStatementPage() {
                 )}
 
                 {tableTab === 'future' && filteredFuture.length > 0 && (
-                  <div className="flex items-center justify-between flex-wrap gap-2 pt-3.5 mt-3 border-t border-g200 text-xs text-g600">
+                  <div className="ss-foot">
                     <div>
                       Showing <strong className="text-g900">{filteredFuture.length}</strong> of{' '}
                       <strong>{futurePayments.length}</strong> future payments

@@ -59,7 +59,8 @@ export interface StudentStatementPaymentDto {
   semesterName?: string | null
 }
 
-// category: PaymentGroupCategory — 1=Tuition, 2=Other, 3=Nche, 4=Guild
+// category: PaymentGroupCategory — 1=Tuition, 2=Other, 3=Nche, 4=Guild.
+// The live response (2026-11-03) omits it; getStudentStatement fills it in.
 export interface StudentStatementOutstandingDto {
   slNo: number
   category: number
@@ -72,6 +73,8 @@ export interface StudentStatementOutstandingDto {
   outstanding: number
 }
 
+// The live response sends the amount as `outstanding`; getStudentStatement
+// copies it into `amountDue`, which the pages read.
 export interface StudentStatementFuturePaymentDto {
   slNo: number
   description: string | null
@@ -80,11 +83,64 @@ export interface StudentStatementFuturePaymentDto {
   currencyName: string | null
 }
 
+// Application payment (2026-11-03 response) — sent on its own, no longer as a
+// category-6 row inside paymentHistory.
+export interface StudentStatementApplicationFeeDto {
+  paymentGuid: string
+  appRefNo: string | null
+  paymentCode: string | null
+  payDate: string
+  amount: number
+  currencyGuid: string | null
+  receipt: string | null
+  payTypeName: string | null
+  iStatus: number | null
+}
+
 export interface StudentStatementDto {
   header: StudentStatementHeaderDto
   paymentHistory: StudentStatementPaymentDto[]
   outstandingItems: StudentStatementOutstandingDto[]
   futurePayments?: StudentStatementFuturePaymentDto[]
+  applicationFee?: StudentStatementApplicationFeeDto | null
+}
+
+// Raw shapes where the live response differs from the DTOs above.
+type RawOutstanding = Omit<StudentStatementOutstandingDto, 'category'> & { category?: number | null }
+type RawFuture = Omit<StudentStatementFuturePaymentDto, 'amountDue'> & { amountDue?: number | null; outstanding?: number | null }
+type RawStatement = Omit<StudentStatementDto, 'outstandingItems' | 'futurePayments'> & {
+  outstandingItems?: RawOutstanding[] | null
+  futurePayments?: RawFuture[] | null
+}
+
+// NCHE / Guild rows carry no ledger, so the description is all there is to
+// tell them apart; anything else ledger-based is Tuition.
+function outstandingCategory(o: RawOutstanding): number {
+  if (o.category != null) return o.category
+  const d = (o.description ?? '').trim().toUpperCase()
+  if (d === 'NCHE') return 3
+  if (d === 'GUILD') return 4
+  return 1
+}
+
+function normalizeStatement(raw: RawStatement): StudentStatementDto {
+  const fee = raw.applicationFee
+  // Shown as a payment row only once something was actually received — the
+  // response returns a 0.00 placeholder with no receipt for an unpaid fee.
+  const feeRow: StudentStatementPaymentDto[] = fee && (fee.amount > 0 || fee.receipt)
+    ? [{
+        slNo: 0, paymentGuid: fee.paymentGuid, category: 6, paymentCode: fee.paymentCode, payDate: fee.payDate,
+        amount: fee.amount, currencyGuid: fee.currencyGuid, currencyName: null, receipt: fee.receipt, payType: fee.payTypeName,
+      }]
+    : []
+  const history = raw.paymentHistory ?? []
+  return {
+    ...raw,
+    // Skip if the backend already lists it in paymentHistory (older shape).
+    paymentHistory: history.some(p => p.category === 6) ? history : [...feeRow, ...history],
+    outstandingItems: (raw.outstandingItems ?? []).map(o => ({ ...o, category: outstandingCategory(o) })),
+    futurePayments: (raw.futurePayments ?? []).map(f => ({ ...f, amountDue: f.amountDue ?? f.outstanding ?? 0 })),
+  }
 }
 
 export interface GetStudentFeeSummaryDto {
@@ -143,7 +199,7 @@ export function searchStudentStatement(filters: StudentStatementSearchFilters, p
 
 export function getStudentStatement(studentGuid: string): Promise<StudentStatementDto> {
   if (MOCK_AUTH) return Promise.resolve(mockStatement)
-  return apiGet<StudentStatementDto>(`/api/v1/students/studentstatement/${studentGuid}`)
+  return apiGet<RawStatement>(`/api/v1/students/studentstatement/${studentGuid}`).then(normalizeStatement)
 }
 
 export function getStudentFeeSummary(studentGuid: string): Promise<GetStudentFeeSummaryDto> {

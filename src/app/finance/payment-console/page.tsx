@@ -52,6 +52,7 @@ import { formatDate, formatDateTime } from '@/lib/date'
 import { AuthError } from '@/lib/api/client'
 import { scrollToFirstError } from '@/lib/scrollToFirstError'
 import { stripLeadingZeros } from '@/lib/errorMessages'
+import { semesterLabel } from '@/lib/semesterLabel'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { useActionGuard } from '@/hooks/users/useActionGuard'
 
@@ -83,7 +84,7 @@ function OutstandingCategoryTable({ items, isLoading, isError }: { items: AllOut
           <span className="pc-ledger-icon"><i className="lni lni-wallet"></i></span>
           <div className="flex-1 min-w-0">
             <div className="pc-ledger-name truncate">{it.description}</div>
-            {it.semesterName && <div className="pc-ledger-sub">{it.semesterName}</div>}
+            {it.semesterName && <div className="pc-ledger-sub">{semesterLabel(it.semesterName)}</div>}
           </div>
           <span className="flex items-baseline gap-1.5 justify-end shrink-0">
             {it.currencyCode && <span className="text-g400 font-semibold" style={{ fontSize: 11 }}>{it.currencyCode}</span>}
@@ -108,63 +109,13 @@ function fmtAmt(n: number) {
   return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
-// Paid-vs-Remaining donut for the Programme Progress stat card (2026-09-11,
-// replacing two separate stat cards, per request) — self-contained SVG, no
-// chart library. Green/amber is the same status pair (good/warning) this
-// page already paints Paid/Outstanding with everywhere else, not a new
-// palette, so it reads as part of this app rather than a bolted-on chart
-// widget. That pair's CVD separation sits in the 6-8 "floor" band (checked
-// via the dataviz skill's validate_palette script) — legal only with
-// secondary encoding, which the legend's text labels + percentages below
-// (never color alone) and the surface gap between the two arcs both supply.
-// No base/track ring is drawn — paid + remaining always sum to ~100%, so
-// the card's own white background shows through the small gap between
-// segments, which *is* the separator (a drawn ring would just be extra ink
-// imitating what the real background already does).
-function ProgrammePaidDonut({ paidPercentage, remainingPercentage }: { paidPercentage: number; remainingPercentage: number }) {
-  const r = 34
-  const strokeWidth = 12
-  const circumference = 2 * Math.PI * r
-  const gap = 4 // px of arc length left as a surface-color gap at each boundary
-  const paid = Math.min(100, Math.max(0, paidPercentage))
-  const remaining = Math.min(100, Math.max(0, remainingPercentage))
-  const paidLen = Math.max(0, (paid / 100) * circumference - gap)
-  const remainingLen = Math.max(0, (remaining / 100) * circumference - gap)
-
-  return (
-    <div className="flex items-center gap-4 mt-1" role="img" aria-label={`${paid.toFixed(2)}% paid, ${remaining.toFixed(2)}% remaining`}>
-      <svg width="84" height="84" viewBox="0 0 84 84" style={{ flexShrink: 0 }}>
-        <g transform="rotate(-90 42 42)">
-          <circle
-            cx="42" cy="42" r={r} fill="none"
-            stroke="var(--green)" strokeWidth={strokeWidth} strokeLinecap="round"
-            strokeDasharray={`${paidLen} ${circumference - paidLen}`}
-          />
-          <circle
-            cx="42" cy="42" r={r} fill="none"
-            stroke="var(--amber)" strokeWidth={strokeWidth} strokeLinecap="round"
-            strokeDasharray={`${remainingLen} ${circumference - remainingLen}`}
-            strokeDashoffset={-(paidLen + gap)}
-          />
-        </g>
-        <text x="42" y="42" textAnchor="middle" dominantBaseline="central" style={{ fontSize: 15, fontWeight: 800, fill: 'var(--g900)' }}>
-          {paid.toFixed(0)}%
-        </text>
-      </svg>
-      <div className="flex flex-col gap-1.5" style={{ fontSize: 12, minWidth: 0 }}>
-        <div className="flex items-center gap-2">
-          <span style={{ width: 9, height: 9, borderRadius: '50%', background: 'var(--green)', flexShrink: 0 }}></span>
-          <span className="text-g700">Paid</span>
-          <span className="font-bold text-green" style={{ marginLeft: 'auto', paddingLeft: 10 }}>{paid.toFixed(2)}%</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span style={{ width: 9, height: 9, borderRadius: '50%', background: 'var(--amber)', flexShrink: 0 }}></span>
-          <span className="text-g700">Remaining</span>
-          <span className="font-bold text-amber" style={{ marginLeft: 'auto', paddingLeft: 10 }}>{remaining.toFixed(2)}%</span>
-        </div>
-      </div>
-    </div>
-  )
+// Icons for Record Payment's method choice, keyed like PAY_TYPE_LABELS.
+const PAY_TYPE_ICONS: Record<number, string> = {
+  1: 'lni-coin',
+  2: 'lni-pencil-alt',
+  3: 'lni-apartment',
+  4: 'lni-files',
+  5: 'lni-world',
 }
 
 // Stable reference for todayRates' "no data yet" case — `data = []` as a
@@ -243,7 +194,15 @@ function todayYmd() {
 
 interface ReceiptData {
   paymentGuid: string; ref: string; code: string; name: string; refNo: string; prog: string; method: string
-  date: string; amount: string; balance: string; advanceMessage: string | null; reRegistrationWarning: string | null
+  // Display strings, all "UGX 1,234.00". allocated = amount − balance (what
+  // went to ledgers); balance = PaymentResultDto.balance, the part of this
+  // payment left over (recorded as an advance), never the student's total owed.
+  date: string; amount: string; allocated: string; balance: string; hasLeftover: boolean
+  advanceMessage: string | null; reRegistrationWarning: string | null
+}
+
+function fmtMoney(code: string, n: number) {
+  return `${code} ${fmtAmt(n)}`.trim()
 }
 
 // Fee-category tab (flow doc: "This page covers the tuition tab only.
@@ -485,6 +444,13 @@ export default function PaymentConsolePage() {
   }
 
   const [receipt, setReceipt] = useState<ReceiptData | null>(null)
+  // Bring the receipt card into view once a tuition payment saves.
+  const receiptRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!receipt) return
+    const raf = requestAnimationFrame(() => receiptRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+    return () => cancelAnimationFrame(raf)
+  }, [receipt])
 
   // ── Apply Advance (tuitionMode === 'adjustment') ────────────────────────
   // Draws down one of this application's own advance deposits against its
@@ -950,6 +916,16 @@ export default function PaymentConsolePage() {
 
   const selectedCurrency = currencies.find(c => c.currencyGuid === currencyGuid)
 
+  // Fee Breakdown's coverage bar and Record Payment's summary. The ledger
+  // table converts into the Currency Received, so the typed amount and
+  // convertedTotalNetPayable are already in the same currency. Paying more
+  // than this semester owes is allowed (it carries on to later semesters),
+  // so a negative balance shows as "beyond this semester", not an error.
+  const payAmountNum = parseFloat(amount) || 0
+  const balanceAfterPayment = convertedTotalNetPayable - payAmountNum
+  const paymentCoverage = convertedTotalNetPayable > 0 ? Math.min(1, payAmountNum / convertedTotalNetPayable) : 0
+  const payCurrencyCode = selectedCurrency?.currencyCode ?? ''
+
   const payableLedgersParams = useMemo(() => {
     const amt = parseFloat(debouncedAmount) || 0
     if (!selectedApplicationGuid || !selectedCurrency || amt <= 0 || !payDate) return null
@@ -1299,8 +1275,10 @@ export default function PaymentConsolePage() {
             prog: programName ?? '—',
             method: PAY_TYPE_LABELS[payTypeNum] ?? `Type ${payTypeNum}`,
             date: formatDateTime(now),
-            amount: `${amt.toLocaleString()} ${selectedCurrency.currencyCode}`,
-            balance: `${selectedCurrency.currencyCode} ${result.balance.toLocaleString()}`,
+            amount: fmtMoney(selectedCurrency.currencyCode, amt),
+            allocated: fmtMoney(selectedCurrency.currencyCode, Math.max(0, amt - result.balance)),
+            balance: fmtMoney(selectedCurrency.currencyCode, result.balance),
+            hasLeftover: result.balance > 0,
             advanceMessage: result.advanceMessage,
             reRegistrationWarning: result.reRegistrationWarning,
           })
@@ -1311,15 +1289,10 @@ export default function PaymentConsolePage() {
           // the fresh receipt.
           setAmount('')
           setCurrencyGuid('')
-          setSuccessModal({
-            title: 'Tuition Payment Recorded',
-            rows: [
-              ['Receipt', result.receipt],
-              ['Amount', `${amt.toLocaleString()} ${selectedCurrency.currencyCode}`],
-              ['Unallocated Balance', `${selectedCurrency.currencyCode} ${result.balance.toLocaleString()}`],
-            ],
-            notices: [result.advanceMessage, result.reRegistrationWarning].filter((n): n is string => !!n),
-          })
+          // No success popup for tuition — the receipt card below already
+          // shows the same figures and notices (see the receiptRef effect,
+          // which scrolls to it). Other Payment / Apply Advance keep theirs.
+          showToast(`Payment recorded — receipt ${result.receipt}`, 'success')
         },
         onError: (error: Error) => {
           // 409 reregistration_required — the student is behind on results.
@@ -1419,7 +1392,27 @@ export default function PaymentConsolePage() {
             <div className="pg-title">Payment Collection Console</div>
             <div className="pg-sub">Search student → view outstanding balance → record payment → server-computed allocation</div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
+            {/* Student-level actions sit in the page header once a student
+                is loaded (Main.dc.html) — Payment History was a button on
+                the old blue student card. Change Student jumps back to the
+                search box with it focused. */}
+            {profile && selectedApplicationGuid && (
+              <>
+                <button className="btn btn-neu btn-sm" onClick={() => setShowPaymentHistory(true)}>
+                  <i className="lni lni-folder"></i> Payment History
+                </button>
+                <button
+                  className="btn btn-neu btn-sm"
+                  onClick={() => {
+                    searchBoxRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                    searchBoxRef.current?.querySelector('input')?.focus({ preventScroll: true })
+                  }}
+                >
+                  <i className="lni lni-search-alt"></i> Change Student
+                </button>
+              </>
+            )}
             {/* Toggles the Exchange Rate bar below — per the redesign, rates
                 move behind this button instead of always showing, so the
                 page opens straight to Student Search. */}
@@ -1621,89 +1614,83 @@ export default function PaymentConsolePage() {
               comment) — it's the first thing after the tabs, so scrolling
               here brings the rest of the body (Payment History, Outstanding
               Balance/payment form) into view right behind it. */}
-          {profile && (
-            <div className="card p-0 overflow-hidden" ref={mainAreaRef}>
-              <div className="pc-hero">
-                <div className="pc-hero-top">
-                  <div className="pc-hero-avatar">{initialsFor(applicantName(profile))}</div>
-                  <div className="flex-1 min-w-0">
-                    <div className="pc-hero-name truncate">{applicantName(profile)}</div>
-                    <div className="pc-hero-sub truncate">{programName ?? '—'}</div>
-                    <span className="pc-hero-badge"><i className="lni lni-bookmark"></i> {profile.appRefNo}</span>
+          {/* Student header (2026-11-02 redesign, per Main.dc.html): white
+              card, identity on the left, programme-level figures on the
+              right, every fact in one tinted row below. Same data and the
+              same two actions as the old blue .pc-hero (which stays for
+              Student Profile/Discount Allocation). */}
+          {profile && (() => {
+            const fullName = applicantName(profile)
+            const intake = profile.intakeCode && profile.intakeCode !== 'null' ? profile.intakeCode : null
+            const regStatus = profile.regStatusName?.trim() || null
+            const regTone = regStatus && /yet|pending|not|block|hold/i.test(regStatus) ? 'amber' : 'green'
+            const email = profile.emailId ?? profile.universityEmail ?? null
+            const showProgramme = !isLedgersLoading && !!currentSemesterPayable && currentSemesterPayable.totalProgramAmount > 0
+            const facts: { label: string; value: string | null | undefined; mono?: boolean }[] = [
+              // Often the same number — shown once when they match.
+              ...(profile.studentNum && profile.studentNum === profile.studentRegNo
+                ? [{ label: 'Student / Reg. no.', value: profile.studentNum, mono: true }]
+                : [
+                    { label: 'Student no.', value: profile.studentNum, mono: true },
+                    { label: 'Reg. no.', value: profile.studentRegNo, mono: true },
+                  ]),
+              { label: 'Semester', value: semesterLabel(semName) },
+              { label: 'Intake', value: intake },
+              { label: 'Batch · Year', value: [batchCode, profile.yearCode].filter(Boolean).join(' · ') || null },
+              { label: 'Phone', value: profile.phone },
+              { label: 'Email', value: email },
+              { label: 'Refugee', value: refugeeLabel(profile.refugee) },
+              { label: 'Category', value: studCategoryLabel(profile.studCategory) },
+            ]
+            return (
+            <section className="card pcx-student" aria-label="Student" ref={mainAreaRef}>
+              <div className="pcx-student-top">
+                <div className="pcx-student-id">
+                  <div className="pcx-avatar" aria-hidden="true">{initialsFor(fullName)}</div>
+                  <div className="min-w-0">
+                    <div className="pcx-name-row">
+                      <h2 className="pcx-name">{fullName}</h2>
+                      {regStatus && <span className={`pcx-pill pcx-pill-${regTone}`}><span className="pcx-dot" aria-hidden="true"></span>{regStatus}</span>}
+                    </div>
+                    <p className="pcx-sub">{programName ?? '—'}</p>
+                    <div className="pcx-meta">
+                      {intake && <span className="pcx-meta-chip">Intake <b>{intake}</b></span>}
+                      <span className="pcx-meta-chip">Application <b className="tabular-nums">{profile.appRefNo}</b></span>
+                    </div>
                   </div>
-                  {/* Card-level actions (2026-09-11, per request) — Total
-                      Outstanding moved here from its own amber stat card
-                      below (see the Programme Progress donut's own
-                      comment); Payment History moved here from its
-                      permanent card in the body, now a popup instead (see
-                      showPaymentHistory). Third flex child of
-                      .pc-hero-top, pushed to the top-right corner by the
-                      name block's own flex-1 rather than needing
-                      justify-content on the row. Stacked/right-aligned via
-                      .pc-hero-actions-top so two buttons don't fight the
-                      name block for width on a narrower card — was a row
-                      below .pc-hero-facts, which left the Semester/Intake
-                      grid with a wide empty gap of its own underneath. */}
-                  <div className="pc-hero-actions pc-hero-actions-top">
-                    {!isLedgersLoading && currentSemesterPayable && currentSemesterPayable.totalProgramAmount > 0 && (
-                      <button type="button" className="pc-hero-action" onClick={() => setShowUpcomingSemesters(true)}>
-                        <i className="lni lni-wallet"></i>
-                        <span>Total Outstanding</span>
-                        <strong>{fmtAmt(totalProgramOutstanding)}</strong>
-                      </button>
-                    )}
-                    <button type="button" className="pc-hero-action" onClick={() => setShowPaymentHistory(true)}>
-                      <i className="lni lni-folder"></i>
-                      <span>Payment History</span>
+                </div>
+                {showProgramme && (
+                  <div className="pcx-figures">
+                    <button type="button" className="pcx-figure pcx-figure-btn pcx-figure-due" onClick={() => setShowUpcomingSemesters(true)} title="See every semester's ledgers">
+                      <span className="pcx-figure-lbl">Total outstanding <i className="lni lni-chevron-right" aria-hidden="true"></i></span>
+                      <span className="pcx-figure-val text-amber">{fmtAmt(totalProgramOutstanding)}</span>
                     </button>
+                    <div className="pcx-figure">
+                      <span className="pcx-figure-lbl">Programme paid</span>
+                      <span className="pcx-figure-val">{paidPercentage.toFixed(1).replace(/\.0$/, '')}%</span>
+                      <span className="pcx-mini-bar" role="img" aria-label={`${paidPercentage.toFixed(1)} percent of the programme paid, ${remainingPercentage.toFixed(1)} percent remaining`}>
+                        <span style={{ width: `${Math.min(100, Math.max(0, paidPercentage))}%` }}></span>
+                      </span>
+                    </div>
                   </div>
-                </div>
-                <div className="pc-hero-facts">
-                  {/* title on each value gives the full text as a native
-                      hover tooltip when it's long enough to be
-                      ellipsis-truncated by pc-hero-fact-val, without
-                      letting a long value wrap and break the grid's row
-                      alignment (confirmed live: wrapping a long value
-                      staggered every row after it out of alignment).
-                      Campus dropped entirely (2026-09-09, per request) —
-                      it only ever existed via the useCampuses() fallback
-                      lookup that's now gone, nothing left to show here. */}
-                  {/* Student identifiers first. Both are null until the
-                      applicant is registered (same lifecycle as studentGuid),
-                      so an applicant shows "—". */}
-                  <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Student No</span><span className="pc-hero-fact-val tabular-nums" title={profile.studentNum || '—'}>{profile.studentNum || '—'}</span></div>
-                  <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Reg. No</span><span className="pc-hero-fact-val tabular-nums" title={profile.studentRegNo || '—'}>{profile.studentRegNo || '—'}</span></div>
-                  <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Semester</span><span className="pc-hero-fact-val" title={semName ?? '—'}>{semName ?? '—'}</span></div>
-                  {/* Guards against the literal string "null" —
-                      confirmed live on an application with no intake
-                      assigned yet, this field can come back as the
-                      4-char string "null" rather than a real null,
-                      which ?? alone doesn't catch. */}
-                  <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Intake</span><span className="pc-hero-fact-val" title={profile.intakeCode && profile.intakeCode !== 'null' ? profile.intakeCode : '—'}>{profile.intakeCode && profile.intakeCode !== 'null' ? profile.intakeCode : '—'}</span></div>
-                  <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Batch</span><span className="pc-hero-fact-val" title={batchCode ?? '—'}>{batchCode ?? '—'}</span></div>
-                  <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Year</span><span className="pc-hero-fact-val" title={profile.yearCode ?? '—'}>{profile.yearCode ?? '—'}</span></div>
-                  <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Phone</span><span className="pc-hero-fact-val" title={profile.phone ?? '—'}>{profile.phone ?? '—'}</span></div>
-                  {/* Paired with Phone as a normal cell, not its own
-                      pc-hero-fact-span2 row (2026-09-11 — that left a
-                      visible blank cell next to Phone whenever there was no
-                      7th fact to fill it, confirmed live). The span2 row's
-                      original reasoning — pairing a long email with a short
-                      neighbor risks uneven row heights from wrapping — no
-                      longer applies: .truncate below already keeps this to
-                      one line with an ellipsis, same as it did when span2
-                      too, so nothing is lost by letting it sit in the grid
-                      like every other fact. */}
-                  <div className="pc-hero-fact">
-                    <span className="pc-hero-fact-lbl">Email</span>
-                    <span className="pc-hero-fact-val truncate" title={profile.emailId ?? profile.universityEmail ?? '—'}>{profile.emailId ?? profile.universityEmail ?? '—'}</span>
-                  </div>
-                  <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Reg Status</span><span className="pc-hero-fact-val" title={profile.regStatusName ?? '—'}>{profile.regStatusName ?? '—'}</span></div>
-                  <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Refugee</span><span className="pc-hero-fact-val">{refugeeLabel(profile.refugee)}</span></div>
-                  <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Category</span><span className="pc-hero-fact-val">{studCategoryLabel(profile.studCategory)}</span></div>
-                </div>
+                )}
               </div>
-            </div>
-          )}
+              {/* Column counts for one row / three balanced rows — the CSS
+                  picks by the card's own width (container query). */}
+              <dl
+                className="pcx-facts"
+                style={{ '--n': facts.length, '--third': Math.ceil(facts.length / 3) } as React.CSSProperties}
+              >
+                {facts.map(f => (
+                  <div key={f.label}>
+                    <dt>{f.label}</dt>
+                    <dd className={f.mono ? 'tabular-nums' : undefined} title={f.value || '—'}>{f.value || '—'}</dd>
+                  </div>
+                ))}
+              </dl>
+            </section>
+            )
+          })()}
 
           {/* Payment History — a popup now (2026-09-11, per request),
               opened from the button on the student card above, instead of
@@ -1862,77 +1849,46 @@ export default function PaymentConsolePage() {
               longer has a second column to balance against. */}
           <div className="flex flex-col gap-5 min-w-0">
 
-            {/* Other Payment tab — restructured 2026-09-15 to match Tuition's
-                own .pc-tuition-split two-card layout exactly (left card:
-                Outstanding Balance + ledger rows + Advance Deposit table;
-                right card: "Payment Detail" fields), not a single merged
-                card any more. Outstanding balance is real (GET
-                .../outstanding-all, filtered to category 2); the
-                payment-entry form and its payment log stay a UI-first mock
-                laid out after the legacy ISMS reference screen
-                (frmTrnPaymentOther.aspx) — a ledger picker, an Advance
-                Payment toggle, bank-account gating matching Tuition's own
-                bank fields, and a flat, append-only payment log (no
-                edit/delete, per the reference screen's own "Paid Fee
-                Details" table) — no documented single-category Other-payment
-                submit endpoint exists yet, so nothing here calls a real API.
-                NCHE and Guild are dropped from this page entirely — they'll
-                get their own pages later. */}
-            {activePayTab === 'other' && (
+            {/* Other Payment tab (2026-11-02 redesign, same panels as Semester
+                Payment, per Main.dc.html). Left: what's outstanding plus the
+                Ledger / Ledger Amount rows (and the deposit picker in Advance
+                mode). Right: Record Payment. Same state, validation and
+                submit as before (otherSaveEntry → post-payment-other.md, one
+                call per row). */}
+            {activePayTab === 'other' && (() => {
+              const otherCurrencyCode = currencies.find(c => c.currencyGuid === otherCurrencyGuid)?.currencyCode ?? ''
+              const otherReceiptBookCode = otherReceiptBooks.find(r => r.receiptBookGuid === otherReceiptBookGuid)?.bookCode
+              const otherMethodLabel = otherIsAdvance ? 'Advance draw-down' : (PAY_TYPE_LABELS[Number(otherPayType)] ?? `Type ${otherPayType}`)
+              const otherSource = otherIsAdvance
+                ? (selectedAdvance ? `From deposit ${selectedAdvance.advPaymentCode}` : 'No deposit picked yet')
+                : (otherReceiptBookCode ? `Receipt book ${otherReceiptBookCode}` : 'No receipt book yet')
+              return (
               <div className="pc-tuition-split">
-                <div className="card flex flex-col gap-4 min-w-0">
-                  <div className="card-hdr">
-                    <div className="card-title"><span className="ctitle-icon"><i className="lni lni-wallet"></i></span> Other Payment</div>
+                <div className="card pcx-panel min-w-0">
+                  <div className="pcx-panel-hdr">
+                    <div className="min-w-0">
+                      <h3 className="pcx-panel-title">Other Fees</h3>
+                      <p className="pcx-panel-sub">Pick each ledger being paid and enter its amount</p>
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {/* Hidden when there's no deposit to draw from. */}
+                      {hasAdvanceDeposits && (
+                        <label className="pcx-check">
+                          <input type="checkbox" checked={otherIsAdvance} onChange={e => toggleAdvancePayment(e.target.checked)} />
+                          Advance Payment
+                        </label>
+                      )}
+                      <button type="button" className="btn btn-neu btn-sm" onClick={addOtherLedgerRow}>
+                        <i className="lni lni-plus"></i> Add Row
+                      </button>
+                    </div>
                   </div>
 
                   <OutstandingCategoryTable items={otherOutstanding} isLoading={isAllOutstandingLoading} isError={isAllOutstandingError} />
 
-                  {/* Advance Payment checkbox — same placement/treatment as
-                      Semester Payment's own "Apply Advance" checkbox
-                      (unlabeled divider, checkbox pushed to the end via
-                      justify-end — "Payment Detail" itself is the RIGHT
-                      card's own header now, not repeated here). Hidden
-                      entirely when hasAdvanceDeposits is false, same
-                      reasoning as before — nothing to draw from, so
-                      there's nothing this checkbox would let the cashier
-                      do. */}
-                  {hasAdvanceDeposits && (
-                    <div className="sec-divider flex items-center justify-end flex-wrap gap-2">
-                      <label className="flex items-center gap-2" style={{ fontSize: 'var(--fs-sm)', cursor: 'pointer' }}>
-                        <input type="checkbox" checked={otherIsAdvance} onChange={e => toggleAdvancePayment(e.target.checked)} />
-                        Advance Payment
-                      </label>
-                    </div>
-                  )}
-
-                  {/* Ledger/Ledger Amount table (2026-09-10, per request) —
-                    replaces the old single Ledger + "Amount to Apply" pair
-                    with a repeatable table, one row per ledger the cashier
-                    wants to collect against in this visit, same
-                    add-row/Total-footer shape as Semester Payment's own
-                    Outstanding Balance table above (just two editable
-                    columns here instead of that one's read-only five). Real
-                    catalogue (get-ledger-others.md) — each row's value is
-                    the ledgerOthersGuid CreatePaymentOther needs, not a
-                    display label. Only two grid columns per the request —
-                    the remove-row control lives inside the Ledger Amount
-                    cell itself rather than as its own column. otherSaveEntry
-                    fires one real payment call per valid row (see its own
-                    comment); the Total below is otherLedgerRowsTotal, also
-                    what the "Amount to Collect" summary strip and (in
-                    Advance mode) the deposit-balance check further down use. */}
-                <div className="mb-[14px]">
-                  {/* Moved above the table, right-aligned (2026-09-11, per
-                      request) — was a plain button below the Total footer
-                      row; same action, just placed where a "row-adding"
-                      control on a table conventionally sits, next to what
-                      it's adding to instead of trailing after the totals. */}
-                  <div className="flex justify-end mb-2">
-                    <button type="button" className="btn btn-neu btn-sm" onClick={addOtherLedgerRow}>
-                      <i className="lni lni-plus"></i> Add Row
-                    </button>
-                  </div>
-                  <div className="recgrid" style={{ gridTemplateColumns: '1.6fr 1fr' }}>
+                  {/* Ledger / Ledger Amount rows (get-ledger-others.md). The
+                      remove-row control sits inside the amount cell. */}
+                  <div className="recgrid pcx-ledgers" style={{ gridTemplateColumns: '1.6fr 1fr' }}>
                     <div className="recgrid-row recgrid-hdr">
                       <span style={{ textAlign: 'left' }}>Ledger</span>
                       <span>Ledger Amount</span>
@@ -1952,11 +1908,8 @@ export default function PaymentConsolePage() {
                         <span style={{ textAlign: 'left' }}>
                           <SearchSelect
                             placeholder="— Select Ledger —"
-                            // Excludes whatever's already picked in every OTHER
-                            // row (this row's own current value stays in its
-                            // own list) — a ledger can't be added twice, so
-                            // there's no dropdown path to a duplicate, not just
-                            // a submit-time rejection of one.
+                            // Excludes ledgers already picked in other rows,
+                            // so a ledger can't be added twice.
                             options={ledgerOthers
                               .filter(l => l.ledgerOthersGuid === row.ledgerOthersGuid || !otherLedgerRows.some(r => r.id !== row.id && r.ledgerOthersGuid === l.ledgerOthersGuid))
                               .map(l => ({ value: l.ledgerOthersGuid, label: l.ledgerName }))}
@@ -1981,8 +1934,9 @@ export default function PaymentConsolePage() {
                               <button
                                 type="button"
                                 title="Remove row"
+                                aria-label="Remove row"
                                 onClick={() => removeOtherLedgerRow(row.id)}
-                                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 3, color: 'var(--g300)', display: 'flex', alignItems: 'center', flexShrink: 0 }}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 3, color: 'var(--g400)', display: 'flex', alignItems: 'center', flexShrink: 0 }}
                               >
                                 <i className="lni lni-trash-can"></i>
                               </button>
@@ -1996,43 +1950,22 @@ export default function PaymentConsolePage() {
                       )
                     })}
                     <div className="recgrid-foot recgrid-total">
-                      <span style={{ gridColumn: '1 / 2' }}>Total</span>
-                      <span>{fmtAmt(otherLedgerRowsTotal)}</span>
+                      <span style={{ gridColumn: '1 / 2' }}>Total {otherCurrencyCode && `(${otherCurrencyCode})`}</span>
+                      <span style={{ color: 'var(--gold)' }}>{fmtAmt(otherLedgerRowsTotal)}</span>
                     </div>
                   </div>
-                </div>
 
-                {/* Advance Payment deposit table — the checkbox that gates
-                    this moved up into the "Payment Detail" section header
-                    above (2026-09-09, per request, matching Semester
-                    Payment's own "Apply Advance" checkbox placement).
-                    Checking it reveals this inline table (2026-09-09 —
-                    moved off a popup modal per an earlier request) instead
-                    of flipping otherIsAdvance straight away;
-                    selectAdvanceDeposit below only fires once a row is
-                    actually clicked. */}
-                {otherIsAdvance && (
-                  <div className="mb-[14px]">
-                    {/* Same Remaining Advance Balance strip as Semester
-                        Payment's own Apply Advance mode. Label now sits
-                        inside the card itself, one row (2026-09-09, per
-                        request), rather than as its own line above. The
-                        card has no fixed width, so .pc-total-due's own
-                        space-between has nothing to distribute once
-                        label+value fit snugly — an explicit gap is what
-                        actually keeps them apart (replaces the old
-                        minWidth-based hack, which doesn't help once the
-                        box is sized to its own content instead of
-                        sitting in a row of same-width siblings). */}
+                  {/* Advance Payment deposit picker — revealed by the
+                      checkbox above; a row click selects (or deselects) the
+                      deposit to draw from. */}
+                  {otherIsAdvance && (
+                  <div className="flex flex-col gap-2">
                     {advanceBalances.length > 0 && (
-                      <div className="flex gap-4 flex-wrap mb-2">
+                      <div className="flex gap-4 flex-wrap">
                         {advanceBalances.map(b => (
-                          <div className="pc-total-due" style={{ gap: 14, background: 'var(--b50)', border: '1.5px solid var(--b200)' }} key={b.currencyGuid}>
-                            {/* .pc-total-due's own amber/gold gradient reads as
-                                "outstanding/due" (see Total Outstanding above),
-                                wrong signal for an available balance — overridden
-                                to the same blue (--b50/--b200) this page already
-                                uses for the "Drawing from" deposit badge below. */}
+                          // Blue, not .pc-total-due's amber — this is money
+                          // available, not money owed.
+                          <div className="pc-total-due" style={{ gap: 14, marginTop: 0, background: 'var(--b50)', border: '1.5px solid var(--b200)' }} key={b.currencyGuid}>
                             <span className="text-muted" style={{ fontSize: 12 }}>Remaining Advance Balance</span>
                             <span className="flex items-baseline gap-1.5">
                               <span className="text-g400 font-semibold" style={{ fontSize: 11 }}>{b.currencyName}</span>
@@ -2043,36 +1976,20 @@ export default function PaymentConsolePage() {
                       </div>
                     )}
                     {selectedAdvance && (
-                      <div className="flex items-center gap-2 mb-2 p-2.5 rounded-[var(--rsm)] bg-b50 border border-[1.5px] border-b100">
+                      <div className="flex items-center gap-2 p-2.5 rounded-[var(--rsm)] bg-b50 border border-[1.5px] border-b100">
                         <div style={{ fontSize: 12 }}>
                           Drawing from <span className="font-mono text-blue font-bold">{selectedAdvance.advPaymentCode}</span>
                           <span className="text-g500"> · Balance {selectedAdvance.balance.toLocaleString()} {selectedAdvance.currencyCode}</span>
                         </div>
                       </div>
                     )}
-                    <div className="text-g500" style={{ fontSize: 12, marginBottom: 8 }}>
+                    <div className="text-g500" style={{ fontSize: 12 }}>
                       {selectedAdvance ? 'Pick a different deposit to draw from instead —' : 'Pick a deposit to draw from —'} every row below still has an undrawn balance.
                     </div>
-                    {/* Same .recgrid CSS-Grid "table look" as the Outstanding
-                        Balance card above (2026-09-09, per request), not a
-                        <table> — see globals.css's own .recgrid comment for
-                        why (subgrid keeps header/body columns pixel-aligned).
-                        Extra leading radio column, so the shared 5-column
-                        template is overridden here via an inline
-                        gridTemplateColumns rather than touching the global
-                        class (which Outstanding Balance still uses as-is).
-                        Deposit Code/Date get an explicit textAlign: 'left'
-                        override — .recgrid-body>span:not(:first-child) right-
-                        aligns every column after the first by default, which
-                        reads fine for the numeric Deposited/Remaining columns
-                        but wrong for a code/date. Ends in a Total Remaining
-                        Deposits footer, one row per currency (mirrors the
-                        Remaining Advance Balance strip above, since it's the
-                        exact same advanceBalances figure) — same
-                        recgrid-foot/recgrid-total footer convention
-                        Outstanding Balance's own Discount/Total Payable rows
-                        use. */}
-                    <div className="recgrid" style={{ gridTemplateColumns: '36px 1.3fr 1fr 1fr 0.8fr 1fr' }}>
+                    {/* Extra leading radio column, so the shared .recgrid
+                        template is overridden inline; Code/Date read left-
+                        aligned, the amounts right-aligned. */}
+                    <div className="recgrid pcx-ledgers" style={{ gridTemplateColumns: '36px 1.3fr 1fr 1fr 0.8fr 1fr' }}>
                       <div className="recgrid-row recgrid-hdr">
                         <span></span>
                         <span style={{ textAlign: 'left' }}>Deposit Code</span>
@@ -2090,10 +2007,7 @@ export default function PaymentConsolePage() {
                           {deposits.map(r => {
                             const isSelected = r.paymentAdvanceGuid === selectedAdvance?.paymentAdvanceGuid
                             const native = advanceNativeByGuid.get(r.paymentAdvanceGuid)
-                            // Same fraction-of-original applies in either currency —
-                            // no exchange rate needed to carry the remaining balance
-                            // over to the native figure, just the ratio the
-                            // base-currency pair already implies.
+                            // Same fraction-of-original applies in either currency.
                             const nativeRemaining = native && r.originalAmount > 0 ? native.amount * (r.balance / r.originalAmount) : null
                             return (
                               <div
@@ -2107,12 +2021,8 @@ export default function PaymentConsolePage() {
                                     type="radio"
                                     checked={isSelected}
                                     onChange={() => selectAdvanceDeposit(r)}
-                                    // A native radio only fires onChange on an
-                                    // unchecked→checked transition — clicking an
-                                    // already-checked one to deselect it wouldn't
-                                    // otherwise do anything, so the toggle is
-                                    // driven from onClick instead (which fires on
-                                    // every click regardless of prior state).
+                                    // A checked→checked click fires no onChange,
+                                    // so the deselect toggle runs from onClick.
                                     onClick={e => { e.stopPropagation(); selectAdvanceDeposit(r) }}
                                   />
                                 </span>
@@ -2139,14 +2049,8 @@ export default function PaymentConsolePage() {
                             )
                           })}
                           {advanceBalances.map(b => (
-                            // .recgrid-foot>span:first-child's own grid-column: 1/5
-                            // (globals.css) assumes the shared 5-column template —
-                            // overridden here to 1/6 so it spans every column up to
-                            // (not including) Remaining, the same way the 5-column
-                            // version spans up to Outstanding; the value span then
-                            // auto-places into the now-correct 6th column instead of
-                            // sliding one column short (under Cur.) as it would with
-                            // the un-overridden 1/5 on a 6-column row.
+                            // 1/6 so the value lands under Remaining on this
+                            // 6-column grid (the shared rule assumes 5).
                             <div className="recgrid-foot recgrid-total" key={b.currencyGuid}>
                               <span style={{ gridColumn: '1 / 6' }}>Total Remaining Deposits ({b.currencyName})</span>
                               <span>{fmtAmt(b.balance)}</span>
@@ -2156,167 +2060,152 @@ export default function PaymentConsolePage() {
                       )}
                     </div>
                   </div>
-                )}
+                  )}
                 </div>
 
-                <div className="card flex flex-col gap-4 min-w-0">
-                  {/* Payment Detail — right card's own header now, matching
-                      Tuition's own right-card divider exactly (was this
-                      card's single shared header, moved off the left card
-                      above per this block's own top comment). */}
-                  <div className="sec-divider" style={{ marginTop: 0 }}>Payment Detail</div>
-
-                  {/* Live summary strip — same treatment as Tuition's own,
-                      now sourced from the Ledger Amount table's own Total
-                      (otherLedgerRowsTotal) rather than a separately-typed
-                      Amount field. */}
-                  {otherLedgerRowsTotal > 0 && (
-                  <div className="pc-pay-summary">
+                <div className="card pcx-panel min-w-0">
+                  <div className="pcx-panel-hdr">
                     <div>
-                      <div className="pc-pay-lbl">Amount to Collect</div>
-                      <div className="pc-pay-amt">{currencies.find(c => c.currencyGuid === otherCurrencyGuid)?.currencyCode ?? ''} {otherLedgerRowsTotal.toLocaleString()}</div>
+                      <h3 className="pcx-panel-title">Record Payment</h3>
+                      <p className="pcx-panel-sub">Fields marked <span className="req">*</span> are required</p>
                     </div>
-                    <div className="pc-pay-meta">
-                      <div><span>Date</span><b>{otherPayDate}</b></div>
-                      <div><span>Method</span><b>{otherIsAdvance ? 'Advance Draw-down' : (PAY_TYPE_LABELS[Number(otherPayType)] ?? `Type ${otherPayType}`)}</b></div>
+                    {/* Same popup as the page header's button — here so a
+                        saved payment can be checked without scrolling up. */}
+                    <button type="button" className="btn btn-neu btn-sm" onClick={() => setShowPaymentHistory(true)}>
+                      <i className="lni lni-folder"></i> Payment History
+                    </button>
+                  </div>
+
+                  {/* The amount is the rows' total on the left — there's no
+                      separate amount field to drift out of sync with it. */}
+                  <div className="pcx-collect" aria-live="polite">
+                    <span className="pcx-collect-lbl">Amount to collect</span>
+                    <div className="pcx-collect-amt">
+                      <span className="pcx-collect-cur">{otherCurrencyCode}</span>
+                      <span className="pcx-collect-val">{otherLedgerRowsTotal.toLocaleString()}</span>
+                    </div>
+                    <span className="pcx-collect-meta">{otherMethodLabel} · {formatDate(otherPayDate)} · {otherSource}</span>
+                  </div>
+
+                  <div className="g2">
+                    <div className="fg">
+                      {/* Locked in Advance mode — it follows the drawn-down
+                          deposit's own currency (set by selectAdvanceDeposit). */}
+                      <div className="lbl">Currency <span className="req">*</span></div>
+                      {otherIsAdvance ? (
+                        <input className="ctrl" readOnly value={currencies.find(c => c.currencyGuid === otherCurrencyGuid)?.currencyName ?? ''} placeholder="—" />
+                      ) : (
+                        <SearchSelect
+                          placeholder="— Select Currency —"
+                          options={currencies.map(c => ({ value: c.currencyGuid, label: `${c.currencyCode} — ${c.currencyName}` }))}
+                          value={otherCurrencyGuid}
+                          onChange={setOtherCurrencyGuid}
+                        />
+                      )}
+                    </div>
+                    <div className="fg">
+                      {/* View-only — always today. */}
+                      <div className="lbl">Payment Date</div>
+                      <input className="ctrl" readOnly value={formatDate(otherPayDate)} />
                     </div>
                   </div>
-                )}
-                {/* Currency + Amount paired, amount on the right — same
-                    pairing as Tuition's own Currency/Amount row. */}
-                <div className="g2 mb-[14px]">
+
+                  {/* Advance mode claims no new receipt or bank — the money
+                      was receipted when the advance was deposited — so the
+                      method, receipt book and bank are hidden (sent as null). */}
+                  {!otherIsAdvance && (
+                    <>
+                      <fieldset className="pcx-methods">
+                        <legend className="lbl">Payment Method <span className="req">*</span></legend>
+                        <div className="pcx-methods-grid">
+                          {Object.entries(PAY_TYPE_LABELS).map(([value, label]) => (
+                            <label key={value} className={`pcx-method${otherPayType === value ? ' active' : ''}`}>
+                              <input
+                                type="radio"
+                                name="pcx-other-pay-type"
+                                value={value}
+                                checked={otherPayType === value}
+                                // Receipt books are filtered by the method's
+                                // category, and Cash has no bank — both reset.
+                                onChange={() => { setOtherPayType(value); setOtherReceiptBookGuid(''); setOtherProcBankGuid('') }}
+                              />
+                              <i className={`lni ${PAY_TYPE_ICONS[Number(value)] ?? 'lni-wallet'}`} aria-hidden="true"></i>
+                              {label}
+                            </label>
+                          ))}
+                        </div>
+                      </fieldset>
+
+                      <div className="g2">
+                        <div className="fg">
+                          <div className="lbl">Receipt Book <span className="req">*</span></div>
+                          <SearchSelect
+                            placeholder="— Select Receipt Book —"
+                            options={otherReceiptBooks.map(r => ({ value: r.receiptBookGuid, label: r.bookCode }))}
+                            value={otherReceiptBookGuid}
+                            onChange={setOtherReceiptBookGuid}
+                          />
+                        </div>
+                        {Number(otherPayType) > 1 && (
+                          <div className="fg">
+                            <div className="lbl">Bank Name <span className="req">*</span></div>
+                            <SearchSelect
+                              placeholder="— Select Bank —"
+                              options={banks.map(b => ({ value: b.procBankGuid, label: b.bankName }))}
+                              value={otherProcBankGuid}
+                              onChange={setOtherProcBankGuid}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
+
                   <div className="fg">
-                    {/* Editable again (2026-09-09, per request — was reported
-                        as "the dropdown not showing" even outside Advance
-                        mode). Locked read-only ONLY while otherIsAdvance is
-                        true, since Currency then has to follow the drawn-
-                        down deposit's own currency (set by
-                        selectAdvanceDeposit) rather than a free cashier
-                        pick — there's nothing to choose between in that
-                        case. Outside Advance mode there's no such
-                        constraint, so it's a real SearchSelect again,
-                        defaulting to Finance's own default currency the
-                        same way it always has (see the effect above). */}
-                    <div className="lbl">Currency <span className="req">*</span></div>
-                    {otherIsAdvance ? (
-                      <input className="ctrl" readOnly value={currencies.find(c => c.currencyGuid === otherCurrencyGuid)?.currencyName ?? ''} placeholder="—" />
-                    ) : (
-                      <SearchSelect
-                        placeholder="— Select Currency —"
-                        options={currencies.map(c => ({ value: c.currencyGuid, label: `${c.currencyCode} — ${c.currencyName}` }))}
-                        value={otherCurrencyGuid}
-                        onChange={setOtherCurrencyGuid}
-                      />  
-                    )}
+                    <div className="lbl">Remarks <span className="text-g400" style={{ fontWeight: 500 }}>(optional)</span></div>
+                    <textarea className="ctrl" rows={2} placeholder="Reference number, payer name or notes" value={otherRemarks} onChange={e => setOtherRemarks(e.target.value)} />
                   </div>
-                  <div className="fg">
-                    {/* Read-only now — the amount to collect is the Ledger
-                        Amount table's own Total above (otherLedgerRowsTotal),
-                        not a separately-typed figure that could drift out of
-                        sync with what the rows actually add up to. */}
-                    <div className="lbl">Amount</div>
-                    <input className="amt-val-input" readOnly
-                      style={{ fontSize: 18, fontWeight: 700, color: 'var(--g700)', cursor: 'not-allowed' }}
-                      value={fmtAmt(otherLedgerRowsTotal)} />
+
+                  <div className="pcx-actions">
+                    {/* Cancel clears the form back to its defaults — nothing has been sent. */}
+                    <button type="button" className="btn btn-neu btn-lg" onClick={resetOtherForm} disabled={isSavingOtherBatch}>
+                      Cancel
+                    </button>
+                    <button type="button" className="btn btn-primary btn-lg pcx-submit" disabled={isSavingOtherBatch} onClick={otherSaveEntry}>
+                      <i className="lni lni-save"></i> {isSavingOtherBatch ? 'Saving…' : 'Save Payment'}
+                    </button>
                   </div>
-                </div>
-                {/* Payment Date stays view-only (always today) either way —
-                    only Payment Type is editable again (2026-09-09, same
-                    reasoning as Currency above), locked to a plain "Advance
-                    Draw-down" label while otherIsAdvance is true (matches
-                    the live summary strip's own Method line above) since no
-                    new receipt/bank is actually claimed in that mode. */}
-                <div className="g2 mb-[14px]">
-                  <div className="fg">
-                    <div className="lbl">Payment Date</div>
-                    <input className="ctrl" readOnly value={formatDate(otherPayDate)} />
-                  </div>
-                  <div className="fg">
-                    <div className="lbl">Payment Type</div>
-                    {otherIsAdvance ? (
-                      <input className="ctrl" readOnly value="Advance Draw-down" />
-                    ) : (
-                      <SearchSelect
-                        options={Object.entries(PAY_TYPE_LABELS).map(([value, label]) => ({ value, label }))}
-                        value={otherPayType}
-                        onChange={val => { setOtherPayType(val); setOtherReceiptBookGuid(''); setOtherProcBankGuid('') }}
-                      />
-                    )}
-                  </div>
-                </div>
 
-                {/* Receipt Book + Bank — real fields post-payment-other.md
-                    needs (receiptBookGuid required, procBankGuid required
-                    too unless Cash), replacing the old free-text "Bank
-                    Account" input, same convention as Tuition's own
-                    Receipt Book/Bank Name fields. Hidden entirely in
-                    Advance mode — no new receipt is claimed there, the
-                    money was already receipted when the advance was
-                    deposited (both sent as null on submit either way). */}
-                {!otherIsAdvance && (
-                <div className="fg mb-[14px]">
-                  <div className="lbl">Receipt Book <span className="req">*</span></div>
-                  <SearchSelect
-                    placeholder="— Select Receipt Book —"
-                    options={otherReceiptBooks.map(r => ({ value: r.receiptBookGuid, label: r.bookCode }))}
-                    value={otherReceiptBookGuid}
-                    onChange={setOtherReceiptBookGuid}
-                  />
-                </div>
-                )}
-
-                {!otherIsAdvance && Number(otherPayType) > 1 && (
-                  <div className="fg mb-[14px]">
-                    <div className="lbl">Bank Name <span className="req">*</span></div>
-                    <SearchSelect
-                      placeholder="— Select Bank —"
-                      options={banks.map(b => ({ value: b.procBankGuid, label: b.bankName }))}
-                      value={otherProcBankGuid}
-                      onChange={setOtherProcBankGuid}
-                    />
-                  </div>
-                )}
-
-                <div className="fg mb-4">
-                  <div className="lbl">Remarks</div>
-                  <textarea className="ctrl" rows={2} placeholder="Optional notes" value={otherRemarks} onChange={e => setOtherRemarks(e.target.value)} />
-                </div>
-
-                <div className="flex gap-[10px] justify-end items-center mb-5">
-                  <button className="btn btn-primary btn-lg" disabled={isSavingOtherBatch} onClick={otherSaveEntry}>
-                    <i className="lni lni-save"></i> {isSavingOtherBatch ? 'Saving…' : 'Add Payment'}
-                  </button>
-                </div>
-
-                {SHOW_OTHER_PAID_FEE_DETAILS && (
-                  <>
-                    <div className="sec-divider" style={{ marginTop: 0 }}>Paid Fee Details</div>
-                    {otherPayments.length === 0 ? (
-                      <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>No other payments recorded yet.</div>
-                    ) : (
-                      <ScrollTable className="no-sticky-col">
-                        <table>
-                          <thead><tr><th>Payment Code</th><th>Payment Date</th><th>Receipt No.</th><th>Ledger Name</th><th>Amount</th><th>Cur.</th></tr></thead>
-                          <tbody>
-                            {otherPayments.map(p => (
-                              <tr key={p.id}>
-                                <td className="font-mono">{p.code}</td>
-                                <td>{p.payDate}</td>
-                                <td className="font-mono text-blue">{p.receiptNo ?? '—'}</td>
-                                <td>{p.ledgerName}</td>
-                                <td className="text-green font-bold">{parseFloat(p.amount).toLocaleString()}</td>
-                                <td>{p.currencyCode}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </ScrollTable>
-                    )}
-                  </>
-                )}
+                  {SHOW_OTHER_PAID_FEE_DETAILS && (
+                    <>
+                      <div className="sec-divider" style={{ marginTop: 0 }}>Paid Fee Details</div>
+                      {otherPayments.length === 0 ? (
+                        <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>No other payments recorded yet.</div>
+                      ) : (
+                        <ScrollTable className="no-sticky-col">
+                          <table>
+                            <thead><tr><th>Payment Code</th><th>Payment Date</th><th>Receipt No.</th><th>Ledger Name</th><th>Amount</th><th>Cur.</th></tr></thead>
+                            <tbody>
+                              {otherPayments.map(p => (
+                                <tr key={p.id}>
+                                  <td className="font-mono">{p.code}</td>
+                                  <td>{p.payDate}</td>
+                                  <td className="font-mono text-blue">{p.receiptNo ?? '—'}</td>
+                                  <td>{p.ledgerName}</td>
+                                  <td className="text-green font-bold">{parseFloat(p.amount).toLocaleString()}</td>
+                                  <td>{p.currencyCode}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </ScrollTable>
+                      )}
+                    </>
+                  )}
                 </div>
               </div>
-            )}
+              )
+            })()}
 
             {/* Outstanding Balance + Record Payment — a single card, not
                 two: the reference "Completing Registration" panel has no
@@ -2358,97 +2247,70 @@ export default function PaymentConsolePage() {
                     cover. */}
                 {!receipt && !isLedgersLoading && ledgers.length > 0 && (
                   <div className="pc-tuition-split">
-                    <div className="card flex flex-col gap-4 min-w-0">
-                      {/* Whole-programme progress (2026-09-11) — every
-                          semester's ledgers, not just the current
-                          semester's own ledgers in the table below. Folded
-                          into this card instead of its own standalone
-                          .stat-card (confirmed live: a whole separate card
-                          just for a small donut — its own padding/margin/
-                          border on top of the donut's own size — cost more
-                          scroll than the content was worth; this card
-                          already pays that overhead once). green/amber, the
-                          same status pair (good/warning) this page already
-                          paints Paid/Outstanding with everywhere else, not
-                          a new chart-library palette. Color alone sits in
-                          the 6-8 CVD floor band for this pair (validated
-                          via the dataviz skill's palette script) — legal
-                          only with secondary encoding, which the direct
-                          segment labels, the always-on legend, and the
-                          surface gap between segments below all provide.
-                          Narrower than before, though: this card (and so
-                          this donut) now only renders once
-                          ledgers.length > 0 — no longer shown once fully
-                          settled or with a receipt on screen, both cases
-                          the standalone card used to cover independently. */}
-                      {!isLedgersLoading && currentSemesterPayable && currentSemesterPayable.totalProgramAmount > 0 && (
-                        <div>
-                          <div className="stat-lbl" style={{ marginBottom: 6 }}>Paid vs Remaining</div>
-                          <ProgrammePaidDonut paidPercentage={paidPercentage} remainingPercentage={remainingPercentage} />
+                    {/* Fee Breakdown (2026-11-02 redesign, per Main.dc.html) —
+                        header + Apply Advance switch, the coverage bar for the
+                        amount being typed on the right, then the same
+                        converted ledger grid as before. Programme-wide
+                        paid/remaining moved up to the student header. */}
+                    <div className="card pcx-panel min-w-0">
+                      <div className="pcx-panel-hdr">
+                        <div className="min-w-0">
+                          <h3 className="pcx-panel-title">Fee Breakdown</h3>
+                          <p className="pcx-panel-sub">
+                            Amounts in {targetCurrencyName || 'the currency received'} — set via <b>Currency Received</b>
+                          </p>
                         </div>
-                      )}
-                      {/* Apply Advance switch — moved into this card's own
-                          top-right corner (2026-09-11, per request; was a
-                          full-width row above the whole split). Kept the
-                          .sec-divider class it had there (bold/uppercase/
-                          blue label text + bottom-border) rather than a
-                          plain flex row — dropping it initially read as a
-                          style regression even though the position was
-                          right. Regular Payment / Apply Advance — a
-                          checkbox (matching Other Payment's own "Advance
-                          Payment" checkbox). Switching modes doesn't touch
-                          the ledger table below — both modes settle the
-                          same outstanding tuition ledgers, just via a
-                          different funding source. Hidden when
-                          hasAdvanceDeposits is false (nothing to draw from,
-                          same reasoning as Other Payment's own checkbox) —
-                          this card only ever renders once ledgers.length > 0
-                          anyway (see the condition this whole split is
-                          under), so no separate "fully settled" guard is
-                          needed here. */}
-                      {hasAdvanceDeposits && (
-                        <div className="sec-divider flex items-center justify-end flex-wrap gap-2">
-                          <label className="flex items-center gap-2" style={{ fontSize: 'var(--fs-sm)', cursor: 'pointer' }}>
-                            <input
-                              type="checkbox"
-                              checked={tuitionMode === 'adjustment'}
-                              onChange={e => setTuitionMode(e.target.checked ? 'adjustment' : 'payment')}
-                            />
-                            Apply Advance
-                          </label>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {/* Apply Advance — hidden when there's no deposit to
+                              draw from. Both modes settle the same ledgers. */}
+                          {hasAdvanceDeposits && (
+                            <label className="pcx-check">
+                              <input
+                                type="checkbox"
+                                checked={tuitionMode === 'adjustment'}
+                                onChange={e => setTuitionMode(e.target.checked ? 'adjustment' : 'payment')}
+                              />
+                              Apply Advance
+                            </label>
+                          )}
+                          <span className="pcx-chip">{ledgers.length} {ledgers.length === 1 ? 'ledger' : 'ledgers'}</span>
                         </div>
-                      )}
-                      {/* Outstanding Balance table — unchanged content; no
-                          longer wrapped in its own isLedgersLoading/
-                          ledgers.length===0 ternary, since the condition
-                          this whole split renders under already covers
-                          both (see above). Column-aligned per request
-                          (2026-09-04, invoice reference) — Ledger/Scheduled
-                          Amt/Scheduled Bill/Paid/Outstanding columns as
-                          .recgrid CSS-Grid rows (see globals.css) instead of
-                          a <table>. Scheduled Amt and Scheduled Bill both
-                          read from ledgerAmount — the backend has no second
-                          figure distinguishing them, they're the same value
-                          shown twice. Discount/Total stay below as their own
-                          bold footer rows (Discount/Total aren't "a
-                          ledger", so they don't belong as grid rows the
-                          column headers describe). Every ledger (regardless
-                          of its own original currency) converts into
-                          whichever currency the cashier picks as "Currency
-                          Received" in Payment Detail on the right — one
-                          merged list, not one table per currency-group.
-                          convertAmount/convertedLedgers do the actual
-                          exchange-rate math. */}
-                      <div className="text-g400 mb-2" style={{ fontSize: 11.5 }}>
-                        Converted to {targetCurrencyName || 'the currency picked in Payment Detail'} — set via <b>Currency Received</b>.
                       </div>
+
+                      {tuitionMode === 'payment' && (
+                        <div className="pcx-coverage">
+                          <div className="pcx-coverage-hdr">
+                            <span className="pcx-coverage-title">Balance coverage after this payment</span>
+                            <span className="pcx-coverage-of">
+                              <b>{(paymentCoverage * 100).toFixed(1).replace(/\.0$/, '')}%</b> of {payCurrencyCode} {fmtAmt(convertedTotalNetPayable)}
+                            </span>
+                          </div>
+                          <div
+                            className="pcx-bar"
+                            role="img"
+                            aria-label={`${(paymentCoverage * 100).toFixed(1)} percent of this semester's payable covered by this payment`}
+                          >
+                            <span style={{ width: `${paymentCoverage * 100}%` }}></span>
+                          </div>
+                          <dl className="pcx-coverage-grid">
+                            <div><dt>Total payable</dt><dd>{fmtAmt(convertedTotalNetPayable)}</dd></div>
+                            <div><dt><span className="pcx-key" aria-hidden="true"></span>This payment</dt><dd>{fmtAmt(payAmountNum)}</dd></div>
+                            {balanceAfterPayment >= 0 ? (
+                              <div><dt>Balance after</dt><dd className="text-amber">{fmtAmt(balanceAfterPayment)}</dd></div>
+                            ) : (
+                              <div><dt>Beyond this semester</dt><dd className="text-blue">{fmtAmt(-balanceAfterPayment)}</dd></div>
+                            )}
+                          </dl>
+                        </div>
+                      )}
+
                       {hasUnconvertibleLedger && (
                         <div className="warn-box mb-3">
                           <i className="lni lni-warning" style={{ color: 'var(--amber)', fontSize: 15, flexShrink: 0, marginTop: 1 }}></i>
                           <div>Some ledgers couldn&apos;t be converted to {targetCurrencyName || 'the selected currency'} — no exchange rate is on file for today for that currency. Those rows show <span className="font-mono">—</span> below; the totals only include what could be converted.</div>
                         </div>
                       )}
-                      <div className="recgrid">
+                      <div className="recgrid pcx-ledgers">
                         <div className="recgrid-row recgrid-hdr">
                           <span>Ledger</span>
                           <span>Scheduled Amt</span>
@@ -2460,9 +2322,12 @@ export default function PaymentConsolePage() {
                           const isPaid = l.outstanding === 0
                           return (
                             <div className="recgrid-row recgrid-body" key={`${l.ledgerGuid ?? 'none'}-${i}`}>
-                              <span>
-                                {l.ledgerName}{l.ledgerNum ? ` (${l.ledgerNum})` : ''}
-                                {isPaid && <span className="text-green" style={{ fontSize: 11, fontWeight: 600, marginLeft: 6 }}>Paid</span>}
+                              <span className="pcx-ledger-cell">
+                                <span className="pcx-ledger-name">
+                                  {l.ledgerName}
+                                  {isPaid && <span className="badge badge-green" style={{ marginLeft: 6 }}>Paid</span>}
+                                </span>
+                                {l.ledgerNum && <span className="pcx-ledger-sub">Ledger {l.ledgerNum}</span>}
                               </span>
                               {/* Native — the raw fee-line amount, not run
                                   through convertAmount, with the ledger's
@@ -2546,7 +2411,7 @@ export default function PaymentConsolePage() {
                               figure the per-ledger column above already
                               shows pre-discount. */}
                           <span>Total Payable {targetCurrencyName && `(${targetCurrencyName})`}</span>
-                          <span style={{ color: 'var(--amber)' }}>{fmtAmt(convertedTotalNetPayable)}</span>
+                          <span style={{ color: 'var(--gold)' }}>{fmtAmt(convertedTotalNetPayable)}</span>
                         </div>
                       </div>
 
@@ -2672,40 +2537,43 @@ export default function PaymentConsolePage() {
                       )}
                     </div>
 
-                    <div className="card flex flex-col gap-4 min-w-0">
-                      {/* Payment Detail — Regular Payment mode's own fields.
-                          Unchanged content, just the right column now
-                          instead of following directly under the ledger
-                          table above. */}
-                      {tuitionMode === 'payment' && (
+                    <div className="card pcx-panel min-w-0">
+                      {/* Record Payment (2026-11-02 redesign, per
+                          Main.dc.html) — Regular Payment mode. Same fields,
+                          state, validation and submit as before; only the
+                          layout changed: an always-on Amount to Collect
+                          banner, a quick-fill for the semester total,
+                          Payment Method as a segmented choice, and a
+                          before/after summary above the actions. */}
+                      {tuitionMode === 'payment' && (() => {
+                        const methodLabel = PAY_TYPE_LABELS[Number(payType)] ?? `Type ${payType}`
+                        const receiptBookCode = receiptBooks.find(r => r.receiptBookGuid === receiptBookGuid)?.bookCode
+                        return (
                         <>
-                          <div className="sec-divider" style={{ marginTop: 0 }}>Payment Detail</div>
-                          {/* Live summary strip — mirrors the amount/currency/date/
-                              method already entered below back at the cashier as
-                              a glanceable card, purely derived from this form's
-                              own state (no extra fetch). Only shows once an
-                              amount has actually been typed. */}
-                          {amount.trim() && (
-                            <div className="pc-pay-summary">
-                              <div>
-                                <div className="pc-pay-lbl">Amount to Collect</div>
-                                <div className="pc-pay-amt">{selectedCurrency?.currencyCode ?? ''} {(parseFloat(amount) || 0).toLocaleString()}</div>
-                              </div>
-                              <div className="pc-pay-meta">
-                                <div><span>Date</span><b>{payDate}</b></div>
-                                <div><span>Method</span><b>{PAY_TYPE_LABELS[Number(payType)] ?? `Type ${payType}`}</b></div>
-                              </div>
+                          <div className="pcx-panel-hdr">
+                            <div>
+                              <h3 className="pcx-panel-title">Record Payment</h3>
+                              <p className="pcx-panel-sub">Fields marked <span className="req">*</span> are required</p>
                             </div>
-                          )}
-                          {/* Currency + Amount paired, amount on the right, per
-                              request — then Date + Method paired, then Receipt
-                              Book on its own row. This currency picker now does
-                              double duty (per follow-up request, 2026-09-05): it's
-                              also what the Outstanding Balance table on the left
-                              converts into (targetCurrencyGuid/targetCurrencyName
-                              further up read straight off this same currencyGuid
-                              state). */}
-                          <div className="g2 mb-[14px]">
+                            <button type="button" className="btn btn-neu btn-sm" onClick={() => setShowPaymentHistory(true)}>
+                              <i className="lni lni-folder"></i> Payment History
+                            </button>
+                          </div>
+
+                          <div className="pcx-collect" aria-live="polite">
+                            <span className="pcx-collect-lbl">Amount to collect</span>
+                            <div className="pcx-collect-amt">
+                              <span className="pcx-collect-cur">{payCurrencyCode}</span>
+                              <span className="pcx-collect-val">{payAmountNum.toLocaleString()}</span>
+                            </div>
+                            <span className="pcx-collect-meta">
+                              {methodLabel} · {payDate ? formatDate(payDate) : 'No date'} · {receiptBookCode ? `Receipt book ${receiptBookCode}` : 'No receipt book yet'}
+                            </span>
+                          </div>
+
+                          {/* Currency Received also sets the currency the Fee
+                              Breakdown on the left converts into. */}
+                          <div className="g2">
                             <div className="fg">
                               <div className="lbl">Currency Received <span className="req">*</span></div>
                               <SearchSelect
@@ -2717,50 +2585,80 @@ export default function PaymentConsolePage() {
                               {payErr('currencyGuid')}
                             </div>
                             <div className="fg">
-                              <div className="lbl">Amount Received <span className="req">*</span></div>
-                              <input type="number" min={0} step={0.01} className="amt-val-input" placeholder="0.00"
-                                style={{ fontSize: 18, fontWeight: 700, ...(payErrors.amount ? { borderColor: 'var(--red)' } : {}) }}
-                                aria-invalid={!!payErrors.amount}
-                                // Number inputs still accept e/E/+/-; none is a valid amount (≥ 0).
-                                onKeyDown={e => { if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault() }}
-                                value={amount} onChange={e => { setAmount(stripLeadingZeros(e.target.value)); clearPayError('amount') }} />
+                              <label className="lbl" htmlFor="pcx-amount">Amount Received <span className="req">*</span></label>
+                              <div className={`pcx-amount${payErrors.amount ? ' has-error' : ''}`}>
+                                {payCurrencyCode && <span className="pcx-amount-cur">{payCurrencyCode}</span>}
+                                <input
+                                  id="pcx-amount"
+                                  type="number" min={0} step={0.01} placeholder="0.00"
+                                  aria-invalid={!!payErrors.amount}
+                                  // Number inputs still accept e/E/+/-; none is a valid amount (≥ 0).
+                                  onKeyDown={e => { if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault() }}
+                                  value={amount} onChange={e => { setAmount(stripLeadingZeros(e.target.value)); clearPayError('amount') }}
+                                />
+                              </div>
                               {payErr('amount')}
                             </div>
                           </div>
-                          <div className="g2 mb-[14px]">
+
+                          {convertedTotalNetPayable > 0 && (
+                            <div className="pcx-quick">
+                              <button
+                                type="button"
+                                className={`pcx-quick-btn${payAmountNum === Math.round(convertedTotalNetPayable * 100) / 100 ? ' active' : ''}`}
+                                onClick={() => { setAmount(String(Math.round(convertedTotalNetPayable * 100) / 100)); clearPayError('amount') }}
+                              >
+                                Full semester balance · {fmtAmt(convertedTotalNetPayable)}
+                              </button>
+                            </div>
+                          )}
+
+                          {/* Method before Receipt Book — the book list is
+                              filtered by the method's category, so picking a
+                              method resets the book (and the bank). */}
+                          <fieldset className="pcx-methods">
+                            <legend className="lbl">Payment Method <span className="req">*</span></legend>
+                            <div className="pcx-methods-grid">
+                              {Object.entries(PAY_TYPE_LABELS).map(([value, label]) => (
+                                <label key={value} className={`pcx-method${payType === value ? ' active' : ''}`}>
+                                  <input
+                                    type="radio"
+                                    name="pcx-pay-type"
+                                    value={value}
+                                    checked={payType === value}
+                                    onChange={() => {
+                                      setPayType(value); setReceiptBookGuid(''); setProcBankGuid('')
+                                      setPayErrors(prev => ({ ...prev, payType: '', receiptBookGuid: '', procBankGuid: '' }))
+                                    }}
+                                  />
+                                  <i className={`lni ${PAY_TYPE_ICONS[Number(value)] ?? 'lni-wallet'}`} aria-hidden="true"></i>
+                                  {label}
+                                </label>
+                              ))}
+                            </div>
+                            {payErr('payType')}
+                          </fieldset>
+
+                          <div className="g2">
                             <div className="fg">
                               <div className="lbl">Payment Date <span className="req">*</span></div>
                               <DatePicker value={payDate} onChange={v => { setPayDate(v); clearPayError('payDate') }} hasError={!!payErrors.payDate} />
                               {payErr('payDate')}
                             </div>
                             <div className="fg">
-                              <div className="lbl">Payment Method <span className="req">*</span></div>
+                              <div className="lbl">Receipt Book <span className="req">*</span></div>
                               <SearchSelect
-                                options={Object.entries(PAY_TYPE_LABELS).map(([value, label]) => ({ value, label }))}
-                                value={payType}
-                                onChange={val => {
-                                  // Receipt books are filtered by the method's category, and
-                                  // Cash has no bank — so both selections (and errors) reset.
-                                  setPayType(val); setReceiptBookGuid(''); setProcBankGuid('')
-                                  setPayErrors(prev => ({ ...prev, payType: '', receiptBookGuid: '', procBankGuid: '' }))
-                                }}
+                                placeholder="— Select Receipt Book —"
+                                options={receiptBooks.map(r => ({ value: r.receiptBookGuid, label: r.bookCode }))}
+                                value={receiptBookGuid}
+                                onChange={v => { setReceiptBookGuid(v); clearPayError('receiptBookGuid') }}
                               />
-                              {payErr('payType')}
+                              {payErr('receiptBookGuid')}
                             </div>
-                          </div>
-                          <div className="fg mb-[14px]">
-                            <div className="lbl">Receipt Book <span className="req">*</span></div>
-                            <SearchSelect
-                              placeholder="— Select Receipt Book —"
-                              options={receiptBooks.map(r => ({ value: r.receiptBookGuid, label: r.bookCode }))}
-                              value={receiptBookGuid}
-                              onChange={v => { setReceiptBookGuid(v); clearPayError('receiptBookGuid') }}
-                            />
-                            {payErr('receiptBookGuid')}
                           </div>
 
                           {showBankFields && (
-                            <div className="g2 mb-[14px]">
+                            <div className="g2">
                               <div className="fg">
                                 <div className="lbl">Bank Name <span className="req">*</span></div>
                                 <SearchSelect
@@ -2778,20 +2676,36 @@ export default function PaymentConsolePage() {
                             </div>
                           )}
 
-                          <div className="fg mb-4">
-                            <div className="lbl">Remarks</div>
-                            <textarea className="ctrl" rows={2} placeholder="Optional notes or sponsor details..." value={remarks} onChange={e => setRemarks(e.target.value)} />
+                          <div className="fg">
+                            <div className="lbl">Remarks <span className="text-g400" style={{ fontWeight: 500 }}>(optional)</span></div>
+                            <textarea className="ctrl" rows={2} placeholder="Reference number, payer name or sponsor details" value={remarks} onChange={e => setRemarks(e.target.value)} />
                           </div>
 
-                          <div className="flex gap-[10px] justify-end items-center">
+                          <dl className="pcx-summary">
+                            <div><dt>Payable this semester</dt><dd>{fmtAmt(convertedTotalNetPayable)}</dd></div>
+                            <div><dt>This payment</dt><dd>− {fmtAmt(payAmountNum)}</dd></div>
+                            {balanceAfterPayment >= 0 ? (
+                              <div className="pcx-summary-total"><dt>Balance after</dt><dd className="text-amber">{payCurrencyCode} {fmtAmt(balanceAfterPayment)}</dd></div>
+                            ) : (
+                              <div className="pcx-summary-total"><dt>Beyond this semester</dt><dd className="text-blue">{payCurrencyCode} {fmtAmt(-balanceAfterPayment)}</dd></div>
+                            )}
+                          </dl>
+
+                          <div className="pcx-actions">
+                            {/* Cancel clears the form back to its defaults
+                                (resetPaymentForm) — nothing has been sent. */}
+                            <button type="button" className="btn btn-neu btn-lg" onClick={resetPaymentForm} disabled={createPayment.isPending}>
+                              Cancel
+                            </button>
                             {permissions.add && (
-                              <button className="btn btn-primary btn-lg" disabled={createPayment.isPending} onClick={() => handleSave()}>
-                                <i className="lni lni-save"></i> {createPayment.isPending ? 'Saving…' : 'Save Payment & Generate Receipt →'}
+                              <button type="button" className="btn btn-primary btn-lg pcx-submit" disabled={createPayment.isPending} onClick={() => handleSave()}>
+                                <i className="lni lni-printer"></i> {createPayment.isPending ? 'Saving…' : 'Save & Generate Receipt'}
                               </button>
                             )}
                           </div>
                         </>
-                      )}
+                        )
+                      })()}
 
                       {/* Payment Detail — Apply Advance mode's own fields
                           (moved from the standalone Payment Console
@@ -2808,7 +2722,12 @@ export default function PaymentConsolePage() {
                           just say the same thing twice. */}
                       {tuitionMode === 'adjustment' && deposits.length > 0 && (
                         <>
-                          <div className="sec-divider" style={{ marginTop: 0 }}>Payment Detail</div>
+                          <div className="pcx-panel-hdr">
+                            <div>
+                              <h3 className="pcx-panel-title">Apply Advance</h3>
+                              <p className="pcx-panel-sub">Settle these ledgers from the deposit picked on the left</p>
+                            </div>
+                          </div>
                           <div className="g2 mb-[14px]">
                             <div className="fg">
                               <div className="lbl">Ledger Amount <span className="req">*</span></div>
@@ -2991,8 +2910,10 @@ export default function PaymentConsolePage() {
               </div>
             )}
 
-            {receipt && (
-              <div className="card">
+            {/* Tuition receipt only — it stays in state after Save, so
+                without the tab check it also showed on Other Payment. */}
+            {activePayTab === 'tuition' && receipt && (
+              <div className="card pcx-receipt" ref={receiptRef}>
                 {/* receipt-print-area (globals.css) — window.print() below
                     previously printed the entire page (sidebar, header,
                     Step 1-3 forms, everything), since no print-scoped CSS
@@ -3006,38 +2927,48 @@ export default function PaymentConsolePage() {
                     <div className="font-mono font-bold text-blue mt-2" style={{ fontSize: 14 }}>{receipt.ref}</div>
                     <div className="text-g400 uppercase font-bold mt-1" style={{ fontSize: 10, letterSpacing: '.06em' }}>Official Fee Payment Receipt</div>
                   </div>
-                  <div className="receipt-row"><span className="text-muted">Student Name</span><span className="font-bold">{receipt.name}</span></div>
-                  <div className="receipt-row"><span className="text-muted">App. Ref</span><span className="font-mono text-blue">{receipt.refNo}</span></div>
-                  <div className="receipt-row"><span className="text-muted">Programme</span><span>{receipt.prog}</span></div>
-                  <div className="receipt-row"><span className="text-muted">Payment Method</span><span>{receipt.method}</span></div>
-                  <div className="receipt-row"><span className="text-muted">Date &amp; Time</span><span>{receipt.date}</span></div>
-                  <div className="receipt-row"><span className="text-muted">Amount Paid</span><span className="font-bold">{receipt.amount}</span></div>
-                  <div className="receipt-row" style={{ background: 'var(--green-bg)', borderRadius: 'var(--rxs)', padding: '6px 2px' }}>
-                    <span className="text-muted">Allocated To</span><span className="font-bold text-green">Outstanding ledgers — see allocation above</span>
+                  {/* Two columns on wide screens (who/how on the left, the
+                      money on the right) so the card can stay full width
+                      without each label sitting far from its value; stacks
+                      to one column below 900px. */}
+                  <div className="pcx-receipt-grid">
+                    <div>
+                      <div className="receipt-row"><span className="text-muted">Student Name</span><span className="font-bold">{receipt.name}</span></div>
+                      <div className="receipt-row"><span className="text-muted">App. Ref</span><span className="font-mono text-blue">{receipt.refNo}</span></div>
+                      <div className="receipt-row"><span className="text-muted">Programme</span><span>{receipt.prog}</span></div>
+                      <div className="receipt-row"><span className="text-muted">Payment Method</span><span>{receipt.method}</span></div>
+                      <div className="receipt-row"><span className="text-muted">Date &amp; Time</span><span>{receipt.date}</span></div>
+                    </div>
+                    <div className="pcx-receipt-money">
+                      <div className="pcx-receipt-paid">
+                        <span>Amount Paid</span>
+                        <strong>{receipt.amount}</strong>
+                      </div>
+                      <div className="receipt-row"><span className="text-muted">Applied to Outstanding Ledgers</span><span className="font-bold text-green">{receipt.allocated}</span></div>
+                      {/* receipt.balance is PaymentResultDto.balance — the part
+                          of THIS payment left over after the ledgers, which the
+                          backend records as an advance (post-payment.md). It is
+                          not the student's total owed; that's Total Outstanding
+                          in the student header, which refetches after Save.
+                          Hidden at 0 — nothing was left over. */}
+                      {receipt.hasLeftover && (
+                        <div className="receipt-row"><span className="text-muted">Recorded as Advance</span><span className="font-bold text-blue">{receipt.balance}</span></div>
+                      )}
+                      <div className="pcx-receipt-note">
+                        The student&apos;s remaining balance is under Total outstanding at the top of the page.
+                      </div>
+                      {receipt.advanceMessage && (
+                        <div className="info-box"><i className="lni lni-information"></i> {receipt.advanceMessage}</div>
+                      )}
+                      {/* Surfaced as a notice, not an error — per the flow doc,
+                          this is the same reregistration warning the 409 would
+                          have blocked on; it's informational now that the
+                          cashier already confirmed past it via confirmOverride. */}
+                      {receipt.reRegistrationWarning && (
+                        <div className="info-box"><i className="lni lni-warning"></i> {receipt.reRegistrationWarning}</div>
+                      )}
+                    </div>
                   </div>
-                  {/* receipt.balance is PaymentResultDto.balance — the
-                      amount left UNALLOCATED from this payment, not the
-                      student's total outstanding balance (post-payment.md).
-                      Was previously labeled "New Outstanding", which reads
-                      as "the account is now settled" — wrong whenever the
-                      payment was smaller than what's owed, which is the
-                      common case. Step 2 · Outstanding Balance (which
-                      refetches after Save) is where the real remaining
-                      balance is shown. */}
-                  <div className="receipt-total"><span>Unallocated Amount</span><span>{receipt.balance}</span></div>
-                  <div className="text-g400" style={{ fontSize: 10.5, marginTop: -4 }}>
-                    Leftover from this payment only — see Step 2 · Outstanding Balance for the student&apos;s updated total owed.
-                  </div>
-                  {receipt.advanceMessage && (
-                    <div className="mt-2"><div className="info-box"><i className="lni lni-information"></i> {receipt.advanceMessage}</div></div>
-                  )}
-                  {/* Surfaced as a notice, not an error — per the flow doc,
-                      this is the same reregistration warning the 409 would
-                      have blocked on; it's informational now that the
-                      cashier already confirmed past it via confirmOverride. */}
-                  {receipt.reRegistrationWarning && (
-                    <div className="mt-2"><div className="info-box"><i className="lni lni-warning"></i> {receipt.reRegistrationWarning}</div></div>
-                  )}
                   <div className="text-center text-g400 mt-3 pt-3 border-t border-dashed border-g300" style={{ fontSize: 10 }}>
                     Received by: Finance Office · ISBAT University<br />
                     System-generated receipt. Unique code: <span className="font-mono">{receipt.code}</span>
@@ -3111,7 +3042,7 @@ export default function PaymentConsolePage() {
                         <td>
                           {l.isDiscountLine ? `${l.ledgerName} (Discount${l.discountName ? `: ${l.discountName}` : ''})` : l.isRoundingLine ? `${l.ledgerName} (Round-off)` : l.ledgerName}
                         </td>
-                        <td>{l.semName ?? '—'}</td>
+                        <td>{semesterLabel(l.semName) ?? '—'}</td>
                         <td className={l.isDiscountLine ? 'text-red font-bold' : 'font-bold'}>{fmtAmt(l.amount)}</td>
                         <td>{l.currencyName}</td>
                       </tr>
