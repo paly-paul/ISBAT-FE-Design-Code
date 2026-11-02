@@ -1,5 +1,5 @@
 'use client'
-import { Dispatch, SetStateAction, useMemo } from 'react'
+import { Dispatch, SetStateAction, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useMenu } from '@/hooks/users/useMenu'
 import { MenuNode } from '@/lib/api/users/menu'
@@ -121,7 +121,24 @@ function visibleChildren(children: MenuNode[], railId: RailId): MenuNode[] {
   return filtered.sort((a, b) => orderIndex(a) - orderIndex(b))
 }
 
+function getItemDisplayName(item: MenuNode): string {
+  if (!item.url) return item.name
+  const id = idFromUrl(item.url)
+  return item.name === 'IA Creation' || id === 'ia-creation'
+    ? 'Assessment Scheduler'
+    : id === 'mark-ue'
+    ? 'Mark Entry UE'
+    : id === 'mark-ue-verify'
+    ? 'Mark Verify UE'
+    : id === 'mark-cw'
+    ? 'Mark Entry CW'
+    : id === 'mark-cbt'
+    ? 'Mark Entry CBT'
+    : item.name
+}
+
 export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSections, toggleCollapse, activeRail, setActiveRail }: SidebarProps) {
+  const [menuSearch, setMenuSearch] = useState('')
   const { data, isLoading, isError, refetch } = useMenu()
   const menu = data?.menu
 
@@ -154,18 +171,7 @@ export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSection
       )
     }
     const id = idFromUrl(item.url)
-    const displayName =
-      item.name === 'IA Creation' || id === 'ia-creation'
-        ? 'Assessment Scheduler'
-        : id === 'mark-ue'
-        ? 'Mark Entry UE'
-        : id === 'mark-ue-verify'
-        ? 'Mark Verify UE'
-        : id === 'mark-cw'
-        ? 'Mark Entry CW'
-        : id === 'mark-cbt'
-        ? 'Mark Entry CBT'
-        : item.name
+    const displayName = getItemDisplayName(item)
     const href = resolveHref(item.url, railId)
     return (
       // prefetch={false} — next/link's default auto-prefetch fires for every
@@ -181,16 +187,18 @@ export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSection
     )
   }
 
-  function sbSection(moduleName: string, section: MenuNode, railId: RailId) {
+  function sbSection(moduleName: string, section: MenuNode, railId: RailId, itemsToRender?: MenuNode[]) {
     const id = `sc-${slug(moduleName)}-${slug(section.name)}`
-    const collapsed = collapsedSections.has(id)
+    const isSearching = Boolean(menuSearch.trim())
+    const collapsed = isSearching ? false : collapsedSections.has(id)
+    const items = itemsToRender ?? visibleChildren(section.children, railId)
     return (
       <div key={id} className={`sb-collapse${collapsed ? ' closed' : ''}`}>
         <div className="sb-group-hdr" onClick={() => toggleCollapse(id)}>
           <span>{section.name}</span><span className="sb-chevron">{collapsed ? '▸' : '▾'}</span>
         </div>
         <div className="sb-collapse-body">
-          {visibleChildren(section.children, railId).map(item => sbItem(item, railId))}
+          {items.map(item => sbItem(item, railId))}
         </div>
       </div>
     )
@@ -205,6 +213,7 @@ export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSection
     } else {
       setActiveRail(rail)
       setPanelOpen(true)
+      setMenuSearch('')
     }
   }
 
@@ -241,13 +250,86 @@ export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSection
         </div>
       )
     }
+
+    const allVisible = visibleChildren(node.children, def.id)
+    const query = menuSearch.trim().toLowerCase()
+
+    let renderedContent: React.ReactNode
+
+    if (!query) {
+      renderedContent = allVisible.map(section =>
+        section.children.length > 0 ? sbSection(node.name, section, def.id) : sbItem(section, def.id)
+      )
+    } else {
+      const filtered = allVisible
+        .map(section => {
+          if (section.children.length > 0) {
+            const sectionNameMatches = section.name.toLowerCase().includes(query)
+            const matchingChildren = visibleChildren(section.children, def.id).filter(item => {
+              const name = getItemDisplayName(item).toLowerCase()
+              const url = (item.url || '').toLowerCase()
+              return name.includes(query) || url.includes(query)
+            })
+
+            if (sectionNameMatches) {
+              return sbSection(node.name, section, def.id)
+            } else if (matchingChildren.length > 0) {
+              return sbSection(node.name, section, def.id, matchingChildren)
+            }
+            return null
+          } else {
+            const name = getItemDisplayName(section).toLowerCase()
+            const url = (section.url || '').toLowerCase()
+            if (name.includes(query) || url.includes(query)) {
+              return sbItem(section, def.id)
+            }
+            return null
+          }
+        })
+        .filter(Boolean)
+
+      if (filtered.length === 0) {
+        renderedContent = (
+          <div className="px-4 py-8 text-center text-xs text-slate-400">
+            <i className="lni lni-search-alt text-lg mb-1.5 block opacity-40"></i>
+            <div>No menu items found</div>
+            <div className="text-[11px] text-slate-400/80 mt-0.5">No match for &ldquo;{menuSearch}&rdquo;</div>
+          </div>
+        )
+      } else {
+        renderedContent = filtered
+      }
+    }
+
     return (
       <>
         <div className="sb-panel-hdr">
           <div className="sb-panel-hdr-title">Module</div>
           <div className="sb-panel-hdr-name"><i className={node.icon ?? def.fallbackIcon}></i> {node.name}</div>
         </div>
-        {visibleChildren(node.children, def.id).map(section => (section.children.length > 0 ? sbSection(node.name, section, def.id) : sbItem(section, def.id)))}
+        <div className="px-3 py-2 border-b border-slate-100 shrink-0 bg-slate-50/50">
+          <div className="relative">
+            <i className="lni lni-search-alt absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs pointer-events-none"></i>
+            <input
+              type="text"
+              placeholder={`Filter ${node.name} menu...`}
+              value={menuSearch}
+              onChange={e => setMenuSearch(e.target.value)}
+              className="w-full text-xs pl-7 pr-7 py-1.5 rounded-lg border border-slate-200 bg-white placeholder:text-slate-400 text-slate-700 focus:outline-hidden focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all shadow-2xs"
+            />
+            {menuSearch && (
+              <button
+                type="button"
+                onClick={() => setMenuSearch('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs p-0.5"
+                aria-label="Clear filter"
+              >
+                <i className="lni lni-close text-[10px]"></i>
+              </button>
+            )}
+          </div>
+        </div>
+        {renderedContent}
         <div className="sb-panel-footer">{def.footer}</div>
       </>
     )

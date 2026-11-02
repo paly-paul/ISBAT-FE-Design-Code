@@ -44,20 +44,40 @@ export function isHtmlEmpty(html: string | null | undefined): boolean {
  */
 export function stripHtmlTags(str: string | null | undefined): string {
   if (!str) return ''
-  return str
+  let cleaned = str
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<\/p>/gi, '\n')
     .replace(/<\/div>/gi, '\n')
     .replace(/<li[^>]*>/gi, '• ')
     .replace(/<\/li>/gi, '\n')
     .replace(/<[^>]+>/g, '')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&#160;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
+
+  // Decode entities with multi-pass (handling double-escaped entities like &amp;#160; or &amp;nbsp;)
+  for (let pass = 0; pass < 3; pass++) {
+    const prev = cleaned
+    cleaned = cleaned
+      .replace(/&nbsp;/gi, ' ')
+      .replace(/&#160;/gi, ' ')
+      .replace(/&#xa0;/gi, ' ')
+      .replace(/&#(\d+);/g, (m, dec) => {
+        const code = parseInt(dec, 10)
+        return code === 160 ? ' ' : String.fromCharCode(code)
+      })
+      .replace(/&#x([0-9a-f]+);/gi, (m, hex) => {
+        const code = parseInt(hex, 16)
+        return code === 160 ? ' ' : String.fromCharCode(code)
+      })
+      .replace(/&amp;/gi, '&')
+      .replace(/&lt;/gi, '<')
+      .replace(/&gt;/gi, '>')
+      .replace(/&quot;/gi, '"')
+      .replace(/&#39;/gi, "'")
+      .replace(/&apos;/gi, "'")
+    if (cleaned === prev) break
+  }
+
+  return cleaned
+    .replace(/[^\S\r\n]+/g, ' ')
     .replace(/\n{3,}/g, '\n\n')
     .trim()
 }
@@ -580,14 +600,20 @@ export function RichTextDisplay({
   className?: string
 }) {
   if (!content) return null
-  const hasHtml = /<[a-z][\s\S]*>/i.test(content)
-  if (hasHtml) {
+  const normalized = content
+    .replace(/&amp;#160;/gi, ' ')
+    .replace(/&amp;nbsp;/gi, ' ')
+    .replace(/&#160;/gi, ' ')
+    .replace(/&#xa0;/gi, ' ')
+
+  const hasHtmlOrEntity = /<[a-z][\s\S]*>|&(?:nbsp|amp|lt|gt|quot|#39);/i.test(normalized)
+  if (hasHtmlOrEntity) {
     return (
-      <span
-        className={`rich-editor-content inline-block ${className}`}
-        dangerouslySetInnerHTML={{ __html: content }}
+      <div
+        className={`rich-editor-content leading-relaxed ${className}`}
+        dangerouslySetInnerHTML={{ __html: normalized }}
       />
     )
   }
-  return <span className={`whitespace-pre-wrap ${className}`}>{content}</span>
+  return <div className={`whitespace-pre-wrap ${className}`}>{normalized}</div>
 }
