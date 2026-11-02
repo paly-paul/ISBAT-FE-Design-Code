@@ -30,6 +30,7 @@ import {
   QuestionPreviewItem,
 } from '@/hooks/assessment/useQuestionBank'
 import { QuestionDto } from '@/lib/api/assessment/questions'
+import { ExistingQuestionsTable } from './ExistingQuestionsTable'
 
 export default function QuestionBankUploadPage() {
   // ── Toast State ─────────────────────────────────────────────────────────────
@@ -72,6 +73,7 @@ export default function QuestionBankUploadPage() {
   const [sheetNames, setSheetNames] = useState<string[]>([])
   const [selectedSheet, setSelectedSheet] = useState<string>('')
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [showUploadBox, setShowUploadBox] = useState<boolean>(false)
 
   // ── Excel Preview Table State ───────────────────────────────────────────────
   const [previewRows, setPreviewRows] = useState<QuestionPreviewItem[] | null>(null)
@@ -126,6 +128,23 @@ export default function QuestionBankUploadPage() {
   )
   const importCourseUnits = importUnitsQuery.data
   const needsLecturer = activeTab === 'import' && !loggedInUserGuid
+
+  // ── Tab 2: Query already uploaded questions for selected course unit & category ──
+  const {
+    data: importExistingQuestions,
+    isLoading: isLoadingImportExistingQuestions,
+    isFetching: isFetchingImportExistingQuestions,
+    refetch: refetchImportExistingQuestions,
+  } = useQuestions(
+    importCourseUnitGuid,
+    Number(importCategory),
+    intakeGuid,
+    Boolean(activeTab === 'import' && importCourseUnitGuid && importCategory && intakeGuid)
+  )
+
+  useEffect(() => {
+    setShowUploadBox(false)
+  }, [importCourseUnitGuid, importCategory])
 
   // ── Mutations ───────────────────────────────────────────────────────────────
   const downloadTemplateMut = useDownloadQuestionBankTemplate()
@@ -328,7 +347,9 @@ export default function QuestionBankUploadPage() {
             setRepoCourseUnitGuid(importCourseUnitGuid)
           }
           refetchQuestions()
-          setActiveTab('repository')
+          refetchImportExistingQuestions()
+          setShowUploadBox(false)
+          setActiveTab('import')
         },
         onError: (err) => {
           setValidationError(err.message || 'Import failed. Please check validation rules.')
@@ -356,12 +377,14 @@ export default function QuestionBankUploadPage() {
 
   // ── Delete Entire Bank Questions ────────────────────────────────────────────
   const handleConfirmDeleteBank = () => {
-    if (!repoCourseUnitGuid || !repoCategory || !intakeGuid) return
+    const targetUnit = activeTab === 'import' ? importCourseUnitGuid : repoCourseUnitGuid
+    const targetCat = activeTab === 'import' ? importCategory : repoCategory
+    if (!targetUnit || !targetCat || !intakeGuid) return
 
     deleteBankMut.mutate(
       {
-        courseUnitGuid: repoCourseUnitGuid,
-        category: Number(repoCategory),
+        courseUnitGuid: targetUnit,
+        category: Number(targetCat),
         intakeGuid,
       },
       {
@@ -369,6 +392,7 @@ export default function QuestionBankUploadPage() {
           setShowDeleteBankModal(false)
           setPreviewRows(null)
           refetchQuestions()
+          refetchImportExistingQuestions()
           setSuccessModal({
             title: 'Question Bank Cleared',
             subtitle: res.message || 'The questions have been soft-deleted from the database.',
@@ -1145,23 +1169,51 @@ export default function QuestionBankUploadPage() {
           {activeTab === 'import' && (
             <div className="space-y-4">
 
-              {/* Upload Card */}
-              <div className="card p-5">
-                <div className="flex flex-wrap items-center justify-between pb-3 mb-4 border-b border-slate-100 gap-2">
-                  <div className="flex items-center gap-2">
-                    <span className="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-xs">
-                      <i className="lni lni-cloud-upload"></i>
-                    </span>
-                    <div>
-                      <div className="card-title mb-0">Upload Questions via Excel (.xlsx)</div>
-                      <div className="text-xs text-slate-500">
-                        Target: <strong className="text-slate-800 font-mono">{selectedImportUnit?.courseUnitCode || 'Select Course Unit'}</strong>
-                        {' • '}
-                        Category: <strong className="text-slate-800">{selectedImportCategoryObj?.name || 'Select Category'}</strong>
+              {/* If questions already exist and user has not toggled upload box: Show Existing Questions */}
+              {importExistingQuestions && importExistingQuestions.length > 0 && !showUploadBox ? (
+                <ExistingQuestionsTable
+                  questions={importExistingQuestions}
+                  isLoading={isLoadingImportExistingQuestions}
+                  isFetching={isFetchingImportExistingQuestions}
+                  onRefresh={refetchImportExistingQuestions}
+                  onUploadClick={() => setShowUploadBox(true)}
+                  onDeleteBankClick={() => setShowDeleteBankModal(true)}
+                  onViewQuestion={setViewingQuestion}
+                  courseUnitCode={selectedImportUnit?.courseUnitCode}
+                  courseUnitName={selectedImportUnit?.courseUnitName}
+                  categoryName={selectedImportCategoryObj?.name}
+                  intakeCode={selectedIntake?.intakeCode}
+                />
+              ) : (
+                /* Upload Card */
+                <div className="card p-5">
+                  <div className="flex flex-wrap items-center justify-between pb-3 mb-4 border-b border-slate-100 gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-xs">
+                        <i className="lni lni-cloud-upload"></i>
+                      </span>
+                      <div>
+                        <div className="card-title mb-0">Upload Questions via Excel (.xlsx)</div>
+                        <div className="text-xs text-slate-500">
+                          Target: <strong className="text-slate-800 font-mono">{selectedImportUnit?.courseUnitCode || 'Select Course Unit'}</strong>
+                          {' • '}
+                          Category: <strong className="text-slate-800">{selectedImportCategoryObj?.name || 'Select Category'}</strong>
+                        </div>
                       </div>
                     </div>
+
+                    {/* Back to existing questions toggle if bank already has questions */}
+                    {importExistingQuestions && importExistingQuestions.length > 0 && (
+                      <button
+                        type="button"
+                        className="btn btn-neu btn-sm flex items-center gap-1.5"
+                        onClick={() => setShowUploadBox(false)}
+                      >
+                        <i className="lni lni-arrow-left"></i>
+                        <span>Back to Existing Questions ({importExistingQuestions.length})</span>
+                      </button>
+                    )}
                   </div>
-                </div>
 
                 {/* Template Format Note */}
                 <div className="bg-slate-50 border border-slate-200/80 rounded-lg p-3 text-xs text-slate-600 mb-4 flex items-center justify-between flex-wrap gap-2">
@@ -1309,6 +1361,7 @@ export default function QuestionBankUploadPage() {
                   </div>
                 </div>
               </div>
+              )}
 
               {/* Validation Error Banner */}
               {validationError && (

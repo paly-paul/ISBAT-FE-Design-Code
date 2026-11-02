@@ -2,6 +2,7 @@
 
 import React from 'react'
 import { UeQuestionDto } from '@/lib/api/assessment/ueQuestions'
+import { RichTextDisplay, stripHtmlTags } from '@/components/RichTextEditor'
 
 interface ViewUeQuestionModalProps {
   isOpen: boolean
@@ -87,8 +88,8 @@ export function ViewUeQuestionModal({
             <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
               Question Statement
             </div>
-            <div className="text-xs text-slate-900 font-medium leading-relaxed whitespace-pre-wrap">
-              {question.questionText}
+            <div className="text-xs text-slate-900 font-medium leading-relaxed">
+              <RichTextDisplay content={question.questionText} />
             </div>
           </div>
 
@@ -116,7 +117,7 @@ export function ViewUeQuestionModal({
                         }`}>
                           {opt.label}
                         </span>
-                        <span>{opt.text}</span>
+                        <span className="leading-normal">{stripHtmlTags(opt.text)}</span>
                       </div>
                       {isCorrect && (
                         <span className="badge badge-green text-[10px] font-bold py-0.5 px-2">
@@ -135,8 +136,14 @@ export function ViewUeQuestionModal({
             <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
               {isMcq ? 'Correct Answer Key' : 'Model Answer & Evaluation Guidelines'}
             </div>
-            <div className="text-xs text-slate-800 leading-relaxed whitespace-pre-wrap">
-              {question.answerText || '—'}
+            <div className="text-xs text-slate-800 leading-relaxed">
+              {isMcq ? (
+                <span className="font-semibold text-emerald-800">
+                  {stripHtmlTags(question.answerText) || '—'}
+                </span>
+              ) : (
+                <RichTextDisplay content={question.answerText} />
+              )}
             </div>
           </div>
 

@@ -379,7 +379,7 @@ function CbtScheduleContent() {
                     checked={publishStatus === 0}
                     onChange={() => setPublishStatus(0)}
                   />
-                  Unpublished
+                  Not publish to student
                 </label>
                 <label className="flex items-center gap-2 text-sm cursor-pointer">
                   <input
@@ -388,7 +388,7 @@ function CbtScheduleContent() {
                     checked={publishStatus === 1}
                     onChange={() => setPublishStatus(1)}
                   />
-                  Published
+                  Publish to student
                 </label>
               </div>
             </div>

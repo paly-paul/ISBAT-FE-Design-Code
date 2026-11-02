@@ -17002,3 +17002,53 @@ body:has(.drawer-overlay) {
   .ss-tab::after { transition: none }
   .ss-donut-arc, .ss-head-bar > span, .ss-heads-sum-bar > span, .ss-head, .ss-grp-chev, .ss-grp-btn { transition: none }
 }
+
+/* Rich Text & Question Display Content Formatting */
+.rich-editor-content ul {
+  list-style-type: disc !important;
+  padding-left: 1.5rem !important;
+  margin: 0.35rem 0 !important;
+}
+.rich-editor-content ol {
+  list-style-type: decimal !important;
+  padding-left: 1.5rem !important;
+  margin: 0.35rem 0 !important;
+}
+.rich-editor-content li {
+  margin: 0.2rem 0 !important;
+}
+.rich-editor-content p {
+  margin-bottom: 0.35rem;
+}
+.rich-editor-content p:last-child {
+  margin-bottom: 0;
+}
+.rich-editor-content h2 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin: 0.5rem 0 0.25rem;
+}
+.rich-editor-content h3 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin: 0.4rem 0 0.2rem;
+}
+.rich-editor-content h4 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 0.3rem 0 0.15rem;
+}
+.rich-editor-content sub {
+  vertical-align: sub;
+  font-size: 0.75em;
+}
+.rich-editor-content sup {
+  vertical-align: super;
+  font-size: 0.75em;
+}
+.rich-editor-content blockquote {
+  border-left: 3px solid #cbd5e1;
+  padding-left: 0.75rem;
+  color: #64748b;
+  margin: 0.35rem 0;
+}
