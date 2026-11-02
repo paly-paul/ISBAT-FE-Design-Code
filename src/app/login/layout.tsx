@@ -14,7 +14,9 @@ import { resolvePostLoginTarget } from '@/lib/postLoginRedirect'
 const GUARDED = new Set(['/login', '/login/staff', '/login/otp'])
 
 export default function LoginLayout({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname()
+  // The static export (trailingSlash) gives "/login/staff/"; drop the slash
+  // so GUARDED matches on S3 as it does on next dev / Vercel.
+  const pathname = usePathname().replace(/(.)\/$/, '$1')
   const queryClient = useQueryClient()
   const [redirecting, setRedirecting] = useState(false)
 

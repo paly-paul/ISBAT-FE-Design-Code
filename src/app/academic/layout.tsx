@@ -26,7 +26,8 @@ export default function AcademicLayout({ children }: { children: React.ReactNode
   const pathname = usePathname()
   const router = useRouter()
 
-  const currentPage = pathname.split('/').pop() ?? 'acad-dashboard'
+  // filter(Boolean): the static export (trailingSlash) gives "/x/page/", whose last split part is ''
+  const currentPage = pathname.split('/').filter(Boolean).pop() ?? 'acad-dashboard'
 
   // Use the saved identity before the first paint so the screen does not flash the loader.
   useLayoutEffect(() => {

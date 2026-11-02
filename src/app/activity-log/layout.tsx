@@ -19,7 +19,8 @@ export default function ActivityLogLayout({ children }: { children: React.ReactN
   const pathname = usePathname()
   const router = useRouter()
 
-  const currentPage = pathname.split('/').pop() ?? 'activity-log'
+  // filter(Boolean): the static export (trailingSlash) gives "/x/page/", whose last split part is ''
+  const currentPage = pathname.split('/').filter(Boolean).pop() ?? 'activity-log'
 
   useLayoutEffect(() => {
     const identity = getSessionIdentity()

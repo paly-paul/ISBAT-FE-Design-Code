@@ -2,8 +2,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { SearchSelect } from '@/components/SearchSelect'
 import { useAvailableRooms, useCreateTimetable, useUpdateTimetable, TimeSlotDropdownItem } from '@/hooks/academic/useTimetable'
+import { useRoomTypes } from '@/hooks/academic/useRooms'
 import type { Weekday } from '@/lib/api/academic/weekday'
-import { allowedDayCodes, capacityState, shiftHint, slotName, slotRange, studentCount } from './ttShared'
+import { allowedDayCodes, capacityState, roomWithType, shiftHint, slotName, slotRange, studentCount } from './ttShared'
 
 // One checked batch row, carried in from the Allocation Context (Add) or
 // from the entry being edited. The triple is what's saved.
@@ -62,6 +63,9 @@ export function TimetableSlotModal({ state, onClose, intakeGuid, term, days, slo
   const [weekDayGuid, setWeekDayGuid] = useState('')
   const [timeSlotGuid, setTimeSlotGuid] = useState('')
   const [roomGuid, setRoomGuid] = useState('')
+  // Narrows the room list only; not saved. '' (cleared) = all types,
+  // otherwise a roomType value from /rooms/types.
+  const [roomTypeFilter, setRoomTypeFilter] = useState('')
   const [url, setUrl] = useState('')
   const [urlTouched, setUrlTouched] = useState(false)
   const urlInputRef = useRef<HTMLInputElement>(null)
@@ -72,6 +76,7 @@ export function TimetableSlotModal({ state, onClose, intakeGuid, term, days, slo
     setWeekDayGuid(state.weekDayGuid)
     setTimeSlotGuid(state.timeSlotGuid)
     setRoomGuid(state.roomGuid ?? '')
+    setRoomTypeFilter('')
     setUrl(state.url ?? '')
     setUrlTouched(false)
     setClash(null)
@@ -86,12 +91,20 @@ export function TimetableSlotModal({ state, onClose, intakeGuid, term, days, slo
     excludeTimetableGuid: state.mode === 'edit' ? state.timetableGuid : null,
   } : null)
   const rooms = roomQuery.data ?? []
+  const { data: roomTypes = [], isLoading: roomTypesLoading } = useRoomTypes()
+  const matchesType = (r: { roomType?: number | null }) =>
+    !roomTypeFilter || r.roomType === Number(roomTypeFilter)
+  const typedRooms = rooms.filter(matchesType)
 
-  // Clear the room when it's no longer free at the new slot or day.
+  // Clear the room when it's no longer free at the new slot or day, or no
+  // longer matches the chosen room type.
   useEffect(() => {
     if (!roomGuid || roomQuery.isFetching || !roomQuery.data) return
-    if (!roomQuery.data.some(r => r.roomGuid === roomGuid)) setRoomGuid('')
-  }, [roomGuid, roomQuery.data, roomQuery.isFetching])
+    const r = roomQuery.data.find(x => x.roomGuid === roomGuid)
+    if (!r || !matchesType(r)) setRoomGuid('')
+    // matchesType only reads roomTypeFilter
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roomGuid, roomQuery.data, roomQuery.isFetching, roomTypeFilter])
 
   const allowed = allowedDayCodes(state?.batchTimeName)
   const dayOptions = useMemo(() => days
@@ -144,19 +157,20 @@ export function TimetableSlotModal({ state, onClose, intakeGuid, term, days, slo
   const roomPlaceholder = !weekDayGuid || !timeSlotGuid
     ? 'Pick a weekday and time slot first'
     : roomQuery.isLoading ? 'Loading free rooms…'
-      : rooms.length === 0 ? 'No rooms free at this slot' : '— Select room —'
+      : rooms.length === 0 ? 'No rooms free at this slot'
+        : typedRooms.length === 0 ? 'No rooms of this type free' : '— Select room —'
 
   return (
     <div className="modal-overlay open">
       <div className="modal" style={{ maxWidth: 640 }} role="dialog" aria-modal="true" aria-labelledby="tt-slot-title">
-        <div className="modal-hdr">
+        <div className="modal-hdr modal-hdr-blue">
           <div className="flex items-center gap-[10px]">
-            <div style={{ width: 34, height: 34, borderRadius: 9, background: 'linear-gradient(135deg,var(--b800),var(--b500))', display: 'grid', placeItems: 'center', color: '#fff', fontSize: 15 }}>
+            <div style={{ width: 34, height: 34, borderRadius: 9, background: 'rgba(255,255,255,.18)', display: 'grid', placeItems: 'center', color: '#fff', fontSize: 15 }}>
               <i className={`lni ${state.mode === 'edit' ? 'lni-pencil' : 'lni-calendar'}`} aria-hidden="true"></i>
             </div>
             <div>
               <div className="modal-title" id="tt-slot-title">{state.mode === 'edit' ? 'Edit Scheduled Slot' : 'Schedule Slot'}</div>
-              <div className="text-g400" style={{ fontSize: 'var(--fs-xs)' }}>
+              <div style={{ fontSize: 'var(--fs-xs)', color: 'rgba(255,255,255,.8)' }}>
                 {state.mode === 'edit' ? `${state.courseLabel} · ${day?.dayName ?? ''} · ${slot ? slotRange(slot.startTime, slot.endTime) : ''}` : 'Confirm the logistics to complete scheduling'}
               </div>
             </div>
@@ -201,10 +215,20 @@ export function TimetableSlotModal({ state, onClose, intakeGuid, term, days, slo
 
           <div className="g2" style={{ marginBottom: 14 }}>
             <div className="fg m-0">
+              <label className="lbl">Room Type</label>
+              <SearchSelect
+                placeholder="All types"
+                options={roomTypes.map(t => ({ value: String(t.value), label: t.name }))}
+                value={roomTypeFilter}
+                onChange={v => { setRoomTypeFilter(v); setClash(null) }}
+                isLoading={roomTypesLoading}
+              />
+            </div>
+            <div className="fg m-0">
               <label className="lbl">Classroom / Lab <span className="req">*</span></label>
               <SearchSelect
                 placeholder={roomPlaceholder}
-                options={rooms.map(r => ({ value: r.roomGuid, label: `${r.roomCode}${r.capacity != null ? ` (Cap: ${r.capacity})` : ''}` }))}
+                options={typedRooms.map(r => ({ value: r.roomGuid, label: `${roomWithType(r.roomCode, r.roomTypeName)}${r.capacity != null ? ` (Cap: ${r.capacity})` : ''}` }))}
                 value={roomGuid}
                 onChange={v => { setRoomGuid(v); setClash(null) }}
                 disabled={!weekDayGuid || !timeSlotGuid}
@@ -212,6 +236,9 @@ export function TimetableSlotModal({ state, onClose, intakeGuid, term, days, slo
               />
               {roomQuery.isError && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>Couldn&apos;t load free rooms.</p>}
             </div>
+          </div>
+
+          <div className="g2" style={{ marginBottom: 14 }}>
             <div className="fg m-0">
               <label className="lbl">Capacity Status</label>
               <div className={`tt-cap${cap ? ` ${cap}` : ''}`} aria-live="polite">
@@ -221,9 +248,8 @@ export function TimetableSlotModal({ state, onClose, intakeGuid, term, days, slo
               </div>
               {cap === 'over' && <p className="text-g500" style={{ fontSize: 'var(--fs-xs)', marginTop: 4 }}>Warning only — the slot can still be saved.</p>}
             </div>
-          </div>
 
-          <div className="fg">
+          <div className="fg m-0">
             <label className="lbl">Online URL <span className="text-g400" style={{ textTransform: 'none', letterSpacing: 0, fontWeight: 400 }}>(optional)</span></label>
             <input
               ref={urlInputRef}
@@ -247,6 +273,7 @@ export function TimetableSlotModal({ state, onClose, intakeGuid, term, days, slo
                 </span>
               </p>
             )}
+          </div>
           </div>
 
           <div className="tt-repeat">

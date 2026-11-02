@@ -26,7 +26,8 @@ export default function FinanceLayout({ children }: { children: React.ReactNode 
   // of who was actually logged in.
   const [displayName, setDisplayName] = useState<string | null>(null)
 
-  const currentPage = pathname.split('/').pop() ?? 'dashboard'
+  // filter(Boolean): the static export (trailingSlash) gives "/x/page/", whose last split part is ''
+  const currentPage = pathname.split('/').filter(Boolean).pop() ?? 'dashboard'
 
   useEffect(() => {
     const identity = getSessionIdentity()
