@@ -6,7 +6,6 @@ const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
 export const MOCK_CREDENTIALS = {
   staff: { id: 'AR-2024-0001', password: 'Admin@1234',   challengeId: 'mock-staff-challenge'   },
-  student: { id: 'ISB/2024/BSCS/0142', password: 'Student@1234', challengeId: 'mock-student-challenge' },
   otp: '123456',
 } as const
 
@@ -42,30 +41,6 @@ export function staffLogin(staffId: string, password: string, trustDevice: boole
       redirect: '/academic',
     }
   })
-}
-
-// Student login
-
-export type StudentLoginResult =
-  | { requiresOtp: true; challengeId: string; otpChannel: 'email' | 'sms'; maskedTarget: string }
-  | { requiresOtp: false; displayName?: string; redirect: string }
-
-export function studentLogin(studentId: string, password: string): Promise<StudentLoginResult> {
-  if (MOCK_AUTH) {
-    if (studentId !== MOCK_CREDENTIALS.student.id || password !== MOCK_CREDENTIALS.student.password)
-      return Promise.reject(new AuthError('bad_credentials'))
-    return Promise.resolve<StudentLoginResult>({
-      requiresOtp: true,
-      challengeId: MOCK_CREDENTIALS.student.challengeId,
-      otpChannel: 'email',
-      maskedTarget: 's***@student.isbat.ac.ug',
-    })
-  }
-  // The API may respond with no body on success.
-  return apiPost<{ displayName: string } | null>('/api/v1/users/auth/login', {
-    Username: studentId,
-    Password: password,
-  }).then(data => ({ requiresOtp: false as const, displayName: data?.displayName, redirect: '' }))
 }
 
 // Session refresh — relies on the httpOnly refresh-token cookie set at login;
@@ -115,12 +90,11 @@ export function otpVerify(challengeId: string, code: string) {
   if (MOCK_AUTH) {
     if (code !== MOCK_CREDENTIALS.otp)
       return Promise.reject(new AuthError('invalid_code'))
-    const isStudent = challengeId === MOCK_CREDENTIALS.student.challengeId
     return Promise.resolve<OtpVerifyResult>({
       sessionId: 'mock-session-id',
-      role: isStudent ? 'student' : 'staff',
-      redirect: isStudent ? '' : '/academic',
-      displayName: isStudent ? 'Mock Student' : 'Mock User',
+      role: 'staff',
+      redirect: '/academic',
+      displayName: 'Mock User',
     })
   }
   return post<OtpVerifyResult>('/api/auth/otp/verify', { challengeId, code })

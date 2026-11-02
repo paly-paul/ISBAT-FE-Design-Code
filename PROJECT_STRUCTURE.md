@@ -21,12 +21,11 @@ No test framework.
 ## Route Map
 
 ```
-/                                  → redirects to /login
+/                                  → redirects to /login/staff
 
-/login                             → portal selector (Staff vs Student)
-/login/staff                       → staff ID + password
-/login/student                     → student ID + password
-/login/otp                         → OTP verification (shared)
+/login                             → redirects to /login/staff
+/login/staff                       → staff ID + password (the only login screen)
+/login/otp                         → OTP verification
 /login/forgot                      → forgot password flow
 /login/activate                    → new staff account activation
 /login/set-password                → set password (post-activation)
@@ -680,7 +679,6 @@ Controlled number inputs must use `string` state (e.g. `useState('25')`) so back
 | Role | ID | Password | OTP |
 |---|---|---|---|
 | Staff | `AR-2024-0001` | `Admin@1234` | `123456` |
-| Student | `ISB/2024/BSCS/0142` | `Student@1234` | `123456` |
 
 Login flow state lives in `sessionStorage` under `isbat_login_flow`; session identity under `isbat_session_identity` (both in `src/lib/session.ts`).
 

@@ -3,7 +3,7 @@
 Reference for the permission-driven sidebar menu API, `GET /api/v1/users/me/menu`.
 Each node has the shape `{ name, icon, url, permissions, children }`.
 
-**Last updated: 2026-10-30.** The tree below matches the frontend's mock menu
+**Last updated: 2026-11-02.** The tree below matches the frontend's mock menu
 (`mockMenu` in `src/lib/api/users/menu.ts`), so it lists every page that is in the
 sidebar today. The events on each page come from reading the buttons and actions in
 that page's code.
@@ -79,7 +79,7 @@ ignored and the button falls back to `edit`.
   send `"approve": false` explicitly.
 - **Some buttons stay visible.** On a few pages (Payment Console, Payment History,
   Student Statement, Financial Reports, and the Discount, Transaction, Outstanding,
-  Enquiry and Application Status reports) the print/export button is always shown, and
+  Enquiry, Application Status and Students in Programme reports) the print/export button is always shown, and
   clicking it without the permission shows a "You don't have permission…" message
   instead of running it.
 - **Menu call fails:** nothing is granted. The sidebar shows "Couldn't load menu" and
@@ -828,6 +828,7 @@ each API.
 | Operations | Fee Structure Transfer | `/student/fee-structure-transfer` | `get` `execute` | `edit` |  |
 | Operations | Terminate Student | `/student/terminate-student` | `get` `execute` | `add` | `execute` = terminate |
 | Operations | Passout Confirmation | `/student/passout-confirmation` | `get` `approve` | `edit` | `approve` = confirm passout |
+| Reports | Students in Programme Report | `/student/reports/students-in-programme` | `get` `export` | `export` | Every student of one programme, filtered by semester / intake / status; preview + Excel export; exports land in the shared Downloads list. The APIs check `student.studentsinprogrammereport.get` (preview) and `.export` |
 | Communications | Send Communication | `/student/communications` | `get` `send` | `add` |  |
 | Events and Announcements | Event Management | `/student/event-management` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
 | Events and Announcements | Announcement Management | `/student/announcement-management` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
@@ -931,6 +932,21 @@ each API.
           "icon": "lni lni-graduation",
           "url": "/student/passout-confirmation",
           "permissions": { "get": true, "approve": true },
+          "children": []
+        }
+      ]
+    },
+    {
+      "name": "Reports",
+      "icon": null,
+      "url": null,
+      "permissions": null,
+      "children": [
+        {
+          "name": "Students in Programme Report",
+          "icon": "lni lni-bar-chart",
+          "url": "/student/reports/students-in-programme",
+          "permissions": { "get": true, "export": true },
           "children": []
         }
       ]
@@ -1843,7 +1859,23 @@ removes any "Lecturer Master" / "Lecture Master" node (`stripLectureMaster`).
 | Assessment | Pending QP Upload | `/assessment/rpt-pending-qp` |
 | Assessment | Faculty Summary | `/assessment/rpt-faculty` |
 
-## Changes since the previous version (2026-10-21)
+## Changes since the previous version (2026-10-30)
+
+- **Added Student › Reports › Students in Programme Report**
+  (`/student/reports/students-in-programme`, icon `lni lni-bar-chart`), with `get` and
+  `export`. It's a new **Reports** section between Operations and Communications.
+  Please register it in the menu API; until then it's hidden and shows Access Denied.
+  Its APIs check `student.studentsinprogrammereport.get` (preview) and
+  `student.studentsinprogrammereport.export` (Excel export). Like the other reports, its
+  Export button always shows, and clicking it without `export` shows a "You don't have
+  permission…" message. Learning Mode Report stays hidden (see
+  [Pages hidden from the sidebar](#pages-hidden-from-the-sidebar)); don't add it to this
+  section.
+- **My Profile (`/profile`) needs no menu entry.** It now loads the signed-in staff
+  member's details from `GET /api/v1/users/employees/me`, but it isn't a menu page: it's
+  reached from the header's profile dropdown and is always allowed.
+
+## Changes in the 2026-10-30 version (since 2026-10-21)
 
 - **The frontend no longer adds pages to the menu.** Until now it inserted pages the
   menu API hadn't registered yet (the "until then the frontend adds it" notes below).

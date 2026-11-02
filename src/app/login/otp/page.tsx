@@ -10,7 +10,6 @@ import OtpInput from '@/components/OtpInput'
 import { otpVerify, AuthError, MOCK_CREDENTIALS } from '@/lib/auth'
 import { getFlowState, setFlowState, clearFlowState, setSessionIdentity } from '@/lib/session'
 import { authErrorMessage } from '@/lib/errorMessages'
-import SuccessScreen from '@/components/SuccessScreen'
 
 const RESEND_COOLDOWN = 30
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
@@ -21,7 +20,6 @@ export default function OtpPage() {
   const [digits, setDigits] = useState(['', '', '', '', '', ''])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [successState, setSuccessState] = useState<{ role: string; redirect: string } | null>(null)
   const [flowState, setLocalFlowState] = useState<ReturnType<typeof getFlowState>>({})
   const [secondsLeft, setSecondsLeft] = useState(RESEND_COOLDOWN)
   const [resending, setResending] = useState(false)
@@ -52,14 +50,13 @@ export default function OtpPage() {
 
     try {
       const result = await otpVerify(flowState.challengeId, code)
-      setSessionIdentity({ displayName: result.displayName, role: result.role === 'student' ? 'student' : 'staff' })
+      setSessionIdentity({ displayName: result.displayName, role: 'staff' })
       clearFlowState()
-      // Staff only — same "requested link, else first menu page" rule as
-      // the login form (lib/postLoginRedirect.ts).
-      const redirect = result.role === 'student'
-        ? result.redirect
-        : await resolvePostLoginTarget(queryClient, result.redirect && result.redirect !== '/academic' ? result.redirect : '/academic/acad-dashboard')
-      setSuccessState({ role: result.role, redirect })
+      // Same "requested link, else first menu page" rule as the login form
+      // (lib/postLoginRedirect.ts). Straight in, no success screen; replace
+      // keeps the login pages out of history. loading stays on until it lands.
+      const redirect = await resolvePostLoginTarget(queryClient, result.redirect && result.redirect !== '/academic' ? result.redirect : '/academic/acad-dashboard')
+      window.location.replace(redirect)
     } catch (err) {
       if (err instanceof AuthError) {
         setError(authErrorMessage(err.code))
@@ -67,7 +64,6 @@ export default function OtpPage() {
         setError(authErrorMessage('unknown'))
       }
       setDigits(['', '', '', '', '', ''])
-    } finally {
       setLoading(false)
     }
   }
@@ -83,20 +79,6 @@ export default function OtpPage() {
   }
 
   const maskedTarget = flowState.maskedTarget ?? (flowState.otpChannel === 'sms' ? '+256 ***** ****' : '***@isbat.ac.ug')
-
-  if (successState) {
-    const isStudent = successState.role === 'student'
-    return (
-      <PanelA eyebrow="Two-factor authentication" headline="Identity verified." centered>
-        <SuccessScreen
-          subtitle={isStudent
-            ? 'The Student Portal is still being built. Check back soon.'
-            : 'Welcome back to ISBAT ERP.'}
-          redirectTo={isStudent ? undefined : (successState.redirect || '/academic/acad-dashboard')}
-        />
-      </PanelA>
-    )
-  }
 
   return (
     <PanelA eyebrow="Two-factor authentication" headline="Verify it's you.">

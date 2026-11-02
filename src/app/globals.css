@@ -14850,6 +14850,8 @@ body:has(.drawer-overlay) {
 }
 .mp-pill i { font-size: 12px; color: var(--g400); }
 .mp-pill.is-live { color: var(--green); background: var(--green-bg); border-color: var(--green-bd); }
+.mp-pill.is-warn { color: var(--amber); background: var(--amber-bg); border-color: var(--amber-bd); }
+.mp-pill.is-bad { color: var(--red); background: var(--red-bg); border-color: var(--red-bd); }
 .mp-pill-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 3px rgba(5, 150, 105, .18); }
 
 .mp-meta {
@@ -14895,7 +14897,80 @@ body:has(.drawer-overlay) {
   margin: 4px 0 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px;
   background: var(--g100); border: 1px solid var(--g100); border-radius: var(--rsm); overflow: hidden;
 }
+.mp-facts.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .mp-fact { background: var(--white); padding: 10px 14px; min-width: 0; }
+.mp-fact dt { display: flex; align-items: center; gap: 6px; }
+.mp-fact dt i { font-size: 11px; color: var(--g400); }
+.mp-fact dd { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mp-fact:hover { background: var(--surface); }
+
+/* Personal Details: personal facts beside an ID card drawn in the hero's
+   navy (same dot texture), so the tab and the banner read as one piece. */
+.mp-details { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 24px; align-items: stretch; }
+@media (max-width: 1100px) { .mp-details { grid-template-columns: 1fr; gap: 18px; } }
+
+.mp-personal { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.mp-born {
+  display: flex; align-items: center; gap: 14px; padding: 16px 18px;
+  border-radius: var(--rsm); background: var(--b50); border: 1px solid var(--b100);
+}
+.mp-born-ic {
+  flex-shrink: 0; width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center;
+  font-size: 18px; color: var(--white); background: var(--b800);
+  box-shadow: 0 6px 14px -8px rgba(30, 45, 110, .7);
+}
+.mp-born-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.mp-born-lbl { font-size: var(--fs-xs); font-weight: 600; color: var(--b700); }
+.mp-born-val { font-size: var(--fs-xl); font-weight: 800; letter-spacing: -0.02em; color: var(--g900); line-height: 1.2; }
+.mp-born-age {
+  flex-shrink: 0; padding: 6px 12px; border-radius: 999px; font-size: var(--fs-sm); font-weight: 700;
+  color: var(--b800); background: var(--white); border: 1px solid var(--b200);
+}
+
+/* 2×2 tiles: with the date-of-birth panel above, the column fills the ID
+   card's height with content rather than empty space. */
+.mp-traits { margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: 1fr; gap: 10px; flex: 1; }
+.mp-trait {
+  min-width: 0; padding: 10px 14px; display: flex; flex-direction: column; justify-content: center;
+  border-radius: var(--rsm); background: var(--surface); border: 1px solid var(--g100);
+  transition: border-color var(--tr), background var(--tr);
+}
+.mp-trait:hover { background: var(--white); border-color: var(--b100); }
+.mp-trait dt { display: flex; align-items: center; gap: 6px; font-size: var(--fs-xs); font-weight: 600; color: var(--g500); }
+.mp-trait dt i { font-size: 12px; color: var(--b600); }
+.mp-trait dd { margin: 4px 0 0; font-size: var(--fs-md, 15px); font-weight: 700; color: var(--g900); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 640px) { .mp-born-val { font-size: var(--fs-lg); } }
+
+.mp-idcard {
+  position: relative; overflow: hidden; display: flex; flex-direction: column; gap: 16px;
+  padding: 20px 22px; border-radius: var(--radius); color: var(--white);
+  background-color: var(--b800);
+  background-image:
+    radial-gradient(120% 90% at 100% 0%, rgba(255, 255, 255, .14), transparent 55%),
+    radial-gradient(rgba(255, 255, 255, .09) 1px, transparent 1.2px);
+  background-size: auto, 14px 14px;
+  box-shadow: 0 14px 28px -18px rgba(20, 30, 80, .75);
+}
+.mp-idcard-top { display: flex; align-items: center; justify-content: space-between; font-size: var(--fs-xs); font-weight: 700; color: var(--b100); }
+.mp-idcard-top i { margin-right: 4px; }
+/* The contact chip of a smart ID card. */
+.mp-idcard-chip {
+  width: 34px; height: 26px; border-radius: 6px;
+  background: linear-gradient(135deg, #f3d98b, #c9a24a);
+  box-shadow: inset 0 0 0 1px rgba(120, 85, 20, .35);
+}
+.mp-idcard-id { display: flex; flex-direction: column; gap: 4px; }
+.mp-idcard-lbl { font-size: var(--fs-xs); font-weight: 600; color: var(--b200); }
+.mp-idcard-num { font-size: 26px; font-weight: 600; letter-spacing: .12em; line-height: 1.2; color: var(--white); overflow-wrap: anywhere; }
+.mp-idcard-sub { font-size: var(--fs-sm); color: var(--b100); }
+.mp-idcard-sub .font-mono { margin-left: 6px; color: var(--white); letter-spacing: .06em; }
+.mp-idcard-foot {
+  margin: auto 0 0; padding-top: 14px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+  border-top: 1px solid rgba(255, 255, 255, .16);
+}
+.mp-idcard-foot dt { font-size: var(--fs-xs); font-weight: 600; color: var(--b200); }
+.mp-idcard-foot dt i { margin-right: 3px; }
+.mp-idcard-foot dd { margin: 3px 0 0; font-size: var(--fs-base); font-weight: 700; color: var(--white); }
 .mp-fact dt { font-size: var(--fs-2xs); font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--g400); }
 .mp-fact dd { margin: 3px 0 0; font-size: var(--fs-base); font-weight: 600; color: var(--g900); }
 .mp-fact dd.font-mono { color: var(--b700); }
@@ -14937,6 +15012,79 @@ body:has(.drawer-overlay) {
 }
 .mp-approval-lbl { font-size: var(--fs-sm); font-weight: 600; color: var(--g500); }
 .mp-info { flex: 1; min-width: 260px; margin: 0; }
+
+/* Skills: name-first chips, grouped by approval status (status said once per
+   group). The small disc on each chip is the proficiency level. Pending is
+   dashed, rejected muted — not colour alone. */
+.mp-skill-groups { display: flex; flex-direction: column; gap: 18px; }
+.mp-skill-group + .mp-skill-group { padding-top: 18px; border-top: 1px dashed var(--g200); }
+.mp-skill-group-hdr {
+  display: flex; align-items: center; gap: 8px; margin: 0 0 10px;
+  font-size: var(--fs-2xs); font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--g500);
+}
+.mp-skill-group-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--g400); }
+.mp-skill-group.is-approved .mp-skill-group-dot { background: var(--green); box-shadow: 0 0 0 3px var(--green-bg); }
+.mp-skill-group.is-pending .mp-skill-group-dot { background: var(--amber); box-shadow: 0 0 0 3px var(--amber-bg); }
+.mp-skill-group.is-rejected .mp-skill-group-dot { background: var(--red); box-shadow: 0 0 0 3px var(--red-bg); }
+.mp-skill-group-count {
+  min-width: 20px; height: 18px; padding: 0 6px; border-radius: 9px; display: inline-grid; place-items: center;
+  font-size: var(--fs-2xs); letter-spacing: 0; color: var(--g700); background: var(--g100);
+}
+
+/* Compact rhythm for My Profile only, so the Profile Info tab fits a
+   typical laptop window without scrolling. Same content, tighter spacing. */
+.mp-page .pg-hdr { margin-bottom: 14px; }
+.mp-page .pg-sub { margin-top: 2px; }
+.mp-page .ptabs { margin-bottom: 14px; }
+.mp-page .ptab { padding-top: 8px; padding-bottom: 8px; }
+.mp-page .card { padding: 16px 18px; margin-bottom: 14px; }
+.mp-page .card-hdr { margin-bottom: 12px; }
+.mp-hero { margin-bottom: 14px; }
+.mp-hero::before { height: 64px; }
+.mp-hero-top { padding: 22px 24px 14px; gap: 20px; }
+.mp-avatar { width: 88px; height: 88px; font-size: 28px; }
+.mp-hero-id { padding-top: 46px; }
+.mp-hero-pills { margin-top: 8px; }
+.mp-meta-item { padding: 10px 20px; }
+.mp-meta dd { margin-top: 2px; }
+.mp-born { padding: 12px 16px; }
+.mp-born-ic { width: 40px; height: 40px; }
+.mp-personal { gap: 10px; }
+.mp-traits { gap: 8px; }
+.mp-trait { padding: 8px 14px; }
+.mp-idcard { padding: 16px 20px; gap: 12px; }
+.mp-idcard-num { font-size: 24px; }
+.mp-idcard-foot { padding-top: 10px; }
+.mp-skill-groups { gap: 14px; }
+.mp-skill-group-hdr { margin-bottom: 8px; }
+.mp-skill { height: 30px; }
+.mp-page .mp-info { margin-top: 0; }
+@media (max-width: 640px) {
+  .mp-hero-top { padding: 22px 18px 14px; }
+  .mp-hero-id { padding-top: 0; }
+  .mp-avatar { width: 76px; height: 76px; font-size: 24px; }
+}
+
+/* Quiet chips: the skill name is the content. The level is a small muted
+   tag, and only appears when skills differ (else the subtitle says it once). */
+.mp-skills { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.mp-skill {
+  display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 14px; max-width: 100%;
+  border: 1px solid var(--b100); border-radius: 17px; background: var(--b50);
+  font-size: var(--fs-base); font-weight: 600; color: var(--b800);
+  transition: border-color var(--tr), background var(--tr), box-shadow var(--tr), transform var(--tr);
+}
+.mp-skill:hover { border-color: var(--b200); background: var(--white); box-shadow: 0 6px 14px -10px rgba(45, 68, 143, .5); transform: translateY(-1px); }
+.mp-skill-name { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mp-skill-lvl {
+  flex-shrink: 0; padding-left: 8px; border-left: 1px solid var(--b200);
+  font-size: var(--fs-xs); font-weight: 600; color: var(--b700); font-variant-numeric: tabular-nums;
+}
+.mp-skill-group.is-pending .mp-skill { border-style: dashed; border-color: var(--amber-bd); background: var(--amber-bg); color: var(--g900); }
+.mp-skill-group.is-pending .mp-skill-lvl { color: var(--amber); border-color: var(--amber-bd); }
+.mp-skill-group.is-rejected .mp-skill { color: var(--g500); background: var(--white); border-color: var(--g200); }
+.mp-skill-group.is-rejected .mp-skill-lvl { color: var(--g500); border-color: var(--g200); }
+@media (prefers-reduced-motion: reduce) { .mp-skill, .mp-skill:hover { transition: none; transform: none; } }
 
 /* Save bar: sits after the cards; only pins to the bottom of the screen
    while there are unsaved edits, so it never covers content otherwise. */
@@ -16043,3 +16191,131 @@ body:has(.drawer-overlay) {
   .abd-context-meta { gap: 8px 20px }
 }
 
+
+/* ── Course Allocation ──
+   One context bar (session · term · school) filters the list and is what the
+   add row saves into; the add row sits between the two, tinted so it reads as
+   "writes into what's below". */
+.ca-ctx {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, .8fr) minmax(0, 1.4fr) auto;
+  gap: 12px 14px;
+  align-items: start;
+  padding-bottom: 16px;
+  border-bottom: 1.5px solid var(--g200)
+}
+
+.ca-ctx .fg { margin: 0 }
+
+.ca-ctx-reset {
+  margin-top: 23px;
+  white-space: nowrap
+}
+
+.ca-add {
+  margin: 16px 0 18px;
+  padding: 14px 16px 16px;
+  background: var(--b50);
+  border: 1.5px solid var(--b100);
+  border-radius: var(--rsm)
+}
+
+.ca-add-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 12px;
+  font-size: 13px;
+  color: var(--g600);
+  text-wrap: pretty
+}
+
+.ca-add-title > i {
+  font-size: 12px;
+  color: var(--b600);
+  transform: translateY(1px)
+}
+
+.ca-add-title strong {
+  color: var(--b800);
+  font-weight: 700
+}
+
+.ca-add-hint { color: var(--g500) }
+
+.ca-add-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.6fr) 96px auto;
+  gap: 12px 14px;
+  align-items: start
+}
+
+.ca-add-grid .fg { margin: 0 }
+
+.ca-add-go {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 23px
+}
+
+.ca-list-hdr {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  margin: 18px 0 12px
+}
+
+.ca-count {
+  font-size: var(--fs-md);
+  font-weight: 700;
+  color: var(--g900);
+  font-variant-numeric: tabular-nums
+}
+
+.ca-unit-code {
+  font-family: var(--font-mono), monospace;
+  font-size: 12px;
+  color: var(--b700);
+  margin-right: 8px
+}
+
+.ca-unit-name { color: var(--g800) }
+
+.ca-muted {
+  color: var(--g400);
+  font-size: var(--fs-sm)
+}
+
+#page-course-allocation th.ca-num,
+#page-course-allocation td.ca-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums
+}
+
+#page-course-allocation .ca-row-new > td { animation: ca-row-in 2.6s cubic-bezier(.16, 1, .3, 1) }
+
+@keyframes ca-row-in {
+  0%, 25% { background: var(--green-bg) }
+  100% { background: transparent }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #page-course-allocation .ca-row-new > td { animation: none; background: var(--green-bg) }
+}
+
+@media (max-width: 900px) {
+  .ca-ctx { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) }
+  .ca-ctx-reset { margin-top: 0; justify-self: start }
+  .ca-add-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) }
+  .ca-add-grid > .fg:nth-child(2) { grid-column: 1 / -1; grid-row: 2 }
+}
+
+@media (max-width: 560px) {
+  .ca-ctx, .ca-add-grid { grid-template-columns: minmax(0, 1fr) }
+  .ca-add-grid > .fg:nth-child(2) { grid-row: auto }
+  .ca-add-go { margin-top: 0 }
+  .ca-add-go .btn-primary { flex: 1; justify-content: center }
+}

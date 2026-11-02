@@ -24,14 +24,6 @@ export function validateStaffId(id: string): string | null {
   return null
 }
 
-export function validateStudentId(id: string): string | null {
-  if (!id.trim()) return 'Student ID is required.'
-  // if (process.env.NEXT_PUBLIC_AUTH_MOCK === 'true' && !/^ISB\/\d{4}\/[A-Z]{2,6}\/\d{4}$/.test(id)) {
-  //   return 'Format: ISB/YYYY/PROG/NNNN · e.g. ISB/2024/BSCS/0142'
-  // }
-  return null
-}
-
 // Keystroke filter for phone number inputs — strips anything that isn't a
 // digit, space, or hyphen (formatting only), plus a leading '+' when the
 // field has no separate country-code selector alongside it (allowPlus).

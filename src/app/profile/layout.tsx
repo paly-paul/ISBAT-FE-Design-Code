@@ -64,10 +64,6 @@ export default function ProfileLayout({ children }: { children: React.ReactNode 
   }, [router])
 
   useEffect(() => {
-    if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' })
-  }, [])
-
-  useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (profileRef.current && !profileRef.current.contains(e.target as Node)) {
         setProfileOpen(false)

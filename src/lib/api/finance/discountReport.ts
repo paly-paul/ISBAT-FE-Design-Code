@@ -123,11 +123,23 @@ export function parseUtcNoZ(value: string | null | undefined): Date | null {
   return new Date(/[zZ]|[+-]\d\d:?\d\d$/.test(value) ? value : `${value}Z`)
 }
 
-// Local-development quirk (get-report-job-download.md): the Local storage
-// provider can hand back http://localhost:44310/… although that port is
-// HTTPS-only. Deployed S3 links are untouched.
+// Local-development quirks (get-report-job-download.md). Deployed S3 links
+// are untouched.
+//   - The Local storage provider can hand back http://localhost:44310/…
+//     although that port is HTTPS-only.
+//   - The link can be the backend's own cookie-authenticated file endpoint
+//     on the gateway host (https://erp-dev…/api/v1/notifications/reports/
+//     {guid}/file). From localhost the browser won't send the erp_access
+//     cookie to that host → 401, so an /api/ link on another host is opened
+//     relative to this site instead: the dev /api proxy carries the cookie,
+//     and in production /api is this site anyway.
 export function fixLocalDownloadUrl(url: string): string {
-  return url.replace(/^http:\/\/localhost:44310\//, 'https://localhost:44310/')
+  const fixed = url.replace(/^http:\/\/localhost:44310\//, 'https://localhost:44310/')
+  try {
+    const u = new URL(fixed, window.location.origin)
+    if (u.origin !== window.location.origin && u.pathname.startsWith('/api/')) return u.pathname + u.search
+  } catch { /* not a URL we can parse — use it as given */ }
+  return fixed
 }
 
 // ── Discount dropdown ──────────────────────────────────────────────────────

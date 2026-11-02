@@ -134,6 +134,10 @@ const STUDENT_OPERATIONS_SECTIONS: MenuNode[] = [
   // section('Reports', [
   //   leaf('Learning Mode Report', 'bar-chart', '/student/learning-mode-report'),
   // ]),
+  // students-in-programme-report-page.md, 2026-11-01.
+  section('Reports', [
+    leaf('Students in Programme Report', 'bar-chart', '/student/reports/students-in-programme'),
+  ]),
   // Services section hidden from the sidebar per request, 2026-09-02 — its
   // one leaf (Student Services) still exists at /student/services, just not
   // linked to. Commented out whole (not just the leaf) since Sidebar.tsx
