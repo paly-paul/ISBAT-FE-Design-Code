@@ -19,7 +19,8 @@ export default function AttendanceLayout({ children }: { children: React.ReactNo
   const pathname = usePathname()
   const router = useRouter()
 
-  const currentPage = pathname.split('/').pop() ?? 'dashboard'
+  // filter(Boolean): the static export (trailingSlash) gives "/x/page/", whose last split part is ''
+  const currentPage = pathname.split('/').filter(Boolean).pop() ?? 'dashboard'
 
   useLayoutEffect(() => {
     const identity = getSessionIdentity()

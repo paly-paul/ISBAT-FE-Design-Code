@@ -26,7 +26,8 @@ export default function ConfigLayout({ children }: { children: React.ReactNode }
   // of who was actually logged in.
   const [displayName, setDisplayName] = useState<string | null>(null)
 
-  const currentPage = pathname.split('/').pop() ?? 'department-master'
+  // filter(Boolean): the static export (trailingSlash) gives "/x/page/", whose last split part is ''
+  const currentPage = pathname.split('/').filter(Boolean).pop() ?? 'department-master'
 
   useEffect(() => {
     const identity = getSessionIdentity()

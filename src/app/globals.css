@@ -16319,3 +16319,218 @@ body:has(.drawer-overlay) {
   .ca-add-go { margin-top: 0 }
   .ca-add-go .btn-primary { flex: 1; justify-content: center }
 }
+
+/* ── Hall Ticket Issuance: selected student + clearance (hall-ticket/page.tsx) ──
+   One panel: who the student is, each clearance as a list row, and a verdict
+   bar carrying the Issue action. Status inks are darkened from the semantic
+   hues so small text stays ≥4.5:1 on white and on the tinted bars. */
+.ht-panel {
+  --ht-ok-ink: color-mix(in srgb, var(--green) 70%, #000);
+  --ht-bad-ink: color-mix(in srgb, var(--red) 78%, #000);
+  padding: 0;
+  overflow: hidden;
+}
+
+.ht-id {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 22px 18px;
+  border-bottom: 1px solid var(--g200);
+}
+
+.ht-avatar {
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: .02em;
+  color: var(--b800);
+  background: var(--b50);
+  border: 1.5px solid var(--b200);
+}
+
+.ht-id-main { flex: 1; min-width: 0 }
+
+.ht-name-row {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+
+.ht-name {
+  margin: 0;
+  font-size: var(--fs-xl);
+  font-weight: 650;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  color: var(--g900);
+  text-wrap: balance;
+}
+
+.ht-reg {
+  font-family: var(--font-mono), monospace;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--b700);
+  font-variant-numeric: tabular-nums;
+}
+
+.ht-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  margin: 6px 0 0;
+  font-size: var(--fs-sm);
+  color: var(--g500);
+}
+
+.ht-meta div { display: flex; gap: 6px; min-width: 0 }
+.ht-meta dt { color: var(--g500) }
+.ht-meta dd { margin: 0; color: var(--g700); font-weight: 600 }
+
+.ht-body { padding: 16px 22px 18px }
+
+.ht-checks-hdr {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-bottom: 10px;
+}
+
+.ht-checks-title {
+  margin: 0;
+  font-size: var(--fs-md);
+  font-weight: 650;
+  color: var(--g900);
+}
+
+.ht-tally {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--g700);
+  font-variant-numeric: tabular-nums;
+}
+
+/* One segment per check, in list order, so the bar reads like the list. */
+.ht-meter { display: flex; gap: 3px }
+.ht-meter span { width: 18px; height: 6px; border-radius: 3px; background: var(--g200) }
+.ht-meter span.ok { background: var(--green) }
+.ht-meter span.bad { background: var(--red) }
+
+.ht-checks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--g200);
+  border-radius: var(--rsm);
+  overflow: hidden;
+}
+
+.ht-check {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 14px;
+  background: var(--white);
+}
+
+.ht-check + .ht-check { border-top: 1px solid var(--g200) }
+.ht-check.bad { background: color-mix(in srgb, var(--red-bg) 45%, var(--white)) }
+
+.ht-check-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 14px;
+}
+
+.ht-check.ok .ht-check-icon { background: var(--green-bg); color: var(--ht-ok-ink) }
+.ht-check.bad .ht-check-icon { background: var(--red-bg); color: var(--ht-bad-ink) }
+
+.ht-check-label { font-size: var(--fs-base); font-weight: 600; color: var(--g900) }
+.ht-check-note { margin-top: 1px; font-size: var(--fs-xs); color: var(--g500); line-height: 1.45 }
+
+.ht-check-status {
+  font-size: var(--fs-sm);
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.ht-check.ok .ht-check-status { color: var(--ht-ok-ink) }
+.ht-check.bad .ht-check-status { color: var(--ht-bad-ink) }
+
+.ht-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 22px 12px;
+  font-size: var(--fs-base);
+  color: var(--g500);
+  border: 1px dashed var(--g300);
+  border-radius: var(--rsm);
+}
+
+.ht-state.err { color: var(--ht-bad-ink); border-color: var(--red-bd); background: color-mix(in srgb, var(--red-bg) 40%, var(--white)) }
+
+.ht-spin {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--g200);
+  border-top-color: var(--b500);
+  border-radius: 50%;
+  animation: spin 700ms linear infinite;
+}
+
+/* Verdict: the panel's last word, and where the action lives. */
+.ht-verdict {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  padding: 14px 22px;
+  border-top: 1px solid var(--g200);
+  background: var(--surface);
+}
+
+.ht-verdict.ok { background: color-mix(in srgb, var(--green-bg) 55%, var(--white)); border-top-color: var(--green-bd) }
+.ht-verdict.bad { background: color-mix(in srgb, var(--red-bg) 55%, var(--white)); border-top-color: var(--red-bd) }
+
+.ht-verdict-msg { display: flex; align-items: flex-start; gap: 10px; min-width: 0 }
+.ht-verdict-msg > i { font-size: 18px; margin-top: 1px; flex-shrink: 0 }
+.ht-verdict.ok .ht-verdict-msg > i { color: var(--ht-ok-ink) }
+.ht-verdict.bad .ht-verdict-msg > i { color: var(--ht-bad-ink) }
+
+.ht-verdict-title { font-size: var(--fs-base); font-weight: 650; color: var(--g900) }
+.ht-verdict-sub { margin-top: 1px; font-size: var(--fs-sm); color: var(--g700) }
+
+@media (prefers-reduced-motion: reduce) {
+  .ht-spin { animation-duration: 2s }
+}
+
+@media (max-width: 640px) {
+  .ht-id { align-items: flex-start; gap: 12px; padding: 16px }
+  .ht-avatar { width: 40px; height: 40px; font-size: 14px }
+  .ht-body { padding: 14px 16px 16px }
+  .ht-verdict { padding: 14px 16px }
+  .ht-verdict > .btn { flex: 1; justify-content: center }
+}
+
+/* Already issued: the verdict follows the header directly, so it drops its
+   top rule (the header's own bottom border already separates them). */
+.ht-id + .ht-verdict { border-top: none }

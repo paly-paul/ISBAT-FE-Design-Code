@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useMemo, useState } from 'react'
 import { SearchSelect } from '@/components/SearchSelect'
+import { ActionMenu } from '@/components/ActionMenu'
 import { Toast } from '@/components/Toast'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
@@ -12,6 +13,7 @@ import {
   useTimetableByLecturer, useTimetableByRoom, useTimetableSlots, useLecturerLoad, useTimeSlots,
   useRoomDropdown, useDeleteTimetable, TimetableEntry, TimeSlotDropdownItem,
 } from '@/hooks/academic/useTimetable'
+import { useRoomTypes } from '@/hooks/academic/useRooms'
 import type { Weekday } from '@/lib/api/academic/weekday'
 import {
   TERM_OPTIONS, useTeachingDays, allowedDayCodes, shiftHint, shiftBadge, slotRange,
@@ -92,6 +94,15 @@ export default function SchedulePage() {
   const { data: roomsAll = [] } = useRoomDropdown()
   const roomTypeByGuid = useMemo(() => new Map(roomsAll.map(r => [r.roomGuid, r.roomTypeName ?? null])), [roomsAll])
   const [roomGuid, setRoomGuid] = useState('')
+  // Room view: narrows the room picker by type ('' = all types).
+  const [roomTypeFilter, setRoomTypeFilter] = useState('')
+  const { data: roomTypes = [], isLoading: roomTypesLoading } = useRoomTypes()
+  const pickerRooms = roomTypeFilter ? roomsAll.filter(r => r.roomType === Number(roomTypeFilter)) : roomsAll
+  function changeRoomType(v: string) {
+    setRoomTypeFilter(v)
+    // Drop a picked room the new type hides, as the slot dialog does.
+    if (v && roomGuid && roomsAll.find(r => r.roomGuid === roomGuid)?.roomType !== Number(v)) setRoomGuid('')
+  }
   const lecturerTT = useTimetableByLecturer(lecturerGuid || null, intakeGuid || null, termNo)
   const roomTT = useTimetableByRoom(calView === 'room' ? roomGuid || null : null, intakeGuid || null, termNo)
   const calSource = calView === 'room' ? roomTT : lecturerTT
@@ -398,7 +409,10 @@ export default function SchedulePage() {
               </div>
               <div className="flex items-center gap-2 flex-wrap tt-no-print">
                 {calView === 'room' && (
-                  <SearchSelect className="w-44" placeholder="— Room —" options={roomsAll.map(r => ({ value: r.roomGuid, label: `${roomWithType(r.roomCode, r.roomTypeName)}${r.capacity != null ? ` (${r.capacity})` : ''}` }))} value={roomGuid} onChange={setRoomGuid} />
+                  <SearchSelect className="w-32" placeholder="All types" options={roomTypes.map(t => ({ value: String(t.value), label: t.name }))} value={roomTypeFilter} onChange={changeRoomType} isLoading={roomTypesLoading} />
+                )}
+                {calView === 'room' && (
+                  <SearchSelect className="w-44" placeholder={roomTypeFilter && pickerRooms.length === 0 ? 'No rooms of this type' : '— Room —'} options={pickerRooms.map(r => ({ value: r.roomGuid, label: `${roomWithType(r.roomCode, r.roomTypeName)}${r.capacity != null ? ` (${r.capacity})` : ''}` }))} value={roomGuid} onChange={setRoomGuid} />
                 )}
                 <div className="tgl-group" role="tablist" aria-label="Calendar view">
                   <button type="button" role="tab" aria-selected={calView === 'lecturer'} className={`tgl-btn${calView === 'lecturer' ? ' tgl-active' : ''}`} onClick={() => setCalView('lecturer')}><i className="lni lni-user"></i> Lecturer</button>
@@ -449,7 +463,7 @@ export default function SchedulePage() {
           <div className="tbl-wrap">
             <table>
               <thead>
-                <tr><th>Lecturer</th><th>Shift</th><th>Day &amp; Slot</th><th>Course · Batch</th><th>Room</th><th>Load</th><th style={{ textAlign: 'right' }} className="tt-no-print">Actions</th></tr>
+                <tr><th style={{ width: 48 }} className="tt-no-print"></th><th>Lecturer</th><th>Shift</th><th>Day &amp; Slot</th><th>Course · Batch</th><th>Room</th><th>Load</th></tr>
               </thead>
               <tbody>
                 {!lecturerGuid ? (
@@ -462,6 +476,14 @@ export default function SchedulePage() {
                   const u = entryUnits(e)
                   return (
                     <tr key={e.timetableGuid}>
+                      <td className="tt-no-print">
+                        {(permissions.edit || permissions.delete) && (
+                          <ActionMenu>
+                            {permissions.edit && <button type="button" className="btn btn-neu btn-sm" disabled={!isEditable} onClick={() => openEdit(e)}><i className="lni lni-pencil"></i> Edit</button>}
+                            {permissions.delete && <button type="button" className="btn btn-neu btn-sm" disabled={!isEditable} onClick={() => setRowDelete(e)}><i className="lni lni-trash-can"></i> Delete</button>}
+                          </ActionMenu>
+                        )}
+                      </td>
                       <td style={{ fontWeight: 600 }}>{e.lecturerName ?? '—'}</td>
                       <td><span className={`badge ${shiftBadge(e.batchTimeName)}`}>{e.batchTimeName}</span></td>
                       <td><strong>{e.dayName}</strong><br /><span className="text-g400" style={{ fontSize: 'var(--fs-xs)' }}>{slotRange(e.startTime, e.endTime, true)}</span></td>
@@ -471,10 +493,6 @@ export default function SchedulePage() {
                         {roomTypeByGuid.get(e.roomGuid) && <><br /><span className="text-g400" style={{ fontSize: 'var(--fs-xs)' }}>{roomTypeByGuid.get(e.roomGuid)}</span></>}
                       </td>
                       <td style={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{e.load} hrs</td>
-                      <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }} className="tt-no-print">
-                        {permissions.edit && <button type="button" className="btn btn-neu btn-xs" disabled={!isEditable} onClick={() => openEdit(e)} aria-label={`Edit ${u.code} on ${e.dayName}`}><i className="lni lni-pencil"></i></button>}{' '}
-                        {permissions.delete && <button type="button" className="btn btn-neu btn-xs" disabled={!isEditable} onClick={() => setRowDelete(e)} aria-label={`Delete ${u.code} on ${e.dayName}`}><i className="lni lni-trash-can" style={{ color: 'var(--red)' }}></i></button>}
-                      </td>
                     </tr>
                   )
                 })}
