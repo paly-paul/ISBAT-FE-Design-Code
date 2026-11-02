@@ -137,7 +137,7 @@ export default function IaCreationPage() {
       {/* ── Page Header ── */}
       <div className="pg-hdr">
         <div>
-          <h1 className="text-xl font-semibold text-g900">Assessment Structure</h1>
+          <h1 className="text-xl font-semibold text-g900">Assessment Scheduler</h1>
           <p className="text-sm text-g500 mt-0.5">
             Create Internal Assessment skeleton for Course Work, Class Test and University Exam
           </p>

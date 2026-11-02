@@ -11,6 +11,7 @@ import { useProgramDropdown } from '@/hooks/academic/useProgramMaster'
 import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
 import { useHallTicketScopeStudents, HallTicketIssueStatus, HallTicketTerm } from '@/hooks/assessment/useHallTicket'
 import { downloadHallTicketPdf } from '@/lib/api/assessment/hallTicketIssue'
+import { getSemestersBySemCode } from '@/lib/api/academic/semester'
 import { downloadBlob } from '@/lib/downloadBlob'
 
 // Hall Ticket Print (pages/assessment/hall-ticket-print-page.md) — one
@@ -51,6 +52,30 @@ export default function HallTicketPrintPage() {
 
   const { data: programs = [] } = useProgramDropdown()
   const { data: semesters = [] } = useSemestersForProgram(programGuid || null, true)
+
+  // Opened from Hall Ticket Issuance (?term=&semCode=&program=&q=): land on
+  // that student. The issue page's search result has names, not GUIDs, so
+  // the programme + semester come from the semCode lookup, matched by
+  // programme name. No match leaves them for the user to pick; the term and
+  // search box are still filled. Read once on mount (static export: no
+  // useSearchParams without Suspense).
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search)
+    if (p.get('term') === '2') setTerm(2)
+    const q = p.get('q')
+    if (q) setSearch(q)
+    const semCode = p.get('semCode')
+    const program = p.get('program')?.trim().toLowerCase()
+    if (!semCode || !program) return
+    let cancelled = false
+    getSemestersBySemCode(semCode)
+      .then(rows => {
+        const row = rows.find(r => r.programName?.trim().toLowerCase() === program)
+        if (row && !cancelled) { setProgramGuid(row.programGuid); setSemesterGuid(row.semesterGuid) }
+      })
+      .catch(() => { /* lookup failed: the user picks programme + semester as usual */ })
+    return () => { cancelled = true }
+  }, [])
 
   const ready = !!intakeGuid && !!programGuid && !!semesterGuid
   const { data: rows = [], isFetching, isError } = useHallTicketScopeStudents(

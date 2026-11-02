@@ -14,7 +14,7 @@ import { getSessionIdentity } from '@/lib/session'
 
 export default function AdmissionLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
-  const [panelOpen, setPanelOpen] = useState(() => pathname !== '/admission/applicant-profile')
+  const [panelOpen, setPanelOpen] = useState(() => !pathname.startsWith('/admission/applicant-profile'))
   const [activeRail, setActiveRail] = useState<RailId>('admission')
   const [profileOpen, setProfileOpen] = useState(false)
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set())
@@ -26,7 +26,8 @@ export default function AdmissionLayout({ children }: { children: React.ReactNod
   // of who was actually logged in.
   const [displayName, setDisplayName] = useState<string | null>(null)
 
-  const currentPage = pathname.split('/').pop() ?? 'dashboard'
+  // filter(Boolean): the static export (trailingSlash) gives "/x/page/", whose last split part is ''
+  const currentPage = pathname.split('/').filter(Boolean).pop() ?? 'dashboard'
 
   useEffect(() => {
     const identity = getSessionIdentity()

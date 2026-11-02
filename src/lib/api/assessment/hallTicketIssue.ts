@@ -45,8 +45,15 @@ export function getHallTicketEligibility(studentGuid: string, intakeGuid: string
 // date is refreshed to today and `message` is "Hall ticket already issued."
 // instead of "Hall ticket issued successfully." (post-issue.md). Treat both
 // as success.
+// Every hall-ticket-issue endpoint names the intake `academicIntakeGuid`
+// (query or body, 2026-10-30 docs); `intakeGuid` is a 400. Only the academic
+// service's student search still takes `intakeGuid`.
 export async function issueHallTicket(payload: { studentGuid: string; intakeGuid: string; term: HallTicketTerm }): Promise<{ alreadyIssued: boolean }> {
-  const { message } = await apiPostWithMessage<boolean>('/api/v1/assessment/hall-ticket-issue', { studentGuid: payload.studentGuid, academicIntakeGuid: payload.intakeGuid, term: payload.term })
+  const { message } = await apiPostWithMessage<boolean>('/api/v1/assessment/hall-ticket-issue', {
+    studentGuid: payload.studentGuid,
+    academicIntakeGuid: payload.intakeGuid,
+    term: payload.term,
+  })
   return { alreadyIssued: /already issued/i.test(message ?? '') }
 }
 
@@ -74,7 +81,6 @@ export interface HallTicketScope {
 export function issueBulkHallTickets(scope: HallTicketScope): Promise<BulkIssueResponseDto> {
   return apiPost<BulkIssueResponseDto>('/api/v1/assessment/hall-ticket-issue/bulk', {
     academicIntakeGuid: scope.intakeGuid,
-    intakeGuid: scope.intakeGuid,
     term: scope.term,
     programGuid: scope.programGuid || null,
     semesterGuid: scope.semesterGuid || null,

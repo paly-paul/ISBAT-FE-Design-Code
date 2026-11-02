@@ -373,7 +373,7 @@ export default function BulkExamSchedulerPage() {
         <div className="pg-hdr flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-3">
           <div>
             <div className="pg-title flex items-center gap-2">
-              <span>Bulk Exam Scheduler</span>
+              <span>Bulk Scheduler</span>
               <span className="badge badge-purple text-[11px] font-semibold">Assessment Ops</span>
             </div>
             <div className="pg-sub text-xs text-slate-500">

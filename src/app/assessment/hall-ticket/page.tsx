@@ -6,7 +6,6 @@ import { SearchSelect } from '@/components/SearchSelect'
 import { Pagination } from '@/components/Pagination'
 import { Toast } from '@/components/Toast'
 import { TableLoadingState } from '@/components/TableLoadingState'
-import { BaselinePanel } from '@/components/student/BaselinePanel'
 import { useIntakesDropdown } from '@/hooks/academic/useIntakes'
 import { useProgramDropdown } from '@/hooks/academic/useProgramMaster'
 import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
@@ -136,69 +135,114 @@ export default function HallTicketIssuancePage() {
           </div>
         </div>
 
-        {selected && (
-          <>
-            <BaselinePanel
-              label="Selected Student"
-              items={[
-                { label: 'Student', value: elig?.studentName ?? selected.studentName ?? '—' },
-                { label: 'Reg No.', value: selected.studentRegNo ?? '—', accent: true },
-                { label: 'Programme', value: selected.programName || '—' },
-                { label: 'Semester', value: selected.semCode || '—' },
-                { label: 'Batch', value: selected.batchCode || '—' },
-              ]}
-            />
-            <div className="card">
-              <div className="card-hdr">
-                <div className="card-title"><i className="lni lni-checkmark-circle"></i> Clearance — Term {term}</div>
-                <button className="btn btn-neu btn-sm" onClick={() => setSelected(null)}><i className="lni lni-close"></i> Clear</button>
+        {selected && (() => {
+          const name = elig?.studentName ?? selected.studentName ?? '—'
+          // Term 2 adds Guild and NCHE; both are null for Term 1.
+          const checks = elig ? [
+            { label: 'Fee clearance', ok: elig.feeOk, note: elig.isFeeExcepted ? 'No fee clearance needed' : elig.isExempted ? 'Exemption student' : `Needs ${term === 1 ? '50%' : '100%'} of fees paid` },
+            { label: 'Coursework', ok: elig.cwOk, note: 'First coursework submitted on every unit with coursework' },
+            { label: 'Class test', ok: elig.ctOk, note: 'First class test submitted on every unit with a mid-semester test' },
+            ...(elig.guildOk !== null ? [{ label: 'Guild fee', ok: elig.guildOk, note: 'Current-semester Guild fee paid' }] : []),
+            ...(elig.ncheOk !== null ? [{ label: 'NCHE', ok: elig.ncheOk, note: 'NCHE status for the semester is Paid' }] : []),
+          ] : []
+          const failing = checks.filter(c => !c.ok).map(c => c.label.toLowerCase())
+          const showChecks = !checking && !eligError && !!elig && !elig.alreadyIssued
+          return (
+            <section className="card ht-panel" aria-labelledby="ht-student-name">
+              <header className="ht-id">
+                <div className="ht-avatar" aria-hidden="true">{initials(name)}</div>
+                <div className="ht-id-main">
+                  <div className="ht-name-row">
+                    <h2 className="ht-name" id="ht-student-name">{name}</h2>
+                    {selected.studentRegNo && <span className="ht-reg" title="Reg No.">{selected.studentRegNo}</span>}
+                  </div>
+                  <dl className="ht-meta">
+                    <div><dt>Programme</dt><dd>{selected.programName || '—'}</dd></div>
+                    <div><dt>Semester</dt><dd>{selected.semCode || '—'}</dd></div>
+                    <div><dt>Batch</dt><dd>{selected.batchCode || '—'}</dd></div>
+                  </dl>
+                </div>
+                <button type="button" className="btn btn-neu btn-sm" onClick={() => setSelected(null)}><i className="lni lni-close"></i> Clear</button>
+              </header>
+
+              {/* Already issued: nothing left to check, so the verdict bar
+                  below says it alone (no empty checklist box). */}
+              {!(elig?.alreadyIssued && !checking && !eligError) && (
+              <div className="ht-body">
+                <div className="ht-checks-hdr">
+                  <h3 className="ht-checks-title">Exam clearance · Term {term}</h3>
+                  {showChecks && (
+                    <div className="ht-tally">
+                      <span className="ht-meter" aria-hidden="true">{checks.map(c => <span key={c.label} className={c.ok ? 'ok' : 'bad'} />)}</span>
+                      {checks.length - failing.length} of {checks.length} cleared
+                    </div>
+                  )}
+                </div>
+
+                {checking ? (
+                  <div className="ht-state" role="status"><span className="ht-spin" aria-hidden="true"></span> Checking clearances…</div>
+                ) : eligError || !elig ? (
+                  // A Finance status (fee / Guild / NCHE) or the course unit
+                  // lookup couldn't load — the API fails with a 400 naming it
+                  // rather than reporting "not cleared", so show it as an
+                  // error, never as a red clearance line.
+                  <div className="ht-state err" role="alert">
+                    <i className="lni lni-warning" aria-hidden="true"></i> {eligErr instanceof Error && eligErr.message ? eligErr.message : 'Couldn’t check eligibility. Please try again.'}
+                  </div>
+                ) : (
+                  <ul className="ht-checks">
+                    {checks.map(c => <ClearanceLine key={c.label} {...c} />)}
+                  </ul>
+                )}
               </div>
-              {checking ? (
-                <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>Checking clearances…</div>
-              ) : eligError || !elig ? (
-                // A Finance status (fee / Guild / NCHE) or the course unit
-                // lookup couldn't load — the API fails with a 400 naming it
-                // rather than reporting "not cleared", so show it as an
-                // error, never as a red clearance line.
-                <div className="text-clr-red text-center" style={{ padding: 16, fontSize: 12.5 }}>
-                  <i className="lni lni-warning"></i> {eligErr instanceof Error && eligErr.message ? eligErr.message : 'Couldn’t check eligibility. Please try again.'}
-                </div>
-              ) : elig.alreadyIssued ? (
-                <div className="info-box">
-                  <i className="lni lni-checkmark-circle" style={{ color: 'var(--green)', fontSize: 15, flexShrink: 0 }}></i>
-                  <div style={{ fontSize: 12.5 }}>
-                    Hall ticket already issued for Term {term}.{' '}
-                    <Link href="/assessment/hall-print" style={{ color: 'var(--b700)', fontWeight: 600 }}>Print it on Hall Ticket Print →</Link>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-4">
-                    <ClearanceLine
-                      label="Fee clearance"
-                      ok={elig.feeOk}
-                      note={elig.isFeeExcepted ? 'No fee clearance needed' : elig.isExempted ? 'Exemption student' : `Needs ${term === 1 ? '50%' : '100%'} of fees paid`}
-                    />
-                    <ClearanceLine label="Coursework" ok={elig.cwOk} note="First coursework submitted on every unit with coursework" />
-                    <ClearanceLine label="Class test" ok={elig.ctOk} note="First class test submitted on every unit with a mid-semester test" />
-                    {/* Term 2 only — both are null for Term 1. */}
-                    {elig.guildOk !== null && <ClearanceLine label="Guild fee" ok={elig.guildOk} note="Current-semester Guild fee paid" />}
-                    {elig.ncheOk !== null && <ClearanceLine label="NCHE" ok={elig.ncheOk} note="NCHE status for the semester is Paid" />}
-                  </div>
-                  <div className="flex gap-2" style={{ justifyContent: 'flex-end', alignItems: 'center' }}>
-                    {elig.canIssue ? (
-                      <button className="btn btn-primary" onClick={handleIssue} disabled={issue.isPending}>
-                        <i className="lni lni-ticket"></i> {issue.isPending ? 'Issuing…' : 'Issue Hall Ticket'}
-                      </button>
-                    ) : (
-                      <span className="badge badge-red"><i className="lni lni-ban"></i> Not eligible — clear the failing items above first</span>
-                    )}
-                  </div>
-                </>
               )}
-            </div>
-          </>
-        )}
+
+              {elig && !checking && !eligError && (
+                elig.alreadyIssued ? (
+                  <footer className="ht-verdict ok">
+                    <div className="ht-verdict-msg">
+                      <i className="lni lni-checkmark-circle" aria-hidden="true"></i>
+                      <div><div className="ht-verdict-title">Term {term} hall ticket already issued</div><div className="ht-verdict-sub">Nothing left to check. Print it from Hall Ticket Print.</div></div>
+                    </div>
+                    <Link
+                      className="btn btn-neu"
+                      // Hall Ticket Print reads these to open on this student
+                      // (it resolves programme + semester GUIDs from them).
+                      href={`/assessment/hall-print?${new URLSearchParams({
+                        term: String(term),
+                        semCode: selected.semCode ?? '',
+                        program: selected.programName ?? '',
+                        q: selected.studentRegNo ?? selected.studentName ?? '',
+                      })}`}
+                    ><i className="lni lni-printer"></i> Go to Hall Ticket Print</Link>
+                  </footer>
+                ) : elig.canIssue ? (
+                  <footer className="ht-verdict ok">
+                    <div className="ht-verdict-msg">
+                      <i className="lni lni-checkmark-circle" aria-hidden="true"></i>
+                      <div><div className="ht-verdict-title">Eligible for a Term {term} hall ticket</div><div className="ht-verdict-sub">Every clearance is in place.</div></div>
+                    </div>
+                    <button type="button" className="btn btn-primary" onClick={handleIssue} disabled={issue.isPending}>
+                      <i className="lni lni-ticket"></i> {issue.isPending ? 'Issuing…' : 'Issue Hall Ticket'}
+                    </button>
+                  </footer>
+                ) : (
+                  <footer className="ht-verdict bad">
+                    <div className="ht-verdict-msg">
+                      <i className="lni lni-ban" aria-hidden="true"></i>
+                      <div>
+                        <div className="ht-verdict-title">Not eligible yet</div>
+                        <div className="ht-verdict-sub">
+                          {failing.length ? `${sentenceList(failing)} ${failing.length === 1 ? 'isn’t' : 'aren’t'} cleared. The ticket can be issued once ${failing.length === 1 ? 'it is' : 'they are'}.` : 'A clearance isn’t in place yet.'}
+                        </div>
+                      </div>
+                    </div>
+                  </footer>
+                )
+              )}
+            </section>
+          )
+        })()}
 
         <div className="card">
           <div className="card-hdr">
@@ -246,16 +290,29 @@ export default function HallTicketIssuancePage() {
   )
 }
 
+// Status is spelled out on the right, so the row never relies on colour alone.
 function ClearanceLine({ label, ok, note }: { label: string; ok: boolean; note: string }) {
   return (
-    <div className="flex items-center gap-3" style={{ padding: '8px 10px', borderRadius: 'var(--rsm)', border: `1px solid var(--${ok ? 'green' : 'red'}-bd)`, background: `var(--${ok ? 'green' : 'red'}-bg)` }}>
-      <i className={`lni ${ok ? 'lni-checkmark-circle' : 'lni-cross-circle'}`} style={{ color: `var(--${ok ? 'green' : 'red'})`, fontSize: 18, flexShrink: 0 }}></i>
+    <li className={`ht-check ${ok ? 'ok' : 'bad'}`}>
+      <span className="ht-check-icon" aria-hidden="true"><i className={`lni ${ok ? 'lni-checkmark' : 'lni-close'}`}></i></span>
       <div>
-        <div style={{ fontSize: 12.5, fontWeight: 600 }}>{label} — {ok ? 'Cleared' : 'Not cleared'}</div>
-        <div className="text-g500" style={{ fontSize: 11 }}>{note}</div>
+        <div className="ht-check-label">{label}</div>
+        <div className="ht-check-note">{note}</div>
       </div>
-    </div>
+      <span className="ht-check-status">{ok ? 'Cleared' : 'Not cleared'}</span>
+    </li>
   )
+}
+
+function initials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(w => /\p{L}/u.test(w))
+  return ((parts[0]?.[0] ?? '') + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase() || '?'
+}
+
+// ['class test'] → 'Class test'; ['a', 'b', 'c'] → 'A, b and c'
+function sentenceList(items: string[]) {
+  const s = items.length > 1 ? `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}` : items[0]
+  return s.charAt(0).toUpperCase() + s.slice(1)
 }
 
 // Bulk issue (POST /bulk) + issue status list (GET /bulk), per steps 5–6:
