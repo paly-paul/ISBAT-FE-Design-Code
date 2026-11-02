@@ -453,7 +453,7 @@ export function UeMarkSheet({ mode }: { mode: UeMarkSheetMode }) {
             <div className="perm-delete-sub">Do you want to verify the exam <strong>{unitLabel}</strong>? This can&apos;t be undone.</div>
             <div className="perm-delete-actions">
               <button className="btn btn-neu" onClick={() => setConfirmVerify(false)}>No</button>
-              <button className="btn btn-primary" onClick={handleVerify}>OK</button>
+              <button className="btn btn-primary" onClick={handleVerify}>Verify</button>
             </div>
           </div>
         </div>

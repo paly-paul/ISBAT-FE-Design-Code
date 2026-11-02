@@ -27,7 +27,7 @@ export default function ModerationPage() {
   // Options for SearchSelect
   const searchOptions = (searchResults || []).map(s => ({
     value: s.studentGuid,
-    label: `${s.studentNumber} - ${s.studentName} (${s.programName})`
+    label: `${s.studentNum || s.studentNumber || s.registrationNumber || ''} - ${s.studentName} (${s.programName})`
   }))
 
   const [toast, setToast] = useState<{ msg: string, type: 'success' | 'error' } | null>(null)
@@ -68,7 +68,7 @@ export default function ModerationPage() {
                 <div>
                   <div className="text-[10px] lg:text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Student</div>
                   <div className="text-[13px] lg:text-[14px] font-extrabold text-slate-800 truncate" title={studentDetail.studentName}>{studentDetail.studentName}</div>
-                  <div className="text-[11px] lg:text-[12px] text-slate-500 font-mono mt-0.5 bg-slate-100 inline-block px-1.5 py-0.5 rounded uppercase tracking-wider">{studentDetail.studentNumber}</div>
+                  <div className="text-[11px] lg:text-[12px] text-slate-500 font-mono mt-0.5 bg-slate-100 inline-block px-1.5 py-0.5 rounded uppercase tracking-wider">{studentDetail.studentNum || studentDetail.studentNumber || studentDetail.registrationNumber || '—'}</div>
                 </div>
                 <div>
                   <div className="text-[10px] lg:text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Program</div>
@@ -77,13 +77,13 @@ export default function ModerationPage() {
                 <div>
                   <div className="text-[10px] lg:text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Batch</div>
                   <div className="inline-flex items-center px-2.5 py-0.5 rounded-md bg-slate-100 text-slate-600 text-[11px] lg:text-[12px] font-bold border border-slate-200">
-                    {studentDetail.batchName}
+                    {studentDetail.batchCode || studentDetail.batchName || '—'}
                   </div>
                 </div>
                 <div>
                   <div className="text-[10px] lg:text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Semester</div>
                   <div className="inline-flex items-center px-2.5 py-0.5 rounded-md bg-indigo-50 text-indigo-700 text-[11px] lg:text-[12px] font-bold border border-indigo-100">
-                    {studentDetail.currentSemester}
+                    {studentDetail.semesterName || studentDetail.currentSemester || '—'}
                   </div>
                 </div>
               </div>

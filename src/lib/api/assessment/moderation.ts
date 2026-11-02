@@ -3,8 +3,11 @@ import { apiGet, apiPut } from '@/lib/api/client'
 export interface ModerationStudentSearchResult {
   studentGuid: string
   studentName: string
-  studentNumber: string
-  registrationNumber: string
+  studentNum?: string
+  studentNumber?: string
+  registrationNumber?: string
+  batchCode?: string
+  semesterName?: string
   programName: string
   batchName: string
 }
@@ -12,11 +15,15 @@ export interface ModerationStudentSearchResult {
 export interface ModerationStudentDetail {
   studentGuid: string
   studentName: string
-  studentNumber: string
-  registrationNumber: string
+  studentNum?: string
+  studentNumber?: string
+  registrationNumber?: string
+  programCode?: string
   programName: string
-  batchName: string
-  currentSemester: string
+  batchCode?: string
+  batchName?: string
+  semesterName?: string
+  currentSemester?: string
 }
 
 export interface ModerationRow {
@@ -44,8 +51,8 @@ export interface UpdateModerationPayload {
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
-export function searchModerationStudents(q: string) {
-  if (!q) return Promise.resolve([])
+export function searchModerationStudents(q: string): Promise<ModerationStudentSearchResult[]> {
+  if (!q) return Promise.resolve<ModerationStudentSearchResult[]>([])
   if (MOCK_AUTH) {
     return Promise.resolve([
       { studentGuid: 'std-1', studentName: 'John Doe', studentNumber: 'ST1001', registrationNumber: 'REG1001', programName: 'BSc Computer Science', batchName: '2023 Intake' },
@@ -55,7 +62,7 @@ export function searchModerationStudents(q: string) {
   return apiGet<ModerationStudentSearchResult[]>(`/api/v1/students/moderation-search?term=${encodeURIComponent(q)}`)
 }
 
-export function getModerationStudentDetail(studentGuid: string) {
+export function getModerationStudentDetail(studentGuid: string): Promise<ModerationStudentDetail> {
   if (MOCK_AUTH) {
     return Promise.resolve({
       studentGuid,

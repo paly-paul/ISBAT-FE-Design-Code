@@ -190,7 +190,7 @@ export function CwScheduleModal({ isOpen, onClose, courseworkGuid }: CwScheduleM
 
   return (
     <div className="modal-overlay open">
-      <div className="modal modal-md modal-flex" style={{ maxWidth: '700px', borderRadius: '12px' }} onClick={e => e.stopPropagation()}>
+      <div className="modal modal-md" style={{ maxWidth: '610px', borderRadius: '12px', height: 'auto', maxHeight: '90vh', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
         {/* Header */}
         <div className="modal-hdr modal-hdr-blue" style={{ display: 'flex', alignItems: 'center', padding: '16px 20px' }}>
           <div className="modal-title text-white font-medium text-base" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -202,56 +202,59 @@ export function CwScheduleModal({ isOpen, onClose, courseworkGuid }: CwScheduleM
         </div>
 
         {/* Content */}
-        <div className="modal-scroll p-6 pb-40 bg-white flex-1 overflow-y-auto">
+        <div className="p-6 bg-white overflow-y-auto" style={{ maxHeight: 'calc(90vh - 60px)' }}>
           <div className={`transition-opacity duration-300 ${isLoading ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
             
             {schedule && (
-                <div className="mb-6 border-b border-slate-200 pb-4">
-                    <div className="text-sm text-slate-500 font-medium mb-1">Coursework for Subject:</div>
-                    <div className="text-lg font-semibold text-slate-900">
-                        {schedule.courseUnitCode} — {schedule.courseUnitName}
-                    </div>
+              <div className="mb-5 border-b border-slate-200 pb-3">
+                <div className="text-xs text-slate-500 font-medium mb-1">Coursework for Subject:</div>
+                <div className="text-base font-semibold text-slate-900">
+                  {schedule.courseUnitCode} — {schedule.courseUnitName}
                 </div>
+              </div>
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-5">
               {/* Dates */}
-              <div>
-                <label className="lbl">Start Date & Time <span className="text-red-500">*</span></label>
-                <div className="flex gap-2 mt-1">
-                  <div className="flex-1">
-                    <DatePicker 
-                      value={startDate} 
-                      onChange={handleStartDateChange} 
-                      minYmd={getTodayYmd()} 
-                      rangeMessage="Before date is not possible"
-                      onError={msg => showToast(msg, 'error')}
-                    />
-                  </div>
-                  <div className="w-[140px]">
-                    <TimePicker value={startTime} onChange={setStartTime} />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="lbl">Start Date & Time <span className="text-red-500">*</span></label>
+                  <div className="flex gap-2 mt-1">
+                    <div className="flex-1 min-w-0">
+                      <DatePicker 
+                        value={startDate} 
+                        onChange={handleStartDateChange} 
+                        minYmd={getTodayYmd()} 
+                        rangeMessage="Before date is not possible"
+                        onError={msg => showToast(msg, 'error')}
+                      />
+                    </div>
+                    <div className="w-[120px] shrink-0">
+                      <TimePicker value={startTime} onChange={setStartTime} />
+                    </div>
                   </div>
                 </div>
-              </div>
-              <div>
-                <label className="lbl">End Date & Time <span className="text-red-500">*</span></label>
-                <div className="flex gap-2 mt-1">
-                  <div className="flex-1">
-                    <DatePicker 
-                      value={endDate} 
-                      onChange={handleEndDateChange} 
-                      minYmd={startDate || getTodayYmd()} 
-                      rangeMessage="Before date is not possible"
-                      onError={msg => showToast(msg, 'error')}
-                    />
-                  </div>
-                  <div className="w-[140px]">
-                    <TimePicker value={endTime} onChange={handleEndTimeChange} />
+
+                <div>
+                  <label className="lbl">End Date & Time <span className="text-red-500">*</span></label>
+                  <div className="flex gap-2 mt-1">
+                    <div className="flex-1 min-w-0">
+                      <DatePicker 
+                        value={endDate} 
+                        onChange={handleEndDateChange} 
+                        minYmd={startDate || getTodayYmd()} 
+                        rangeMessage="Before date is not possible"
+                        onError={msg => showToast(msg, 'error')}
+                      />
+                    </div>
+                    <div className="w-[120px] shrink-0">
+                      <TimePicker value={endTime} onChange={handleEndTimeChange} />
+                    </div>
                   </div>
                 </div>
               </div>
 
-              {/* Marks */}
+              {/* Marks (hidden) */}
               <div className="hidden">
                 <label className="lbl">Max Mark <span className="text-red-500">*</span></label>
                 <input
@@ -264,58 +267,59 @@ export function CwScheduleModal({ isOpen, onClose, courseworkGuid }: CwScheduleM
                 />
               </div>
 
-              {/* Type */}
-              <div>
-                <label className="lbl">Coursework Type</label>
-                <div className="flex gap-4 mt-2">
-                  <label className="flex items-center gap-2 text-sm cursor-pointer">
-                    <input
-                      type="radio"
-                      name="courseworkType"
-                      checked={courseworkType === 0}
-                      onChange={() => setCourseworkType(0)}
-                    />
-                    Online
-                  </label>
-                  <label className="flex items-center gap-2 text-sm cursor-pointer">
-                    <input
-                      type="radio"
-                      name="courseworkType"
-                      checked={courseworkType === 1}
-                      onChange={() => setCourseworkType(1)}
-                    />
-                    Offline
-                  </label>
+              {/* Type and Publish Status */}
+              <div className="grid grid-cols-2 gap-4 pt-1">
+                <div>
+                  <label className="lbl">Coursework Type</label>
+                  <div className="flex gap-4 mt-2">
+                    <label className="flex items-center gap-2 text-sm cursor-pointer">
+                      <input
+                        type="radio"
+                        name="courseworkType"
+                        checked={courseworkType === 0}
+                        onChange={() => setCourseworkType(0)}
+                      />
+                      Online
+                    </label>
+                    <label className="flex items-center gap-2 text-sm cursor-pointer">
+                      <input
+                        type="radio"
+                        name="courseworkType"
+                        checked={courseworkType === 1}
+                        onChange={() => setCourseworkType(1)}
+                      />
+                      Offline
+                    </label>
+                  </div>
                 </div>
-              </div>
 
-              {/* Publish Status */}
-              <div>
-                <label className="lbl">Publish Status</label>
-                <div className="flex gap-4 mt-2">
-                  <label className="flex items-center gap-2 text-sm cursor-pointer">
-                    <input
-                      type="radio"
-                      name="cwPublishStatus"
-                      checked={publishStatus === 0}
-                      onChange={() => setPublishStatus(0)}
-                    />
-                    Unpublished
-                  </label>
-                  <label className="flex items-center gap-2 text-sm cursor-pointer">
-                    <input
-                      type="radio"
-                      name="cwPublishStatus"
-                      checked={publishStatus === 1}
-                      onChange={() => setPublishStatus(1)}
-                    />
-                    Published
-                  </label>
+                <div>
+                  <label className="lbl">Publish Status</label>
+                  <div className="flex gap-4 mt-2">
+                    <label className="flex items-center gap-2 text-sm cursor-pointer">
+                      <input
+                        type="radio"
+                        name="cwPublishStatus"
+                        checked={publishStatus === 0}
+                        onChange={() => setPublishStatus(0)}
+                      />
+                      Unpublished
+                    </label>
+                    <label className="flex items-center gap-2 text-sm cursor-pointer">
+                      <input
+                        type="radio"
+                        name="cwPublishStatus"
+                        checked={publishStatus === 1}
+                        onChange={() => setPublishStatus(1)}
+                      />
+                      Published
+                    </label>
+                  </div>
                 </div>
               </div>
 
               {/* Exam Rule Picker */}
-              <div>
+              <div className="pt-1">
                 <div className="flex justify-between items-center mb-1">
                   <label className="lbl mb-0">Exam Rule (Optional)</label>
                   <button 
@@ -337,7 +341,7 @@ export function CwScheduleModal({ isOpen, onClose, courseworkGuid }: CwScheduleM
             </div>
 
             {/* Footer */}
-            <div className="flex justify-end gap-3 mt-8 pt-6 border-t border-slate-200">
+            <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-slate-200">
               <button className="btn btn-neu" onClick={onClose} disabled={updateMut.isPending}>
                 Cancel
               </button>
