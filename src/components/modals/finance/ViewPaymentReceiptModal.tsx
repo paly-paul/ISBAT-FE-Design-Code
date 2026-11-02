@@ -1,5 +1,5 @@
 'use client'
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { ModalProps } from '../types'
 import type { PaymentHistoryListEntry } from '@/hooks/finance/usePaymentConsole'
 import { formatDate } from '@/lib/date'
@@ -26,10 +26,19 @@ export function ViewPaymentReceiptModal({ isOpen, onClose, showToast, entry, aut
   // Fires window.print() once the modal (and its .receipt-print-area, see
   // globals.css) has actually painted — a same-tick call right after
   // setState risks printing the pre-open DOM on some browsers.
+  // The quick Print action shows only the browser's print dialog — the modal
+  // stays hidden on screen (.receipt-print-silent) and closes once the
+  // dialog is dismissed.
+  // onClose is a new function each parent render — held in a ref so a
+  // re-render doesn't re-run the effect and open the dialog again.
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
   useEffect(() => {
     if (!isOpen || !autoPrint || !canPrint) return
+    const close = () => onCloseRef.current()
     const t = setTimeout(() => window.print(), 120)
-    return () => clearTimeout(t)
+    window.addEventListener('afterprint', close)
+    return () => { clearTimeout(t); window.removeEventListener('afterprint', close) }
   }, [isOpen, autoPrint, canPrint])
 
   if (!isOpen || !entry) return null
@@ -41,7 +50,7 @@ export function ViewPaymentReceiptModal({ isOpen, onClose, showToast, entry, aut
   const showConversion = entry.rate != null
 
   return (
-    <div className="modal-overlay open">
+    <div className={`modal-overlay open${autoPrint && canPrint ? ' receipt-print-silent' : ''}`}>
       {/* Sticky header + sticky footer, scrollable middle — same pattern
           .modal-flex uses elsewhere, but sized to content (up to 90vh)
           rather than a fixed 85vh, since a receipt is short. Without this,

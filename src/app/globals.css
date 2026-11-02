@@ -4889,6 +4889,11 @@ th:hover .th-fi {
    layout space. Applies to any receipt in the app, not just one page's —
    see payment-console's own receipt card and payment-history's
    ViewPaymentReceiptModal, both opted in via this same class. */
+/* A receipt opened only to print: invisible on screen, still printed (the
+   print rule below makes .receipt-print-area visible again). */
+@media screen {
+  .receipt-print-silent { visibility: hidden; pointer-events: none }
+}
 @media print {
   body * {
     visibility: hidden
@@ -16534,3 +16539,466 @@ body:has(.drawer-overlay) {
 /* Already issued: the verdict follows the header directly, so it drops its
    top rule (the header's own bottom border already separates them). */
 .ht-id + .ht-verdict { border-top: none }
+
+/* ═══════════════════════════════════════
+   PAYMENT CONSOLE — 2026-11-02 redesign (Main.dc.html): white student
+   header, Fee Breakdown with a coverage bar, Record Payment form. New pcx-
+   classes rather than restyling .pc-hero/.recgrid, which Student Profile,
+   Discount Allocation and the Upcoming Semesters modal still share; the
+   .recgrid overrides are scoped to .pcx-ledgers. Amounts use --gold (not
+   --amber) for 4.5:1 contrast on white.
+═══════════════════════════════════════ */
+#page-payment-console .pcx-student .text-amber,
+#page-payment-console .pcx-panel .text-amber { color: var(--gold) }
+#page-payment-console .pcx-panel .text-blue { color: var(--b800) }
+
+/* Student header */
+.pcx-student { padding: 0; overflow: hidden; font-variant-numeric: tabular-nums }
+.pcx-student-top {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: 20px 24px; padding: 24px 28px; border-bottom: 1px solid var(--g200);
+  background: linear-gradient(180deg, var(--b50) 0%, var(--white) 100%);
+}
+/* Identity grows greedily (999) so, sharing a row, the figures stay at their
+   base width on the right; once the figures wrap below they're alone on the
+   line and grow to fill it instead of leaving a gap on the right. */
+.pcx-student-id { display: flex; align-items: center; gap: 16px; min-width: 0; flex: 999 1 360px }
+.pcx-avatar {
+  width: 58px; height: 58px; flex: none; border-radius: 16px;
+  display: grid; place-items: center; color: #fff;
+  background: linear-gradient(135deg, var(--b600) 0%, var(--b800) 100%);
+  box-shadow: 0 6px 14px rgba(45, 68, 143, .22);
+  font-weight: 700; font-size: 19px; letter-spacing: .03em;
+}
+.pcx-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px }
+.pcx-meta-chip {
+  display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 999px;
+  background: var(--white); border: 1px solid var(--g200); font-size: var(--fs-sm); color: var(--g500);
+}
+.pcx-meta-chip b { color: var(--g900); font-weight: 600 }
+.pcx-name-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px }
+.pcx-name { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -.015em; color: var(--g900); line-height: 1.2 }
+.pcx-sub { margin: 5px 0 0; font-size: var(--fs-md); color: var(--g700) }
+.pcx-sub b { color: var(--g900); font-weight: 600 }
+.pcx-pill {
+  display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px;
+  font-size: var(--fs-sm); font-weight: 600; white-space: nowrap;
+}
+.pcx-pill-green { background: var(--green-bg); color: #065f46 }
+.pcx-pill-amber { background: var(--amber-bg); color: #92400e }
+.pcx-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor }
+
+/* Two separate tiles; outstanding carries a warm tint so the amount owed
+   reads first. */
+.pcx-figures { display: flex; gap: 10px; flex: 1 1 346px }
+.pcx-figures > .pcx-figure { flex: 1 1 0; min-width: 0 }
+.pcx-figure {
+  display: flex; flex-direction: column; gap: 4px; padding: 12px 18px; min-width: 168px; text-align: left;
+  background: var(--white); border: 1px solid var(--g200); border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .05);
+}
+.pcx-figure-due { background: color-mix(in srgb, var(--amber-bg) 45%, var(--white)); border-color: var(--amber-bd) }
+.pcx-figure-btn { font: inherit; cursor: pointer; transition: box-shadow var(--tr), transform var(--tr) }
+.pcx-figure-btn:hover { box-shadow: 0 6px 16px rgba(15, 23, 42, .08); transform: translateY(-1px) }
+.pcx-figure-btn:focus-visible { outline: 2px solid var(--b600); outline-offset: -2px }
+.pcx-figure-lbl { display: inline-flex; align-items: center; gap: 4px; font-size: var(--fs-sm); color: var(--g500); font-weight: 500 }
+.pcx-figure-lbl i { font-size: 10px; color: var(--b700) }
+.pcx-figure-val { font-size: 22px; font-weight: 700; color: var(--g900); line-height: 1.2; letter-spacing: -.01em }
+.pcx-mini-bar { display: block; height: 6px; border-radius: 999px; background: var(--g100); overflow: hidden; margin-top: 4px }
+.pcx-mini-bar > span { display: block; height: 100%; background: var(--green); border-radius: inherit }
+
+/* Grid, so facts line up in columns across rows. Columns are sized to
+   their content (auto) and space-between spreads the leftover width
+   evenly, so the visible gap between neighbours is the same everywhere.
+   The column count (--n = one row, --third = three balanced rows, or a
+   fixed 5/6) is picked by the card's own width. A value
+   longer than its column (a long email) wraps rather than being cut. */
+.pcx-student { container-type: inline-size }
+.pcx-facts {
+  margin: 0; padding: 16px 28px 18px; background: var(--white);
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 28px;
+}
+@container (min-width: 480px) {
+  .pcx-facts { grid-template-columns: repeat(var(--third, 3), auto); justify-content: space-between }
+}
+/* 5 / 6 a row on medium cards — fewer left wide empty gaps (always 8–9
+   facts, so neither leaves an empty first row). */
+@container (min-width: 760px) {
+  .pcx-facts { grid-template-columns: repeat(5, auto) }
+}
+@container (min-width: 900px) {
+  .pcx-facts { grid-template-columns: repeat(6, auto) }
+}
+@container (min-width: 1180px) {
+  .pcx-facts { grid-template-columns: repeat(var(--n, 9), auto) }
+}
+.pcx-facts > div { display: flex; flex-direction: column; gap: 4px; min-width: 0 }
+.pcx-facts dt { font-size: var(--fs-xs); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--g500) }
+.pcx-facts dd { margin: 0; font-size: var(--fs-md); font-weight: 600; color: var(--g900); overflow-wrap: anywhere }
+
+/* Panels (Fee Breakdown / Record Payment / Apply Advance) */
+.pcx-panel { display: flex; flex-direction: column; gap: 18px; font-variant-numeric: tabular-nums }
+.pcx-panel-hdr { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 10px 12px }
+.pcx-panel-title { margin: 0; font-size: var(--fs-lg); font-weight: 700; color: var(--g900) }
+.pcx-panel-sub { margin: 3px 0 0; font-size: var(--fs-sm); color: var(--g500) }
+.pcx-panel-sub b { color: var(--g700); font-weight: 600 }
+.pcx-chip { padding: 4px 10px; border-radius: 6px; background: var(--g100); color: var(--g700); font-size: var(--fs-sm); font-weight: 600; white-space: nowrap }
+.pcx-check {
+  display: inline-flex; align-items: center; gap: 8px; height: 30px; padding: 0 12px;
+  border: 1px solid var(--g300); border-radius: 999px; font-size: var(--fs-sm); font-weight: 600;
+  color: var(--g700); cursor: pointer; transition: var(--tr);
+}
+.pcx-check:hover { border-color: var(--b300) }
+.pcx-check:has(input:checked) { background: var(--b50); border-color: var(--b300); color: var(--b800) }
+
+.pcx-coverage { padding: 16px 18px; border: 1px solid var(--g200); border-radius: 12px; display: flex; flex-direction: column; gap: 12px }
+.pcx-coverage-hdr { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 6px 12px }
+.pcx-coverage-title { font-size: var(--fs-base); font-weight: 600; color: var(--g700) }
+.pcx-coverage-of { font-size: var(--fs-base); color: var(--g500) }
+.pcx-coverage-of b { color: var(--g900) }
+.pcx-bar { height: 10px; border-radius: 999px; background: var(--g100); overflow: hidden }
+.pcx-bar > span { display: block; height: 100%; background: var(--b600); border-radius: inherit; transition: width .35s cubic-bezier(.16, 1, .3, 1) }
+.pcx-coverage-grid { margin: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px }
+.pcx-coverage-grid > div { display: flex; flex-direction: column; gap: 2px; min-width: 0 }
+.pcx-coverage-grid dt { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-sm); color: var(--g500) }
+.pcx-coverage-grid dd { margin: 0; font-size: var(--fs-md); font-weight: 600; color: var(--g900); overflow-wrap: anywhere }
+.pcx-key { width: 8px; height: 8px; border-radius: 2px; background: var(--b600); flex: none }
+
+/* Ledger grid — lighter skin over the shared .recgrid */
+.pcx-ledgers.recgrid { border: 1px solid var(--g200); border-radius: 12px; margin-bottom: 0 }
+.pcx-ledgers .recgrid-hdr { background: var(--surface) }
+.pcx-ledgers .recgrid-hdr > span {
+  color: var(--g500); text-transform: none; letter-spacing: 0; font-size: var(--fs-sm); font-weight: 600;
+  border-bottom: 1px solid var(--g200);
+}
+.pcx-ledgers .recgrid-hdr > span:not(:last-child),
+.pcx-ledgers .recgrid-body > span:not(:last-child),
+.pcx-ledgers .recgrid-foot > span:first-child { border-right: none }
+.pcx-ledgers .recgrid-body { border-bottom-color: var(--g100) }
+.pcx-ledgers .recgrid-body > span { padding: 14px 16px; color: var(--g700) }
+.pcx-ledger-cell { display: flex; flex-direction: column; gap: 2px }
+.pcx-ledger-name { font-weight: 600; color: var(--g900) }
+.pcx-ledger-sub { font-size: var(--fs-sm); color: var(--g500) }
+.pcx-ledgers .recgrid-total > span:first-child { text-transform: none; letter-spacing: 0; font-size: var(--fs-base); color: var(--g700) }
+.pcx-ledgers .recgrid-total:last-child { background: var(--surface) }
+.pcx-ledgers .recgrid-total:last-child > span { padding-top: 13px; padding-bottom: 13px }
+.pcx-ledgers .recgrid-total:last-child > span:first-child { color: var(--g900); font-size: var(--fs-md) }
+@media(max-width:640px) {
+  .pcx-ledgers .recgrid-body > span.pcx-ledger-cell { flex-direction: column; justify-content: flex-start }
+}
+
+/* Record Payment */
+.pcx-collect {
+  padding: 16px 18px; border-radius: 12px; background: var(--b50); border: 1px solid var(--b100);
+  display: flex; flex-direction: column; gap: 4px; color: var(--b800);
+}
+.pcx-collect-lbl { font-size: var(--fs-sm); font-weight: 600; letter-spacing: .04em; text-transform: uppercase }
+.pcx-collect-amt { display: flex; align-items: baseline; gap: 8px; min-width: 0 }
+.pcx-collect-cur { font-size: var(--fs-lg); font-weight: 600 }
+.pcx-collect-val { font-size: 32px; font-weight: 700; letter-spacing: -.02em; line-height: 1.15; color: var(--b700); overflow-wrap: anywhere }
+.pcx-collect-meta { font-size: var(--fs-sm) }
+
+.pcx-panel .g2 { margin-bottom: 0 }
+.pcx-panel .fg { margin-bottom: 0 }
+.pcx-amount {
+  display: flex; align-items: center; height: 42px; border: 1.5px solid var(--g200); border-radius: var(--rsm);
+  background: var(--white); overflow: hidden; transition: var(--tr);
+}
+.pcx-amount:focus-within { border-color: var(--b500); box-shadow: 0 0 0 3px var(--b100) }
+.pcx-amount.has-error { border-color: var(--red) }
+.pcx-amount-cur { padding: 0 4px 0 12px; font-size: var(--fs-sm); font-weight: 700; color: var(--g500) }
+.pcx-amount input {
+  flex: 1; min-width: 0; height: 100%; border: 0; outline: none; background: transparent;
+  padding: 0 12px 0 6px; font: inherit; font-size: var(--fs-lg); font-weight: 700; color: var(--g900);
+}
+
+.pcx-quick { display: flex; flex-wrap: wrap; gap: 8px; margin-top: -6px }
+.pcx-quick-btn {
+  height: 30px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--g300); background: var(--white);
+  color: var(--g700); font-size: var(--fs-sm); font-weight: 500; cursor: pointer; transition: var(--tr);
+}
+.pcx-quick-btn:hover { border-color: var(--b300); color: var(--b800) }
+.pcx-quick-btn.active { background: var(--b50); border-color: var(--b300); color: var(--b800); font-weight: 600 }
+
+.pcx-methods { margin: 0; padding: 0; border: 0; min-width: 0 }
+.pcx-methods legend { padding: 0; margin-bottom: 6px }
+.pcx-methods-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(104px, 1fr)); gap: 8px }
+.pcx-method {
+  position: relative; height: 42px; display: flex; align-items: center; justify-content: center; gap: 7px;
+  border: 1px solid var(--g300); border-radius: var(--rsm); background: var(--white);
+  font-size: var(--fs-sm); font-weight: 500; color: var(--g700); cursor: pointer; transition: var(--tr); white-space: nowrap;
+}
+.pcx-method:hover { border-color: var(--b300) }
+.pcx-method i { font-size: 15px }
+.pcx-method input { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none }
+.pcx-method.active { border: 1.5px solid var(--b600); background: var(--b50); color: var(--b800); font-weight: 600 }
+.pcx-method:has(input:focus-visible) { outline: 2px solid var(--b600); outline-offset: 2px }
+
+.pcx-summary { margin: 0; border-top: 1px dashed var(--g300); padding-top: 14px; display: flex; flex-direction: column; gap: 8px; font-size: var(--fs-md) }
+.pcx-summary > div { display: flex; justify-content: space-between; gap: 12px }
+.pcx-summary dt { color: var(--g500) }
+.pcx-summary dd { margin: 0; font-weight: 500; color: var(--g900) }
+.pcx-summary-total dt, .pcx-summary-total dd { font-weight: 700; color: var(--g900); font-size: var(--fs-lg) }
+
+.pcx-actions { display: flex; flex-wrap: wrap; gap: 10px }
+.pcx-actions .btn { justify-content: center }
+.pcx-submit { flex: 1 1 220px }
+
+/* On-screen receipt — full width, split into details | money so no label
+   sits far from its value (a single full-width column put them ~1500px
+   apart). One column below 900px. */
+.pcx-receipt { font-variant-numeric: tabular-nums }
+/* Right-align a wrapped value only while label and value share a row —
+   below 480px .receipt-row stacks them and everything reads left-aligned. */
+@media(min-width:481px) {
+  .pcx-receipt .receipt-row > span:last-child { text-align: right }
+}
+.pcx-receipt-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 32px; align-items: start }
+.pcx-receipt-money {
+  display: flex; flex-direction: column; gap: 2px; padding: 16px 18px;
+  background: var(--white); border: 1px solid var(--g200); border-radius: 12px;
+}
+.pcx-receipt-paid {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  padding-bottom: 10px; margin-bottom: 4px; border-bottom: 1px solid var(--g200);
+}
+.pcx-receipt-paid span { font-size: var(--fs-base); font-weight: 600; color: var(--g700) }
+.pcx-receipt-paid strong { font-size: var(--fs-2xl); font-weight: 700; color: var(--g900) }
+.pcx-receipt-note { margin: 6px 0 4px; font-size: var(--fs-xs); color: var(--g500) }
+.pcx-receipt .info-box { align-items: flex-start; margin: 6px 0 0 }
+@media(max-width:900px) {
+  .pcx-receipt-grid { grid-template-columns: 1fr; gap: 16px }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pcx-bar > span { transition: none }
+}
+
+@media(max-width:640px) {
+  .pcx-student-top, .pcx-facts { padding-left: 16px; padding-right: 16px }
+  .pcx-figures { width: 100% }
+  .pcx-figure { flex: 1; min-width: 0 }
+  .pcx-coverage-grid { grid-template-columns: 1fr 1fr }
+}
+
+/* ═══════════════════════════════════════
+   STUDENT STATEMENT — 2026-11-03 refresh. Reuses the Payment Console's pcx-
+   student header and panel headers; ss- adds the view switcher, KPI tiles,
+   the ledger's underline tabs, toolbar and footer.
+═══════════════════════════════════════ */
+/* Same 18px gap as .card's own margin — the wrapper's space-y utility is
+   layered, so it loses to the unlayered .card margins and can't be relied on. */
+#page-student-statement .pcx-student { margin-bottom: 18px }
+
+/* View switcher (page header) — one segmented control, not three buttons. */
+.ss-seg { display: inline-flex; gap: 2px; padding: 3px; background: var(--g100); border: 1px solid var(--g200); border-radius: var(--rsm) }
+.ss-seg-btn {
+  display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border: 0; border-radius: var(--rxs);
+  background: transparent; color: var(--g700); font-size: var(--fs-sm); font-weight: 600; cursor: pointer; transition: var(--tr);
+}
+.ss-seg-btn:hover { color: var(--b800) }
+.ss-seg-btn.active { background: var(--white); color: var(--b800); box-shadow: 0 1px 3px rgba(15, 23, 42, .12) }
+.ss-seg-btn:focus-visible { outline: 2px solid var(--b600); outline-offset: 1px }
+
+/* Analytics cards use the pcx- panel header; give them the same rhythm. */
+.ss-panel { font-variant-numeric: tabular-nums }
+
+/* Ledger: underline tabs sitting on the card's top edge. */
+.ss-tabs { display: flex; gap: 4px; margin: -4px 0 16px; border-bottom: 1px solid var(--g200); overflow-x: auto; scrollbar-width: none }
+.ss-tabs::-webkit-scrollbar { display: none }
+.ss-tab {
+  position: relative; display: inline-flex; align-items: center; gap: 8px; padding: 10px 14px 12px; border: 0; background: none;
+  font-size: var(--fs-base); font-weight: 600; color: var(--g500); cursor: pointer; white-space: nowrap; transition: color var(--tr);
+}
+.ss-tab::after {
+  content: ''; position: absolute; left: 10px; right: 10px; bottom: -1px; height: 2px; border-radius: 2px 2px 0 0;
+  background: var(--b600); transform: scaleX(0); transition: transform .25s cubic-bezier(.16, 1, .3, 1);
+}
+.ss-tab:hover { color: var(--g900) }
+.ss-tab.active { color: var(--b800) }
+.ss-tab.active::after { transform: scaleX(1) }
+.ss-tab:focus-visible { outline: 2px solid var(--b600); outline-offset: -2px; border-radius: var(--rxs) }
+.ss-tab-count {
+  min-width: 22px; padding: 1px 7px; border-radius: 999px; background: var(--g100); color: var(--g700);
+  font-size: var(--fs-xs); font-weight: 700; text-align: center; font-variant-numeric: tabular-nums;
+}
+.ss-tab.active .ss-tab-count { background: var(--b100); color: var(--b800) }
+
+.ss-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px }
+.ss-foot {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px;
+  margin-top: 12px; padding: 12px 14px; border-radius: var(--rsm); background: var(--surface); border: 1px solid var(--g200);
+  font-size: var(--fs-sm); color: var(--g500); font-variant-numeric: tabular-nums;
+}
+
+/* Semester group rows — a quiet tinted band instead of a heavy blue rule. */
+#page-student-statement .stmt-tbl tr.stmt-group-hdr td {
+  padding: 0; background: var(--white); border-top: 1px solid var(--g100); border-bottom: 1px solid var(--g100);
+}
+#page-student-statement .stmt-group-name { font-size: var(--fs-md); color: var(--g900) }
+
+/* Collapsible semester header: the whole row is the toggle, the semester's
+   subtotal sits on the right so a collapsed list still reads as a summary. */
+.ss-grp-btn {
+  display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 14px;
+  border: 0; background: none; font: inherit; color: inherit; text-align: left; cursor: pointer;
+  transition: background var(--tr);
+}
+.ss-grp-btn:hover { background: var(--surface) }
+.ss-grp-btn:focus-visible { outline: 2px solid var(--b600); outline-offset: -2px }
+.ss-grp.open .ss-grp-btn { background: var(--b50) }
+.ss-grp-chev { font-size: 11px; color: var(--g400); transition: transform .2s cubic-bezier(.16, 1, .3, 1) }
+.ss-grp.open .ss-grp-chev { transform: rotate(90deg); color: var(--b700) }
+.ss-grp-icon {
+  width: 30px; height: 30px; flex: none; display: grid; place-items: center; border-radius: 8px;
+  background: var(--g100); color: var(--g600); font-size: 14px; transition: background var(--tr), color var(--tr);
+}
+.ss-grp.open .ss-grp-icon { background: var(--white); color: var(--b700); box-shadow: inset 0 0 0 1px var(--b100) }
+#page-student-statement .stmt-tbl tr.ss-grp .ss-grp-icon i { color: inherit; font-size: 14px }
+.ss-grp-count { font-size: var(--fs-xs); font-weight: 600; color: var(--g500); white-space: nowrap }
+.ss-grp-total { margin-left: auto; display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px }
+.stmt-total-chip.is-due { background: var(--red-bg); border-color: var(--red-bd); color: var(--red) }
+.stmt-total-chip.is-due .font-mono { color: var(--red) }
+
+.ss-grp-all {
+  display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px;
+  border: 1px solid var(--g200); background: var(--white); color: var(--g700);
+  font-size: var(--fs-sm); font-weight: 600; cursor: pointer; transition: border-color var(--tr), color var(--tr);
+}
+.ss-grp-all:hover { border-color: var(--b300); color: var(--b800) }
+.ss-grp-all:focus-visible { outline: 2px solid var(--b600); outline-offset: 2px }
+
+/* Paired cells: the main value with a quiet second line beneath it. */
+.ss-cell-main { display: block; font-weight: 700; white-space: nowrap }
+.ss-cell-sub { display: block; margin-top: 2px; font-size: var(--fs-xs); color: var(--g500); white-space: nowrap }
+
+@media (max-width: 640px) {
+  .ss-grp-btn { flex-wrap: wrap }
+  .ss-grp-total { width: 100%; justify-content: flex-start; margin-left: 42px }
+}
+
+/* Analytics cards: header, body, footer pinned to the bottom so the two
+   cards' footers line up whatever their content height. */
+.ss-chart { display: flex; flex-direction: column; gap: 18px }
+
+/* Overview: donut card left, KPI tiles 2×2 right — the tiles stretch to the
+   donut card's height. Stacks below 900px. */
+.ss-overview { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; margin-bottom: 18px }
+.ss-overview > .ss-chart { margin-bottom: 0 }
+.ss-overview > .ss-kpi-panel { grid-auto-rows: 1fr; margin-bottom: 0 }
+.fd-kpi-cyan { --tone: var(--cyan); --tone-bg: var(--cyan-bg) }
+/* Statement amounts carry two decimals — a touch smaller than the
+   dashboard's whole-number figures so they don't crowd the cell. */
+.ss-kpi-panel .fd-kpi-num { font-size: clamp(22px, 10cqi, 30px) }
+@media (max-width: 900px) {
+  .ss-overview { grid-template-columns: minmax(0, 1fr) }
+}
+.ss-chart .pcx-panel-hdr { margin-bottom: 0 }
+.ss-chart-foot {
+  margin-top: auto; padding-top: 14px; border-top: 1px solid var(--g100);
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px;
+  font-size: var(--fs-sm); color: var(--g500);
+}
+.ss-chart-foot b { margin-left: 4px; color: var(--g900); font-weight: 700 }
+.ss-chart-empty { padding: 32px 0; text-align: center; font-size: var(--fs-sm); color: var(--g400) }
+.ss-status { display: inline-flex; align-items: center; gap: 6px; font-weight: 600 }
+.ss-status.ok { color: var(--green) }
+.ss-status.due { color: var(--red) }
+
+/* Donut + legend */
+.ss-donut-wrap { display: grid; grid-template-columns: 148px minmax(0, 1fr); align-items: center; gap: 24px }
+.ss-donut { position: relative; width: 148px; aspect-ratio: 1 }
+.ss-donut svg { width: 100%; height: 100%; transform: rotate(-90deg); overflow: visible }
+.ss-donut circle { fill: none; stroke-width: 11 }
+.ss-donut-track { stroke: var(--g100) }
+.ss-donut-arc { cursor: pointer; transition: opacity var(--tr), stroke-width var(--tr) }
+.ss-donut-arc:hover { stroke-width: 13 }
+.ss-donut-arc.dim { opacity: .3 }
+.ss-donut-center { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; pointer-events: none }
+.ss-donut-val { font-size: 26px; font-weight: 800; letter-spacing: -.02em; line-height: 1; color: var(--g900) }
+.ss-donut-lbl { margin-top: 4px; font-size: var(--fs-xs); font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--g500) }
+
+.ss-legend { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column }
+.ss-legend-row {
+  display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; align-items: center; gap: 12px;
+  padding: 11px 10px; border-radius: var(--rxs); transition: background var(--tr);
+}
+.ss-legend-row + .ss-legend-row { border-top: 1px solid var(--g100) }
+.ss-legend-row.active { background: var(--surface) }
+.ss-legend-dot { width: 10px; height: 10px; border-radius: 3px }
+.ss-legend-txt { display: flex; flex-direction: column; min-width: 0 }
+.ss-legend-name { font-size: var(--fs-base); font-weight: 600; color: var(--g800) }
+.ss-legend-pct { margin-left: 4px; font-size: var(--fs-xs); font-weight: 600; color: var(--g400) }
+.ss-legend-sub { font-size: var(--fs-xs); color: var(--g500) }
+.ss-legend-amt { font-size: var(--fs-base); font-weight: 700; color: var(--g900); white-space: nowrap }
+
+/* Fee heads */
+/* One row per head, same reading order as the Finance Dashboard's
+   fee-type rows: name · bar · rate · amounts. Fixed side tracks keep
+   every row's bar the same length. */
+/* Overall summary: the headline figure, one bar, paid / outstanding. */
+.ss-heads-sum {
+  display: flex; align-items: center; gap: 24px; padding: 16px 20px;
+  border-radius: var(--rsm); background: var(--surface); border: 1px solid var(--g200);
+}
+.ss-heads-sum-fig { display: flex; flex-direction: column; flex: none; min-width: 96px }
+.ss-heads-sum-pct { font-size: 30px; font-weight: 800; letter-spacing: -.03em; line-height: 1; color: var(--b800); font-variant-numeric: tabular-nums }
+.ss-heads-sum-lbl { margin-top: 5px; font-size: var(--fs-xs); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--g500) }
+.ss-heads-sum-body { flex: 1; min-width: 0 }
+.ss-heads-sum-bar { height: 10px; border-radius: 999px; background: var(--white); box-shadow: inset 0 0 0 1px var(--b100); overflow: hidden }
+.ss-heads-sum-bar > span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--b500), var(--b700)); transition: width .6s cubic-bezier(.16, 1, .3, 1) }
+.ss-heads-sum-meta { margin-top: 9px; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 16px; font-size: var(--fs-sm); color: var(--g500); font-variant-numeric: tabular-nums }
+.ss-heads-sum-meta b { color: var(--g900); font-weight: 700 }
+.ss-heads-sum-due { color: var(--gold); font-weight: 600 }
+.ss-heads-sum-ok { color: var(--green); font-weight: 600 }
+
+/* Rows: icon · name over amounts · bar · status pill. Heads still owing
+   come first and carry a faint amber wash; settled ones stay quiet. */
+.ss-heads { list-style: none; margin: -6px 0 0; padding: 0 }
+.ss-head {
+  display: grid; grid-template-columns: 34px minmax(160px, 260px) minmax(100px, 1fr) 52px 150px;
+  align-items: center; gap: 16px; padding: 13px 8px; transition: background var(--tr);
+}
+.ss-head + .ss-head { border-top: 1px solid var(--g100) }
+.ss-head:hover { background: var(--surface) }
+.ss-head-icon { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 10px; font-size: 15px }
+.ss-head-icon.ss-tone-green { background: var(--green-bg); color: var(--green) }
+.ss-head-icon.ss-tone-amber { background: var(--amber-bg); color: var(--gold) }
+.ss-head-icon.ss-tone-red { background: var(--red-bg); color: var(--red) }
+.ss-head-txt { display: flex; flex-direction: column; min-width: 0 }
+.ss-head-name { font-size: var(--fs-base); font-weight: 700; color: var(--g900); overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.ss-head-sub { margin-top: 2px; font-size: var(--fs-xs); color: var(--g500); font-variant-numeric: tabular-nums; white-space: nowrap }
+.ss-head-sub b { color: var(--g700); font-weight: 600 }
+.ss-head-bar { display: block; height: 6px; border-radius: 999px; background: var(--g100); overflow: hidden }
+.ss-head-bar > span { display: block; height: 100%; border-radius: inherit; transition: width .5s cubic-bezier(.16, 1, .3, 1) }
+.ss-head-bar .ss-tone-green { background: var(--green) }
+.ss-head-bar .ss-tone-amber { background: var(--amber) }
+.ss-head-bar .ss-tone-red { background: var(--red) }
+/* Percent beside the bar; the balance as a right-aligned figure over a
+   short caption, so the column lines up row to row. */
+.ss-head-pct { font-size: var(--fs-sm); font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; color: var(--g500) }
+.ss-head-pct.ss-tone-green { color: var(--green) }
+.ss-head-status { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; white-space: nowrap; font-variant-numeric: tabular-nums }
+.ss-head-status b { display: inline-flex; align-items: center; gap: 5px; font-size: var(--fs-base); font-weight: 700 }
+.ss-head-status span { font-size: var(--fs-xs); color: var(--g500) }
+.ss-head-status.ss-tone-green b { color: var(--green) }
+.ss-head-status.ss-tone-amber b { color: var(--gold) }
+.ss-head-status.ss-tone-red b { color: var(--red) }
+@container (max-width: 640px) {
+  .ss-heads-sum { flex-direction: column; align-items: stretch; gap: 12px }
+  .ss-head { grid-template-columns: 34px minmax(0, 1fr) auto; gap: 8px 12px }
+  .ss-head-bar { grid-column: 2 / 3; grid-row: 2 }
+  .ss-head-pct { grid-column: 3; grid-row: 2 }
+  .ss-head-status { grid-column: 3; grid-row: 1 }
+}
+
+.ss-chart { container-type: inline-size }
+@container (max-width: 420px) {
+  .ss-donut-wrap { grid-template-columns: 1fr; justify-items: center }
+  .ss-legend { width: 100% }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ss-tab::after { transition: none }
+  .ss-donut-arc, .ss-head-bar > span, .ss-heads-sum-bar > span, .ss-head, .ss-grp-chev, .ss-grp-btn { transition: none }
+}
