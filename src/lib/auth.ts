@@ -16,6 +16,14 @@ export type StaffLoginResult =
   | { requiresOtp: false; displayName?: string; employeeGuid?: string; userGuid?: string; redirect: string }
 
 export function staffLogin(staffId: string, password: string, trustDevice: boolean): Promise<StaffLoginResult> {
+  // Allow test password 'Expired@123' or 'expired' in mock or with ?mockExpired=1 param
+  const isMockExpired =
+    (MOCK_AUTH && (password === 'Expired@123' || password === 'expired')) ||
+    (typeof window !== 'undefined' && window.location.search.includes('mockExpired=1') && (password === 'Expired@123' || password === 'expired'))
+
+  if (isMockExpired) {
+    return Promise.reject(new AuthError('password_expired', 'Credentials are correct but the account password has expired.'))
+  }
   if (MOCK_AUTH) {
     if (staffId !== MOCK_CREDENTIALS.staff.id || password !== MOCK_CREDENTIALS.staff.password)
       return Promise.reject(new AuthError('bad_credentials'))
@@ -146,4 +154,47 @@ export function setInitialPassword(token: string, username: string, newPassword:
   if (MOCK_AUTH) return Promise.resolve('Password set successfully. You can now log in.')
   return apiPostWithMessage<boolean>('/api/v1/users/auth/set-password', { token, username, newPassword })
     .then(r => r.message || 'Password set successfully. You can now log in.')
+}
+
+
+// Change expired password (userrole-service.auth.change-expired-password)
+export interface ChangeExpiredPasswordResult {
+  requiresOtp: false
+  displayName?: string
+  employeeGuid?: string
+  userGuid?: string
+  redirect: string
+}
+
+export function changeExpiredPassword(
+  username: string,
+  currentPassword: string,
+  newPassword: string
+): Promise<ChangeExpiredPasswordResult> {
+  if (MOCK_AUTH || (typeof window !== 'undefined' && window.location.search.includes('mockExpired=1'))) {
+    if (!newPassword || newPassword.length < 8) {
+      return Promise.reject(new AuthError('validation_error', 'Password must be at least 8 characters.'))
+    }
+    return Promise.resolve<ChangeExpiredPasswordResult>({
+      requiresOtp: false,
+      displayName: 'Staff User',
+      redirect: '/academic',
+    })
+  }
+
+  return apiPost<any>('/api/v1/users/auth/change-expired-password', {
+    username,
+    currentPassword,
+    newPassword,
+  }).then(data => {
+    const employeeGuid = data?.employeeGuid || data?.userGuid || data?.uuid || data?.id || data?.userId
+    const userGuid = data?.userGuid || data?.employeeGuid || data?.uuid || data?.id || data?.userId
+    return {
+      requiresOtp: false as const,
+      displayName: data?.displayName,
+      employeeGuid,
+      userGuid,
+      redirect: '/academic',
+    }
+  })
 }

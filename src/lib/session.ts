@@ -5,6 +5,8 @@ export interface LoginFlowState {
   otpChannel?: 'email' | 'sms'
   maskedTarget?: string
   returnTo?: string
+  username?: string
+  currentPassword?: string
 }
 
 export function getFlowState(): LoginFlowState {

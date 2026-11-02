@@ -11,6 +11,8 @@ export function authErrorMessage(code: string): string {
       return 'Incorrect code. Please check and try again.'
     case 'expired_code':
       return 'This code has expired. Please request a new one.'
+    case 'password_expired':
+      return 'Your password has expired. Please reset your password to continue.'
     default:
       return 'An unexpected error occurred. Please try again or contact IT support.'
   }

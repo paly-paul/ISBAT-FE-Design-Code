@@ -13,6 +13,7 @@ export interface HallTicketSearchResultDto {
 export function getHallTicketSearch(searchTerm: string, intakeGuid: string): Promise<HallTicketSearchResultDto[]> {
   const params = new URLSearchParams()
   params.set('searchTerm', searchTerm || '')
+  params.set('academicIntakeGuid', intakeGuid)
   params.set('intakeGuid', intakeGuid)
   
   return apiGet<HallTicketSearchResultDto[]>(`/api/v1/students/hall-ticket-search?${params.toString()}`)
