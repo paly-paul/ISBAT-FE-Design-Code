@@ -15,7 +15,7 @@ import {
 import type { Weekday } from '@/lib/api/academic/weekday'
 import {
   TERM_OPTIONS, useTeachingDays, allowedDayCodes, shiftHint, shiftBadge, slotRange,
-  intakeOptionLabel, isOverCapacity, entryUnits, entryBatches, studentCount, TimetableMatrix, TtCard,
+  intakeOptionLabel, isOverCapacity, entryUnits, entryBatches, studentCount, roomWithType, TimetableMatrix, TtCard,
 } from '@/components/timetable/ttShared'
 import { TimetableSlotModal, SlotModalState, SlotBatch } from '@/components/timetable/TimetableSlotModal'
 
@@ -90,6 +90,7 @@ export default function SchedulePage() {
   const { data: shiftSlots = [], isLoading: slotsLoading } = useTimeSlots(batchTimeGuid || null, !!batchTimeGuid)
   const [calView, setCalView] = useState<'lecturer' | 'room'>('lecturer')
   const { data: roomsAll = [] } = useRoomDropdown()
+  const roomTypeByGuid = useMemo(() => new Map(roomsAll.map(r => [r.roomGuid, r.roomTypeName ?? null])), [roomsAll])
   const [roomGuid, setRoomGuid] = useState('')
   const lecturerTT = useTimetableByLecturer(lecturerGuid || null, intakeGuid || null, termNo)
   const roomTT = useTimetableByRoom(calView === 'room' ? roomGuid || null : null, intakeGuid || null, termNo)
@@ -194,7 +195,7 @@ export default function SchedulePage() {
           name={u.name}
           over={isOverCapacity(e)}
           metaLeft={calView === 'room' ? (e.lecturerName ?? '—') : entryBatches(e)}
-          metaRight={calView === 'room' ? studentCount(e.headCount) : e.roomCode}
+          metaRight={calView === 'room' ? studentCount(e.headCount) : roomWithType(e.roomCode, roomTypeByGuid.get(e.roomGuid))}
         />
       </>
     )
@@ -202,7 +203,8 @@ export default function SchedulePage() {
 
   const totalLoadAll = allSlots.reduce((n, s) => n + (s.load || 0), 0)
   const lecturerCount = new Set(allSlots.map(s => s.lecturerGuid).filter(Boolean)).size
-  const roomName = roomsAll.find(r => r.roomGuid === roomGuid)?.roomCode
+  const selectedRoom = roomsAll.find(r => r.roomGuid === roomGuid)
+  const roomName = selectedRoom && roomWithType(selectedRoom.roomCode, selectedRoom.roomTypeName)
 
   // What the calendar body shows when it can't show a grid yet.
   let calMessage: { icon: string; text: string } | null = null
@@ -396,7 +398,7 @@ export default function SchedulePage() {
               </div>
               <div className="flex items-center gap-2 flex-wrap tt-no-print">
                 {calView === 'room' && (
-                  <SearchSelect className="w-44" placeholder="— Room —" options={roomsAll.map(r => ({ value: r.roomGuid, label: `${r.roomCode}${r.capacity != null ? ` (${r.capacity})` : ''}` }))} value={roomGuid} onChange={setRoomGuid} />
+                  <SearchSelect className="w-44" placeholder="— Room —" options={roomsAll.map(r => ({ value: r.roomGuid, label: `${roomWithType(r.roomCode, r.roomTypeName)}${r.capacity != null ? ` (${r.capacity})` : ''}` }))} value={roomGuid} onChange={setRoomGuid} />
                 )}
                 <div className="tgl-group" role="tablist" aria-label="Calendar view">
                   <button type="button" role="tab" aria-selected={calView === 'lecturer'} className={`tgl-btn${calView === 'lecturer' ? ' tgl-active' : ''}`} onClick={() => setCalView('lecturer')}><i className="lni lni-user"></i> Lecturer</button>
@@ -464,7 +466,10 @@ export default function SchedulePage() {
                       <td><span className={`badge ${shiftBadge(e.batchTimeName)}`}>{e.batchTimeName}</span></td>
                       <td><strong>{e.dayName}</strong><br /><span className="text-g400" style={{ fontSize: 'var(--fs-xs)' }}>{slotRange(e.startTime, e.endTime, true)}</span></td>
                       <td><strong className="text-b700">{u.code}</strong><br /><span className="text-g400" style={{ fontSize: 'var(--fs-xs)' }}>{entryBatches(e)} ({studentCount(e.headCount)})</span></td>
-                      <td>{e.roomCode}{e.roomCapacity != null ? ` (${e.roomCapacity})` : ''} {isOverCapacity(e) && <span className="badge badge-red" style={{ fontSize: 9, padding: '1px 5px' }}>Over</span>}</td>
+                      <td>
+                        {e.roomCode}{e.roomCapacity != null ? ` (${e.roomCapacity})` : ''} {isOverCapacity(e) && <span className="badge badge-red" style={{ fontSize: 9, padding: '1px 5px' }}>Over</span>}
+                        {roomTypeByGuid.get(e.roomGuid) && <><br /><span className="text-g400" style={{ fontSize: 'var(--fs-xs)' }}>{roomTypeByGuid.get(e.roomGuid)}</span></>}
+                      </td>
                       <td style={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{e.load} hrs</td>
                       <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }} className="tt-no-print">
                         {permissions.edit && <button type="button" className="btn btn-neu btn-xs" disabled={!isEditable} onClick={() => openEdit(e)} aria-label={`Edit ${u.code} on ${e.dayName}`}><i className="lni lni-pencil"></i></button>}{' '}

@@ -102,6 +102,13 @@ export function studentCount(n: number) {
   return `${n} ${n === 1 ? 'student' : 'students'}`
 }
 
+// "RM-FCT-002 · Lab". Timetable entries carry no room type, so callers look
+// it up from the room dropdown by roomGuid; a room with no type set shows
+// its code alone.
+export function roomWithType(code: string, typeName?: string | null) {
+  return typeName ? `${code} · ${typeName}` : code
+}
+
 export function isOverCapacity(e: Pick<TimetableEntry, 'headCount' | 'roomCapacity'>) {
   return capacityState(e.headCount, e.roomCapacity) === 'over'
 }

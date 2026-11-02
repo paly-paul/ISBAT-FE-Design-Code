@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { SearchSelect } from '@/components/SearchSelect'
 import { useAvailableRooms, useCreateTimetable, useUpdateTimetable, TimeSlotDropdownItem } from '@/hooks/academic/useTimetable'
 import type { Weekday } from '@/lib/api/academic/weekday'
-import { allowedDayCodes, capacityState, shiftHint, slotName, slotRange, studentCount } from './ttShared'
+import { allowedDayCodes, capacityState, roomWithType, shiftHint, slotName, slotRange, studentCount } from './ttShared'
 
 // One checked batch row, carried in from the Allocation Context (Add) or
 // from the entry being edited. The triple is what's saved.
@@ -204,7 +204,7 @@ export function TimetableSlotModal({ state, onClose, intakeGuid, term, days, slo
               <label className="lbl">Classroom / Lab <span className="req">*</span></label>
               <SearchSelect
                 placeholder={roomPlaceholder}
-                options={rooms.map(r => ({ value: r.roomGuid, label: `${r.roomCode}${r.capacity != null ? ` (Cap: ${r.capacity})` : ''}` }))}
+                options={rooms.map(r => ({ value: r.roomGuid, label: `${roomWithType(r.roomCode, r.roomTypeName)}${r.capacity != null ? ` (Cap: ${r.capacity})` : ''}` }))}
                 value={roomGuid}
                 onChange={v => { setRoomGuid(v); setClash(null) }}
                 disabled={!weekDayGuid || !timeSlotGuid}
