@@ -19,6 +19,7 @@ import {
   useVerifyUeQuestions,
 } from '@/hooks/assessment/useUeQuestions'
 import { UeQuestionDto, UeCourseUnitDto } from '@/lib/api/assessment/ueQuestions'
+import { stripHtmlTags } from '@/components/RichTextEditor'
 import { UeQuestionModal } from '@/components/modals/assessment/UeQuestionModal'
 import { ViewUeQuestionModal } from '@/components/modals/assessment/ViewUeQuestionModal'
 
@@ -126,8 +127,8 @@ export default function QpUploadVettingPage() {
       const q = search.toLowerCase()
       list = list.filter(
         item =>
-          item.questionText?.toLowerCase().includes(q) ||
-          item.answerText?.toLowerCase().includes(q) ||
+          stripHtmlTags(item.questionText).toLowerCase().includes(q) ||
+          stripHtmlTags(item.answerText).toLowerCase().includes(q) ||
           item.option1Text?.toLowerCase().includes(q) ||
           item.option2Text?.toLowerCase().includes(q) ||
           item.option3Text?.toLowerCase().includes(q) ||
@@ -147,7 +148,7 @@ export default function QpUploadVettingPage() {
   const searchResults: TableSearchResult[] = useMemo(() => {
     return filteredQuestions.slice(0, 8).map(q => ({
       id: q.questionGuid,
-      primary: q.questionText || '',
+      primary: stripHtmlTags(q.questionText) || 'Untitled Question',
       secondary: q.questionType === 1 ? 'MCQ' : 'Descriptive',
     }))
   }, [filteredQuestions])
@@ -301,17 +302,18 @@ export default function QpUploadVettingPage() {
 
       {/* ── Tab 1: Faculty Upload & Question Paper Workspace ───────────────── */}
       {activeTab === 'faculty' && (
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
+        <div className="flex flex-col gap-5">
           
-          {/* Left Column: Scope Selection & UG Pattern Reminder */}
-          <div className="lg:col-span-2 flex flex-col gap-4">
+          {/* Top Row: Scope Selection & Summary Metrics */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
             
-            <div className="card p-5">
-              <div className="card-title mb-4">
-                <span className="ctitle-icon"><i className="lni lni-agenda"></i></span> Selection & Scope
+            {/* Selection & Scope */}
+            <div className="lg:col-span-5 card p-4 sm:p-5 flex flex-col justify-between">
+              <div className="card-title mb-3">
+                <span className="ctitle-icon"><i className="lni lni-agenda"></i></span> Selection &amp; Scope
               </div>
 
-              <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 items-end">
                 <div>
                   <label className="text-[12px] font-semibold text-slate-700 block mb-1.5">
                     Subject / Course Unit <span className="text-red-500">*</span>
@@ -331,12 +333,12 @@ export default function QpUploadVettingPage() {
                     Exam Type
                   </label>
                   <div className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-md font-medium text-slate-800 flex items-center justify-between">
-                    <span>
+                    <span className="truncate">
                       {ueType === 1
-                        ? 'University Examination (Practical)'
-                        : 'University Examination (Theory)'}
+                        ? 'UE (Practical)'
+                        : 'UE (Theory)'}
                     </span>
-                    <span className="badge badge-blue text-[10.5px] font-semibold">
+                    <span className="badge badge-blue text-[10.5px] font-semibold shrink-0">
                       {ueType === 1 ? 'Practical' : 'Theory'}
                     </span>
                   </div>
@@ -344,236 +346,233 @@ export default function QpUploadVettingPage() {
               </div>
             </div>
 
-            {/* UG Pattern Reminder Box */}
-            <div className="card p-5">
-              <div className="card-title mb-2">
-                <span className="ctitle-icon"><i className="lni lni-information"></i></span> UG Pattern Reminder
-              </div>
-              <div className="bg-slate-50 border border-slate-200 rounded-md p-3.5 text-[12.5px] text-slate-700 leading-relaxed shadow-inner space-y-1">
-                <div><strong className="text-slate-800">Sec A:</strong> 10 MCQ (2m each) — prepare 20</div>
-                <div><strong className="text-slate-800">Sec B:</strong> Any 4 of 6 (15m each) — prepare 12</div>
-                <div><strong className="text-slate-800">Sec C:</strong> Any 1 of 2 (20m each) — prepare 4</div>
-                <div className="text-slate-500 pt-1 border-t border-slate-200 mt-1">Total: 100 marks (prorated to weightage)</div>
-              </div>
-            </div>
-
-            {/* Locked State Warning Banner */}
-            {isLocked ? (
-              <div className="bg-emerald-50 border border-emerald-200 rounded-md p-3.5 flex gap-3 text-[12.5px] text-emerald-900 items-start shadow-xs">
-                <div className="mt-0.5 text-emerald-600"><i className="lni lni-lock text-[16px]"></i></div>
-                <div>
-                  <strong className="font-semibold text-emerald-950">
-                    {selectedUnit?.courseUnitCode || 'Course Unit'} is locked.
-                  </strong>{' '}
-                  Question paper was officially verified by the committee. Editing and additions are disabled.
-                </div>
-              </div>
-            ) : (
-              <div className="bg-amber-50 border border-amber-200 rounded-md p-3.5 flex gap-3 text-[12.5px] text-amber-900 items-start shadow-xs">
-                <div className="mt-0.5 text-amber-600"><i className="lni lni-timer text-[16px]"></i></div>
-                <div>
-                  <strong className="font-semibold text-amber-950">Draft Mode:</strong> Add questions to Sections A, B, and C below. Once prepared, the Vetting Committee will verify and sign off.
-                </div>
-              </div>
-            )}
-
-          </div>
-
-          {/* Right Column: Section Tabs, Summary Bar & Questions Table */}
-          <div className="lg:col-span-3 flex flex-col gap-4">
-            
-            {/* Summary Cards */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <div className="card p-3 text-center">
+            {/* Summary Metrics */}
+            <div className="lg:col-span-7 grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="card p-3 sm:p-4 text-center flex flex-col items-center justify-center">
                 <div className="text-[11px] font-bold text-slate-500 uppercase">Total Qs</div>
-                <div className="text-[20px] font-extrabold text-slate-900 mt-0.5">
+                <div className="text-[22px] font-extrabold text-slate-900 mt-1">
                   {isSummaryLoading ? '—' : summary.totalCount}
                 </div>
               </div>
-              <div className="card p-3 text-center cursor-pointer hover:border-purple-300" onClick={() => setActiveLevel(1)}>
+              <div className="card p-3 sm:p-4 text-center cursor-pointer hover:border-purple-300 flex flex-col items-center justify-center transition-colors" onClick={() => setActiveLevel(1)}>
                 <div className="text-[11px] font-bold text-purple-700 uppercase">Sec A (MCQ)</div>
-                <div className="text-[20px] font-extrabold text-purple-900 mt-0.5">
+                <div className="text-[22px] font-extrabold text-purple-900 mt-1">
                   {isSummaryLoading ? '—' : summary.sectionACount}
                 </div>
               </div>
-              <div className="card p-3 text-center cursor-pointer hover:border-blue-300" onClick={() => setActiveLevel(2)}>
+              <div className="card p-3 sm:p-4 text-center cursor-pointer hover:border-blue-300 flex flex-col items-center justify-center transition-colors" onClick={() => setActiveLevel(2)}>
                 <div className="text-[11px] font-bold text-blue-700 uppercase">Sec B (15m)</div>
-                <div className="text-[20px] font-extrabold text-blue-900 mt-0.5">
+                <div className="text-[22px] font-extrabold text-blue-900 mt-1">
                   {isSummaryLoading ? '—' : summary.sectionBCount}
                 </div>
               </div>
-              <div className="card p-3 text-center cursor-pointer hover:border-indigo-300" onClick={() => setActiveLevel(3)}>
+              <div className="card p-3 sm:p-4 text-center cursor-pointer hover:border-indigo-300 flex flex-col items-center justify-center transition-colors" onClick={() => setActiveLevel(3)}>
                 <div className="text-[11px] font-bold text-indigo-700 uppercase">Sec C (20m)</div>
-                <div className="text-[20px] font-extrabold text-indigo-900 mt-0.5">
+                <div className="text-[22px] font-extrabold text-indigo-900 mt-1">
                   {isSummaryLoading ? '—' : summary.sectionCCount}
                 </div>
               </div>
             </div>
+          </div>
 
-            {/* Questions Table Card */}
-            <div className="card">
-              
-              {/* Card Header with Section Pills & Search */}
-              <div className="card-hdr flex-wrap gap-3">
-                <div className="flex items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setActiveLevel(1)}
-                    className={`btn btn-sm ${
-                      activeLevel === 1 ? 'btn-primary' : 'btn-neu'
-                    } text-xs font-semibold`}
-                  >
-                    Section A ({summary.sectionACount})
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setActiveLevel(2)}
-                    className={`btn btn-sm ${
-                      activeLevel === 2 ? 'btn-primary' : 'btn-neu'
-                    } text-xs font-semibold`}
-                  >
-                    Section B ({summary.sectionBCount})
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setActiveLevel(3)}
-                    className={`btn btn-sm ${
-                      activeLevel === 3 ? 'btn-primary' : 'btn-neu'
-                    } text-xs font-semibold`}
-                  >
-                    Section C ({summary.sectionCCount})
-                  </button>
-                </div>
-
-                <TableSearch
-                  className="w-56"
-                  placeholder="Search questions..."
-                  value={search}
-                  onChange={setSearch}
-                  results={searchResults}
-                  onSelect={(r) => setSearch(r.primary)}
-                />
+          {/* Locked State Warning Banner */}
+          {isLocked && (
+            <div className="bg-emerald-50 border border-emerald-200 rounded-md p-3.5 flex gap-3 text-[12.5px] text-emerald-900 items-start shadow-xs">
+              <div className="mt-0.5 text-emerald-600"><i className="lni lni-lock text-[16px]"></i></div>
+              <div>
+                <strong className="font-semibold text-emerald-950">
+                  {selectedUnit?.courseUnitCode || 'Course Unit'} is locked.
+                </strong>{' '}
+                Question paper was officially verified by the committee. Editing and additions are disabled.
               </div>
-
-              {/* Scrollable Table */}
-              <ScrollTable>
-                <table style={{ fontSize: '11.5px' }}>
-                  <thead>
-                    <tr>
-                      <th style={{ width: 44 }}></th>
-                      <FilterTh
-                        label="TYPE"
-                        opts={['MCQ', 'Descriptive']}
-                        isOpen={openFilter === 'type'}
-                        activeFilter={filters['type'] || []}
-                        onToggle={(e) => { e.stopPropagation(); setOpenFilter(openFilter === 'type' ? null : 'type') }}
-                        onSelect={(vals) => handleFilterSelect('type', vals)}
-                        onClear={() => handleFilterSelect('type', [])}
-                        onClose={() => setOpenFilter(null)}
-                      />
-                      <th>QUESTION STATEMENT</th>
-                      <th>ANSWER KEY</th>
-                      <FilterTh
-                        label="STATUS"
-                        opts={['Verified', 'Draft']}
-                        isOpen={openFilter === 'status'}
-                        activeFilter={filters['status'] || []}
-                        onToggle={(e) => { e.stopPropagation(); setOpenFilter(openFilter === 'status' ? null : 'status') }}
-                        onSelect={(vals) => handleFilterSelect('status', vals)}
-                        onClear={() => handleFilterSelect('status', [])}
-                        onClose={() => setOpenFilter(null)}
-                      />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {isQuestionsLoading ? (
-                      <TableLoadingState colSpan={5} title="Loading section questions…" />
-                    ) : paginatedQuestions.length === 0 ? (
-                      <EmptyState
-                        colSpan={5}
-                        title="No questions found in this section"
-                        subtitle={isLocked ? 'Verified questions may be hidden for regular lecturers.' : 'Click "+ Add Question" above to prepare questions.'}
-                        hasFilters={Boolean(search || filters['status']?.length || filters['type']?.length)}
-                        onClearFilters={() => { setSearch(''); setFilters({}); }}
-                      />
-                    ) : (
-                      paginatedQuestions.map((q) => {
-                        const isMcq = q.questionType === 1
-                        return (
-                          <tr key={q.questionGuid} className="hover:bg-slate-50/60">
-                            <td>
-                              <ActionMenu>
-                                <button
-                                  className="btn btn-neu btn-sm"
-                                  onClick={() => setViewingQuestion(q)}
-                                >
-                                  <i className="lni lni-search-alt" /> View Details
-                                </button>
-                                {!isLocked && !q.isVerified && (
-                                  <button
-                                    className="btn btn-neu btn-sm"
-                                    onClick={() => handleOpenEditModal(q)}
-                                  >
-                                    <i className="lni lni-pencil" /> Edit Question
-                                  </button>
-                                )}
-                              </ActionMenu>
-                            </td>
-                            <td>
-                              {isMcq ? (
-                                <span className="badge badge-purple text-[10px]">MCQ</span>
-                              ) : (
-                                <span className="badge bg-slate-100 text-slate-700 text-[10px] border border-slate-200">
-                                  Descriptive
-                                </span>
-                              )}
-                            </td>
-                            <td>
-                              <div className="font-medium text-slate-900 line-clamp-2 pr-2">
-                                {q.questionText}
-                              </div>
-                            </td>
-                            <td>
-                              <div className="text-slate-600 line-clamp-1 max-w-xs">
-                                {isMcq ? (
-                                  <span className="font-semibold text-emerald-800">
-                                    ✓ {q.answerText}
-                                  </span>
-                                ) : (
-                                  <span className="italic text-slate-500">
-                                    {q.answerText ? q.answerText.slice(0, 40) + '...' : '—'}
-                                  </span>
-                                )}
-                              </div>
-                            </td>
-                            <td>
-                              {q.isVerified ? (
-                                <span className="badge badge-green">✓ Verified</span>
-                              ) : (
-                                <span className="badge badge-amber">Draft</span>
-                              )}
-                            </td>
-                          </tr>
-                        )
-                      })
-                    )}
-                  </tbody>
-                </table>
-              </ScrollTable>
-
-              {/* Pagination */}
-              {filteredQuestions.length > pageSize && (
-                <div className="p-3 border-t border-slate-100">
-                  <Pagination
-                    page={page}
-                    totalPages={totalPages}
-                    totalCount={filteredQuestions.length}
-                    onPageChange={setPage}
-                  />
-                </div>
-              )}
-
             </div>
+          )}
+
+          {/* UG Pattern Reminder Box (commented out per user request)
+          <div className="card p-5">
+            <div className="card-title mb-2">
+              <span className="ctitle-icon"><i className="lni lni-information"></i></span> UG Pattern Reminder
+            </div>
+            <div className="bg-slate-50 border border-slate-200 rounded-md p-3.5 text-[12.5px] text-slate-700 leading-relaxed shadow-inner space-y-1">
+              <div><strong className="text-slate-800">Sec A:</strong> 10 MCQ (2m each) — prepare 20</div>
+              <div><strong className="text-slate-800">Sec B:</strong> Any 4 of 6 (15m each) — prepare 12</div>
+              <div><strong className="text-slate-800">Sec C:</strong> Any 1 of 2 (20m each) — prepare 4</div>
+              <div className="text-slate-500 pt-1 border-t border-slate-200 mt-1">Total: 100 marks (prorated to weightage)</div>
+            </div>
+          </div>
+          */}
+
+          {/* Draft Mode banner (commented out per user request)
+          <div className="bg-amber-50 border border-amber-200 rounded-md p-3.5 flex gap-3 text-[12.5px] text-amber-900 items-start shadow-xs">
+            <div className="mt-0.5 text-amber-600"><i className="lni lni-timer text-[16px]"></i></div>
+            <div>
+              <strong className="font-semibold text-amber-950">Draft Mode:</strong> Add questions to Sections A, B, and C below. Once prepared, the Vetting Committee will verify and sign off.
+            </div>
+          </div>
+          */}
+
+          {/* Questions Table Card - Full Width */}
+          <div className="card w-full">
+              
+              {/* Card Header with Section Pills & Search */}
+              <div className="card-hdr flex-wrap gap-3">
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setActiveLevel(1)}
+                    className={`btn btn-sm ${
+                      activeLevel === 1 ? 'btn-primary' : 'btn-neu'
+                    } text-xs font-semibold`}
+                  >
+                    Section A ({summary.sectionACount})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveLevel(2)}
+                    className={`btn btn-sm ${
+                      activeLevel === 2 ? 'btn-primary' : 'btn-neu'
+                    } text-xs font-semibold`}
+                  >
+                    Section B ({summary.sectionBCount})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveLevel(3)}
+                    className={`btn btn-sm ${
+                      activeLevel === 3 ? 'btn-primary' : 'btn-neu'
+                    } text-xs font-semibold`}
+                  >
+                    Section C ({summary.sectionCCount})
+                  </button>
+                </div>
+
+                <TableSearch
+                  className="w-56"
+                  placeholder="Search questions..."
+                  value={search}
+                  onChange={setSearch}
+                  results={searchResults}
+                  onSelect={(r) => setSearch(r.primary)}
+                />
+              </div>
+
+              {/* Scrollable Table */}
+              <ScrollTable>
+                <table style={{ fontSize: '11.5px' }}>
+                  <thead>
+                    <tr>
+                      <th style={{ width: 44 }}></th>
+                      <FilterTh
+                        label="TYPE"
+                        opts={['MCQ', 'Descriptive']}
+                        isOpen={openFilter === 'type'}
+                        activeFilter={filters['type'] || []}
+                        onToggle={(e) => { e.stopPropagation(); setOpenFilter(openFilter === 'type' ? null : 'type') }}
+                        onSelect={(vals) => handleFilterSelect('type', vals)}
+                        onClear={() => handleFilterSelect('type', [])}
+                        onClose={() => setOpenFilter(null)}
+                      />
+                      <th>QUESTION STATEMENT</th>
+                      <th>ANSWER KEY</th>
+                      <FilterTh
+                        label="STATUS"
+                        opts={['Verified', 'Draft']}
+                        isOpen={openFilter === 'status'}
+                        activeFilter={filters['status'] || []}
+                        onToggle={(e) => { e.stopPropagation(); setOpenFilter(openFilter === 'status' ? null : 'status') }}
+                        onSelect={(vals) => handleFilterSelect('status', vals)}
+                        onClear={() => handleFilterSelect('status', [])}
+                        onClose={() => setOpenFilter(null)}
+                      />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {isQuestionsLoading ? (
+                      <TableLoadingState colSpan={5} title="Loading section questions…" />
+                    ) : paginatedQuestions.length === 0 ? (
+                      <EmptyState
+                        colSpan={5}
+                        title="No questions found in this section"
+                        subtitle={isLocked ? 'Verified questions may be hidden for regular lecturers.' : 'Click "+ Add Question" above to prepare questions.'}
+                        hasFilters={Boolean(search || filters['status']?.length || filters['type']?.length)}
+                        onClearFilters={() => { setSearch(''); setFilters({}); }}
+                      />
+                    ) : (
+                      paginatedQuestions.map((q) => {
+                        const isMcq = q.questionType === 1
+                        return (
+                          <tr key={q.questionGuid} className="hover:bg-slate-50/60">
+                            <td>
+                              <ActionMenu>
+                                <button
+                                  className="btn btn-neu btn-sm"
+                                  onClick={() => setViewingQuestion(q)}
+                                >
+                                  <i className="lni lni-search-alt" /> View Details
+                                </button>
+                                {!isLocked && !q.isVerified && (
+                                  <button
+                                    className="btn btn-neu btn-sm"
+                                    onClick={() => handleOpenEditModal(q)}
+                                  >
+                                    <i className="lni lni-pencil" /> Edit Question
+                                  </button>
+                                )}
+                              </ActionMenu>
+                            </td>
+                            <td>
+                              {isMcq ? (
+                                <span className="badge badge-purple text-[10px]">MCQ</span>
+                              ) : (
+                                <span className="badge bg-slate-100 text-slate-700 text-[10px] border border-slate-200">
+                                  Descriptive
+                                </span>
+                              )}
+                            </td>
+                            <td>
+                              <div className="font-medium text-slate-900 line-clamp-2 pr-2">
+                                {stripHtmlTags(q.questionText)}
+                              </div>
+                            </td>
+                            <td>
+                              <div className="text-slate-600 line-clamp-1 max-w-xs">
+                                {isMcq ? (
+                                  <span className="font-semibold text-emerald-800">
+                                    ✓ {stripHtmlTags(q.answerText)}
+                                  </span>
+                                ) : (
+                                  <span className="italic text-slate-500">
+                                    {stripHtmlTags(q.answerText) ? stripHtmlTags(q.answerText).slice(0, 50) + (stripHtmlTags(q.answerText).length > 50 ? '...' : '') : '—'}
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td>
+                              {q.isVerified ? (
+                                <span className="badge badge-green">✓ Verified</span>
+                              ) : (
+                                <span className="badge badge-amber">Draft</span>
+                              )}
+                            </td>
+                          </tr>
+                        )
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </ScrollTable>
+
+              {/* Pagination */}
+              {filteredQuestions.length > pageSize && (
+                <div className="p-3 border-t border-slate-100">
+                  <Pagination
+                    page={page}
+                    totalPages={totalPages}
+                    totalCount={filteredQuestions.length}
+                    onPageChange={setPage}
+                  />
+                </div>
+              )}
 
           </div>
 

@@ -116,7 +116,7 @@ export function IaStructureViewModal({ row, progName, semName, onClose, onEditCw
                     <div>
                       <div className="text-[12.5px] font-medium text-g500 mb-1">Publish Status</div>
                       <div className="text-[14.5px] text-g900">
-                        {cwSchedule.publishStatus === 1 ? 'Published' : 'Unpublished'}
+                        {cwSchedule.publishStatus === 1 ? 'Publish to student' : 'Not publish to student'}
                       </div>
                     </div>
 
@@ -166,7 +166,7 @@ export function IaStructureViewModal({ row, progName, semName, onClose, onEditCw
                     <div>
                       <div className="text-[12.5px] font-medium text-g500 mb-1">Publish Status</div>
                       <div className="text-[14.5px] text-g900">
-                        {ctSchedule.publishStatus === 1 ? 'Published' : 'Unpublished'}
+                        {ctSchedule.publishStatus === 1 ? 'Publish to student' : 'Not publish to student'}
                       </div>
                     </div>
 
@@ -217,7 +217,7 @@ export function IaStructureViewModal({ row, progName, semName, onClose, onEditCw
                     <div>
                       <div className="text-[12.5px] font-medium text-g500 mb-1">Publish Status</div>
                       <div className="text-[14.5px] text-g900">
-                        {ueSchedule.publishStatus === 1 ? 'Published' : 'Unpublished'}
+                        {ueSchedule.publishStatus === 1 ? 'Publish to student' : 'Not publish to student'}
                       </div>
                     </div>
 

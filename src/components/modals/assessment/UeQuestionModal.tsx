@@ -18,6 +18,15 @@ interface UeQuestionModalProps {
   showToast: (msg: string, type?: string) => void
 }
 
+function sanitizeRichContent(html: string): string {
+  if (!html) return ''
+  return html
+    .replace(/^((?:<p>|<div>|<span>)?)(&amp;#160;|&amp;nbsp;|&#160;|&nbsp;|\s)+/gi, '$1')
+    .replace(/(&amp;#160;|&amp;nbsp;|&#160;|&nbsp;|\s)+(<\/(?:p|div|li|span)>|$)/gi, '$2')
+    .replace(/(<p><br\s*\/?><\/p>|<br\s*\/?>)+$/gi, '')
+    .trim()
+}
+
 export function UeQuestionModal({
   isOpen,
   onClose,
@@ -136,12 +145,12 @@ export function UeQuestionModal({
       category: 5,
       questionType,
       level,
-      questionText: questionText.trim(),
+      questionText: sanitizeRichContent(questionText),
       option1Text: questionType === 1 ? option1Text.trim() : null,
       option2Text: questionType === 1 ? option2Text.trim() : null,
       option3Text: questionType === 1 ? option3Text.trim() : null,
       option4Text: questionType === 1 ? option4Text.trim() : null,
-      answerText: resolvedAnswer,
+      answerText: questionType === 2 ? sanitizeRichContent(resolvedAnswer) : resolvedAnswer,
       universityExamType: ueType,
     }
 
