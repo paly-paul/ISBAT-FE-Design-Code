@@ -607,7 +607,7 @@ export default function AssessmentDashboard() {
 
         {/* Card 4: Resit Registrations */}
         <div
-          onClick={() => router.push(resit ? '/assessment/resit-applications' : '/assessment/bulk-exam-scheduler')}
+          onClick={() => router.push('/assessment/resit-configs')}
           className="stat-card [--b700:var(--green)] [--b400:#34d399] flex flex-col justify-between !p-4 cursor-pointer hover:border-b300 hover:-translate-y-0.5 hover:shadow-xs transition-all duration-200 group min-h-[158px]"
         >
           <div className="flex items-start justify-between">
