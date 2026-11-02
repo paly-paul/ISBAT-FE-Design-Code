@@ -9,7 +9,6 @@ import Icon from '@/components/Icon'
 import { staffLogin, AuthError, MOCK_CREDENTIALS } from '@/lib/auth'
 import { setFlowState, setSessionIdentity } from '@/lib/session'
 import { authErrorMessage, validateStaffId, validatePassword } from '@/lib/errorMessages'
-import SuccessScreen from '@/components/SuccessScreen'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
@@ -23,7 +22,6 @@ export default function StaffLoginPage() {
   const [loading, setLoading] = useState(false)
   const [idError, setIdError] = useState<string | null>(null)
   const [passwordError, setPasswordError] = useState<string | null>(null)
-  const [successState, setSuccessState] = useState<{ displayName?: string; redirect: string } | null>(null)
 
   const disabled = loading || !staffId.trim() || !password
 
@@ -68,25 +66,21 @@ export default function StaffLoginPage() {
           employeeGuid: result.employeeGuid,
           userGuid: result.userGuid,
         })
-        const redirect = await resolvePostLoginTarget(queryClient, result.redirect)
-        setSuccessState({ displayName: result.displayName, redirect })
+        // Straight in, no success screen; replace keeps the login pages out
+        // of history (Back must not return here while signed in).
+        window.location.replace(await resolvePostLoginTarget(queryClient, result.redirect))
       }
+      // Every success path leaves the page, so loading stays on until it does.
     } catch (err) {
+      // An expired password can't sign in at all, so go straight to the
+      // reset flow with the ID filled in rather than showing an error.
+      if (err instanceof AuthError && err.code === 'password_expired') {
+        router.push(`/login/forgot?expired=1&username=${encodeURIComponent(staffId.trim())}`)
+        return
+      }
       setPasswordError(err instanceof AuthError ? authErrorMessage(err.code) : authErrorMessage('unknown'))
-    } finally {
       setLoading(false)
     }
-  }
-
-  if (successState) {
-    return (
-      <PanelA eyebrow="Staff & Faculty" headline="Signed in." centered>
-        <SuccessScreen
-          subtitle={successState.displayName ? `Welcome back, ${successState.displayName}.` : 'Welcome back.'}
-          redirectTo={successState.redirect}
-        />
-      </PanelA>
-    )
   }
 
   return (

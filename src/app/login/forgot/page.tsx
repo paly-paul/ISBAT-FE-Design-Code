@@ -49,12 +49,16 @@ export default function ForgotPage() {
   // otp_max_attempts locks the OTP until a new one is requested.
   const [locked, setLocked] = useState(false)
   const [secondsLeft, setSecondsLeft] = useState(0)
+  // ?expired=1: sent here by login's password_expired, not by choice.
+  const [expired, setExpired] = useState(false)
 
   // Prefilled from the login page's "Forgot password?" link. Read on mount
   // rather than via useSearchParams (static export would need Suspense).
   useEffect(() => {
-    const u = new URLSearchParams(window.location.search).get('username')
+    const params = new URLSearchParams(window.location.search)
+    const u = params.get('username')
     if (u) setUsername(u)
+    if (params.get('expired') === '1') setExpired(true)
   }, [])
 
   useEffect(() => {
@@ -124,7 +128,7 @@ export default function ForgotPage() {
   }
 
   return (
-    <PanelA eyebrow="Reset password" headline="We'll get you back in.">
+    <PanelA eyebrow="Reset password" headline={expired ? 'Your password has expired.' : "We'll get you back in."}>
       <div style={{ marginBottom: 22 }}>
         <Stepper steps={STEPS} current={step} />
       </div>
@@ -139,7 +143,9 @@ export default function ForgotPage() {
       {step === 0 && (
         <form onSubmit={handleRequest}>
           <p style={{ color: 'var(--isb-muted)', fontSize: 13.5, margin: '0 0 18px', lineHeight: 1.55 }}>
-            Enter your username and we&apos;ll email a 6-digit code to the address on your account.
+            {expired
+              ? <>Set a new password to keep signing in. We&apos;ll email a 6-digit code to the address on your account to confirm it&apos;s you.</>
+              : <>Enter your username and we&apos;ll email a 6-digit code to the address on your account.</>}
           </p>
 
           <div className="isb-field">

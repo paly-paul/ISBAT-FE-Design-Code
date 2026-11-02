@@ -85,7 +85,8 @@ function statusPillClass(status: number | null) {
   return 'mp-pill'
 }
 
-const SKILL_BADGE: Record<string, string> = { Approved: 'badge-green', Pending: 'badge-amber', Rejected: 'badge-red' }
+const SKILL_TONE: Record<string, string> = { Approved: 'is-approved', Pending: 'is-pending', Rejected: 'is-rejected' }
+const SKILL_GROUP_LABEL: Record<string, string> = { Pending: 'Pending review' }
 
 function profileErrorMessage(err: unknown) {
   if (err instanceof AuthError && err.code === 'employee_required') return 'Your account isn’t linked to an employee record, so there’s no staff profile to show. Contact HR if this is wrong.'
@@ -127,67 +128,92 @@ function PasswordInput({ id, value, onChange, autoComplete }: { id: string; valu
   )
 }
 
-function Facts({ items }: { items: { label: string; value: string | null; mono?: boolean }[] }) {
-  return (
-    <dl className="mp-facts">
-      {items.map(d => (
-        <div key={d.label} className="mp-fact">
-          <dt>{d.label}</dt>
-          <dd className={d.mono && d.value ? 'font-mono' : undefined}>{d.value || '—'}</dd>
-        </div>
-      ))}
-    </dl>
-  )
+interface Fact { label: string; value: string | null; icon: string }
+
+// "1979-12-10T00:00:00" → "10 December 1979" (read from the string, no timezone shift).
+function fmtDateLong(value: string | null): string | null {
+  if (!value) return null
+  const [y, m, d] = value.slice(0, 10).split('-').map(Number)
+  return y && m && d ? `${d} ${MONTHS_LONG[m - 1]} ${y}` : null
 }
 
 // Only what the banner doesn't already show: name, staff no, role, status,
 // campuses and the contact/account details all live in the banner.
 function ProfileInfo({ p }: { p: MyProfile }) {
-  const personal = [
-    { label: 'Title', value: p.title },
-    { label: 'Date of Birth', value: fmtDate(p.personal.birthDate) },
-    { label: 'Age', value: ageFrom(p.personal.birthDate) },
-    { label: 'Sex', value: p.personal.sexName },
-    { label: 'Marital Status', value: p.personal.maritalStatusName },
-    { label: 'Place of Birth', value: p.personal.placeOfBirth },
+  const birthLong = fmtDateLong(p.personal.birthDate)
+  const age = ageFrom(p.personal.birthDate)
+  const personal: Fact[] = [
+    { label: 'Title', value: p.title, icon: 'lni-user' },
+    { label: 'Sex', value: p.personal.sexName, icon: 'lni-users' },
+    { label: 'Marital Status', value: p.personal.maritalStatusName, icon: 'lni-heart' },
+    { label: 'Place of Birth', value: p.personal.placeOfBirth, icon: 'lni-map-marker' },
   ]
 
-  // Two ID fields on the record; many staff only have one. Show whichever
-  // has a value, and both (labelled apart) only when both are recorded.
+  // Two ID fields on the record; many staff only have one. The first one
+  // with a value is the card's headline number; the other is shown under it
+  // only when both are recorded.
   const { nationalId, natId } = p.documents
-  const identity = [
-    ...(nationalId && natId
-      ? [{ label: 'National ID', value: nationalId, icon: 'lni-postcard', mono: true }, { label: 'NAT ID', value: natId, icon: 'lni-postcard', mono: true }]
-      : [{ label: 'National ID', value: nationalId ?? natId, icon: 'lni-postcard', mono: true }]),
-    { label: 'Nationality', value: p.personal.nationality, icon: 'lni-flag' },
-    { label: 'Country', value: p.personal.countryName, icon: 'lni-world' },
-  ]
+  const primaryId = nationalId ?? natId
+  const secondaryId = nationalId && natId ? natId : null
 
-  const skillCounts = (['Approved', 'Pending', 'Rejected'] as const)
-    .map(status => ({ status, count: p.skills.filter(s => s.approvalStatus === status).length }))
-    .filter(c => c.count > 0)
+  // Status is said once per group, not on every skill. Known statuses in a
+  // fixed order, then anything unexpected under its own name.
+  const statuses = [...new Set(['Approved', 'Pending', 'Rejected', ...p.skills.map(s => s.approvalStatus)])]
+  const skillGroups = statuses
+    .map(status => ({ status, skills: p.skills.filter(s => s.approvalStatus === status) }))
+    .filter(g => g.skills.length > 0)
+
+  // When every skill has the same proficiency, say it once in the subtitle
+  // instead of repeating the same number on every chip.
+  const levels = new Set(p.skills.map(s => s.proficiency))
+  const sharedLevel = levels.size === 1 ? p.skills[0].proficiency : null
 
   return (
     <div className="mp-panel">
-      <div className="g2">
-        <div className="card">
-          <div className="card-hdr"><div className="card-title"><i className="lni lni-user"></i> Personal Information</div><span className="badge badge-grey">Read-only</span></div>
-          <Facts items={personal} />
+      {/* Personal facts on the left; identity drawn as an ID card on the
+          right, in the banner's navy so the tab reads as one piece. */}
+      <div className="card">
+        <div className="card-hdr">
+          <div>
+            <div className="card-title"><i className="lni lni-user"></i> Personal Details</div>
+            <div className="card-sub">As recorded on your staff record</div>
+          </div>
         </div>
-
-        <div className="card">
-          <div className="card-hdr"><div className="card-title"><i className="lni lni-postcard"></i> Identity &amp; Nationality</div><span className="badge badge-grey">Read-only</span></div>
-          <dl className="mp-assign" style={{ gridTemplateColumns: '1fr' }}>
-            {identity.map(a => (
-              <div key={a.label} className="mp-assign-item">
-                <span className="mp-assign-ic" aria-hidden="true"><i className={`lni ${a.icon}`}></i></span>
-                <div>
-                  <dt>{a.label}</dt>
-                  <dd className={a.mono && a.value ? 'font-mono' : undefined} title={a.value ?? undefined}>{a.value || '—'}</dd>
-                </div>
+        <div className="mp-details">
+          <section className="mp-personal" aria-label="Personal">
+            <div className="mp-born">
+              <span className="mp-born-ic" aria-hidden="true"><i className="lni lni-calendar"></i></span>
+              <div className="mp-born-main">
+                <span className="mp-born-lbl">Date of birth</span>
+                <span className="mp-born-val">{birthLong ?? 'Not recorded'}</span>
               </div>
-            ))}
-          </dl>
+              {age && <span className="mp-born-age">{age}</span>}
+            </div>
+            <dl className="mp-traits">
+              {personal.map(f => (
+                <div key={f.label} className="mp-trait">
+                  <dt><i className={`lni ${f.icon}`} aria-hidden="true"></i>{f.label}</dt>
+                  <dd title={f.value ?? undefined}>{f.value || '—'}</dd>
+                </div>
+              ))}
+            </dl>
+          </section>
+
+          <section className="mp-idcard" aria-label="Identity and nationality">
+            <div className="mp-idcard-top">
+              <span><i className="lni lni-postcard" aria-hidden="true"></i> Identity</span>
+              <span className="mp-idcard-chip" aria-hidden="true"></span>
+            </div>
+            <div className="mp-idcard-id">
+              <span className="mp-idcard-lbl">National ID</span>
+              <span className="mp-idcard-num font-mono">{primaryId || '—'}</span>
+              {secondaryId && <span className="mp-idcard-sub">NAT ID <span className="font-mono">{secondaryId}</span></span>}
+            </div>
+            <dl className="mp-idcard-foot">
+              <div><dt><i className="lni lni-flag" aria-hidden="true"></i> Nationality</dt><dd>{p.personal.nationality || '—'}</dd></div>
+              <div><dt><i className="lni lni-world" aria-hidden="true"></i> Country</dt><dd>{p.personal.countryName || '—'}</dd></div>
+            </dl>
+          </section>
         </div>
       </div>
 
@@ -196,14 +222,16 @@ function ProfileInfo({ p }: { p: MyProfile }) {
           <div>
             <div className="card-title"><i className="lni lni-bulb"></i> Skills</div>
             <div className="card-sub">
-              {p.skills.length === 0 ? 'Skills recorded on your staff record, with their approval status' : `${p.skills.length} skill${p.skills.length === 1 ? '' : 's'} on your profile`}
+              {p.skills.length === 0
+                ? 'Skills recorded on your staff record, with their approval status'
+                : <>
+                    {p.skills.length} skill{p.skills.length === 1 ? '' : 's'} on your profile
+                    {sharedLevel != null
+                      ? <> · {p.skills.length === 1 ? 'proficiency' : 'all at proficiency'} level {sharedLevel}</>
+                      : ' · each shows its proficiency level'}
+                  </>}
             </div>
           </div>
-          {skillCounts.length > 0 && (
-            <div className="flex gap-2 flex-wrap">
-              {skillCounts.map(c => <span key={c.status} className={`badge ${SKILL_BADGE[c.status]}`}>{c.count} {c.status}</span>)}
-            </div>
-          )}
         </div>
         {p.skills.length === 0 ? (
           <div className="rpt-empty" style={{ padding: '18px 0 6px' }}>
@@ -211,18 +239,28 @@ function ProfileInfo({ p }: { p: MyProfile }) {
             <div className="rpt-empty-title">No skills recorded yet</div>
           </div>
         ) : (
-          <dl className="mp-assign">
-            {p.skills.map(s => (
-              <div key={s.skillName} className="mp-assign-item">
-                <span className="mp-assign-ic" aria-hidden="true"><i className="lni lni-bulb"></i></span>
-                <div style={{ flex: 1 }}>
-                  <dt>Proficiency {s.proficiency}</dt>
-                  <dd title={s.skillName}>{s.skillName}</dd>
-                </div>
-                <span className={`badge ${SKILL_BADGE[s.approvalStatus] ?? 'badge-grey'}`}>{s.approvalStatus}</span>
-              </div>
-            ))}
-          </dl>
+          <div className="mp-skill-groups">
+            {skillGroups.map(g => {
+              const tone = SKILL_TONE[g.status] ?? 'is-other'
+              return (
+                <section key={g.status} className={`mp-skill-group ${tone}`} aria-label={`${g.status} skills`}>
+                  <h3 className="mp-skill-group-hdr">
+                    <span className="mp-skill-group-dot" aria-hidden="true"></span>
+                    {SKILL_GROUP_LABEL[g.status] ?? g.status}
+                    <span className="mp-skill-group-count">{g.skills.length}</span>
+                  </h3>
+                  <ul className="mp-skills">
+                    {g.skills.map(s => (
+                      <li key={s.skillName} className="mp-skill" title={`${s.skillName} · Proficiency ${s.proficiency} · ${s.approvalStatus}`}>
+                        <span className="mp-skill-name">{s.skillName}</span>
+                        {sharedLevel == null && <span className="mp-skill-lvl" aria-label={`Proficiency ${s.proficiency}`}>Lv {s.proficiency}</span>}
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )
+            })}
+          </div>
         )}
       </div>
 

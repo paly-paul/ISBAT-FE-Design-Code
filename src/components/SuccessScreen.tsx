@@ -2,6 +2,15 @@
 
 import { useEffect } from 'react'
 
+// Animated "done" illustration (graduation cap + drawn check) for the end of
+// a flow, e.g. set-password. Keyframes (ss-pop/ss-ring/ss-check/ss-dot/
+// ss-rise) live in globals.css under "SuccessScreen". Sign-in deliberately
+// skips it and redirects straight away.
+//
+//   <SuccessScreen title="Done" subtitle="…" redirectTo="/login/staff" />
+//
+// redirectTo adds a Continue button and auto-redirects (location.replace)
+// after redirectDelay ms; leave it out for a static confirmation.
 interface Props {
   title?: string
   subtitle: string

@@ -25,11 +25,10 @@ The app is a UI-first design prototype. All data is hard-coded mock data; API ca
 ## Route Architecture
 
 ```
-/                          → redirects to /login
-/login                     → portal selector (Staff vs Student)
-/login/staff               → staff ID + password form
-/login/student             → student ID + password form
-/login/otp                 → OTP verification (shared for both flows)
+/                          → redirects to /login/staff
+/login                     → redirects to /login/staff
+/login/staff               → staff ID + password form (the only login screen)
+/login/otp                 → OTP verification
 /login/forgot              → forgot password flow
 /login/activate            → account activation (new staff)
 /login/expired             → expired session landing
@@ -62,7 +61,6 @@ The app is a UI-first design prototype. All data is hard-coded mock data; API ca
 
 Mock credentials (from `src/lib/auth.ts`):
 - Staff: `AR-2024-0001` / `Admin@1234`, OTP: `123456`
-- Student: `ISB/2024/BSCS/0142` / `Student@1234`, OTP: `123456`
 
 ### Academic module shell
 `src/app/academic/layout.tsx` is a `'use client'` layout that owns the sidebar panel state (`panelOpen`, `collapsedSections`). It renders `<Header>` and `<Sidebar>` and passes state down as props. Navigation inside the module uses `router.push('/academic/' + id)`.
@@ -125,7 +123,6 @@ Three Google Fonts loaded with CSS variables: `--font-serif` (Source Serif 4), `
 
 ## Input Validation (`src/lib/errorMessages.ts`)
 - Staff ID format: `ROLE-YYYY-NNNN` (e.g. `AR-2024-0042`)
-- Student ID format: `ISB/YYYY/PROG/NNNN` (e.g. `ISB/2024/BSCS/0142`)
 - Password: min 8 chars, 1 uppercase, 1 digit, 1 special character
 
 ## Environment Variables
