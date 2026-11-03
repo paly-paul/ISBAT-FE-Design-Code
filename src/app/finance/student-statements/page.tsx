@@ -859,19 +859,18 @@ export default function StudentStatementPage() {
             })()}
 
             {/* ══════════════════════════════════════════════════════════════
-                2–3. OVERVIEW — one Fee clearance card (donut + figures),
+                2–3. OVERVIEW — one Fee clearance card (paid · pending),
                 fee heads full width below. The Ledger view has no charts, so
                 the same figures show as a row of KPI tiles there instead.
                ══════════════════════════════════════════════════════════════ */}
             {(() => {
               const withCharts = viewMode === 'hybrid' || viewMode === 'charts'
-              // Ledger view only: the Finance Dashboard's KPI tiles, three across.
+              // Ledger view only: the Finance Dashboard's KPI tiles, two across.
               const kpiTiles = (
                 <div className="card fd-kpis ss-kpi-panel abd-kpis">
                   {([
                     { tone: 'blue', icon: 'lni-checkmark-circle', label: 'Amount paid', value: paidBy, sub: `${paymentHistory.length} recorded ${paymentHistory.length === 1 ? 'payment' : 'payments'}` },
                     { tone: balanceDueCurrent > 0 ? 'red' : 'green', icon: 'lni-wallet', label: 'Pending fee', value: pendingBy, sub: `${outstandingItems.length} pending ${outstandingItems.length === 1 ? 'due' : 'dues'}` },
-                    { tone: 'amber', icon: 'lni-calculator', label: 'Total amount to pay', value: totalBy, sub: balanceDueCurrent > 0 ? 'Fee clearance pending' : 'Exam clearance eligible' },
                   ]).map(k => (
                     <div key={k.label} className={`fd-kpi fd-kpi-${k.tone}`}>
                       <span className="fd-kpi-top">
@@ -892,24 +891,23 @@ export default function StudentStatementPage() {
               return (
                 <>
                   <div className="ss-overview">
-                    {/* Chart 1: clearance donut — paid / outstanding / future as
-                        separate arcs, with a legend that doubles as the figures. */}
+                    {/* Fee clearance: donut of paid vs pending, beside the two
+                        figures. No total — fee-summary sends no billed amount, and
+                        payments don't land in the currency they were billed in
+                        (UGX paid against USD tuition), so paid + pending per
+                        currency isn't anything a student was billed. */}
                     {(() => {
                       const R = 40
                       const C = 2 * Math.PI * R
                       const segs = [
-                        // Paid / Pending are fee-summary's totalAmountPaid* / toBePaid*.
+                        // fee-summary's totalAmountPaid* / toBePaid* (toBePaid is already the balance).
                         // `value` is the UGX-weighed share for the arcs; `by` is what's shown.
                         { key: 'paid', label: 'Amount Paid', short: 'Paid', sub: `${paymentHistory.length} recorded ${paymentHistory.length === 1 ? 'payment' : 'payments'}`, value: totalPaid, by: paidBy, color: 'var(--green)' },
                         { key: 'outstanding', label: 'Pending Fee', short: 'Pending', sub: balanceDueCurrent > 0 ? `${outstandingItems.length} pending ${outstandingItems.length === 1 ? 'due' : 'dues'}` : 'Nothing overdue', value: currentOutstanding, by: pendingBy, color: 'var(--red)' },
                       ]
-                      const amounts = (p: CurrencyPair) => shownCurrencies.map(c => (
-                        <span key={c} className="ss-eq-line"><span className="ss-eq-cur">{c}</span>{formatMoney(p[c])}</span>
-                      ))
                       // Mixed currencies are only comparable through a rate — say which.
-                      const mixed = shownCurrencies.length > 1
-                      const shareNote = !mixed
-                        ? 'Share of everything assessed so far'
+                      const shareNote = shownCurrencies.length < 2
+                        ? 'Paid so far and still due'
                         : usdRate
                           ? `Shares weighed at 1 USD = UGX ${formatMoney(usdRate)}`
                           : 'Shares count UGX only — no USD rate on file'
@@ -962,40 +960,32 @@ export default function StudentStatementPage() {
                               </div>
                             </div>
 
-                            {/* The figures as the sum they are — paid + pending
-                                = total to pay, per currency. One line on a wide card;
-                                a receipt (operators in the gutter, rule above the total)
-                                on a narrow one. */}
+                            {/* Narrow card: currency columns headed once at the top.
+                                Wide card: the two figures side by side. */}
                             <div className="ss-eq" style={{ '--cur-n': shownCurrencies.length } as React.CSSProperties}>
-                              {/* Narrow card only: currency column heads, so each
-                                  currency's sum reads straight down its column. */}
                               <div className="ss-eq-head" aria-hidden="true">
                                 {shownCurrencies.map(c => <span key={c}>{c}</span>)}
                               </div>
-                              {segs.map((s, i) => (
-                                <Fragment key={s.key}>
-                                  {i > 0 && <span className="ss-eq-op" aria-hidden="true">+</span>}
-                                  <div
-                                    className={`ss-eq-term${hoveredChartSegment === s.key ? ' active' : ''}`}
-                                    onMouseEnter={() => setHoveredChartSegment(s.key)}
-                                    onMouseLeave={() => setHoveredChartSegment(null)}
-                                  >
-                                    <span className="ss-eq-lbl">
-                                      <span className="ss-eq-dot" style={{ background: s.color }} aria-hidden="true"></span>
-                                      {s.label}
-                                      <span className="ss-eq-pct">{pct(s.value)}%</span>
-                                    </span>
-                                    <span className={`ss-eq-amt${s.key === 'outstanding' && balanceDueCurrent > 0 ? ' is-due' : ''}`}>{amounts(s.by)}</span>
-                                    <span className="ss-eq-sub">{s.sub}</span>
-                                  </div>
-                                </Fragment>
+                              {segs.map(s => (
+                                <div
+                                  key={s.key}
+                                  className={`ss-eq-term${hoveredChartSegment === s.key ? ' active' : ''}`}
+                                  onMouseEnter={() => setHoveredChartSegment(s.key)}
+                                  onMouseLeave={() => setHoveredChartSegment(null)}
+                                >
+                                  <span className="ss-eq-lbl">
+                                    <span className="ss-eq-dot" style={{ background: s.color }} aria-hidden="true"></span>
+                                    {s.label}
+                                    <span className="ss-eq-pct">{pct(s.value)}%</span>
+                                  </span>
+                                  <span className={`ss-eq-amt${s.key === 'outstanding' && balanceDueCurrent > 0 ? ' is-due' : ''}`}>
+                                    {shownCurrencies.map(c => (
+                                      <span key={c} className="ss-eq-line"><span className="ss-eq-cur">{c}</span>{formatMoney(s.by[c])}</span>
+                                    ))}
+                                  </span>
+                                  <span className="ss-eq-sub">{s.sub}</span>
+                                </div>
                               ))}
-                              <span className="ss-eq-op" aria-hidden="true">=</span>
-                              <div className="ss-eq-term is-total">
-                                <span className="ss-eq-lbl">Total Amount to Pay</span>
-                                <span className="ss-eq-amt">{amounts(totalBy)}</span>
-                                <span className="ss-eq-sub">{paidPercent}% cleared so far</span>
-                              </div>
                             </div>
                           </div>
                         </div>

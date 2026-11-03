@@ -16919,10 +16919,10 @@ body:has(.drawer-overlay) {
 /* Statement amounts carry two decimals — a touch smaller than the
    dashboard's whole-number figures so they don't crowd the cell. */
 .ss-kpi-panel .fd-kpi-num { font-size: clamp(22px, 10cqi, 30px) }
-/* Three tiles (paid · pending · total), so they stay one row until the
-   shared single-column breakpoint instead of the dashboard's 2×2. */
+/* Two tiles (paid · pending), so they stay one row until the shared
+   single-column breakpoint instead of the dashboard's 2×2. */
 @media (min-width: 521px) {
-  .ss-kpi-panel.abd-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)) }
+  .ss-kpi-panel.abd-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)) }
   .ss-kpi-panel.abd-kpis .fd-kpi:nth-child(n) { border-right: 0; border-bottom: 0 }
   .ss-kpi-panel.abd-kpis .fd-kpi + .fd-kpi { border-left: 1px solid var(--g100) }
 }
@@ -16990,8 +16990,8 @@ body:has(.drawer-overlay) {
    top), every term a subgrid row of it, so UGX and USD each sum straight
    down their own column instead of sitting as a two-line cluster per term. */
 @container (max-width: 899px) {
-  .ss-eq { grid-template-columns: 14px minmax(0, 1fr) repeat(var(--cur-n, 2), auto) }
-  .ss-eq-head, .ss-eq-term { grid-column: 2 / -1; display: grid; grid-template-columns: subgrid; column-gap: 18px }
+  .ss-eq { grid-template-columns: minmax(0, 1fr) repeat(var(--cur-n, 2), auto) }
+  .ss-eq-head, .ss-eq-term { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; column-gap: 18px }
   .ss-eq-head {
     padding: 0 10px 4px; font-size: var(--fs-xs); font-weight: 700; letter-spacing: .08em;
     color: var(--g400); text-transform: uppercase;
