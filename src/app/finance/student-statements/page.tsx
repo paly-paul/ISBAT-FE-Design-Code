@@ -244,8 +244,8 @@ export default function StudentStatementPage() {
 
   // Summary totals — fee-summary reports paid / to-be-paid per currency with
   // no conversion, so each figure is a UGX + USD pair. Until it loads, the
-  // statement rows stand in, grouped the same way. Future payments aren't
-  // part of clearance — they have their own tab.
+  // statement rows stand in, grouped the same way. Future payments aren't in
+  // fee-summary, so they always come from the statement rows.
   const { data: feeSummary } = useStudentFeeSummary(selectedGuid)
 
   const paidBy: CurrencyPair = feeSummary
@@ -254,9 +254,12 @@ export default function StudentStatementPage() {
   const pendingBy: CurrencyPair = feeSummary
     ? { UGX: feeSummary.toBePaidUgx, USD: feeSummary.toBePaidUsd }
     : currencyPair(sumByCurrency(outstandingItems, 'outstanding'))
+  const futureBy = currencyPair(sumByCurrency(futurePayments, 'amountDue'))
+  // Not shown as a figure (it isn't a billed total) — only decides which
+  // currencies the card needs.
   const totalBy: CurrencyPair = {
-    UGX: paidBy.UGX + pendingBy.UGX,
-    USD: paidBy.USD + pendingBy.USD,
+    UGX: paidBy.UGX + pendingBy.UGX + futureBy.UGX,
+    USD: paidBy.USD + pendingBy.USD + futureBy.USD,
   }
   // Currencies the card shows — only the ones with money in them.
   const summaryCurrencies = SUMMARY_CURRENCIES.filter(c => totalBy[c] !== 0)
@@ -277,11 +280,14 @@ export default function StudentStatementPage() {
 
   const totalPaid = inUgx(paidBy)
   const currentOutstanding = inUgx(pendingBy)
+  const totalFuture = inUgx(futureBy)
   // Pending in either currency holds clearance back, whatever the rate.
+  // Future payments aren't due yet, so they don't.
   const balanceDueCurrent = Math.max(pendingBy.UGX, pendingBy.USD)
 
-  // Clearance percentage
-  const totalBilled = (totalPaid + currentOutstanding) || 1
+  // Paid share of the donut (paid · pending · future), so the centre figure
+  // matches the green slice.
+  const totalBilled = (totalPaid + currentOutstanding + totalFuture) || 1
   const paidPercent = Math.min(100, Math.max(0, Math.round((totalPaid / totalBilled) * 100)))
 
   // Opened as /finance/student-statements?studentGuid=… (e.g. Payment
@@ -525,7 +531,7 @@ export default function StudentStatementPage() {
   }, [paymentHistory, outstandingItems])
 
   // Donut chart math
-  const chartTotal = totalPaid + currentOutstanding || 1
+  const chartTotal = totalPaid + currentOutstanding + totalFuture || 1
 
   // Filtered payments by category and search
   const filteredPayments = useMemo(() => {
@@ -865,12 +871,13 @@ export default function StudentStatementPage() {
                ══════════════════════════════════════════════════════════════ */}
             {(() => {
               const withCharts = viewMode === 'hybrid' || viewMode === 'charts'
-              // Ledger view only: the Finance Dashboard's KPI tiles, two across.
+              // Ledger view only: the Finance Dashboard's KPI tiles, three across.
               const kpiTiles = (
                 <div className="card fd-kpis ss-kpi-panel abd-kpis">
                   {([
                     { tone: 'blue', icon: 'lni-checkmark-circle', label: 'Amount paid', value: paidBy, sub: `${paymentHistory.length} recorded ${paymentHistory.length === 1 ? 'payment' : 'payments'}` },
                     { tone: balanceDueCurrent > 0 ? 'red' : 'green', icon: 'lni-wallet', label: 'Pending fee', value: pendingBy, sub: `${outstandingItems.length} pending ${outstandingItems.length === 1 ? 'due' : 'dues'}` },
+                    { tone: 'cyan', icon: 'lni-alarm-clock', label: 'Future payments', value: futureBy, sub: `${futurePayments.length} upcoming ${futurePayments.length === 1 ? 'fee' : 'fees'}` },
                   ]).map(k => (
                     <div key={k.label} className={`fd-kpi fd-kpi-${k.tone}`}>
                       <span className="fd-kpi-top">
@@ -904,6 +911,7 @@ export default function StudentStatementPage() {
                         // `value` is the UGX-weighed share for the arcs; `by` is what's shown.
                         { key: 'paid', label: 'Amount Paid', short: 'Paid', sub: `${paymentHistory.length} recorded ${paymentHistory.length === 1 ? 'payment' : 'payments'}`, value: totalPaid, by: paidBy, color: 'var(--green)' },
                         { key: 'outstanding', label: 'Pending Fee', short: 'Pending', sub: balanceDueCurrent > 0 ? `${outstandingItems.length} pending ${outstandingItems.length === 1 ? 'due' : 'dues'}` : 'Nothing overdue', value: currentOutstanding, by: pendingBy, color: 'var(--red)' },
+                        { key: 'future', label: 'Future Payments', short: 'Future', sub: `${futurePayments.length} upcoming ${futurePayments.length === 1 ? 'fee' : 'fees'}`, value: totalFuture, by: futureBy, color: 'var(--b300)' },
                       ]
                       // Mixed currencies are only comparable through a rate — say which.
                       const shareNote = shownCurrencies.length < 2

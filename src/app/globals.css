@@ -16919,10 +16919,10 @@ body:has(.drawer-overlay) {
 /* Statement amounts carry two decimals — a touch smaller than the
    dashboard's whole-number figures so they don't crowd the cell. */
 .ss-kpi-panel .fd-kpi-num { font-size: clamp(22px, 10cqi, 30px) }
-/* Two tiles (paid · pending), so they stay one row until the shared
-   single-column breakpoint instead of the dashboard's 2×2. */
+/* Three tiles (paid · pending · future), so they stay one row until the
+   shared single-column breakpoint instead of the dashboard's 2×2. */
 @media (min-width: 521px) {
-  .ss-kpi-panel.abd-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)) }
+  .ss-kpi-panel.abd-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)) }
   .ss-kpi-panel.abd-kpis .fd-kpi:nth-child(n) { border-right: 0; border-bottom: 0 }
   .ss-kpi-panel.abd-kpis .fd-kpi + .fd-kpi { border-left: 1px solid var(--g100) }
 }
