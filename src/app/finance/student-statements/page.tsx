@@ -9,7 +9,7 @@ import { TableLoadingState } from '@/components/TableLoadingState'
 import { ActionMenu } from '@/components/ActionMenu'
 import { Toast } from '@/components/Toast'
 import { ViewPaymentReceiptModal } from '@/components/modals/finance/ViewPaymentReceiptModal'
-import { useStudentStatementSearch, useStudentStatement } from '@/hooks/student/useStudentStatement'
+import { useStudentStatementSearch, useStudentStatement, useStudentFeeSummary } from '@/hooks/student/useStudentStatement'
 import { getStudentStatementPdfUrl, type StudentStatementPaymentDto } from '@/lib/api/student/studentStatement'
 import { PAYMENT_CATEGORY_LABELS, type PaymentHistoryListEntry } from '@/lib/api/finance/paymentConsole'
 import { useExchangeRatesByDates, type ExchangeRate } from '@/hooks/finance/useExchangeRates'
@@ -225,16 +225,18 @@ export default function StudentStatementPage() {
   )
 
   // Summary totals
-  // From the statement rows. The fee-summary endpoint reports paid / to-be-paid
-  // per currency (UGX, USD) with no conversion, so it can't feed one total.
-  const totalPaid = paymentHistory.reduce((acc, p) => acc + (p.amount || 0), 0)
-  const currentOutstanding = outstandingItems.reduce((acc, o) => acc + (o.outstanding || 0), 0)
-  // Outstanding is already what's left to pay — subtracting paid again went
-  // negative for anyone who'd paid more than they still owe.
+  const { data: feeSummary } = useStudentFeeSummary(selectedGuid)
+
+  const totalPaid = feeSummary?.amountPaid ?? paymentHistory.reduce((acc, p) => acc + (p.amount || 0), 0)
+  const currentOutstanding = feeSummary?.pendingFee ?? outstandingItems.reduce((acc, o) => acc + (o.outstanding || 0), 0)
+  const totalFuture = futurePayments.reduce((acc, f) => acc + (f.amountDue || 0), 0)
+  // fee-summary's pendingFee is already what's left to pay (total − paid);
+  // subtracting the paid amount again went negative for anyone who'd paid
+  // more than they still owe and showed them as cleared.
   const balanceDueCurrent = currentOutstanding
 
   // Clearance percentage
-  const totalBilled = (totalPaid + currentOutstanding) || 1
+  const totalBilled = (feeSummary?.totalAmountToPay ?? (totalPaid + currentOutstanding)) || 1
   const paidPercent = Math.min(100, Math.max(0, Math.round((totalPaid / totalBilled) * 100)))
 
   // Opened as /finance/student-statements?studentGuid=… (e.g. Payment
@@ -478,7 +480,7 @@ export default function StudentStatementPage() {
   }, [paymentHistory, outstandingItems])
 
   // Donut chart math
-  const chartTotal = totalPaid + currentOutstanding || 1
+  const chartTotal = totalPaid + currentOutstanding + totalFuture || 1
 
   // Filtered payments by category and search
   const filteredPayments = useMemo(() => {
@@ -821,7 +823,8 @@ export default function StudentStatementPage() {
                   {([
                     { tone: 'blue', icon: 'lni-checkmark-circle', label: 'Amount paid', value: totalPaid, sub: `${paymentHistory.length} recorded ${paymentHistory.length === 1 ? 'payment' : 'payments'}` },
                     { tone: currentOutstanding > 0 ? 'red' : 'green', icon: 'lni-wallet', label: 'Pending fee', value: currentOutstanding, sub: `${outstandingItems.length} pending ${outstandingItems.length === 1 ? 'due' : 'dues'}` },
-                    { tone: 'amber', icon: 'lni-calculator', label: 'Total amount to pay', value: totalPaid + currentOutstanding, sub: currentOutstanding > 0 ? 'Fee clearance pending' : 'Exam clearance eligible' },
+                    { tone: 'cyan', icon: 'lni-alarm-clock', label: 'Future payments', value: totalFuture, sub: `${futurePayments.length} upcoming ${futurePayments.length === 1 ? 'fee' : 'fees'}` },
+                    { tone: 'amber', icon: 'lni-calculator', label: 'Total amount to pay', value: feeSummary?.totalAmountToPay ?? totalPaid + currentOutstanding, sub: currentOutstanding > 0 ? 'Fee clearance pending' : 'Exam clearance eligible' },
                   ]).map(k => (
                     <div key={k.label} className={`fd-kpi fd-kpi-${k.tone}`}>
                       <span className="fd-kpi-top">
@@ -844,8 +847,10 @@ export default function StudentStatementPage() {
                       const R = 40
                       const C = 2 * Math.PI * R
                       const segs = [
+                        // Labels follow the fee-summary response: amountPaid, pendingFee.
                         { key: 'paid', label: 'Amount Paid', short: 'Paid', sub: `${paymentHistory.length} recorded ${paymentHistory.length === 1 ? 'payment' : 'payments'}`, value: totalPaid, color: 'var(--green)' },
                         { key: 'outstanding', label: 'Pending Fee', short: 'Pending', sub: currentOutstanding > 0 ? `${outstandingItems.length} pending ${outstandingItems.length === 1 ? 'due' : 'dues'}` : 'Nothing overdue', value: currentOutstanding, color: 'var(--red)' },
+                        { key: 'future', label: 'Future Payments', short: 'Future', sub: `${futurePayments.length} upcoming ${futurePayments.length === 1 ? 'fee' : 'fees'}`, value: totalFuture, color: 'var(--b300)' },
                       ]
                       const drawn = segs.filter(s => s.value > 0)
                       const gap = drawn.length > 1 ? 1.6 : 0
@@ -896,8 +901,8 @@ export default function StudentStatementPage() {
                               </div>
                             </div>
 
-                            {/* The figures as the sum they are — paid + pending
-                                = total to pay. One line on a wide card;
+                            {/* The figures as the sum they are — paid + pending + future
+                                = fee-summary's totalAmountToPay. One line on a wide card;
                                 a receipt (operators in the gutter, rule above the total)
                                 on a narrow one. */}
                             <div className="ss-eq">
@@ -922,7 +927,7 @@ export default function StudentStatementPage() {
                               <span className="ss-eq-op" aria-hidden="true">=</span>
                               <div className="ss-eq-term is-total">
                                 <span className="ss-eq-lbl">Total Amount to Pay</span>
-                                <span className="ss-eq-amt">{formatMoney(totalPaid + currentOutstanding)}</span>
+                                <span className="ss-eq-amt">{formatMoney(feeSummary?.totalAmountToPay ?? totalPaid + currentOutstanding)}</span>
                                 <span className="ss-eq-sub">{paidPercent}% cleared so far</span>
                               </div>
                             </div>

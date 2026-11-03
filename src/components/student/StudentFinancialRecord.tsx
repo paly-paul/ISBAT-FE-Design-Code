@@ -1,7 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { ScrollTable } from '@/components/ScrollTable'
-import { useStudentStatement } from '@/hooks/student/useStudentStatement'
+import { useStudentStatement, useStudentFeeSummary } from '@/hooks/student/useStudentStatement'
 import { getStudentStatementPdfUrl } from '@/lib/api/student/studentStatement'
 import { PAYMENT_CATEGORY_LABELS } from '@/lib/api/finance/paymentConsole'
 
@@ -24,6 +24,7 @@ type Section = 'payments' | 'outstanding' | 'future'
 export function StudentFinancialRecord({ studentGuid }: { studentGuid: string }) {
   const [section, setSection] = useState<Section>('payments')
   const { data: statement, isLoading, isError, error } = useStudentStatement(studentGuid)
+  const { data: feeSummary } = useStudentFeeSummary(studentGuid)
 
   if (isLoading) return <div className="text-g400 text-center" style={{ padding: 24, fontSize: 12.5 }}>Loading financial statement…</div>
   if (isError || !statement) {
@@ -39,8 +40,8 @@ export function StudentFinancialRecord({ studentGuid }: { studentGuid: string })
   const payments = statement.paymentHistory ?? []
   const outstanding = statement.outstandingItems ?? []
   const future = statement.futurePayments ?? []
-  const totalPaid = payments.reduce((sum, p) => sum + (p.amount || 0), 0)
-  const currentOutstanding = outstanding.reduce((sum, o) => sum + (o.outstanding || 0), 0)
+  const totalPaid = feeSummary?.amountPaid ?? payments.reduce((sum, p) => sum + (p.amount || 0), 0)
+  const currentOutstanding = feeSummary?.pendingFee ?? outstanding.reduce((sum, o) => sum + (o.outstanding || 0), 0)
   const totalFuture = future.reduce((sum, f) => sum + (f.amountDue || 0), 0)
   const balanceDue = currentOutstanding - totalPaid
 

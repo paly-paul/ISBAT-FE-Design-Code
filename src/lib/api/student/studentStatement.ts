@@ -153,13 +153,10 @@ function normalizeStatement(raw: RawStatement): StudentStatementDto {
   }
 }
 
-// Paid and to-be-paid are kept per currency — the backend doesn't convert
-// between them, so there's no single total.
 export interface GetStudentFeeSummaryDto {
-  totalAmountPaidUgx: number
-  totalAmountPaidUsd: number
-  toBePaidUgx: number
-  toBePaidUsd: number
+  totalAmountToPay: number
+  amountPaid: number
+  pendingFee: number
 }
 
 export interface StudentStatementSearchFilters {
@@ -216,7 +213,7 @@ export function getStudentStatement(studentGuid: string): Promise<StudentStateme
 }
 
 export function getStudentFeeSummary(studentGuid: string): Promise<GetStudentFeeSummaryDto> {
-  if (MOCK_AUTH) return Promise.resolve({ totalAmountPaidUgx: 422042, totalAmountPaidUsd: 1.2, toBePaidUgx: 0, toBePaidUsd: 749.62 })
+  if (MOCK_AUTH) return Promise.resolve({ totalAmountToPay: 1500, amountPaid: 600, pendingFee: 900 })
   return apiGet<GetStudentFeeSummaryDto>(`/api/v1/students/studentstatement/${studentGuid}/fee-summary`)
 }
 

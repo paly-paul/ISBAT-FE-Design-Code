@@ -16919,13 +16919,6 @@ body:has(.drawer-overlay) {
 /* Statement amounts carry two decimals — a touch smaller than the
    dashboard's whole-number figures so they don't crowd the cell. */
 .ss-kpi-panel .fd-kpi-num { font-size: clamp(22px, 10cqi, 30px) }
-/* Three tiles (paid · pending · total), so they stay one row until the
-   shared single-column breakpoint instead of the dashboard's 2×2. */
-@media (min-width: 521px) {
-  .ss-kpi-panel.abd-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)) }
-  .ss-kpi-panel.abd-kpis .fd-kpi:nth-child(n) { border-right: 0; border-bottom: 0 }
-  .ss-kpi-panel.abd-kpis .fd-kpi + .fd-kpi { border-left: 1px solid var(--g100) }
-}
 .ss-chart .pcx-panel-hdr { margin-bottom: 0 }
 .ss-chart-foot {
   margin-top: auto; padding-top: 14px; border-top: 1px solid var(--g100);
@@ -16951,7 +16944,7 @@ body:has(.drawer-overlay) {
 .ss-donut-val { font-size: 26px; font-weight: 800; letter-spacing: -.02em; line-height: 1; color: var(--g900) }
 .ss-donut-lbl { margin-top: 4px; font-size: var(--fs-xs); font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--g500) }
 
-/* The figures as a sum: paid + pending = total to pay.
+/* The figures as a sum: paid + pending + future = total to pay.
    Default (narrow card) is a receipt — operators in a left gutter, amounts
    right-aligned, a rule above the total. The 720px query lays the same
    terms out as one line, the total last as the result. */
@@ -17039,7 +17032,7 @@ body:has(.drawer-overlay) {
 
 .ss-chart { container-type: inline-size }
 /* Wide card: the sum reads as one line beside the donut —
-   Paid + Pending = Total — the total set on a soft tint as the
+   Paid + Pending + Future = Total — the total set on a soft tint as the
    result. Each term stacks label / amount / note. 900px so four terms of
    "426,472.00"-length amounts fit without clipping. */
 @container (min-width: 900px) {
