@@ -665,6 +665,13 @@ export default function PaymentConsolePage() {
   const totalProgramOutstanding = currentSemesterPayable?.totalProgramOutstanding ?? 0
   const paidPercentage = currentSemesterPayable?.paidPercentage ?? 0
   const remainingPercentage = currentSemesterPayable?.remainingPercentage ?? 0
+  // Same figures for the current semester alone (system default currency).
+  // Amount 0 means the semester has no fee, so there's nothing to show.
+  const semesterAmount = currentSemesterPayable?.currentSemesterAmount ?? 0
+  const semesterOutstanding = currentSemesterPayable?.currentSemesterOutstanding ?? 0
+  const semesterPaidPercentage = currentSemesterPayable?.currentSemesterPaidPercentage ?? 0
+  const semesterRemainingPercentage = currentSemesterPayable?.currentSemesterRemainingPercentage ?? 0
+  const semesterComplete = semesterAmount > 0 && semesterOutstanding <= 0
   // Business rule (2026-09-04, per request): the discount is documented as
   // conditional on "this group is paid in full" (see discountMessage's own
   // wording), but this endpoint always shows it unconditionally — it has no
@@ -1665,6 +1672,20 @@ export default function PaymentConsolePage() {
                       <span className="pcx-figure-lbl">Total outstanding <i className="lni lni-chevron-right" aria-hidden="true"></i></span>
                       <span className="pcx-figure-val text-amber">{fmtAmt(totalProgramOutstanding)}</span>
                     </button>
+                    {semesterAmount > 0 && (
+                      <div className="pcx-figure">
+                        <span className="pcx-figure-lbl">Semester paid</span>
+                        <span className="pcx-figure-val">{semesterPaidPercentage.toFixed(1).replace(/\.0$/, '')}%</span>
+                        <span className="pcx-mini-bar" role="img" aria-label={`${semesterPaidPercentage.toFixed(1)} percent of the current semester paid, ${semesterRemainingPercentage.toFixed(1)} percent remaining`}>
+                          <span style={{ width: `${Math.min(100, Math.max(0, semesterPaidPercentage))}%` }}></span>
+                        </span>
+                        <span className={`pcx-figure-note${semesterComplete ? ' is-done' : ''}`}>
+                          {semesterComplete
+                            ? <><i className="lni lni-checkmark-circle" aria-hidden="true"></i> Semester complete</>
+                            : <>{fmtAmt(semesterOutstanding)} left of {fmtAmt(semesterAmount)}</>}
+                        </span>
+                      </div>
+                    )}
                     <div className="pcx-figure">
                       <span className="pcx-figure-lbl">Programme paid</span>
                       <span className="pcx-figure-val">{paidPercentage.toFixed(1).replace(/\.0$/, '')}%</span>
@@ -2229,11 +2250,25 @@ export default function PaymentConsolePage() {
                 {!receipt && isLedgersLoading && (
                   <div className="card text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>Checking outstanding balance…</div>
                 )}
+                {/* Empty ledgers is either fully settled (the 404, nothing owing
+                    anywhere) or just this semester paid up while later
+                    semesters still owe — the endpoint returns 200 for that. */}
                 {!receipt && !isLedgersLoading && ledgers.length === 0 && (
                   <div className="card text-center" style={{ padding: 24 }}>
                     <div className="pc-receipt-check" style={{ fontSize: 22 }}><i className="lni lni-checkmark-circle"></i></div>
-                    <div className="font-bold text-g700" style={{ fontSize: 13.5 }}>Fully settled</div>
-                    <div className="text-g400 mt-1" style={{ fontSize: 12.5 }}>This application has no outstanding tuition ledgers — there is nothing to bill right now.</div>
+                    {totalProgramOutstanding > 0 ? (
+                      <>
+                        <div className="font-bold text-g700" style={{ fontSize: 13.5 }}>Current semester fully paid</div>
+                        <div className="text-g400 mt-1" style={{ fontSize: 12.5 }}>
+                          Nothing to bill this semester. Later semesters still owe {fmtAmt(totalProgramOutstanding)} — see Total outstanding.
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="font-bold text-g700" style={{ fontSize: 13.5 }}>Fully settled</div>
+                        <div className="text-g400 mt-1" style={{ fontSize: 12.5 }}>This application has no outstanding tuition ledgers — there is nothing to bill right now.</div>
+                      </>
+                    )}
                   </div>
                 )}
 

@@ -233,7 +233,7 @@ export interface PaymentResult {
 }
 
 export const PAYMENT_CATEGORY_LABELS: Record<number, string> = {
-  1: 'Tuition',
+  1: 'Semester Fee',
   2: 'Other',
   3: 'NCHE',
   4: 'Guild',
@@ -422,6 +422,11 @@ export interface CurrentSemesterUpcomingSemester {
 // paidPercentage/remainingPercentage are whole-programme figures (every
 // semester, not just the current one) — the Outstanding Balance card's own
 // per-semester ledgers/totals stay scoped to just `ledgers` above them.
+// currentSemester* (2026-11-03) are the same figures for the current
+// semester alone, in the system default currency. currentSemesterAmount
+// counts fully paid lines too, so it can exceed the sum of `ledgers` (which
+// only lists lines still owing). A paid-up current semester comes back 200
+// with ledgers [] and currentSemesterOutstanding 0.
 export interface CurrentSemesterPayableResult {
   ledgers: CurrentSemesterPayableLedger[]
   upcomingSemesters: CurrentSemesterUpcomingSemester[]
@@ -429,6 +434,10 @@ export interface CurrentSemesterPayableResult {
   totalProgramOutstanding: number
   paidPercentage: number
   remainingPercentage: number
+  currentSemesterAmount: number
+  currentSemesterOutstanding: number
+  currentSemesterPaidPercentage: number
+  currentSemesterRemainingPercentage: number
 }
 
 const EMPTY_CURRENT_SEMESTER_PAYABLE: CurrentSemesterPayableResult = {
@@ -438,6 +447,10 @@ const EMPTY_CURRENT_SEMESTER_PAYABLE: CurrentSemesterPayableResult = {
   totalProgramOutstanding: 0,
   paidPercentage: 0,
   remainingPercentage: 0,
+  currentSemesterAmount: 0,
+  currentSemesterOutstanding: 0,
+  currentSemesterPaidPercentage: 0,
+  currentSemesterRemainingPercentage: 0,
 }
 
 // studentGuid is optional, same reasoning as getOutstandingLedgers' own —
@@ -463,6 +476,10 @@ export function getCurrentSemesterPayable(applicationGuid: string, studentGuid?:
         totalProgramOutstanding: data.totalProgramOutstanding ?? 0,
         paidPercentage: data.paidPercentage ?? 0,
         remainingPercentage: data.remainingPercentage ?? 0,
+        currentSemesterAmount: data.currentSemesterAmount ?? 0,
+        currentSemesterOutstanding: data.currentSemesterOutstanding ?? 0,
+        currentSemesterPaidPercentage: data.currentSemesterPaidPercentage ?? 0,
+        currentSemesterRemainingPercentage: data.currentSemesterRemainingPercentage ?? 0,
       }
     })
     // Same "empty result surfaces as a 404" behavior as getOutstandingLedgers

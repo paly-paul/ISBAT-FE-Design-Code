@@ -1,5 +1,5 @@
 'use client'
-import { Dispatch, SetStateAction, useMemo, useState } from 'react'
+import { Dispatch, SetStateAction, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useMenu } from '@/hooks/users/useMenu'
 import { MenuNode } from '@/lib/api/users/menu'
@@ -141,6 +141,17 @@ export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSection
   const [menuSearch, setMenuSearch] = useState('')
   const { data, isLoading, isError, refetch } = useMenu()
   const menu = data?.menu
+
+  // At ≤900px the panel lies over the page instead of pushing it aside (see
+  // the 900px block in globals.css), so starting open — every module layout
+  // defaults panelOpen to true — covered most of a phone screen on load,
+  // and it stayed over the new page after picking an item. Close it on
+  // arrival and after each navigation there; desktop keeps its default.
+  // Same breakpoint as the CSS.
+  const isOverlayWidth = () => typeof window !== 'undefined' && window.matchMedia('(max-width: 900px)').matches
+  useEffect(() => {
+    if (isOverlayWidth()) setPanelOpen(false)
+  }, [currentPage, setPanelOpen])
 
   // No route-warming effect here on purpose. A prior version fired
   // router.prefetch() for every route in the active module in one tight
@@ -359,6 +370,10 @@ export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSection
   const visibleRailSlots = railSlots.filter(s => s.node)
 
   return (
+    <>
+    {/* ≤900px only (CSS hides it above): dims the page under the open
+        panel, and a tap on it closes the panel. */}
+    {panelOpen && <div className="sb-backdrop" onClick={() => setPanelOpen(false)} aria-hidden="true" />}
     <div className="sidebar">
       <div className="sb-rail bg-bg">
         {visibleRailSlots.map((slot, i) => (
@@ -419,5 +434,6 @@ export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSection
         <i className={`lni ${panelOpen ? 'lni-chevron-left' : 'lni-chevron-right'}`}></i>
       </button>
     </div>
+    </>
   )
 }
