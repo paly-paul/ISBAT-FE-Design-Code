@@ -16556,19 +16556,33 @@ body:has(.drawer-overlay) {
 .pcx-student { padding: 0; overflow: hidden; font-variant-numeric: tabular-nums }
 .pcx-student-top {
   display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
-  gap: 20px 24px; padding: 24px 28px; border-bottom: 1px solid var(--g200);
+  gap: 16px 24px; padding: clamp(16px, 4.5cqi, 24px) clamp(16px, 5cqi, 28px); border-bottom: 1px solid var(--g200);
   background: linear-gradient(180deg, var(--b50) 0%, var(--white) 100%);
+}
+/* Narrow card: the action drops below the identity, so give it the full
+   row instead of leaving it stranded on the left. */
+@container (max-width: 480px) {
+  .pcx-student-top > .btn { width: 100%; justify-content: center }
+}
+/* Below 420px the avatar beside the name squeezed it onto two lines; stack
+   it above instead, centred, so name and programme get the full card width. */
+@container (max-width: 420px) {
+  .pcx-student-id { flex-direction: column; align-items: center; gap: 12px; text-align: center }
+  .pcx-name-row { justify-content: center }
+  .pcx-avatar { width: 44px; height: 44px; border-radius: 12px; font-size: 15px }
 }
 /* Identity grows greedily (999) so, sharing a row, the figures stay at their
    base width on the right; once the figures wrap below they're alone on the
    line and grow to fill it instead of leaving a gap on the right. */
-.pcx-student-id { display: flex; align-items: center; gap: 16px; min-width: 0; flex: 999 1 360px }
+.pcx-student-id { display: flex; align-items: center; gap: clamp(12px, 3.5cqi, 16px); min-width: 0; flex: 999 1 300px }
+/* Avatar and name scale with the card (.pcx-student is the container), so a
+   phone-width card isn't dominated by desktop-sized type. */
 .pcx-avatar {
-  width: 58px; height: 58px; flex: none; border-radius: 16px;
+  width: clamp(44px, 11cqi, 58px); height: clamp(44px, 11cqi, 58px); flex: none; border-radius: clamp(12px, 3cqi, 16px);
   display: grid; place-items: center; color: #fff;
   background: linear-gradient(135deg, var(--b600) 0%, var(--b800) 100%);
   box-shadow: 0 6px 14px rgba(45, 68, 143, .22);
-  font-weight: 700; font-size: 19px; letter-spacing: .03em;
+  font-weight: 700; font-size: clamp(15px, 3.6cqi, 19px); letter-spacing: .03em;
 }
 .pcx-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px }
 .pcx-meta-chip {
@@ -16577,8 +16591,8 @@ body:has(.drawer-overlay) {
 }
 .pcx-meta-chip b { color: var(--g900); font-weight: 600 }
 .pcx-name-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px }
-.pcx-name { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -.015em; color: var(--g900); line-height: 1.2 }
-.pcx-sub { margin: 5px 0 0; font-size: var(--fs-md); color: var(--g700) }
+.pcx-name { margin: 0; font-size: clamp(17px, 4.4cqi, 22px); font-weight: 700; letter-spacing: -.015em; color: var(--g900); line-height: 1.2; overflow-wrap: anywhere }
+.pcx-sub { margin: 5px 0 0; font-size: clamp(var(--fs-base), 3.2cqi, var(--fs-md)); color: var(--g700) }
 .pcx-sub b { color: var(--g900); font-weight: 600 }
 .pcx-pill {
   display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px;
@@ -16610,16 +16624,16 @@ body:has(.drawer-overlay) {
 /* Grid, so facts line up in columns across rows. Columns are sized to
    their content (auto) and space-between spreads the leftover width
    evenly, so the visible gap between neighbours is the same everywhere.
-   The column count (--n = one row, --third = three balanced rows, or a
-   fixed 5/6) is picked by the card's own width. A value
+   The column count (3, a fixed 5/6, or --n = one row) is picked by the
+   card's own width; below a 768px viewport it's 2, below 420px 1. A value
    longer than its column (a long email) wraps rather than being cut. */
 .pcx-student { container-type: inline-size }
 .pcx-facts {
-  margin: 0; padding: 16px 28px 18px; background: var(--white);
-  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 28px;
+  margin: 0; padding: 16px clamp(16px, 5cqi, 28px) 18px; background: var(--white);
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px clamp(16px, 5cqi, 28px);
 }
 @container (min-width: 480px) {
-  .pcx-facts { grid-template-columns: repeat(var(--third, 3), auto); justify-content: space-between }
+  .pcx-facts { grid-template-columns: repeat(3, auto); justify-content: space-between }
 }
 /* 5 / 6 a row on medium cards — fewer left wide empty gaps (always 8–9
    facts, so neither leaves an empty first row). */
@@ -16631,6 +16645,13 @@ body:has(.drawer-overlay) {
 }
 @container (min-width: 1180px) {
   .pcx-facts { grid-template-columns: repeat(var(--n, 9), auto) }
+}
+/* Three columns hold down to 768px; two below that, one below 420px. */
+@media (max-width: 767px) {
+  .pcx-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); justify-content: normal }
+}
+@media (max-width: 419px) {
+  .pcx-facts { grid-template-columns: minmax(0, 1fr) }
 }
 .pcx-facts > div { display: flex; flex-direction: column; gap: 4px; min-width: 0 }
 .pcx-facts dt { font-size: var(--fs-xs); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--g500) }
@@ -16775,7 +16796,6 @@ body:has(.drawer-overlay) {
 }
 
 @media(max-width:640px) {
-  .pcx-student-top, .pcx-facts { padding-left: 16px; padding-right: 16px }
   .pcx-figures { width: 100% }
   .pcx-figure { flex: 1; min-width: 0 }
   .pcx-coverage-grid { grid-template-columns: 1fr 1fr }
@@ -16872,6 +16892,14 @@ body:has(.drawer-overlay) {
 .ss-cell-main { display: block; font-weight: 700; white-space: nowrap }
 .ss-cell-sub { display: block; margin-top: 2px; font-size: var(--fs-xs); color: var(--g500); white-space: nowrap }
 
+/* Ledger breakdown in the payment row: one line per ledger — name, dotted
+   leader, amount — so amounts line up like a receipt. */
+.ss-ledgers { display: flex; flex-direction: column; gap: 4px; min-width: 210px; max-width: 290px; margin: 0; padding: 0; list-style: none; font-size: var(--fs-xs) }
+.ss-ledger-line { display: flex; align-items: center; gap: 7px; line-height: 1.35 }
+.ss-ledger-name { color: var(--g700); font-weight: 600; white-space: nowrap }
+.ss-ledger-lead { flex: 1; min-width: 12px; border-bottom: 1px dotted var(--g300); transform: translateY(3px) }
+.ss-ledger-amt { font-family: var(--font-mono); font-weight: 600; color: var(--g900); white-space: nowrap }
+
 @media (max-width: 640px) {
   .ss-grp-btn { flex-wrap: wrap }
   .ss-grp-total { width: 100%; justify-content: flex-start; margin-left: 42px }
@@ -16883,16 +16911,14 @@ body:has(.drawer-overlay) {
 
 /* Overview: donut card left, KPI tiles 2×2 right — the tiles stretch to the
    donut card's height. Stacks below 900px. */
-.ss-overview { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; margin-bottom: 18px }
+/* One Fee clearance card, full width — it carries the paid / pending /
+   future figures itself, so there are no KPI tiles beside it. */
+.ss-overview { margin-bottom: 18px }
 .ss-overview > .ss-chart { margin-bottom: 0 }
-.ss-overview > .ss-kpi-panel { grid-auto-rows: 1fr; margin-bottom: 0 }
 .fd-kpi-cyan { --tone: var(--cyan); --tone-bg: var(--cyan-bg) }
 /* Statement amounts carry two decimals — a touch smaller than the
    dashboard's whole-number figures so they don't crowd the cell. */
 .ss-kpi-panel .fd-kpi-num { font-size: clamp(22px, 10cqi, 30px) }
-@media (max-width: 900px) {
-  .ss-overview { grid-template-columns: minmax(0, 1fr) }
-}
 .ss-chart .pcx-panel-hdr { margin-bottom: 0 }
 .ss-chart-foot {
   margin-top: auto; padding-top: 14px; border-top: 1px solid var(--g100);
@@ -16905,8 +16931,8 @@ body:has(.drawer-overlay) {
 .ss-status.ok { color: var(--green) }
 .ss-status.due { color: var(--red) }
 
-/* Donut + legend */
-.ss-donut-wrap { display: grid; grid-template-columns: 148px minmax(0, 1fr); align-items: center; gap: 24px }
+/* Donut + the figures beside it */
+.ss-donut-wrap { display: grid; grid-template-columns: 148px minmax(0, 1fr); align-items: center; gap: 28px }
 .ss-donut { position: relative; width: 148px; aspect-ratio: 1 }
 .ss-donut svg { width: 100%; height: 100%; transform: rotate(-90deg); overflow: visible }
 .ss-donut circle { fill: none; stroke-width: 11 }
@@ -16918,19 +16944,31 @@ body:has(.drawer-overlay) {
 .ss-donut-val { font-size: 26px; font-weight: 800; letter-spacing: -.02em; line-height: 1; color: var(--g900) }
 .ss-donut-lbl { margin-top: 4px; font-size: var(--fs-xs); font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--g500) }
 
-.ss-legend { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column }
-.ss-legend-row {
-  display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; align-items: center; gap: 12px;
-  padding: 11px 10px; border-radius: var(--rxs); transition: background var(--tr);
+/* The figures as a sum: paid + pending + future = total to pay.
+   Default (narrow card) is a receipt — operators in a left gutter, amounts
+   right-aligned, a rule above the total. The 720px query lays the same
+   terms out as one line, the total last as the result. */
+.ss-eq { display: grid; grid-template-columns: 14px minmax(0, 1fr); column-gap: 8px; align-items: center; min-width: 0 }
+.ss-eq-op { grid-column: 1; text-align: center; font-family: var(--font-mono); font-size: var(--fs-md); font-weight: 500; color: var(--g400); user-select: none }
+.ss-eq-term {
+  grid-column: 2; display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "lbl amt" "sub amt";
+  column-gap: 12px; row-gap: 2px; padding: 9px 10px; border-radius: var(--rxs); transition: background var(--tr);
 }
-.ss-legend-row + .ss-legend-row { border-top: 1px solid var(--g100) }
-.ss-legend-row.active { background: var(--surface) }
-.ss-legend-dot { width: 10px; height: 10px; border-radius: 3px }
-.ss-legend-txt { display: flex; flex-direction: column; min-width: 0 }
-.ss-legend-name { font-size: var(--fs-base); font-weight: 600; color: var(--g800) }
-.ss-legend-pct { margin-left: 4px; font-size: var(--fs-xs); font-weight: 600; color: var(--g400) }
-.ss-legend-sub { font-size: var(--fs-xs); color: var(--g500) }
-.ss-legend-amt { font-size: var(--fs-base); font-weight: 700; color: var(--g900); white-space: nowrap }
+.ss-eq-term.active { background: var(--surface) }
+.ss-eq-lbl { grid-area: lbl; display: flex; align-items: center; gap: 7px; min-width: 0; font-size: var(--fs-base); font-weight: 600; color: var(--g800) }
+.ss-eq-dot { width: 9px; height: 9px; flex: none; border-radius: 3px }
+.ss-eq-pct { font-size: var(--fs-xs); font-weight: 600; color: var(--g400) }
+.ss-eq-sub { grid-area: sub; padding-left: 16px; font-size: var(--fs-xs); color: var(--g500) }
+.ss-eq-amt {
+  grid-area: amt; align-self: center; font-family: var(--font-mono); font-variant-numeric: tabular-nums;
+  font-size: var(--fs-md); font-weight: 600; color: var(--g900); white-space: nowrap;
+}
+.ss-eq-amt.is-due { color: var(--red) }
+.ss-eq-term.is-total { margin-top: 4px; padding-top: 12px; border-top: 1px solid var(--g200); border-radius: 0 }
+.ss-eq-op:has(+ .is-total) { margin-top: 4px; padding-top: 12px }
+.is-total .ss-eq-lbl { font-weight: 700; color: var(--g900) }
+.is-total .ss-eq-sub { padding-left: 0 }
+.is-total .ss-eq-amt { font-size: 17px; font-weight: 700 }
 
 /* Fee heads */
 /* One row per head, same reading order as the Finance Dashboard's
@@ -16993,14 +17031,39 @@ body:has(.drawer-overlay) {
 }
 
 .ss-chart { container-type: inline-size }
-@container (max-width: 420px) {
-  .ss-donut-wrap { grid-template-columns: 1fr; justify-items: center }
-  .ss-legend { width: 100% }
+/* Wide card: the sum reads as one line beside the donut —
+   Paid + Pending + Future = Total — the total set on a soft tint as the
+   result. Each term stacks label / amount / note. 900px so four terms of
+   "426,472.00"-length amounts fit without clipping. */
+@container (min-width: 900px) {
+  .ss-donut-wrap { gap: 36px }
+  .ss-eq { display: flex; align-items: stretch; gap: 4px }
+  .ss-eq-op { align-self: center; padding: 0 2px; font-family: var(--font-sans); font-size: 22px; font-weight: 300; color: var(--g300) }
+  .ss-eq-op:has(+ .is-total) { margin-top: 0; padding-top: 0 }
+  .ss-eq-term {
+    flex: 1 1 0; min-width: 0; align-content: center; padding: 16px 14px;
+    grid-template-columns: minmax(0, 1fr); grid-template-areas: "lbl" "amt" "sub"; row-gap: 6px;
+  }
+  .ss-eq-amt { padding-left: 16px; font-size: clamp(17px, 2.1cqi, 21px); font-weight: 700; letter-spacing: -.01em }
+  .ss-eq-term.is-total { flex-grow: 1.3; margin-top: 0; padding: 16px 18px; border-top: 0; border-radius: var(--rsm); background: var(--b50) }
+  .is-total .ss-eq-lbl { color: var(--b800) }
+  .is-total .ss-eq-amt { padding-left: 0; font-size: clamp(20px, 2.6cqi, 26px); color: var(--b900) }
+  .is-total .ss-eq-sub { color: var(--b700) }
+}
+/* 550px and narrower: beside the donut the receipt was too squeezed and its
+   labels wrapped, so the donut goes on top and the receipt takes the full
+   card width below it. */
+@container (max-width: 550px) {
+  .ss-donut-wrap { grid-template-columns: 1fr; justify-items: center; gap: 18px }
+  .ss-donut { width: 140px }
+  .ss-donut-val { font-size: 24px }
+  .ss-eq { width: 100% }
+  .ss-eq-term { padding: 8px 6px }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .ss-tab::after { transition: none }
-  .ss-donut-arc, .ss-head-bar > span, .ss-heads-sum-bar > span, .ss-head, .ss-grp-chev, .ss-grp-btn { transition: none }
+  .ss-donut-arc, .ss-head-bar > span, .ss-heads-sum-bar > span, .ss-head, .ss-grp-chev, .ss-grp-btn, .ss-eq-term { transition: none }
 }
 
 /* Rich Text & Question Display Content Formatting */

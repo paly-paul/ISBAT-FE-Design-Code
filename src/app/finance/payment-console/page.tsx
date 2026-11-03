@@ -1679,7 +1679,7 @@ export default function PaymentConsolePage() {
                   picks by the card's own width (container query). */}
               <dl
                 className="pcx-facts"
-                style={{ '--n': facts.length, '--third': Math.ceil(facts.length / 3) } as React.CSSProperties}
+                style={{ '--n': facts.length } as React.CSSProperties}
               >
                 {facts.map(f => (
                   <div key={f.label}>

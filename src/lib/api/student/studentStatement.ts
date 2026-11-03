@@ -43,6 +43,15 @@ export interface StudentStatementHeaderDto {
   admissionTypeLabel: string | null
 }
 
+// The ledgers one payment was allocated to. NCHE / Guild / Advance rows send
+// an empty list. The same ledger can appear more than once.
+export interface StudentStatementPaymentLedgerDto {
+  ledgerGuid: string
+  ledgerCode: string | null
+  ledgerName: string | null
+  amount: number
+}
+
 // category: PaymentHistoryCategory — 1=Tuition, 2=Other, 3=Nche, 4=Guild, 5=Advance,
 // 6=ApplicationFee (the Admission application payment; not yet in erp-docs)
 export interface StudentStatementPaymentDto {
@@ -57,6 +66,7 @@ export interface StudentStatementPaymentDto {
   receipt: string | null
   payType: string | null
   semesterName?: string | null
+  ledgers?: StudentStatementPaymentLedgerDto[] | null
 }
 
 // category: PaymentGroupCategory — 1=Tuition, 2=Other, 3=Nche, 4=Guild.

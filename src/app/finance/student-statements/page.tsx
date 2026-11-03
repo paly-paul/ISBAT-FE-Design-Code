@@ -10,7 +10,7 @@ import { ActionMenu } from '@/components/ActionMenu'
 import { Toast } from '@/components/Toast'
 import { ViewPaymentReceiptModal } from '@/components/modals/finance/ViewPaymentReceiptModal'
 import { useStudentStatementSearch, useStudentStatement, useStudentFeeSummary } from '@/hooks/student/useStudentStatement'
-import { getStudentStatementPdfUrl } from '@/lib/api/student/studentStatement'
+import { getStudentStatementPdfUrl, type StudentStatementPaymentDto } from '@/lib/api/student/studentStatement'
 import { PAYMENT_CATEGORY_LABELS, type PaymentHistoryListEntry } from '@/lib/api/finance/paymentConsole'
 import { useExchangeRatesByDates, type ExchangeRate } from '@/hooks/finance/useExchangeRates'
 import { useActionGuard } from '@/hooks/users/useActionGuard'
@@ -139,6 +139,34 @@ function renderCategoryBadge(category?: number | null) {
   )
 }
 
+// The ledgers a payment was allocated to, one line per ledger with its
+// amount (repeats merged, amounts summed). Rows with no ledgers — NCHE,
+// Guild, Advance, Application Fee — fall back to the category badge.
+function renderLedgerBadges(p: StudentStatementPaymentDto) {
+  const merged = new Map<string, { name: string; amount: number }>()
+  for (const l of p.ledgers ?? []) {
+    const name = l.ledgerName || l.ledgerCode || 'Ledger'
+    const prev = merged.get(l.ledgerGuid)
+    merged.set(l.ledgerGuid, { name, amount: (prev?.amount ?? 0) + (l.amount || 0) })
+  }
+  if (merged.size === 0) return renderCategoryBadge(p.category)
+  return (
+    <ul className="ss-ledgers">
+      {[...merged.entries()].map(([guid, l]) => (
+        <li key={guid} className="ss-ledger-line">
+          <span className="ss-ledger-name">{l.name}</span>
+          <span className="ss-ledger-lead" />
+          <span className="ss-ledger-amt">{formatMoney(l.amount)}</span>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+function ledgerNames(p: StudentStatementPaymentDto) {
+  return (p.ledgers ?? []).map(l => `${l.ledgerName ?? ''} ${l.ledgerCode ?? ''}`).join(' ').toLowerCase()
+}
+
 type DisplayView = 'hybrid' | 'charts' | 'official'
 
 export default function StudentStatementPage() {
@@ -202,7 +230,10 @@ export default function StudentStatementPage() {
   const totalPaid = feeSummary?.amountPaid ?? paymentHistory.reduce((acc, p) => acc + (p.amount || 0), 0)
   const currentOutstanding = feeSummary?.pendingFee ?? outstandingItems.reduce((acc, o) => acc + (o.outstanding || 0), 0)
   const totalFuture = futurePayments.reduce((acc, f) => acc + (f.amountDue || 0), 0)
-  const balanceDueCurrent = currentOutstanding - totalPaid
+  // fee-summary's pendingFee is already what's left to pay (total − paid);
+  // subtracting the paid amount again went negative for anyone who'd paid
+  // more than they still owe and showed them as cleared.
+  const balanceDueCurrent = currentOutstanding
 
   // Clearance percentage
   const totalBilled = (feeSummary?.totalAmountToPay ?? (totalPaid + currentOutstanding)) || 1
@@ -387,7 +418,7 @@ export default function StudentStatementPage() {
           <span className="ss-cell-sub">{p.currencyName || '—'}</span>
         </td>
         <td className="num font-mono font-bold text-g900">{renderUsdCell(p)}</td>
-        <td>{renderCategoryBadge(p.category)}</td>
+        <td>{renderLedgerBadges(p)}</td>
       </tr>
     )
   }
@@ -462,6 +493,7 @@ export default function StudentStatementPage() {
         (p.paymentCode && p.paymentCode.toLowerCase().includes(q)) ||
         (p.payType && p.payType.toLowerCase().includes(q)) ||
         (p.semesterName && p.semesterName.toLowerCase().includes(q)) ||
+        ledgerNames(p).includes(q) ||
         (PAYMENT_CATEGORY_LABELS[p.category] && PAYMENT_CATEGORY_LABELS[p.category].toLowerCase().includes(q))
       return matchCat && matchSearch
     })
@@ -765,7 +797,7 @@ export default function StudentStatementPage() {
                   </div>
                   <dl
                     className="pcx-facts"
-                    style={{ '--n': facts.length, '--third': Math.ceil(facts.length / 3) } as React.CSSProperties}
+                    style={{ '--n': facts.length } as React.CSSProperties}
                   >
                     {facts.map(f => (
                       <div key={f.label}>
@@ -779,24 +811,20 @@ export default function StudentStatementPage() {
             })()}
 
             {/* ══════════════════════════════════════════════════════════════
-                2–3. OVERVIEW — clearance donut on the left, the four KPI
-                tiles as a 2×2 grid on the right (same arrangement as the
-                Finance Dashboard), fee heads full width below. The Ledger
-                view has no charts, so the KPIs stay a single row there.
+                2–3. OVERVIEW — one Fee clearance card (donut + figures),
+                fee heads full width below. The Ledger view has no charts, so
+                the same figures show as a row of KPI tiles there instead.
                ══════════════════════════════════════════════════════════════ */}
             {(() => {
               const withCharts = viewMode === 'hybrid' || viewMode === 'charts'
-              // The Finance Dashboard's KPI panel (.fd-kpi*): 2×2 beside the
-              // donut, four across (.abd-kpis) in the Ledger view.
+              // Ledger view only: the Finance Dashboard's KPI tiles, four across.
               const kpiTiles = (
-                <div className={`card fd-kpis ss-kpi-panel${withCharts ? '' : ' abd-kpis'}`}>
+                <div className="card fd-kpis ss-kpi-panel abd-kpis">
                   {([
-                    { tone: 'blue', icon: 'lni-checkmark-circle', label: 'Total paid', value: totalPaid, sub: `${paymentHistory.length} recorded ${paymentHistory.length === 1 ? 'payment' : 'payments'}` },
-                    { tone: 'amber', icon: 'lni-wallet', label: 'Current outstanding', value: currentOutstanding, sub: `${outstandingItems.length} pending ${outstandingItems.length === 1 ? 'due' : 'dues'}` },
+                    { tone: 'blue', icon: 'lni-checkmark-circle', label: 'Amount paid', value: totalPaid, sub: `${paymentHistory.length} recorded ${paymentHistory.length === 1 ? 'payment' : 'payments'}` },
+                    { tone: currentOutstanding > 0 ? 'red' : 'green', icon: 'lni-wallet', label: 'Pending fee', value: currentOutstanding, sub: `${outstandingItems.length} pending ${outstandingItems.length === 1 ? 'due' : 'dues'}` },
                     { tone: 'cyan', icon: 'lni-alarm-clock', label: 'Future payments', value: totalFuture, sub: `${futurePayments.length} upcoming ${futurePayments.length === 1 ? 'fee' : 'fees'}` },
-                    balanceDueCurrent <= 0
-                      ? { tone: 'green', icon: 'lni-shield', label: 'Net balance due', value: balanceDueCurrent, sub: 'Clearance in good standing' }
-                      : { tone: 'red', icon: 'lni-warning', label: 'Net balance due', value: balanceDueCurrent, sub: 'Pending balance payment' },
+                    { tone: 'amber', icon: 'lni-calculator', label: 'Total amount to pay', value: feeSummary?.totalAmountToPay ?? totalPaid + currentOutstanding, sub: currentOutstanding > 0 ? 'Fee clearance pending' : 'Exam clearance eligible' },
                   ]).map(k => (
                     <div key={k.label} className={`fd-kpi fd-kpi-${k.tone}`}>
                       <span className="fd-kpi-top">
@@ -819,9 +847,10 @@ export default function StudentStatementPage() {
                       const R = 40
                       const C = 2 * Math.PI * R
                       const segs = [
-                        { key: 'paid', label: 'Paid', sub: 'Settled to date', value: totalPaid, color: 'var(--green)' },
-                        { key: 'outstanding', label: 'Outstanding', sub: currentOutstanding > 0 ? 'Due now' : 'Nothing overdue', value: currentOutstanding, color: 'var(--red)' },
-                        { key: 'future', label: 'Future', sub: `${futurePayments.length} upcoming ${futurePayments.length === 1 ? 'fee' : 'fees'}`, value: totalFuture, color: 'var(--b300)' },
+                        // Labels follow the fee-summary response: amountPaid, pendingFee.
+                        { key: 'paid', label: 'Amount Paid', short: 'Paid', sub: `${paymentHistory.length} recorded ${paymentHistory.length === 1 ? 'payment' : 'payments'}`, value: totalPaid, color: 'var(--green)' },
+                        { key: 'outstanding', label: 'Pending Fee', short: 'Pending', sub: currentOutstanding > 0 ? `${outstandingItems.length} pending ${outstandingItems.length === 1 ? 'due' : 'dues'}` : 'Nothing overdue', value: currentOutstanding, color: 'var(--red)' },
+                        { key: 'future', label: 'Future Payments', short: 'Future', sub: `${futurePayments.length} upcoming ${futurePayments.length === 1 ? 'fee' : 'fees'}`, value: totalFuture, color: 'var(--b300)' },
                       ]
                       const drawn = segs.filter(s => s.value > 0)
                       const gap = drawn.length > 1 ? 1.6 : 0
@@ -842,8 +871,9 @@ export default function StudentStatementPage() {
                               <h3 className="pcx-panel-title">Fee clearance</h3>
                               <p className="pcx-panel-sub">Share of everything assessed so far</p>
                             </div>
-                            <span className={`pcx-pill ${paidPercent >= 100 ? 'pcx-pill-green' : 'pcx-pill-amber'}`}>
-                              <span className="pcx-dot" aria-hidden="true"></span>{paidPercent}% cleared
+                            <span className={`pcx-pill ${cleared ? 'pcx-pill-green' : 'pcx-pill-amber'}`}>
+                              <i className={`lni ${cleared ? 'lni-checkmark-circle' : 'lni-warning'}`} aria-hidden="true"></i>
+                              {cleared ? 'Exam clearance eligible' : 'Fee clearance pending'}
                             </span>
                           </div>
 
@@ -866,41 +896,45 @@ export default function StudentStatementPage() {
                               </svg>
                               <div className="ss-donut-center" aria-hidden="true">
                                 <span className="ss-donut-val">{focus ? pct(focus.value) : paidPercent}%</span>
-                                <span className="ss-donut-lbl">{focus ? focus.label : 'Paid'}</span>
+                                {/* One-word label — the full name doesn't fit inside the ring. */}
+                                <span className="ss-donut-lbl">{focus ? focus.short : 'Paid'}</span>
                               </div>
                             </div>
 
-                            <ul className="ss-legend">
-                              {segs.map(s => (
-                                <li
-                                  key={s.key}
-                                  className={`ss-legend-row${hoveredChartSegment === s.key ? ' active' : ''}`}
-                                  onMouseEnter={() => setHoveredChartSegment(s.key)}
-                                  onMouseLeave={() => setHoveredChartSegment(null)}
-                                >
-                                  <span className="ss-legend-dot" style={{ background: s.color }} aria-hidden="true"></span>
-                                  <span className="ss-legend-txt">
-                                    <span className="ss-legend-name">{s.label} <span className="ss-legend-pct">{pct(s.value)}%</span></span>
-                                    <span className="ss-legend-sub">{s.sub}</span>
-                                  </span>
-                                  <span className={`ss-legend-amt${s.key === 'outstanding' && s.value > 0 ? ' text-red' : ''}`}>{formatMoney(s.value)}</span>
-                                </li>
+                            {/* The figures as the sum they are — paid + pending + future
+                                = fee-summary's totalAmountToPay. One line on a wide card;
+                                a receipt (operators in the gutter, rule above the total)
+                                on a narrow one. */}
+                            <div className="ss-eq">
+                              {segs.map((s, i) => (
+                                <Fragment key={s.key}>
+                                  {i > 0 && <span className="ss-eq-op" aria-hidden="true">+</span>}
+                                  <div
+                                    className={`ss-eq-term${hoveredChartSegment === s.key ? ' active' : ''}`}
+                                    onMouseEnter={() => setHoveredChartSegment(s.key)}
+                                    onMouseLeave={() => setHoveredChartSegment(null)}
+                                  >
+                                    <span className="ss-eq-lbl">
+                                      <span className="ss-eq-dot" style={{ background: s.color }} aria-hidden="true"></span>
+                                      {s.label}
+                                      <span className="ss-eq-pct">{pct(s.value)}%</span>
+                                    </span>
+                                    <span className={`ss-eq-amt${s.key === 'outstanding' && s.value > 0 ? ' is-due' : ''}`}>{formatMoney(s.value)}</span>
+                                    <span className="ss-eq-sub">{s.sub}</span>
+                                  </div>
+                                </Fragment>
                               ))}
-                            </ul>
-                          </div>
-
-                          <div className="ss-chart-foot">
-                            <span>Assessed total <b>{formatMoney(chartTotal)}</b></span>
-                            <span className={`ss-status ${cleared ? 'ok' : 'due'}`}>
-                              <i className={`lni ${cleared ? 'lni-checkmark-circle' : 'lni-warning'}`} aria-hidden="true"></i>
-                              {cleared ? 'Exam clearance eligible' : 'Fee clearance pending'}
-                            </span>
+                              <span className="ss-eq-op" aria-hidden="true">=</span>
+                              <div className="ss-eq-term is-total">
+                                <span className="ss-eq-lbl">Total Amount to Pay</span>
+                                <span className="ss-eq-amt">{formatMoney(feeSummary?.totalAmountToPay ?? totalPaid + currentOutstanding)}</span>
+                                <span className="ss-eq-sub">{paidPercent}% cleared so far</span>
+                              </div>
+                            </div>
                           </div>
                         </div>
                       )
                     })()}
-
-                    {kpiTiles}
                   </div>
 
                   {/* Chart 2: one row per fee head — paid share of what that
@@ -926,70 +960,70 @@ export default function StudentStatementPage() {
                     const headsTotal = headsPaid + headsDue
                     const overallPct = pctOf(headsPaid, headsDue)
                     const owingCount = heads.filter(h => h.due > 0).length
-                    return (
-                      <div className="card ss-panel ss-chart ss-heads-card">
-                        <div className="pcx-panel-hdr">
-                          <div>
-                            <h3 className="pcx-panel-title">Fee heads</h3>
-                            <p className="pcx-panel-sub">How much of each fee category is paid</p>
-                          </div>
-                          <span className="pcx-chip">{heads.length} {heads.length === 1 ? 'head' : 'heads'}</span>
-                        </div>
+                    // return (
+                    //   <div className="card ss-panel ss-chart ss-heads-card">
+                    //     <div className="pcx-panel-hdr">
+                    //       <div>
+                    //         <h3 className="pcx-panel-title">Fee heads</h3>
+                    //         <p className="pcx-panel-sub">How much of each fee category is paid</p>
+                    //       </div>
+                    //       <span className="pcx-chip">{heads.length} {heads.length === 1 ? 'head' : 'heads'}</span>
+                    //     </div>
 
-                        {heads.length === 0 ? (
-                          <div className="ss-chart-empty">No fee heads billed yet</div>
-                        ) : (
-                          <>
-                            <div className="ss-heads-sum">
-                              <div className="ss-heads-sum-fig">
-                                <span className="ss-heads-sum-pct">{overallPct}%</span>
-                                <span className="ss-heads-sum-lbl">paid overall</span>
-                              </div>
-                              <div className="ss-heads-sum-body">
-                                <div className="ss-heads-sum-bar" role="progressbar" aria-valuenow={overallPct} aria-valuemin={0} aria-valuemax={100} aria-label="Paid across all fee heads">
-                                  <span style={{ width: `${overallPct}%` }}></span>
-                                </div>
-                                <div className="ss-heads-sum-meta">
-                                  <span><b>{formatMoney(headsPaid)}</b> of {formatMoney(headsTotal)} billed</span>
-                                  <span className={headsDue > 0 ? 'ss-heads-sum-due' : 'ss-heads-sum-ok'}>
-                                    {headsDue > 0
-                                      ? `${formatMoney(headsDue)} outstanding on ${owingCount} ${owingCount === 1 ? 'head' : 'heads'}`
-                                      : 'Every head settled'}
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
+                    //     {heads.length === 0 ? (
+                    //       <div className="ss-chart-empty">No fee heads billed yet</div>
+                    //     ) : (
+                    //       <>
+                    //         <div className="ss-heads-sum">
+                    //           <div className="ss-heads-sum-fig">
+                    //             <span className="ss-heads-sum-pct">{overallPct}%</span>
+                    //             <span className="ss-heads-sum-lbl">paid overall</span>
+                    //           </div>
+                    //           <div className="ss-heads-sum-body">
+                    //             <div className="ss-heads-sum-bar" role="progressbar" aria-valuenow={overallPct} aria-valuemin={0} aria-valuemax={100} aria-label="Paid across all fee heads">
+                    //               <span style={{ width: `${overallPct}%` }}></span>
+                    //             </div>
+                    //             <div className="ss-heads-sum-meta">
+                    //               <span><b>{formatMoney(headsPaid)}</b> of {formatMoney(headsTotal)} billed</span>
+                    //               <span className={headsDue > 0 ? 'ss-heads-sum-due' : 'ss-heads-sum-ok'}>
+                    //                 {headsDue > 0
+                    //                   ? `${formatMoney(headsDue)} outstanding on ${owingCount} ${owingCount === 1 ? 'head' : 'heads'}`
+                    //                   : 'Every head settled'}
+                    //               </span>
+                    //             </div>
+                    //           </div>
+                    //         </div>
 
-                            <ul className="ss-heads">
-                              {heads.map(h => {
-                                const settled = h.due <= 0
-                                const tone = settled ? 'green' : h.paid > 0 ? 'amber' : 'red'
-                                return (
-                                  <li key={h.label} className="ss-head">
-                                    <span className={`ss-head-icon ss-tone-${tone}`} aria-hidden="true"><i className={`lni ${HEAD_ICONS[h.label] ?? 'lni-wallet'}`}></i></span>
-                                    <span className="ss-head-txt">
-                                      <span className="ss-head-name">{h.label}</span>
-                                      <span className="ss-head-sub"><b>{formatMoney(h.paid)}</b> of {formatMoney(h.total)}</span>
-                                    </span>
-                                    <span className="ss-head-bar" role="progressbar" aria-valuenow={h.pct} aria-valuemin={0} aria-valuemax={100} aria-label={`${h.label} paid`}>
-                                      <span className={`ss-tone-${tone}`} style={{ width: `${h.pct}%` }}></span>
-                                    </span>
-                                    <span className={`ss-head-pct ss-tone-${tone}`}>{h.pct}%</span>
-                                    <span className={`ss-head-status ss-tone-${tone}`}>
-                                      {settled ? (
-                                        <><b><i className="lni lni-checkmark-circle" aria-hidden="true"></i> Settled</b><span>Nothing due</span></>
-                                      ) : (
-                                        <><b>{formatMoney(h.due)}</b><span>{h.paid > 0 ? 'still due' : 'not paid yet'}</span></>
-                                      )}
-                                    </span>
-                                  </li>
-                                )
-                              })}
-                            </ul>
-                          </>
-                        )}
-                      </div>
-                    )
+                    //         <ul className="ss-heads">
+                    //           {heads.map(h => {
+                    //             const settled = h.due <= 0
+                    //             const tone = settled ? 'green' : h.paid > 0 ? 'amber' : 'red'
+                    //             return (
+                    //               <li key={h.label} className="ss-head">
+                    //                 <span className={`ss-head-icon ss-tone-${tone}`} aria-hidden="true"><i className={`lni ${HEAD_ICONS[h.label] ?? 'lni-wallet'}`}></i></span>
+                    //                 <span className="ss-head-txt">
+                    //                   <span className="ss-head-name">{h.label}</span>
+                    //                   <span className="ss-head-sub"><b>{formatMoney(h.paid)}</b> of {formatMoney(h.total)}</span>
+                    //                 </span>
+                    //                 <span className="ss-head-bar" role="progressbar" aria-valuenow={h.pct} aria-valuemin={0} aria-valuemax={100} aria-label={`${h.label} paid`}>
+                    //                   <span className={`ss-tone-${tone}`} style={{ width: `${h.pct}%` }}></span>
+                    //                 </span>
+                    //                 <span className={`ss-head-pct ss-tone-${tone}`}>{h.pct}%</span>
+                    //                 <span className={`ss-head-status ss-tone-${tone}`}>
+                    //                   {settled ? (
+                    //                     <><b><i className="lni lni-checkmark-circle" aria-hidden="true"></i> Settled</b><span>Nothing due</span></>
+                    //                   ) : (
+                    //                     <><b>{formatMoney(h.due)}</b><span>{h.paid > 0 ? 'still due' : 'not paid yet'}</span></>
+                    //                   )}
+                    //                 </span>
+                    //               </li>
+                    //             )
+                    //           })}
+                    //         </ul>
+                    //       </>
+                    //     )}
+                    //   </div>
+                    // )
                   })()}
                 </>
               )
@@ -1103,7 +1137,7 @@ export default function StudentStatementPage() {
                           <th>Receipt · Method</th>
                           <th className="num">Amount</th>
                           <th className="num" title="Converted at the exchange rate on the payment date">Amount (USD)</th>
-                          <th>Category</th>
+                          <th>Ledger</th>
                         </tr>
                       </thead>
                       <tbody>
