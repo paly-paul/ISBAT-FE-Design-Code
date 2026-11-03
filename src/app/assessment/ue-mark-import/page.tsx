@@ -1,8 +1,9 @@
 'use client'
 
 import React, { useState, useEffect, useRef, useMemo } from 'react'
-import { ProgramSearchPicker, ProgramPickOption } from '@/components/ProgramSearchPicker'
 import { SearchSelect } from '@/components/SearchSelect'
+import { useProgramDropdown } from '@/hooks/academic/useProgramMaster'
+import type { ProgramDropdownItem } from '@/lib/api/academic/programMaster'
 import { SuccessPopup } from '@/components/modals/shared/SuccessPopup'
 import { Toast } from '@/components/Toast'
 import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
@@ -34,7 +35,7 @@ export default function UeMarkImportPage() {
     }, duration)
   }
 
-  const [program, setProgram] = useState<ProgramPickOption | null>(null)
+  const [program, setProgram] = useState<ProgramDropdownItem | null>(null)
   const [semesterGuid, setSemesterGuid] = useState('')
   const [courseUnitGuid, setCourseUnitGuid] = useState('')
   const [intakeGuid, setIntakeGuid] = useState('')
@@ -53,6 +54,9 @@ export default function UeMarkImportPage() {
   const errorRef = useRef<HTMLDivElement>(null)
 
   // -- Queries --
+  // Lightweight /program-master/dropdown list, not the paged full Programme
+  // Master search the old picker used.
+  const { data: programs, isLoading: isLoadingPrograms } = useProgramDropdown()
   const { data: semesters, isLoading: isLoadingSemesters } = useSemestersForProgram(program?.programGuid || null, !!program)
   const { data: intakes, isLoading: isLoadingIntakes } = useIntakesDropdown()
   const { data: currentIntake } = useCurrentAcademicIntake()
@@ -103,15 +107,9 @@ export default function UeMarkImportPage() {
     }
   }
 
-  const handleProgramSelect = (p: ProgramPickOption) => {
-    setProgram(p)
-    setSemesterGuid('')
-    setCourseUnitGuid('')
-    handleClearFile()
-  }
-
-  const handleProgramClear = () => {
-    setProgram(null)
+  // '' when the selection is cleared.
+  const handleProgramChange = (programGuid: string) => {
+    setProgram(programs?.find(p => p.programGuid === programGuid) ?? null)
     setSemesterGuid('')
     setCourseUnitGuid('')
     handleClearFile()
@@ -276,10 +274,12 @@ export default function UeMarkImportPage() {
 
           <div className="fg mb-0">
             <label className="lbl">Programme <span className="text-red-500">*</span></label>
-            <ProgramSearchPicker
-              selectedLabel={program ? `${program.programCode} — ${program.programName}` : null}
-              onSelect={handleProgramSelect}
-              onClear={handleProgramClear}
+            <SearchSelect
+              options={programs?.map(p => ({ value: p.programGuid, label: `${p.programCode} — ${p.programName}` })) || []}
+              value={program?.programGuid || ''}
+              onChange={handleProgramChange}
+              disabled={isLoadingPrograms}
+              placeholder={isLoadingPrograms ? 'Loading...' : '— Select Programme —'}
             />
           </div>
 

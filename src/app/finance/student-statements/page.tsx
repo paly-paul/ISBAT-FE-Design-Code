@@ -12,7 +12,7 @@ import { ViewPaymentReceiptModal } from '@/components/modals/finance/ViewPayment
 import { useStudentStatementSearch, useStudentStatement, useStudentFeeSummary } from '@/hooks/student/useStudentStatement'
 import { getStudentStatementPdfUrl, type StudentStatementPaymentDto } from '@/lib/api/student/studentStatement'
 import { PAYMENT_CATEGORY_LABELS, type PaymentHistoryListEntry } from '@/lib/api/finance/paymentConsole'
-import { useExchangeRatesByDates, type ExchangeRate } from '@/hooks/finance/useExchangeRates'
+import { useExchangeRatesByDate, useExchangeRatesByDates, type ExchangeRate } from '@/hooks/finance/useExchangeRates'
 import { useActionGuard } from '@/hooks/users/useActionGuard'
 import { semesterLabel } from '@/lib/semesterLabel'
 
@@ -55,17 +55,30 @@ function parseSemesterOrder(name: string): number {
   return year * 10 + sem
 }
 
-function sumByCurrency<T extends { currencyName?: string | null; amount?: number; outstanding?: number; amountDue?: number }>(
+function sumByCurrency<T extends { currencyName?: string | null; currencyCode?: string | null; amount?: number; outstanding?: number; amountDue?: number }>(
   rows: T[],
   field: 'amount' | 'outstanding' | 'amountDue'
 ): { currency: string; total: number }[] {
   const byCurrency = new Map<string, number>()
   for (const r of rows) {
-    const cur = currencyLabel(r.currencyName)
+    const cur = rowCurrency(r)
     const val = (field === 'amount' ? r.amount : field === 'outstanding' ? r.outstanding : r.amountDue) ?? 0
     byCurrency.set(cur, (byCurrency.get(cur) ?? 0) + val)
   }
   return [...byCurrency.entries()].map(([currency, total]) => ({ currency, total }))
+}
+
+// The fee clearance figures, kept apart per currency as fee-summary sends them.
+const SUMMARY_CURRENCIES = ['UGX', 'USD'] as const
+type CurrencyPair = Record<(typeof SUMMARY_CURRENCIES)[number], number>
+function currencyPair(totals: { currency: string; total: number }[]): CurrencyPair {
+  const of = (c: string) => totals.find(t => t.currency === c)?.total ?? 0
+  return { UGX: of('UGX'), USD: of('USD') }
+}
+
+function localToday() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
 // Exchange rates are UGX per one unit of the currency (amountUsh = amount ×
@@ -80,11 +93,16 @@ function isUgx(currencyName?: string | null) {
 
 // Short code for a currency name, so totals group "Uganda Shillings" and the
 // currency-less NCHE/Guild rows together as one UGX figure instead of two.
-const CURRENCY_CODES: Record<string, string> = { 'us dollar': 'USD', 'kenyan shilling': 'KES' }
+const CURRENCY_CODES: Record<string, string> = { 'us dollar': 'USD', 'us dollars': 'USD', 'kenyan shilling': 'KES' }
 function currencyLabel(currencyName?: string | null) {
   if (isUgx(currencyName)) return 'UGX'
   const name = currencyName!.trim()
   return CURRENCY_CODES[name.toLowerCase()] ?? name
+}
+// Outstanding rows carry the code itself (currencyCode: "USD"); use it when
+// it's there, the name lookup otherwise.
+function rowCurrency(r: { currencyName?: string | null; currencyCode?: string | null }) {
+  return r.currencyCode?.trim().toUpperCase() || currencyLabel(r.currencyName)
 }
 
 function toUsd(
@@ -93,7 +111,7 @@ function toUsd(
 ): number | null {
   const usdRate = rates?.find(r => r.currencyCode?.toUpperCase() === 'USD')
   if (usdRate && p.currencyGuid === usdRate.currencyGuid) return p.amount
-  if (p.currencyName?.trim().toLowerCase() === 'us dollar') return p.amount
+  if (currencyLabel(p.currencyName) === 'USD') return p.amount
   if (!usdRate?.exRate) return null
   const ownRate = isUgx(p.currencyName) ? 1 : rates?.find(r => r.currencyGuid === p.currencyGuid)?.exRate
   if (!ownRate) return null
@@ -224,19 +242,46 @@ export default function StudentStatementPage() {
     paymentHistory.length > 0,
   )
 
-  // Summary totals
+  // Summary totals — fee-summary reports paid / to-be-paid per currency with
+  // no conversion, so each figure is a UGX + USD pair. Until it loads, the
+  // statement rows stand in, grouped the same way. Future payments aren't
+  // part of clearance — they have their own tab.
   const { data: feeSummary } = useStudentFeeSummary(selectedGuid)
 
-  const totalPaid = feeSummary?.amountPaid ?? paymentHistory.reduce((acc, p) => acc + (p.amount || 0), 0)
-  const currentOutstanding = feeSummary?.pendingFee ?? outstandingItems.reduce((acc, o) => acc + (o.outstanding || 0), 0)
-  const totalFuture = futurePayments.reduce((acc, f) => acc + (f.amountDue || 0), 0)
-  // fee-summary's pendingFee is already what's left to pay (total − paid);
-  // subtracting the paid amount again went negative for anyone who'd paid
-  // more than they still owe and showed them as cleared.
-  const balanceDueCurrent = currentOutstanding
+  const paidBy: CurrencyPair = feeSummary
+    ? { UGX: feeSummary.totalAmountPaidUgx, USD: feeSummary.totalAmountPaidUsd }
+    : currencyPair(sumByCurrency(paymentHistory, 'amount'))
+  const pendingBy: CurrencyPair = feeSummary
+    ? { UGX: feeSummary.toBePaidUgx, USD: feeSummary.toBePaidUsd }
+    : currencyPair(sumByCurrency(outstandingItems, 'outstanding'))
+  const totalBy: CurrencyPair = {
+    UGX: paidBy.UGX + pendingBy.UGX,
+    USD: paidBy.USD + pendingBy.USD,
+  }
+  // Currencies the card shows — only the ones with money in them.
+  const summaryCurrencies = SUMMARY_CURRENCIES.filter(c => totalBy[c] !== 0)
+  const shownCurrencies = summaryCurrencies.length ? summaryCurrencies : (['UGX'] as const)
+
+  // The donut and the percentages need one unit, so USD is weighed in UGX at
+  // today's rate (or the latest payment-day rate if today's isn't set yet).
+  // Display only — the figures themselves stay in their own currency.
+  const { data: todayRates } = useExchangeRatesByDate(localToday(), !!selectedGuid)
+  const rateBoard = todayRates?.length
+    ? todayRates
+    : ratesByDate.get([...ratesByDate.keys()].sort().pop() ?? '')
+  const usdRate = rateBoard?.find(r => r.currencyCode?.toUpperCase() === 'USD')?.exRate ?? null
+  // No rate at all: count UGX only, or USD only for a USD-only student.
+  const inUgx = (p: CurrencyPair) => usdRate
+    ? p.UGX + p.USD * usdRate
+    : totalBy.UGX !== 0 ? p.UGX : p.USD
+
+  const totalPaid = inUgx(paidBy)
+  const currentOutstanding = inUgx(pendingBy)
+  // Pending in either currency holds clearance back, whatever the rate.
+  const balanceDueCurrent = Math.max(pendingBy.UGX, pendingBy.USD)
 
   // Clearance percentage
-  const totalBilled = (feeSummary?.totalAmountToPay ?? (totalPaid + currentOutstanding)) || 1
+  const totalBilled = (totalPaid + currentOutstanding) || 1
   const paidPercent = Math.min(100, Math.max(0, Math.round((totalPaid / totalBilled) * 100)))
 
   // Opened as /finance/student-statements?studentGuid=… (e.g. Payment
@@ -480,7 +525,7 @@ export default function StudentStatementPage() {
   }, [paymentHistory, outstandingItems])
 
   // Donut chart math
-  const chartTotal = totalPaid + currentOutstanding + totalFuture || 1
+  const chartTotal = totalPaid + currentOutstanding || 1
 
   // Filtered payments by category and search
   const filteredPayments = useMemo(() => {
@@ -555,7 +600,10 @@ export default function StudentStatementPage() {
   const groupedOutstanding = useMemo(() => {
     const map = new Map<string, typeof filteredOutstanding>()
     for (const item of filteredOutstanding) {
-      const sem = item.semesterName?.trim() || header?.semesterName?.trim() || 'General / Unassigned'
+      // No fallback to the student's current semester — NCHE / Guild dues come
+      // with semesterName null, and pinning them to the current one claimed a
+      // semester the response doesn't give.
+      const sem = item.semesterName?.trim() || 'General / Unassigned'
       if (!map.has(sem)) map.set(sem, [])
       map.get(sem)!.push(item)
     }
@@ -573,7 +621,7 @@ export default function StudentStatementPage() {
     })
 
     return groups
-  }, [filteredOutstanding, header?.semesterName])
+  }, [filteredOutstanding])
 
   // Grouped future payments by semester (sorted ascending by year & semester, with currency breakdown)
   const groupedFuture = useMemo(() => {
@@ -817,21 +865,24 @@ export default function StudentStatementPage() {
                ══════════════════════════════════════════════════════════════ */}
             {(() => {
               const withCharts = viewMode === 'hybrid' || viewMode === 'charts'
-              // Ledger view only: the Finance Dashboard's KPI tiles, four across.
+              // Ledger view only: the Finance Dashboard's KPI tiles, three across.
               const kpiTiles = (
                 <div className="card fd-kpis ss-kpi-panel abd-kpis">
                   {([
-                    { tone: 'blue', icon: 'lni-checkmark-circle', label: 'Amount paid', value: totalPaid, sub: `${paymentHistory.length} recorded ${paymentHistory.length === 1 ? 'payment' : 'payments'}` },
-                    { tone: currentOutstanding > 0 ? 'red' : 'green', icon: 'lni-wallet', label: 'Pending fee', value: currentOutstanding, sub: `${outstandingItems.length} pending ${outstandingItems.length === 1 ? 'due' : 'dues'}` },
-                    { tone: 'cyan', icon: 'lni-alarm-clock', label: 'Future payments', value: totalFuture, sub: `${futurePayments.length} upcoming ${futurePayments.length === 1 ? 'fee' : 'fees'}` },
-                    { tone: 'amber', icon: 'lni-calculator', label: 'Total amount to pay', value: feeSummary?.totalAmountToPay ?? totalPaid + currentOutstanding, sub: currentOutstanding > 0 ? 'Fee clearance pending' : 'Exam clearance eligible' },
+                    { tone: 'blue', icon: 'lni-checkmark-circle', label: 'Amount paid', value: paidBy, sub: `${paymentHistory.length} recorded ${paymentHistory.length === 1 ? 'payment' : 'payments'}` },
+                    { tone: balanceDueCurrent > 0 ? 'red' : 'green', icon: 'lni-wallet', label: 'Pending fee', value: pendingBy, sub: `${outstandingItems.length} pending ${outstandingItems.length === 1 ? 'due' : 'dues'}` },
+                    { tone: 'amber', icon: 'lni-calculator', label: 'Total amount to pay', value: totalBy, sub: balanceDueCurrent > 0 ? 'Fee clearance pending' : 'Exam clearance eligible' },
                   ]).map(k => (
                     <div key={k.label} className={`fd-kpi fd-kpi-${k.tone}`}>
                       <span className="fd-kpi-top">
                         <span className="fd-kpi-ic" aria-hidden="true"><i className={`lni ${k.icon}`}></i></span>
                         <span className="fd-kpi-lbl">{k.label}</span>
                       </span>
-                      <span className="fd-kpi-num">{formatMoney(k.value)}</span>
+                      <span className="fd-kpi-num">
+                        {shownCurrencies.map(c => (
+                          <span key={c} className="ss-kpi-line"><span className="fd-cur">{c}</span> {formatMoney(k.value[c])}</span>
+                        ))}
+                      </span>
                       <span className="fd-kpi-foot">{k.sub}</span>
                     </div>
                   ))}
@@ -847,11 +898,21 @@ export default function StudentStatementPage() {
                       const R = 40
                       const C = 2 * Math.PI * R
                       const segs = [
-                        // Labels follow the fee-summary response: amountPaid, pendingFee.
-                        { key: 'paid', label: 'Amount Paid', short: 'Paid', sub: `${paymentHistory.length} recorded ${paymentHistory.length === 1 ? 'payment' : 'payments'}`, value: totalPaid, color: 'var(--green)' },
-                        { key: 'outstanding', label: 'Pending Fee', short: 'Pending', sub: currentOutstanding > 0 ? `${outstandingItems.length} pending ${outstandingItems.length === 1 ? 'due' : 'dues'}` : 'Nothing overdue', value: currentOutstanding, color: 'var(--red)' },
-                        { key: 'future', label: 'Future Payments', short: 'Future', sub: `${futurePayments.length} upcoming ${futurePayments.length === 1 ? 'fee' : 'fees'}`, value: totalFuture, color: 'var(--b300)' },
+                        // Paid / Pending are fee-summary's totalAmountPaid* / toBePaid*.
+                        // `value` is the UGX-weighed share for the arcs; `by` is what's shown.
+                        { key: 'paid', label: 'Amount Paid', short: 'Paid', sub: `${paymentHistory.length} recorded ${paymentHistory.length === 1 ? 'payment' : 'payments'}`, value: totalPaid, by: paidBy, color: 'var(--green)' },
+                        { key: 'outstanding', label: 'Pending Fee', short: 'Pending', sub: balanceDueCurrent > 0 ? `${outstandingItems.length} pending ${outstandingItems.length === 1 ? 'due' : 'dues'}` : 'Nothing overdue', value: currentOutstanding, by: pendingBy, color: 'var(--red)' },
                       ]
+                      const amounts = (p: CurrencyPair) => shownCurrencies.map(c => (
+                        <span key={c} className="ss-eq-line"><span className="ss-eq-cur">{c}</span>{formatMoney(p[c])}</span>
+                      ))
+                      // Mixed currencies are only comparable through a rate — say which.
+                      const mixed = shownCurrencies.length > 1
+                      const shareNote = !mixed
+                        ? 'Share of everything assessed so far'
+                        : usdRate
+                          ? `Shares weighed at 1 USD = UGX ${formatMoney(usdRate)}`
+                          : 'Shares count UGX only — no USD rate on file'
                       const drawn = segs.filter(s => s.value > 0)
                       const gap = drawn.length > 1 ? 1.6 : 0
                       let start = 0
@@ -869,7 +930,7 @@ export default function StudentStatementPage() {
                           <div className="pcx-panel-hdr">
                             <div>
                               <h3 className="pcx-panel-title">Fee clearance</h3>
-                              <p className="pcx-panel-sub">Share of everything assessed so far</p>
+                              <p className="pcx-panel-sub">{shareNote}</p>
                             </div>
                             <span className={`pcx-pill ${cleared ? 'pcx-pill-green' : 'pcx-pill-amber'}`}>
                               <i className={`lni ${cleared ? 'lni-checkmark-circle' : 'lni-warning'}`} aria-hidden="true"></i>
@@ -901,11 +962,16 @@ export default function StudentStatementPage() {
                               </div>
                             </div>
 
-                            {/* The figures as the sum they are — paid + pending + future
-                                = fee-summary's totalAmountToPay. One line on a wide card;
+                            {/* The figures as the sum they are — paid + pending
+                                = total to pay, per currency. One line on a wide card;
                                 a receipt (operators in the gutter, rule above the total)
                                 on a narrow one. */}
-                            <div className="ss-eq">
+                            <div className="ss-eq" style={{ '--cur-n': shownCurrencies.length } as React.CSSProperties}>
+                              {/* Narrow card only: currency column heads, so each
+                                  currency's sum reads straight down its column. */}
+                              <div className="ss-eq-head" aria-hidden="true">
+                                {shownCurrencies.map(c => <span key={c}>{c}</span>)}
+                              </div>
                               {segs.map((s, i) => (
                                 <Fragment key={s.key}>
                                   {i > 0 && <span className="ss-eq-op" aria-hidden="true">+</span>}
@@ -919,7 +985,7 @@ export default function StudentStatementPage() {
                                       {s.label}
                                       <span className="ss-eq-pct">{pct(s.value)}%</span>
                                     </span>
-                                    <span className={`ss-eq-amt${s.key === 'outstanding' && s.value > 0 ? ' is-due' : ''}`}>{formatMoney(s.value)}</span>
+                                    <span className={`ss-eq-amt${s.key === 'outstanding' && balanceDueCurrent > 0 ? ' is-due' : ''}`}>{amounts(s.by)}</span>
                                     <span className="ss-eq-sub">{s.sub}</span>
                                   </div>
                                 </Fragment>
@@ -927,7 +993,7 @@ export default function StudentStatementPage() {
                               <span className="ss-eq-op" aria-hidden="true">=</span>
                               <div className="ss-eq-term is-total">
                                 <span className="ss-eq-lbl">Total Amount to Pay</span>
-                                <span className="ss-eq-amt">{formatMoney(feeSummary?.totalAmountToPay ?? totalPaid + currentOutstanding)}</span>
+                                <span className="ss-eq-amt">{amounts(totalBy)}</span>
                                 <span className="ss-eq-sub">{paidPercent}% cleared so far</span>
                               </div>
                             </div>
@@ -1229,13 +1295,14 @@ export default function StudentStatementPage() {
                                 <tr key={o.ledgerGuid || `${groupIdx}-${idx}`}>
                                   <td className="text-center text-g500">{runningNo(groupedOutstanding, groupIdx, idx)}</td>
                                   <td className="font-bold text-g900">{o.description || 'Fee Assessment'}</td>
-                                  <td className="text-g700">{semesterLabel(o.semesterName || header?.semesterName) || '—'}</td>
+                                  <td className="text-g700">{semesterLabel(o.semesterName) || '—'}</td>
                                   <td>{renderCategoryBadge(o.category)}</td>
                                   <td className="num font-mono font-bold text-red">
                                     {formatMoney(o.outstanding)}
                                   </td>
                                   <td>
-                                    <span className="badge badge-grey">{o.currencyName || '—'}</span>
+                                    {/* Same code the totals file it under — a null currency is UGX. */}
+                                    <span className="badge badge-grey">{rowCurrency(o)}</span>
                                   </td>
                                 </tr>
                               ))}
@@ -1247,13 +1314,13 @@ export default function StudentStatementPage() {
                             <tr key={o.ledgerGuid || idx}>
                               <td className="text-center text-g500">{idx + 1}</td>
                               <td className="font-bold text-g900">{o.description || 'Fee Assessment'}</td>
-                              <td className="text-g700">{semesterLabel(o.semesterName || header?.semesterName) || '—'}</td>
+                              <td className="text-g700">{semesterLabel(o.semesterName) || '—'}</td>
                               <td>{renderCategoryBadge(o.category)}</td>
                               <td className="num font-mono font-bold text-red">
                                 {formatMoney(o.outstanding)}
                               </td>
                               <td>
-                                <span className="badge badge-grey">{o.currencyName || '—'}</span>
+                                <span className="badge badge-grey">{rowCurrency(o)}</span>
                               </td>
                             </tr>
                           ))
@@ -1364,7 +1431,7 @@ export default function StudentStatementPage() {
                       <span className="font-semibold text-g700">Total Current Outstanding:</span>
                       <span className="font-mono font-bold text-red">
                         {sumByCurrency(filteredOutstanding, 'outstanding')
-                          .map(c => `${c.currency} ${c.total.toLocaleString()}`)
+                          .map(c => formatMoney(c.total, c.currency))
                           .join(' • ') || '0.00'}
                       </span>
                     </div>
