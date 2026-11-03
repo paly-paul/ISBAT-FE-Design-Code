@@ -10,7 +10,7 @@ import { usePagination } from '@/hooks/usePagination'
 import { ResitConfigFormModal } from './_components/ResitConfigFormModal'
 import { ResitConfigViewModal } from './_components/ResitConfigViewModal'
 import { useResitConfigs, useDeleteResitConfig } from '@/hooks/assessment/useResitConfigs'
-import { useIntakes } from '@/hooks/academic/useIntakes'
+import { useIntakesDropdown } from '@/hooks/academic/useIntakes'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const FETCH_SIZE = 12000
@@ -29,7 +29,7 @@ export default function ResitConfigsPage() {
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
   const [filterIntake, setFilterIntake] = useState('')
 
-  const { data: intakes } = useIntakes()
+  const { data: intakes } = useIntakesDropdown()
   const { data, isLoading: loading } = useResitConfigs(1, FETCH_SIZE, filterIntake)
   const deleteMut = useDeleteResitConfig()
 

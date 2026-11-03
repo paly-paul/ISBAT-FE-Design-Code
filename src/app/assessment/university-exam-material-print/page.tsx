@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { SearchSelect } from '@/components/SearchSelect'
 import { Toast } from '@/components/Toast'
-import { useCurrentAcademicIntake, useIntakes } from '@/hooks/academic/useIntakes'
+import { useCurrentAcademicIntake, useIntakesDropdown } from '@/hooks/academic/useIntakes'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import {
   useDownloadUeBookletPdf, useDownloadUeQuestionTheoryWord, usePrintUeBooklet,
@@ -66,7 +66,7 @@ export default function UniversityExamMaterialPrintPage() {
   }
 
   const { data: currentIntake, isLoading: currentIntakeLoading } = useCurrentAcademicIntake()
-  const { data: allIntakes, isLoading: allIntakesLoading } = useIntakes()
+  const { data: allIntakes, isLoading: allIntakesLoading } = useIntakesDropdown()
   const intakeLoading = currentIntakeLoading || allIntakesLoading
 
   const intakeOptions = useMemo(() => {

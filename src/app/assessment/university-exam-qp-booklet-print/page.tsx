@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react'
 import { SearchSelect } from '@/components/SearchSelect'
 import { Toast } from '@/components/Toast'
-import { useCurrentAcademicIntake, useIntakes, useIntakesDropdown } from '@/hooks/academic/useIntakes'
+import { useCurrentAcademicIntake, useIntakesDropdown } from '@/hooks/academic/useIntakes'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import {
   useDownloadUeBookletPdf,
@@ -84,12 +84,9 @@ export default function UniversityExamQpBookletPrintPage() {
   // Silent Intake Resolution per specification: no intake dropdown rendered
   const { data: currentIntake } = useCurrentAcademicIntake()
   const { data: dropdownIntakes } = useIntakesDropdown()
-  const { data: allIntakes } = useIntakes()
   const intakeGuid = currentIntake?.intakeGuid
     || (dropdownIntakes ?? []).find(i => i.currentIntake)?.intakeGuid
     || (dropdownIntakes && dropdownIntakes.length > 0 ? dropdownIntakes[0].intakeGuid : '')
-    || (allIntakes ?? []).find(i => i.currentIntake)?.intakeGuid
-    || (allIntakes && allIntakes.length > 0 ? allIntakes[0].intakeGuid : '')
 
   // Dropdown Queries
   const { data: programs, isLoading: programsLoading } = useUeMaterialPrintPrograms()

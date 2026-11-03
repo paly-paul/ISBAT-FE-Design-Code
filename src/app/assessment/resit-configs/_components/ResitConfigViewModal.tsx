@@ -1,5 +1,5 @@
 import { useResitConfig } from '@/hooks/assessment/useResitConfigs'
-import { useIntakes } from '@/hooks/academic/useIntakes'
+import { useIntakesDropdown } from '@/hooks/academic/useIntakes'
 
 interface ResitConfigViewModalProps {
   isOpen: boolean
@@ -10,7 +10,7 @@ interface ResitConfigViewModalProps {
 
 export function ResitConfigViewModal({ isOpen, onClose, onEdit, viewingGuid }: ResitConfigViewModalProps) {
   const { data, isLoading } = useResitConfig(viewingGuid, isOpen)
-  const { data: intakes } = useIntakes()
+  const { data: intakes } = useIntakesDropdown()
 
   if (!isOpen) return null
 

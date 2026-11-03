@@ -9,7 +9,7 @@ import { ActionMenu } from '@/components/ActionMenu'
 import { SuccessPopup } from '@/components/modals/shared/SuccessPopup'
 import { SingleQuestionModal } from '@/components/modals/assessment/SingleQuestionModal'
 import { RichTextDisplay, stripHtmlTags } from '@/components/RichTextEditor'
-import { useIntakes, useCurrentAcademicIntake } from '@/hooks/academic/useIntakes'
+import { useIntakesDropdown, useCurrentAcademicIntake } from '@/hooks/academic/useIntakes'
 import { useEmployees } from '@/hooks/employee/useEmployees'
 import { EmployeeListItem } from '@/lib/api/employee/employee'
 import { getSessionIdentity, getLoggedInUserGuid } from '@/lib/session'
@@ -94,7 +94,7 @@ export default function QuestionBankUploadPage() {
   const errorRef = useRef<HTMLDivElement>(null)
 
   // ── Global Queries ──────────────────────────────────────────────────────────
-  const { data: intakes, isLoading: isLoadingIntakes } = useIntakes()
+  const { data: intakes, isLoading: isLoadingIntakes } = useIntakesDropdown()
   const { data: currentIntake } = useCurrentAcademicIntake()
   const { data: employeesData } = useEmployees()
 
