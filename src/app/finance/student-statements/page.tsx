@@ -19,7 +19,7 @@ import { semesterLabel } from '@/lib/semesterLabel'
 // Category options for standard SearchSelect dropdown
 const CATEGORY_OPTIONS = [
   { value: 'all', label: 'All Categories' },
-  { value: '1', label: 'Tuition Fee' },
+  { value: '1', label: 'Semester Fee' },
   { value: '3', label: 'NCHE Fee' },
   { value: '4', label: 'Guild Fee' },
   { value: '5', label: 'Advance Deposit' },
@@ -133,8 +133,8 @@ function getCategoryBadge(category?: number | null) {
       return { badge: 'badge-green', label: 'NCHE' }
     case 4: // Guild
       return { badge: 'badge-amber', label: 'Guild' }
-    case 1: // Tuition
-      return { badge: 'badge-blue', label: 'Tuition' }
+    case 1: // Semester Fee (formerly "Tuition")
+      return { badge: 'badge-blue', label: PAYMENT_CATEGORY_LABELS[1] }
     case 5: // Advance Deposit
       return { badge: 'badge-purple', label: 'Advance Deposit' }
     case 6: // Application Fee
@@ -350,7 +350,7 @@ export default function StudentStatementPage() {
       studentNo: header?.studentNum || header?.studentRegNo || null,
       studentName: header?.studentName || null,
       programName: header?.programName || null,
-      feeType: (p.category != null ? PAYMENT_CATEGORY_LABELS[p.category] : null) || 'Tuition Fee',
+      feeType: (p.category != null ? PAYMENT_CATEGORY_LABELS[p.category] : null) || 'Semester Fee',
       amount: p.amount || 0,
       currencyCode: p.currencyName || 'UGX',
       ugxValue: p.amount || 0,
@@ -1005,7 +1005,7 @@ export default function StudentStatementPage() {
                       head has billed so far. */}
                   {(() => {
                     const HEAD_ICONS: Record<string, string> = {
-                      Tuition: 'lni-graduation', NCHE: 'lni-certificate', Guild: 'lni-users',
+                      'Semester Fee': 'lni-graduation', NCHE: 'lni-certificate', Guild: 'lni-users',
                       Advance: 'lni-coin', 'Application Fee': 'lni-files',
                     }
                     // One decimal, and never 100% while anything is still owed

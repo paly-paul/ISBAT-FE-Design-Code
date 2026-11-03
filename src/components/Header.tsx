@@ -88,23 +88,20 @@ export function Header({ panelOpen, setPanelOpen, profileOpen, setProfileOpen, p
   return (
     <header className="hdr">
       <div className="hdr-brand bg-bg">
-        {/* Logo → the app's landing page. Header is shared across every
-            module layout (Academic, Finance, Employee, ...), so there's no
-            single "current module's dashboard" to send this to — Academic's
-            dashboard is the closest thing this app has to a home screen
-            (acad-dashboard is the first route in the route list, and every
-            module layout's own activeRail defaults to itself rather than
-            Academic, so nothing else is a safer universal default). */}
-        <button className="hdr-badge" onClick={() => router.push('/academic/acad-dashboard')} aria-label="Go to dashboard" title="ISBAT ERP — Dashboard">IU</button>
         <button className="hdr-menu-btn" onClick={() => setPanelOpen(p => !p)} aria-label="Toggle menu">
           <i className={`lni ${panelOpen ? 'lni-close' : 'lni-menu'}`}></i>
         </button>
       </div>
       <div className="hdr-body">
-        <div className="hdr-title-wrap">
-          <div className="hdr-title">ISBAT University ERP</div>
-          <div className="hdr-sub">Enterprise Resource Planning{currentIntake ? ` · ${currentIntake.description}` : ''}</div>
-        </div>
+        {/* University logo (same artwork as the login screens' PanelA) →
+            the app's landing page. Header is shared across every module
+            layout (Academic, Finance, Employee, ...), so there's no single
+            "current module's dashboard" to send this to — Academic's
+            dashboard is the closest thing this app has to a home screen. */}
+        <button className="hdr-logo-btn" onClick={() => router.push('/academic/acad-dashboard')} aria-label="ISBAT University — go to dashboard" title="Dashboard">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img className="hdr-logo" src="/isbat-university-logo.png" alt="" width={768} height={252} />
+        </button>
         <div className="hdr-right">
           <div className="hdr-module-pill acad"><i className="lni lni-graduation"></i> Academic</div>
           {currentIntake && <div className="hdr-intake">{currentIntake.description} ({currentIntake.intakeCode})</div>}

@@ -339,42 +339,18 @@ body {
   align-items: center;
 }
 
+/* Holds only the menu button, which shows at ≤900px — hidden above that so
+   the logo starts the bar instead of sitting beside an empty square. */
 .hdr-brand {
   width: var(--rail-w);
   flex-shrink: 0;
-  display: flex;
+  display: none;
   align-items: center;
   justify-content: center;
   height: 100%;
   border-right: 1px solid var(--g200);
   background: var(--sb-rail-bg);
   box-shadow: 1px 0 0 var(--sb-border);
-}
-
-.hdr-badge {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, var(--b800), var(--b500));
-  display: grid;
-  place-items: center;
-  color: #fff;
-  font-weight: 800;
-  font-size: 13px;
-  box-shadow: 0 3px 10px rgba(37, 99, 235, .35);
-  /* Now a <button> (logo → dashboard) rather than a bare div — undo the
-     browser's default button chrome so it still reads as the same plain
-     logo mark, not a form control. */
-  border: none;
-  padding: 0;
-  font-family: var(--font);
-  cursor: pointer;
-  transition: var(--tr);
-}
-
-.hdr-badge:hover {
-  transform: translateY(-1px) scale(1.04);
-  box-shadow: 0 5px 14px rgba(37, 99, 235, .45);
 }
 
 .hdr-body {
@@ -385,20 +361,17 @@ body {
   padding: 0 24px;
 }
 
-.hdr-title-wrap .hdr-title {
-  font-family: 'Inter', -apple-system, sans-serif;
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--g900);
-  letter-spacing: -0.01em
+/* University logo, doubling as the dashboard link — a <button> with the
+   browser's button chrome undone so it reads as the plain logo. */
+.hdr-logo-btn {
+  display: flex; align-items: center; flex-shrink: 0; padding: 2px 4px; margin-left: -4px;
+  background: none; border: none; border-radius: var(--rxs); cursor: pointer; transition: var(--tr);
 }
-
-.hdr-title-wrap .hdr-sub {
-  font-size: 10.5px;
-  color: var(--g400);
-  margin-top: 1px;
-  letter-spacing: .03em
-}
+.hdr-logo-btn:hover { opacity: .85 }
+.hdr-logo-btn:focus-visible { outline: 2px solid var(--b600); outline-offset: 0 }
+/* Near the full 58px bar height — the crest is much taller than the
+   wordmark, so the text only reads at this size. */
+.hdr-logo { display: block; height: 52px; width: auto }
 
 .hdr-menu-btn {
   display: none;
@@ -1020,6 +993,19 @@ body {
 
 .sb-panel-shell.open {
   width: var(--panel-w)
+}
+
+/* Behind the open panel at ≤900px, where it overlays the page. */
+.sb-backdrop {
+  display: none;
+  position: fixed;
+  inset: var(--hdr-h) 0 0 0;
+  z-index: 199;
+  background: rgba(15, 23, 42, .32);
+}
+
+@media(max-width:900px) {
+  .sb-backdrop { display: block }
 }
 
 .sb-panel {
@@ -7584,10 +7570,7 @@ html:hover::-webkit-scrollbar-thumb {
     padding: 18px 20px
   }
 
-  .hdr-badge {
-    display: none
-  }
-
+  .hdr-brand,
   .hdr-menu-btn {
     display: flex
   }
@@ -7632,18 +7615,14 @@ html:hover::-webkit-scrollbar-thumb {
   }
 }
 
-/* ── HEADER: tablet (hide subtitle, intake pill, user name) ── */
+/* ── HEADER: tablet (smaller logo, hide intake pill, user name) ── */
 @media(max-width:720px) {
   .hdr-body {
     padding: 0 14px
   }
 
-  .hdr-title-wrap .hdr-title {
-    font-size: 14px
-  }
-
-  .hdr-title-wrap .hdr-sub {
-    display: none
+  .hdr-logo {
+    height: 46px
   }
 
   .hdr-intake {
@@ -7669,8 +7648,8 @@ html:hover::-webkit-scrollbar-thumb {
     display: none
   }
 
-  .hdr-title-wrap .hdr-title {
-    font-size: 13.5px
+  .hdr-logo {
+    height: 40px
   }
 
   .hdr-right {
@@ -16604,8 +16583,13 @@ body:has(.drawer-overlay) {
 
 /* Two separate tiles; outstanding carries a warm tint so the amount owed
    reads first. */
-.pcx-figures { display: flex; gap: 10px; flex: 1 1 346px }
-.pcx-figures > .pcx-figure { flex: 1 1 0; min-width: 0 }
+/* Equal-width tiles, each as wide as the widest one's content (1fr columns
+   in an auto-sized grid all resolve to the largest max-content), so nothing
+   clips or wraps. When the row can't hold them beside the identity, the
+   whole group drops to its own line. */
+.pcx-figures { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(140px, 1fr); gap: 10px; flex: 0 1 auto }
+.pcx-figures > .pcx-figure { min-width: 0 }
+.pcx-figure-lbl, .pcx-figure-val, .pcx-figure-note { white-space: nowrap }
 .pcx-figure {
   display: flex; flex-direction: column; gap: 4px; padding: 12px 18px; min-width: 168px; text-align: left;
   background: var(--white); border: 1px solid var(--g200); border-radius: 12px;
@@ -16620,6 +16604,8 @@ body:has(.drawer-overlay) {
 .pcx-figure-val { font-size: 22px; font-weight: 700; color: var(--g900); line-height: 1.2; letter-spacing: -.01em }
 .pcx-mini-bar { display: block; height: 6px; border-radius: 999px; background: var(--g100); overflow: hidden; margin-top: 4px }
 .pcx-mini-bar > span { display: block; height: 100%; background: var(--green); border-radius: inherit }
+.pcx-figure-note { display: inline-flex; align-items: center; gap: 4px; font-size: var(--fs-xs); color: var(--g500); font-variant-numeric: tabular-nums }
+.pcx-figure-note.is-done { color: var(--green); font-weight: 600 }
 
 /* Grid, so facts line up in columns across rows. Columns are sized to
    their content (auto) and space-between spreads the leftover width
@@ -16795,9 +16781,13 @@ body:has(.drawer-overlay) {
   .pcx-bar > span { transition: none }
 }
 
+/* Tablet and down: one tile per row, full width — three side by side
+   get cramped. */
+@media(max-width:768px) {
+  .pcx-figures { width: 100%; grid-auto-flow: row; grid-template-columns: 1fr }
+}
+
 @media(max-width:640px) {
-  .pcx-figures { width: 100% }
-  .pcx-figure { flex: 1; min-width: 0 }
   .pcx-coverage-grid { grid-template-columns: 1fr 1fr }
 }
 
@@ -17154,4 +17144,146 @@ body:has(.drawer-overlay) {
   padding-left: 0.75rem;
   color: #64748b;
   margin: 0.35rem 0;
+}
+
+/* ═══════════════════════════════════════
+   EXCHANGE RATES — /finance/exchange-rates
+   Daily rate board (left) + rate history (right). Figures in the mono
+   face with tabular numerals so rates line up; status by icon + word,
+   never colour alone.
+═══════════════════════════════════════ */
+.er-layout { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); gap: 18px; align-items: start }
+@media (max-width: 1180px) { .er-layout { grid-template-columns: minmax(0, 1fr) } }
+
+.er-card { display: flex; flex-direction: column; gap: 16px; margin-bottom: 0 }
+.er-hdr { align-items: center }
+.er-hdr-tools { display: flex; align-items: center; gap: 10px; flex-wrap: wrap }
+.er-date { width: 168px }
+
+/* Market feed strip — quiet, one line, the action on the right. */
+.er-market {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px 16px; flex-wrap: wrap;
+  padding: 10px 12px 10px 14px; border: 1px solid var(--b100); border-radius: var(--rsm);
+  background: var(--b50);
+}
+.er-market-text { flex: 1 1 260px; font-size: var(--fs-sm); color: var(--b900); line-height: 1.45 }
+.er-market-text b { font-weight: 600 }
+.er-spin { display: inline-block; animation: er-spin .8s linear infinite }
+@keyframes er-spin { to { transform: rotate(360deg) } }
+
+/* Rate board — one row per currency. */
+.er-board { display: flex; flex-direction: column; border: 1px solid var(--g200); border-radius: var(--rsm); overflow: hidden }
+.er-row {
+  display: grid; grid-template-columns: 148px minmax(170px, 1fr) 150px auto; align-items: center; gap: 12px 20px;
+  padding: 14px 16px; background: var(--white); transition: background var(--tr);
+}
+.er-row + .er-row { border-top: 1px solid var(--g100) }
+.er-row.is-dirty { background: color-mix(in srgb, var(--amber-bg) 40%, var(--white)) }
+.er-row-skel {
+  height: 76px; background: linear-gradient(90deg, var(--g100) 0%, var(--surface) 50%, var(--g100) 100%);
+  background-size: 200% 100%; animation: er-shimmer 1.4s ease-in-out infinite;
+}
+@keyframes er-shimmer { to { background-position: -200% 0 } }
+
+.er-cur { display: flex; flex-direction: column; gap: 3px; min-width: 0 }
+.er-code {
+  align-self: flex-start; font-family: var(--font-mono); font-size: var(--fs-md); font-weight: 700; letter-spacing: .04em;
+  color: var(--b900); background: var(--b50); border: 1px solid var(--b100); border-radius: var(--rxs); padding: 3px 8px;
+}
+.er-code-sm { font-size: var(--fs-xs); padding: 2px 6px }
+.er-name { font-size: var(--fs-xs); color: var(--g500); overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.er-name-inline { margin-left: 8px }
+
+.er-value { display: flex; flex-direction: column; gap: 4px; min-width: 0 }
+.er-lbl { font-size: var(--fs-xs); font-weight: 600; color: var(--g500); margin: 0 }
+.er-input {
+  display: flex; align-items: center; gap: 8px; height: 42px; padding: 0 12px;
+  border: 1.5px solid var(--g200); border-radius: var(--rxs); background: var(--white);
+  transition: border-color var(--tr), box-shadow var(--tr);
+}
+.er-input:hover { border-color: var(--g300) }
+.er-input:focus-within { border-color: var(--b500); box-shadow: 0 0 0 3px color-mix(in srgb, var(--b500) 16%, transparent) }
+.er-row.is-dirty .er-input { border-color: var(--amber-bd) }
+.er-input input {
+  flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; padding: 0;
+  font-family: var(--font-mono); font-size: 18px; font-weight: 700; color: var(--g900);
+  font-variant-numeric: tabular-nums; appearance: textfield; -moz-appearance: textfield;
+}
+.er-input input::-webkit-outer-spin-button,
+.er-input input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0 }
+.er-input input::placeholder { color: var(--g300) }
+.er-suffix { font-size: var(--fs-xs); font-weight: 700; letter-spacing: .04em; color: var(--g400) }
+.er-locked-val {
+  display: flex; align-items: baseline; gap: 8px; height: 42px; line-height: 42px;
+  font-family: var(--font-mono); font-size: 18px; font-weight: 700; color: var(--g700); font-variant-numeric: tabular-nums;
+}
+.er-hint { font-size: var(--fs-xs); color: var(--g500); line-height: 1.4 }
+.er-hint-btn {
+  align-self: flex-start; padding: 0; border: 0; background: none; cursor: pointer; font: inherit; font-size: var(--fs-xs);
+  font-weight: 600; color: var(--b700); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--b200);
+}
+.er-hint-btn:hover { color: var(--b900); text-decoration-color: currentColor }
+.er-hint-btn:focus-visible { outline: 2px solid var(--b600); outline-offset: 2px; border-radius: 3px }
+
+.er-compare { display: flex; flex-direction: column; gap: 3px; min-width: 0 }
+.er-prev { font-family: var(--font-mono); font-size: var(--fs-md); font-weight: 600; color: var(--g700); font-variant-numeric: tabular-nums }
+.er-delta { display: inline-flex; align-items: center; gap: 3px; font-size: var(--fs-xs); font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap }
+.er-delta i { font-size: 10px }
+.er-delta.is-up { color: var(--green) }
+.er-delta.is-down { color: var(--red) }
+.er-delta.is-flat { color: var(--g400); font-weight: 500 }
+.er-delta-pct { opacity: .75 }
+
+.er-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 8px }
+.er-status { display: inline-flex; align-items: center; gap: 5px; font-size: var(--fs-xs); font-weight: 600; white-space: nowrap }
+.er-status i { font-size: 12px }
+.er-status.is-saved { color: var(--green) }
+.er-status.is-dirty { color: #92400e }
+.er-status.is-locked { color: var(--g500) }
+.er-status.is-empty { color: var(--g400) }
+
+/* Narrow board: currency + status on top, value full width, then yesterday. */
+@media (max-width: 720px) {
+  .er-row { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "cur act" "val val" "cmp cmp"; gap: 12px }
+  .er-cur { grid-area: cur }
+  .er-value { grid-area: val }
+  .er-compare { grid-area: cmp; flex-direction: row; align-items: baseline; gap: 8px; flex-wrap: wrap }
+  .er-actions { grid-area: act; flex-direction: row; align-items: center }
+}
+
+/* Empty / error states inside either card. */
+.er-state {
+  display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 28px 16px; text-align: center;
+  font-size: var(--fs-sm); color: var(--g500); border: 1px dashed var(--g200); border-radius: var(--rsm);
+}
+.er-state i { font-size: 20px; color: var(--g300) }
+.er-state.is-error { color: var(--red); border-color: var(--red-bd); background: var(--red-bg) }
+.er-state.is-error i { color: var(--red) }
+
+/* History */
+.er-filters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px }
+@media (max-width: 560px) { .er-filters { grid-template-columns: minmax(0, 1fr) } }
+.er-table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm) }
+.er-table th {
+  padding: 8px 12px; text-align: left; font-size: var(--fs-xs); font-weight: 600; color: var(--g500);
+  border-bottom: 1px solid var(--g200); white-space: nowrap;
+}
+.er-table td { padding: 10px 12px; border-bottom: 1px solid var(--g100); color: var(--g800); white-space: nowrap }
+.er-table tbody tr:hover td { background: var(--surface) }
+.er-table .num { text-align: right }
+.er-rate-cell { font-family: var(--font-mono); font-weight: 700; color: var(--g900); font-variant-numeric: tabular-nums }
+.er-act-cell { width: 44px; text-align: right }
+.er-today-tag { margin-left: 8px; padding: 1px 6px; border-radius: 999px; background: var(--green-bg); color: #065f46; font-size: 10.5px; font-weight: 600 }
+
+.er-icon-btn {
+  display: inline-grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 1px solid transparent;
+  border-radius: var(--rxs); background: none; color: var(--g500); cursor: pointer; transition: var(--tr);
+}
+.er-icon-btn:hover:not(:disabled) { background: var(--g100); color: var(--g900) }
+.er-act-cell .er-icon-btn:hover { background: var(--red-bg); color: var(--red) }
+.er-icon-btn:focus-visible { outline: 2px solid var(--b600); outline-offset: 1px }
+.er-icon-btn:disabled { opacity: .4; cursor: not-allowed }
+
+@media (prefers-reduced-motion: reduce) {
+  .er-spin, .er-row-skel { animation: none }
 }

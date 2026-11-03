@@ -18,7 +18,7 @@ import { getSessionIdentity, setSessionIdentity } from '@/lib/session'
 // highlighted, same as landing on any page outside its tree. It defaults to
 // the Academic rail so the panel isn't empty on arrival, matching the
 // header logo's own "closest thing to a home screen" reasoning (see
-// Header.tsx's hdr-badge comment).
+// Header.tsx's logo-button comment).
 export default function NotificationsLayout({ children }: { children: React.ReactNode }) {
   const [panelOpen, setPanelOpen] = useState(true)
   const [profileOpen, setProfileOpen] = useState(false)

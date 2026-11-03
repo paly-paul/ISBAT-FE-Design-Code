@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import { Toast } from '@/components/Toast'
 import { ScrollTable } from '@/components/ScrollTable'
+import { SearchSelect } from '@/components/SearchSelect'
 import DatePicker from '@/components/DatePicker'
 import { useFinanceCurrencies } from '@/hooks/finance/useFinanceCurrencies'
 import {
@@ -13,6 +14,7 @@ import {
   ExchangeRate,
 } from '@/hooks/finance/useExchangeRates'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
+import { getMarketRates, marketRateFor } from '@/lib/api/finance/marketRates'
 
 // Stable reference for the "no data yet" case — `data = []` as a
 // destructuring default creates a NEW array literal every render while
@@ -50,27 +52,27 @@ function toDisplayDate(ymd: string): string {
   return `${d}/${m}/${y}`
 }
 
+// Rates read in UGX per unit (e.g. 4,277.71), so two decimals; a rate under
+// 1 keeps up to six so it doesn't round to 0.00.
+function fmtRate(n: number): string {
+  return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: Math.abs(n) < 1 ? 6 : 2 })
+}
+
+// Change against yesterday's saved rate. A percentage threshold, not an
+// absolute one, so it holds whatever the rate's magnitude; 0.01% because FX
+// moves are small — the old 0.5% cut-off hid a 20-shilling move on USD.
 function Delta({ current, previous }: { current: number; previous: number | null }) {
-  if (previous == null) return <div className="text-g400" style={{ fontSize: 11 }}>No prior rate</div>
+  if (previous == null) return <span className="er-delta is-flat">No rate yesterday</span>
+  if (!(current > 0)) return <span className="er-delta is-flat">—</span>
   const diff = current - previous
   const pct = previous ? (diff / previous) * 100 : 0
-  // Was a fixed `Math.abs(diff) < 0.005` — calibrated for this page's old
-  // large-number display (raw exRate, e.g. ~3800), where 0.005 UGX really
-  // was negligible noise. Now that this page shows the inverted "1 UGX =
-  // ___ {currency}" fraction (e.g. ~0.0002-0.03), that same absolute
-  // threshold swallows a real, large move as "No change" — confirmed live:
-  // USD going from 0.000909 to 0.0002600002 (a ~71% drop) still showed "No
-  // change" since the raw difference (~0.00065) stayed under 0.005. A
-  // percentage threshold scales correctly regardless of the numbers'
-  // magnitude, unlike a fixed absolute one. diff itself is now shown to 6dp
-  // (matching this page's own maximumFractionDigits: 6 elsewhere) instead
-  // of 2dp, which rounded every one of these small fractions to "0.00".
-  if (Math.abs(pct) < 0.5) return <div className="text-muted" style={{ fontSize: 11 }}>No change</div>
+  if (Math.abs(pct) < 0.01) return <span className="er-delta is-flat"><i className="lni lni-minus" aria-hidden="true"></i>No change</span>
   const up = diff > 0
   return (
-    <div className={up ? 'text-green' : 'text-red'} style={{ fontSize: 11 }}>
-      {up ? '↑' : '↓'} {up ? '+' : ''}{diff.toFixed(6)} ({up ? '+' : ''}{pct.toFixed(1)}%)
-    </div>
+    <span className={`er-delta ${up ? 'is-up' : 'is-down'}`}>
+      <i className={`lni ${up ? 'lni-arrow-up' : 'lni-arrow-down'}`} aria-hidden="true"></i>
+      {fmtRate(Math.abs(diff))} <span className="er-delta-pct">{Math.abs(pct).toFixed(2)}%</span>
+    </span>
   )
 }
 
@@ -114,10 +116,57 @@ export default function Page() {
     setRateInputs(map)
   }, [ratesForDate, rateDate])
 
+  // "Fetch market rates" — fills today's editable inputs with the market
+  // figure; nothing is saved until Save / Save Rates. Today only: these are
+  // today's market rates, wrong for a back-dated entry.
+  const [isFetchingMarket, setIsFetchingMarket] = useState(false)
+  // byGuid keeps each fetched figure, so its row can show "Market x" next to
+  // the input even after someone types over it.
+  const [marketInfo, setMarketInfo] = useState<{ date: string; filled: string[]; missing: string[]; byGuid: Record<string, string> } | null>(null)
+
+  async function handleFetchMarketRates() {
+    if (!baseCurrency) return
+    setIsFetchingMarket(true)
+    try {
+      const market = await getMarketRates()
+      const filled: string[] = []
+      const missing: string[] = []
+      const next: Record<string, string> = {}
+      for (const c of rateCurrencies) {
+        const rate = marketRateFor(market, c.currencyCode, baseCurrency.currencyCode)
+        if (rate == null) { missing.push(c.currencyCode); continue }
+        // Two decimals, like the rates finance enters by hand.
+        next[c.currencyGuid] = rate.toFixed(2)
+        filled.push(c.currencyCode)
+      }
+      setRateInputs(prev => ({ ...prev, ...next }))
+      setMarketInfo({ date: market.date, filled, missing, byGuid: next })
+      if (filled.length === 0) showToast('No market rate found for these currencies.', 'warn')
+      else showToast(`Filled ${filled.join(', ')} from market rates — review, then Save.`, 'success')
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Could not fetch market rates.', 'error')
+    } finally {
+      setIsFetchingMarket(false)
+    }
+  }
+
   const createMutation = useCreateExchangeRate()
   const updateMutation = useUpdateExchangeRate()
   const deleteMutation = useDeleteExchangeRate()
   const isSaving = createMutation.isPending || updateMutation.isPending
+
+  // A row has unsaved changes when its input holds a valid rate that differs
+  // from what's saved for the date (or nothing is saved yet). Locked rows —
+  // historical and already set — never count.
+  function isDirty(currencyGuid: string): boolean {
+    const existing = existingByCurrency.get(currencyGuid)
+    if (existing && !isToday) return false
+    const num = parseFloat(rateInputs[currencyGuid] ?? '')
+    if (!(num > 0)) return false
+    return !existing || num !== existing.exRate
+  }
+  const dirtyCount = rateCurrencies.filter(c => isDirty(c.currencyGuid)).length
+  const currencyNameByGuid = new Map(allCurrencies.map(c => [c.currencyGuid, c.currencyName]))
 
   async function saveRate(currencyGuid: string, currencyCode: string) {
     const raw = rateInputs[currencyGuid] ?? ''
@@ -150,15 +199,10 @@ export default function Page() {
   async function handleSaveAll() {
     if (!permissions.add && !permissions.edit) { showToast('You do not have permission to save exchange rates.', 'warn'); return }
     if (!rateDate) { showToast('Rate date is required.', 'warn'); return }
-    const targets = rateCurrencies.filter(c => {
-      const existing = existingByCurrency.get(c.currencyGuid)
-      // Skip rows the UI has already made read-only (historical + already
-      // set) — nothing to save there.
-      if (existing && !isToday) return false
-      const raw = rateInputs[c.currencyGuid]
-      return !!raw && parseFloat(raw) > 0
-    })
-    if (targets.length === 0) { showToast('Enter at least one currency rate.', 'warn'); return }
+    // Only rows with unsaved changes — re-saving an unchanged rate is a
+    // wasted PUT, and locked rows are skipped by isDirty itself.
+    const targets = rateCurrencies.filter(c => isDirty(c.currencyGuid))
+    if (targets.length === 0) { showToast('No unsaved rate changes.', 'warn'); return }
 
     let successCount = 0
     const failures: string[] = []
@@ -214,6 +258,8 @@ export default function Page() {
     }
   }
 
+  const baseCode = baseCurrency?.currencyCode ?? 'base'
+
   return (
     <>
       <div className="page active">
@@ -222,109 +268,182 @@ export default function Page() {
             <div className="pg-title">Exchange Rate Management</div>
             <div className="pg-sub">Set per-currency daily rates · Required before payments in that currency can be allocated</div>
           </div>
-          <button className="btn btn-primary" disabled={isSaving || (!permissions.add && !permissions.edit)} onClick={handleSaveAll}>
-            <i className="lni lni-save"></i> {isSaving ? 'Saving…' : 'Save Rates'}
+          <button className="btn btn-primary" disabled={isSaving || dirtyCount === 0 || (!permissions.add && !permissions.edit)} onClick={handleSaveAll}>
+            <i className="lni lni-save"></i> {isSaving ? 'Saving…' : dirtyCount > 0 ? `Save ${dirtyCount} rate${dirtyCount === 1 ? '' : 's'}` : 'Save Rates'}
           </button>
         </div>
 
-        <div className="g2">
-          <div className="card">
-            <div className="card-hdr">
-              <div className="card-title"><span className="ctitle-icon"><i className="lni lni-world"></i></span> Set Exchange Rates</div>
-              {isToday && <span className="badge badge-blue"><span className="bdot"></span>Today</span>}
-            </div>
-
-            <div className="fg mb-[14px]">
-              <div className="lbl">Rate Date <span className="req">*</span></div>
-              {/* maxYmd enforces CreateExchangeRateCommandValidator's "exDate
-                  cannot be in the future" rule client-side too. */}
-              <DatePicker value={rateDate} onChange={setRateDate} maxYmd={today} />
-            </div>
-
-            {baseCurrency && (
-              <>
-                <div className="sec-divider">Currency Rates (Base: {baseCurrency.currencyCode})</div>
-                <div className="flex items-center gap-3 flex-wrap p-[14px] border border-[1.5px] border-g200 rounded-[var(--rsm)] bg-surface mb-[14px]">
-                  <span className="badge badge-gold" style={{ fontSize: 14, padding: '8px 12px' }}>{baseCurrency.currencyCode}</span>
-                  <div className="flex-1" style={{ minWidth: 160 }}>
-                    <div className="lbl">Base Currency (Fixed)</div>
-                    <div className="font-mono font-extrabold text-blue" style={{ fontSize: 22 }}>1.000000</div>
-                  </div>
-                  <div className="text-g400" style={{ fontSize: 11 }}>Reference base</div>
+        <div className="er-layout">
+          {/* ── Rate board: one row per currency for the chosen date ── */}
+          <section className="card er-card" aria-labelledby="er-board-title">
+            <div className="pcx-panel-hdr er-hdr">
+              <div>
+                <h3 id="er-board-title" className="pcx-panel-title">Daily rates</h3>
+                <p className="pcx-panel-sub">
+                  {baseCurrency
+                    ? <>In <b>{baseCurrency.currencyCode}</b> per 1 unit · {baseCurrency.currencyName || baseCurrency.currencyCode} is the base</>
+                    : 'Per 1 unit of each currency'}
+                </p>
+              </div>
+              <div className="er-hdr-tools">
+                <div className="er-date">
+                  {/* maxYmd enforces CreateExchangeRateCommandValidator's "exDate
+                      cannot be in the future" rule client-side too. */}
+                  <DatePicker value={rateDate} onChange={setRateDate} maxYmd={today} />
                 </div>
-              </>
+                {isToday ? (
+                  <span className="pcx-pill pcx-pill-green"><span className="pcx-dot" aria-hidden="true"></span>Today</span>
+                ) : (
+                  <button type="button" className="btn btn-neu btn-sm" onClick={() => setRateDate(today)}>Back to today</button>
+                )}
+              </div>
+            </div>
+
+            {/* Market feed — today only: these are today's market rates,
+                wrong for a back-dated entry. */}
+            {isToday && baseCurrency && rateCurrencies.length > 0 && (
+              <div className="er-market">
+                <div className="er-market-text">
+                  {marketInfo && marketInfo.filled.length > 0 ? (
+                    <>
+                      <b>Filled {marketInfo.filled.join(', ')}</b> from market rates{marketInfo.date ? ` of ${toDisplayDate(marketInfo.date)}` : ''}. Not saved yet — check against the bank rate, then save.
+                      {marketInfo.missing.length > 0 && ` No market rate for ${marketInfo.missing.join(', ')}.`}
+                    </>
+                  ) : (
+                    <>Start from the daily market feed, then adjust to the bank rate before saving.</>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-neu btn-sm"
+                  disabled={isFetchingMarket || (!permissions.add && !permissions.edit)}
+                  onClick={handleFetchMarketRates}
+                >
+                  <i className={`lni lni-reload${isFetchingMarket ? ' er-spin' : ''}`} aria-hidden="true"></i> {isFetchingMarket ? 'Fetching…' : 'Fetch market rates'}
+                </button>
+              </div>
             )}
 
-            {isRatesLoading && <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>Loading rates for this date…</div>}
+            {isRatesLoading && (
+              <div className="er-board" aria-busy="true">
+                {[0, 1].map(i => <div key={i} className="er-row er-row-skel" aria-hidden="true"></div>)}
+              </div>
+            )}
             {!isRatesLoading && isRatesError && (
-              <div className="text-clr-red text-center" style={{ padding: 16, fontSize: 12.5 }}>
-                <i className="lni lni-warning"></i> {ratesError instanceof Error ? ratesError.message : 'Failed to load rates for this date.'}
+              <div className="er-state is-error">
+                <i className="lni lni-warning" aria-hidden="true"></i>
+                <span>{ratesError instanceof Error ? ratesError.message : 'Failed to load rates for this date.'}</span>
               </div>
             )}
 
             {!isRatesLoading && !isRatesError && (
-              <div className="flex flex-col gap-[14px]">
-                {rateCurrencies.length === 0 && (
-                  <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>No non-base currencies configured.</div>
-                )}
-                {rateCurrencies.map(c => {
-                  const existing = existingByCurrency.get(c.currencyGuid)
-                  const locked = !!existing && !isToday
-                  const prevDisplay = prevRateByCurrency.get(c.currencyGuid) ?? null
-                  return (
-                    <div key={c.currencyGuid} className="flex items-center gap-3 flex-wrap p-[14px] border border-[1.5px] border-b200 rounded-[var(--rsm)] bg-b50">
-                      <span className="badge badge-gold" style={{ fontSize: 14, padding: '8px 12px' }}>{c.currencyCode}</span>
-                      <div className="flex-1" style={{ minWidth: 160 }}>
-                        <div className="lbl">1 {c.currencyCode} = ___ {baseCurrency?.currencyCode ?? 'base'} <span className="req">*</span></div>
-                        {locked ? (
-                          <>
-                            <div className="font-mono font-extrabold text-g700" style={{ fontSize: 22 }}>{existing.exRate.toLocaleString(undefined, { maximumFractionDigits: 6 })}</div>
-                            <div className="text-g400" style={{ fontSize: 11 }}>
-                              Historical rate already set — only today’s rates can be edited. Delete it below (History panel) to change.
-                            </div>
-                          </>
-                        ) : (
-                          <input
-                            className="rate-big-input"
-                            type="number"
-                            step="0.000001"
-                            min={0}
-                            value={rateInputs[c.currencyGuid] ?? ''}
-                            onChange={e => setRateInputs(prev => ({ ...prev, [c.currencyGuid]: e.target.value }))}
-                          />
-                        )}
-                      </div>
-                      {!locked && (
-                        <div className="flex flex-col items-end gap-1">
-                          <div className="text-right">
-                            <div className="text-g400" style={{ fontSize: 10.5 }}>Yesterday</div>
-                            <div className="font-bold text-g500">{prevDisplay != null ? prevDisplay.toLocaleString(undefined, { maximumFractionDigits: 6 }) : '—'}</div>
-                            <Delta current={parseFloat(rateInputs[c.currencyGuid] ?? '') || 0} previous={prevDisplay} />
-                          </div>
-                          <button className="btn btn-neu btn-sm" disabled={isSaving || (existing ? !permissions.edit : !permissions.add)} onClick={() => saveRate(c.currencyGuid, c.currencyCode)}>
-                            <i className="lni lni-save"></i> {existing ? 'Update' : 'Save'}
-                          </button>
+              rateCurrencies.length === 0 ? (
+                <div className="er-state">
+                  <i className="lni lni-world" aria-hidden="true"></i>
+                  <span>No currencies besides the base are set up. Add one in Currency Master to set its rate here.</span>
+                </div>
+              ) : (
+                <div className="er-board">
+                  {rateCurrencies.map(c => {
+                    const existing = existingByCurrency.get(c.currencyGuid)
+                    const locked = !!existing && !isToday
+                    const prevRate = prevRateByCurrency.get(c.currencyGuid) ?? null
+                    const dirty = isDirty(c.currencyGuid)
+                    const value = rateInputs[c.currencyGuid] ?? ''
+                    const market = isToday ? marketInfo?.byGuid[c.currencyGuid] : undefined
+                    const status = locked
+                      ? { cls: 'is-locked', icon: 'lni-lock', text: 'Locked' }
+                      : dirty
+                        ? { cls: 'is-dirty', icon: 'lni-pencil', text: 'Unsaved' }
+                        : existing
+                          ? { cls: 'is-saved', icon: 'lni-checkmark-circle', text: 'Saved' }
+                          : { cls: 'is-empty', icon: 'lni-circle-plus', text: 'Not set' }
+                    const inputId = `er-rate-${c.currencyGuid}`
+                    return (
+                      <div key={c.currencyGuid} className={`er-row${dirty ? ' is-dirty' : ''}`}>
+                        <div className="er-cur">
+                          <span className="er-code">{c.currencyCode}</span>
+                          <span className="er-name">{c.currencyName && c.currencyName !== c.currencyCode ? c.currencyName : `1 ${c.currencyCode}`}</span>
                         </div>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </div>
 
-          <div className="card">
-            <div className="card-hdr">
-              <div className="card-title"><span className="ctitle-icon"><i className="lni lni-bar-chart"></i></span> Rate History</div>
+                        <div className="er-value">
+                          <label className="er-lbl" htmlFor={inputId}>1 {c.currencyCode} = </label>
+                          {locked ? (
+                            <div className="er-locked-val">
+                              {fmtRate(existing.exRate)} <span className="er-suffix">{baseCode}</span>
+                            </div>
+                          ) : (
+                            <div className="er-input">
+                              <input
+                                id={inputId}
+                                type="number"
+                                inputMode="decimal"
+                                step="0.01"
+                                min={0}
+                                placeholder="0.00"
+                                value={value}
+                                onChange={e => setRateInputs(prev => ({ ...prev, [c.currencyGuid]: e.target.value }))}
+                                onKeyDown={e => { if (e.key === 'Enter' && dirty) saveRate(c.currencyGuid, c.currencyCode) }}
+                              />
+                              <span className="er-suffix">{baseCode}</span>
+                            </div>
+                          )}
+                          {locked ? (
+                            <span className="er-hint">Past rates can&apos;t be edited — delete it in Rate history to re-enter.</span>
+                          ) : market && market !== value ? (
+                            <button type="button" className="er-hint er-hint-btn" onClick={() => setRateInputs(prev => ({ ...prev, [c.currencyGuid]: market }))}>
+                              Market {fmtRate(parseFloat(market))} · use
+                            </button>
+                          ) : market ? (
+                            <span className="er-hint">Market rate</span>
+                          ) : null}
+                        </div>
+
+                        <div className="er-compare">
+                          <span className="er-lbl">Yesterday</span>
+                          <span className="er-prev">{prevRate != null ? fmtRate(prevRate) : '—'}</span>
+                          <Delta current={locked ? existing.exRate : parseFloat(value) || 0} previous={prevRate} />
+                        </div>
+
+                        <div className="er-actions">
+                          <span className={`er-status ${status.cls}`}><i className={`lni ${status.icon}`} aria-hidden="true"></i>{status.text}</span>
+                          {!locked && (
+                            <button
+                              type="button"
+                              className="btn btn-neu btn-sm"
+                              disabled={isSaving || !dirty || (existing ? !permissions.edit : !permissions.add)}
+                              onClick={() => saveRate(c.currencyGuid, c.currencyCode)}
+                            >
+                              {existing ? 'Update' : 'Save'}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )
+            )}
+          </section>
+
+          {/* ── History: every saved rate, filterable ── */}
+          <section className="card er-card" aria-labelledby="er-history-title">
+            <div className="pcx-panel-hdr er-hdr">
+              <div>
+                <h3 id="er-history-title" className="pcx-panel-title">Rate history</h3>
+                <p className="pcx-panel-sub">{isHistoryLoading ? 'Loading…' : `${historyTotal.toLocaleString()} saved rate${historyTotal === 1 ? '' : 's'}`}</p>
+              </div>
             </div>
 
-            <div className="g3 mb-[14px]">
+            <div className="er-filters">
               <div className="fg" style={{ marginBottom: 0 }}>
                 <div className="lbl">Currency</div>
-                <select className="ctrl" value={historyCurrencyGuid} onChange={e => setHistoryCurrencyGuid(e.target.value)}>
-                  <option value="">All currencies</option>
-                  {allCurrencies.map(c => <option key={c.currencyGuid} value={c.currencyGuid}>{c.currencyCode}</option>)}
-                </select>
+                <SearchSelect
+                  options={allCurrencies.map(c => ({ value: c.currencyGuid, label: c.currencyCode }))}
+                  value={historyCurrencyGuid}
+                  onChange={setHistoryCurrencyGuid}
+                  placeholder="All currencies"
+                />
               </div>
               <div className="fg" style={{ marginBottom: 0 }}>
                 <div className="lbl">From</div>
@@ -337,32 +456,48 @@ export default function Page() {
             </div>
 
             {isHistoryLoading ? (
-              <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>Loading history…</div>
+              <div className="er-state">Loading history…</div>
             ) : historyItems.length === 0 ? (
-              <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>No exchange rates recorded for this filter.</div>
+              <div className="er-state">
+                <i className="lni lni-search-alt" aria-hidden="true"></i>
+                <span>{historyCurrencyGuid || historyFromDate || historyToDate ? 'No rates match these filters.' : 'No rates saved yet.'}</span>
+                {(historyCurrencyGuid || historyFromDate || historyToDate) && (
+                  <button type="button" className="btn btn-neu btn-sm" onClick={() => { setHistoryCurrencyGuid(''); setHistoryFromDate(''); setHistoryToDate('') }}>Clear filters</button>
+                )}
+              </div>
             ) : (
               <>
                 <ScrollTable>
-                  <table>
-                    <thead><tr><th>Date</th><th>Currency</th><th>Rate</th><th></th></tr></thead>
+                  <table className="er-table">
+                    <thead><tr><th>Date</th><th>Currency</th><th className="num">Rate ({baseCode})</th><th><span className="sr-only">Actions</span></th></tr></thead>
                     <tbody>
-                      {historyItems.map(r => (
-                        <tr key={r.exchangeRateGuid}>
-                          <td>{toDisplayDate(r.exDate.slice(0, 10))}</td>
-                          <td><span className="badge badge-gold">{r.currencyCode}</span></td>
-                          <td className="font-mono font-bold">{r.exRate.toLocaleString(undefined, { maximumFractionDigits: 6 })}</td>
-                          <td>
-                            {permissions.delete && (
-                              <button
-                                className="btn btn-neu btn-sm"
-                                onClick={() => handleDelete(r.exchangeRateGuid, `${r.currencyCode} · ${toDisplayDate(r.exDate.slice(0, 10))}`)}
-                              >
-                                <i className="lni lni-trash-can"></i>
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
+                      {historyItems.map(r => {
+                        const ymd = r.exDate.slice(0, 10)
+                        const name = currencyNameByGuid.get(r.currencyGuid)
+                        return (
+                          <tr key={r.exchangeRateGuid}>
+                            <td className="tabular-nums">{toDisplayDate(ymd)}{ymd === today && <span className="er-today-tag">Today</span>}</td>
+                            <td>
+                              <span className="er-code er-code-sm">{r.currencyCode}</span>
+                              {name && name !== r.currencyCode && <span className="er-name er-name-inline">{name}</span>}
+                            </td>
+                            <td className="num er-rate-cell">{fmtRate(r.exRate)}</td>
+                            <td className="er-act-cell">
+                              {permissions.delete && (
+                                <button
+                                  type="button"
+                                  className="er-icon-btn"
+                                  aria-label={`Delete ${r.currencyCode} rate for ${toDisplayDate(ymd)}`}
+                                  title="Delete rate"
+                                  onClick={() => handleDelete(r.exchangeRateGuid, `${r.currencyCode} · ${toDisplayDate(ymd)}`)}
+                                >
+                                  <i className="lni lni-trash-can" aria-hidden="true"></i>
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        )
+                      })}
                     </tbody>
                   </table>
                 </ScrollTable>
@@ -375,7 +510,7 @@ export default function Page() {
                 </div>
               </>
             )}
-          </div>
+          </section>
         </div>
       </div>
       <Toast toast={toast} />
