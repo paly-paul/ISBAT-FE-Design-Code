@@ -16,6 +16,7 @@ import {
   useUeMarkImportImport
 } from '@/hooks/assessment/useUeMarkImport'
 import { UeMarkImportPreviewItem } from '@/lib/api/assessment/ueMarkImport'
+import { hasTheoryMarks } from '@/lib/api/assessment/ueMarks'
 
 export default function UeMarkImportPage() {
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
@@ -82,6 +83,9 @@ export default function UeMarkImportPage() {
     Number(ueType),
     !!program && !!semesterGuid && !!courseUnitGuid && !!intakeGuid && !!ueType
   )
+
+  const isTheoryExam = examInfo?.layout === 0
+  const isTheoryNoRule = Boolean(isTheoryExam && examInfo && !hasTheoryMarks(examInfo.maxMarks))
 
   const downloadMut = useDownloadUeMarkImportTemplate()
   const sheetsMut = useUeMarkImportSheets()
@@ -248,6 +252,14 @@ export default function UeMarkImportPage() {
             Upload and process legacy Excel templates for student marks.
           </div>
         </div>
+        {isTheoryNoRule && (
+          <div className="px-5 pb-4">
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm flex items-center gap-2">
+              <i className="lni lni-warning text-base text-red-500 flex-shrink-0" />
+              <span>The exam rule has no section marks configured for this exam.</span>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="card mb-5 p-5">
@@ -310,11 +322,10 @@ export default function UeMarkImportPage() {
             {isLoadingExamInfo ? (
               <div className="text-sm text-slate-500 animate-pulse">Resolving exam...</div>
             ) : examInfo ? (
-              <div className="text-sm font-bold text-slate-800">
-                {/* Simplified total logic for display purpose */}
-                Theory/Practical/Project Max
+              <div className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                <span>{examInfo.examRuleTotalMark}</span>
                 {examInfo.isVerified && (
-                  <span className="ml-2 badge badge-green">Verified</span>
+                  <span className="badge badge-green">Verified</span>
                 )}
               </div>
             ) : (
@@ -370,7 +381,8 @@ export default function UeMarkImportPage() {
             type="button"
             className="btn btn-primary bg-indigo-600 text-white"
             onClick={handlePreview}
-            disabled={!file || !selectedSheet || previewMut.isPending}
+            disabled={!file || !selectedSheet || previewMut.isPending || isTheoryNoRule}
+            title={isTheoryNoRule ? "The exam rule has no section marks configured for this exam." : undefined}
           >
             {previewMut.isPending ? 'Previewing...' : 'Preview'}
           </button>
@@ -397,7 +409,8 @@ export default function UeMarkImportPage() {
             type="button"
             className="btn btn-neu ml-auto text-blue-600 flex items-center gap-1.5"
             onClick={handleDownloadTemplate}
-            disabled={!examInfo || downloadMut.isPending}
+            disabled={!examInfo || downloadMut.isPending || isTheoryNoRule}
+            title={isTheoryNoRule ? 'The exam rule has no section marks configured for this exam.' : undefined}
           >
             <i className={`lni ${downloadMut.isPending ? 'lni-spinner animate-spin' : 'lni-download'}`} />
             {downloadMut.isPending ? 'Downloading...' : 'Template Download'}
@@ -428,18 +441,27 @@ export default function UeMarkImportPage() {
                 <tr>
                   <th>Sl No</th>
                   <th>Matching Code</th>
-                  {/* Depending on layout, we might show different columns, for now dumping common ones */}
-                  {previewRows.some(r => r.sectionAMark !== null) && <th>Section A</th>}
-                  {previewRows.some(r => r.sectionBMark !== null) && <th>Section B</th>}
-                  {previewRows.some(r => r.sectionCMark !== null) && <th>Section C</th>}
-                  {previewRows.some(r => r.recordMark !== null) && <th>Record</th>}
-                  {previewRows.some(r => r.codingMark !== null) && <th>Coding</th>}
-                  {previewRows.some(r => r.outputMark !== null) && <th>Output</th>}
-                  {previewRows.some(r => r.vivaMark !== null) && <th>Viva</th>}
-                  {previewRows.some(r => r.synopsisMark !== null) && <th>Synopsis</th>}
-                  {previewRows.some(r => r.reviewMark !== null) && <th>Review</th>}
-                  {previewRows.some(r => r.methodologyMark !== null) && <th>Methodology</th>}
-                  {previewRows.some(r => r.analysisMark !== null) && <th>Analysis</th>}
+                  {isTheoryExam ? (
+                    <>
+                      {examInfo?.maxMarks.sectionAMax != null && <th>Section A ({examInfo.maxMarks.sectionAMax})</th>}
+                      {examInfo?.maxMarks.sectionBMax != null && <th>Section B ({examInfo.maxMarks.sectionBMax})</th>}
+                      {examInfo?.maxMarks.sectionCMax != null && <th>Section C ({examInfo.maxMarks.sectionCMax})</th>}
+                    </>
+                  ) : (
+                    <>
+                      {previewRows.some(r => r.sectionAMark !== null) && <th>Section A</th>}
+                      {previewRows.some(r => r.sectionBMark !== null) && <th>Section B</th>}
+                      {previewRows.some(r => r.sectionCMark !== null) && <th>Section C</th>}
+                      {previewRows.some(r => r.recordMark !== null) && <th>Record</th>}
+                      {previewRows.some(r => r.codingMark !== null) && <th>Coding</th>}
+                      {previewRows.some(r => r.outputMark !== null) && <th>Output</th>}
+                      {previewRows.some(r => r.vivaMark !== null) && <th>Viva</th>}
+                      {previewRows.some(r => r.synopsisMark !== null) && <th>Synopsis</th>}
+                      {previewRows.some(r => r.reviewMark !== null) && <th>Review</th>}
+                      {previewRows.some(r => r.methodologyMark !== null) && <th>Methodology</th>}
+                      {previewRows.some(r => r.analysisMark !== null) && <th>Analysis</th>}
+                    </>
+                  )}
                 </tr>
               </thead>
               <tbody>
@@ -447,17 +469,27 @@ export default function UeMarkImportPage() {
                   <tr key={i}>
                     <td>{row.slNo}</td>
                     <td className="font-mono font-medium text-slate-800">{row.matchingCode || '—'}</td>
-                    {row.sectionAMark !== null && <td className="font-mono">{row.sectionAMark}</td>}
-                    {row.sectionBMark !== null && <td className="font-mono">{row.sectionBMark}</td>}
-                    {row.sectionCMark !== null && <td className="font-mono">{row.sectionCMark}</td>}
-                    {row.recordMark !== null && <td className="font-mono">{row.recordMark}</td>}
-                    {row.codingMark !== null && <td className="font-mono">{row.codingMark}</td>}
-                    {row.outputMark !== null && <td className="font-mono">{row.outputMark}</td>}
-                    {row.vivaMark !== null && <td className="font-mono">{row.vivaMark}</td>}
-                    {row.synopsisMark !== null && <td className="font-mono">{row.synopsisMark}</td>}
-                    {row.reviewMark !== null && <td className="font-mono">{row.reviewMark}</td>}
-                    {row.methodologyMark !== null && <td className="font-mono">{row.methodologyMark}</td>}
-                    {row.analysisMark !== null && <td className="font-mono">{row.analysisMark}</td>}
+                    {isTheoryExam ? (
+                      <>
+                        {examInfo?.maxMarks.sectionAMax != null && <td className="font-mono">{row.sectionAMark ?? '—'}</td>}
+                        {examInfo?.maxMarks.sectionBMax != null && <td className="font-mono">{row.sectionBMark ?? '—'}</td>}
+                        {examInfo?.maxMarks.sectionCMax != null && <td className="font-mono">{row.sectionCMark ?? '—'}</td>}
+                      </>
+                    ) : (
+                      <>
+                        {previewRows.some(r => r.sectionAMark !== null) && <td className="font-mono">{row.sectionAMark}</td>}
+                        {previewRows.some(r => r.sectionBMark !== null) && <td className="font-mono">{row.sectionBMark}</td>}
+                        {previewRows.some(r => r.sectionCMark !== null) && <td className="font-mono">{row.sectionCMark}</td>}
+                        {previewRows.some(r => r.recordMark !== null) && <td className="font-mono">{row.recordMark}</td>}
+                        {previewRows.some(r => r.codingMark !== null) && <td className="font-mono">{row.codingMark}</td>}
+                        {previewRows.some(r => r.outputMark !== null) && <td className="font-mono">{row.outputMark}</td>}
+                        {previewRows.some(r => r.vivaMark !== null) && <td className="font-mono">{row.vivaMark}</td>}
+                        {previewRows.some(r => r.synopsisMark !== null) && <td className="font-mono">{row.synopsisMark}</td>}
+                        {previewRows.some(r => r.reviewMark !== null) && <td className="font-mono">{row.reviewMark}</td>}
+                        {previewRows.some(r => r.methodologyMark !== null) && <td className="font-mono">{row.methodologyMark}</td>}
+                        {previewRows.some(r => r.analysisMark !== null) && <td className="font-mono">{row.analysisMark}</td>}
+                      </>
+                    )}
                   </tr>
                 ))}
               </tbody>

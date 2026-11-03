@@ -81,10 +81,23 @@ export const UE_LAYOUT_FIELDS: Record<UeLayout, { field: UeMarkField; max: UeMax
   ],
 }
 
-// Mark columns for a grid. Theory's Section C exists only when sectionCMax is
-// set (master-level programmes have no Section C).
+// Mark columns for a grid. For Theory exams, each section's maximum mark is now
+// read dynamically from the exam's exam rule (maxMarks) — Section A, B or C column
+// appears only when its corresponding maximum is not null. Practical and project exams
+// keep their fixed layout fields.
+export function hasTheoryMarks(maxMarks?: Partial<Record<UeMaxField, number | null>> | null): boolean {
+  if (!maxMarks) return false
+  return Boolean(
+    (maxMarks.sectionAMax != null && Number(maxMarks.sectionAMax) > 0) ||
+    (maxMarks.sectionBMax != null && Number(maxMarks.sectionBMax) > 0) ||
+    (maxMarks.sectionCMax != null && Number(maxMarks.sectionCMax) > 0)
+  )
+}
 export function ueColumnsFor(layout: UeLayout, maxMarks: Record<UeMaxField, number | null>) {
-  return UE_LAYOUT_FIELDS[layout].filter(c => c.field !== 'sectionCMark' || maxMarks.sectionCMax != null)
+  if (layout === 'Theory') {
+    return UE_LAYOUT_FIELDS.Theory.filter(c => maxMarks && maxMarks[c.max] != null && Number(maxMarks[c.max]) > 0)
+  }
+  return UE_LAYOUT_FIELDS[layout]
 }
 
 // layout is numeric on the wire (0 Theory, 1 Practical, 2 Project). Strings

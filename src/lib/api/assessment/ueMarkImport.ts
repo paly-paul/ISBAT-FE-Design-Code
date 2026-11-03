@@ -118,6 +118,11 @@ export function getUeMarkImportExam(
     ueType: String(ueType),
   })
   return apiGet<UeMarkImportExam>(`/api/v1/assessment/ue-mark-import/exam?${params.toString()}`)
+    .then(data => ({
+      ...data,
+      maxMarks: data?.maxMarks ?? ({} as UeMarkImportExam['maxMarks']),
+      examRuleTotalMark: data?.examRuleTotalMark ?? 0,
+    }))
 }
 
 export async function getUeMarkImportTemplate(universityExamGuid: string): Promise<UeMarkImportTemplateResponse> {
@@ -177,7 +182,7 @@ export function postUeMarkImportPreview(params: UeMarkImportFileParams): Promise
   if (MOCK_AUTH) return Promise.resolve(mockPreview)
   const formData = new FormData()
   formData.append('file', params.file)
-  if (params.sheetName) formData.append('SheetName', params.sheetName)
+  formData.append('SheetName', params.sheetName || '')
   formData.append('UniversityExamGuid', params.universityExamGuid?.toUpperCase() || '')
 
   return apiPostForm<UeMarkImportPreviewItem[]>('/api/v1/assessment/ue-mark-import/preview', formData)
@@ -188,7 +193,7 @@ export function postUeMarkImportImport(params: UeMarkImportFileParams): Promise<
   if (MOCK_AUTH) return Promise.resolve({ success: true, message: 'Marks Saved successfully......! (Mocked)' })
   const formData = new FormData()
   formData.append('file', params.file)
-  if (params.sheetName) formData.append('SheetName', params.sheetName)
+  formData.append('SheetName', params.sheetName || '')
   formData.append('UniversityExamGuid', params.universityExamGuid?.toUpperCase() || '')
 
   return apiPostForm<boolean>('/api/v1/assessment/ue-mark-import/import', formData)

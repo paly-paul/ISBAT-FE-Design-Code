@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react'
 import { SearchSelect } from '@/components/SearchSelect'
 import { Toast } from '@/components/Toast'
-import { useCurrentAcademicIntake, useIntakes } from '@/hooks/academic/useIntakes'
+import { useCurrentAcademicIntake, useIntakes, useIntakesDropdown } from '@/hooks/academic/useIntakes'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import {
   useDownloadUeBookletPdf,
@@ -63,7 +63,13 @@ function parseOutcome(result: any): { outcome: QpOutcome | null; message: string
 
 export default function UniversityExamQpBookletPrintPage() {
   const permissions = usePagePermissions()
+  // Printing question papers and booklets is a print/generate action.
+  // Real backend roles assign 'print'/'generate' (or 'get'/'view') on this page, not 'add'.
+  const canPrint = permissions.print !== false && Boolean(
+    permissions.print || permissions.generate || permissions.add || permissions.view || permissions.get
+  )
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
+  const [validationError, setValidationError] = useState<string | null>(null)
   const [programGuid, setProgramGuid] = useState('')
   const [semesterGuid, setSemesterGuid] = useState('')
   const [courseUnitGuid, setCourseUnitGuid] = useState('')
@@ -77,8 +83,11 @@ export default function UniversityExamQpBookletPrintPage() {
 
   // Silent Intake Resolution per specification: no intake dropdown rendered
   const { data: currentIntake } = useCurrentAcademicIntake()
+  const { data: dropdownIntakes } = useIntakesDropdown()
   const { data: allIntakes } = useIntakes()
   const intakeGuid = currentIntake?.intakeGuid
+    || (dropdownIntakes ?? []).find(i => i.currentIntake)?.intakeGuid
+    || (dropdownIntakes && dropdownIntakes.length > 0 ? dropdownIntakes[0].intakeGuid : '')
     || (allIntakes ?? []).find(i => i.currentIntake)?.intakeGuid
     || (allIntakes && allIntakes.length > 0 ? allIntakes[0].intakeGuid : '')
 
@@ -104,10 +113,10 @@ export default function UniversityExamQpBookletPrintPage() {
 
   const effectiveType: EffectiveType = selectedUnitType === 'Combined' ? combinedType : selectedUnitType
 
-  const formComplete = Boolean(intakeGuid && programGuid && semesterGuid && courseUnitGuid)
-  const canPrintBooklet = formComplete && effectiveType === 'Theory' && permissions.add
-  const canPrintQuestionPaper = formComplete && effectiveType !== 'Project' && permissions.add
-  const canDeletePracticalQp = formComplete && effectiveType === 'Practical' && permissions.delete
+  const formComplete = Boolean(programGuid && semesterGuid && courseUnitGuid)
+  const canPrintBooklet = formComplete && Boolean(intakeGuid) && effectiveType === 'Theory' && canPrint
+  const canPrintQuestionPaper = formComplete && Boolean(intakeGuid) && effectiveType !== 'Project' && canPrint
+  const canDeletePracticalQp = formComplete && Boolean(intakeGuid) && effectiveType === 'Practical' && permissions.delete
 
   // Mutations
   const printBooklet = usePrintUeBooklet()
@@ -145,6 +154,7 @@ export default function UniversityExamQpBookletPrintPage() {
     setSemesterGuid('')
     setCourseUnitGuid('')
     setCombinedType('Theory')
+    setValidationError(null)
   }
 
   const download = (blob: Blob, filename: string | null, fallback: string) => {
@@ -174,7 +184,9 @@ export default function UniversityExamQpBookletPrintPage() {
       download(file.blob, file.filename, 'Booklet.pdf')
       showToast(result.wasReprint ? 'Booklet reprinted successfully.' : 'Booklet downloaded successfully.', 'success')
     } catch (error: any) {
-      showToast(error?.message || 'Failed to print booklet.', 'error')
+      const errMsg = error?.message || 'Failed to print booklet. Questions may not be uploaded.'
+      setValidationError(errMsg)
+      showToast(errMsg, 'error')
     }
   }
 
@@ -196,14 +208,19 @@ export default function UniversityExamQpBookletPrintPage() {
         return
       }
       if (outcome === 'ExamRuleNotSet') {
-        showToast(message || 'University Exam not yet Scheduled!!', 'error')
+        const msg = message || 'University Exam not yet Scheduled!!'
+        setValidationError(msg)
+        showToast(msg, 'error')
         return
       }
       if (outcome === 'QuestionsNotAvailable') {
-        showToast(message || 'Questions are not yet uploaded!!', 'error')
+        const msg = message || 'Questions are not yet uploaded for this course unit!!'
+        setValidationError(msg)
+        showToast(msg, 'error')
         return
       }
       if (outcome === 'Printed' || outcome === 'Reprinted') {
+        setValidationError(null)
         const file = effectiveType === 'Practical'
           ? await downloadPracticalWord.mutateAsync(practicalRequest())
           : await downloadTheoryWord.mutateAsync(request())
@@ -218,7 +235,9 @@ export default function UniversityExamQpBookletPrintPage() {
         showToast('Unexpected response from the server — the question paper may not have been printed.', 'error')
       }
     } catch (error: any) {
-      showToast(error?.message || 'Failed to print question paper.', 'error')
+      const errMsg = error?.message || 'Failed to print question paper. Questions may not be uploaded.'
+      setValidationError(errMsg)
+      showToast(errMsg, 'error')
     }
   }
 
@@ -248,17 +267,21 @@ export default function UniversityExamQpBookletPrintPage() {
 
   const bookletHint = !formComplete
     ? 'Select Programme, Semester and Course Unit first.'
-    : effectiveType !== 'Theory'
-      ? 'Booklet printing is currently available for Theory only.'
-      : !permissions.add
-        ? 'You do not have permission to print booklets.'
-        : ''
+    : !intakeGuid
+      ? 'Academic intake could not be determined. Please refresh.'
+      : effectiveType !== 'Theory'
+        ? 'Booklet printing is currently available for Theory only.'
+        : !canPrint
+          ? 'You do not have permission to print booklets.'
+          : ''
 
   const qpHint = !formComplete
     ? 'Select Programme, Semester and Course Unit first.'
-    : !permissions.add
-      ? 'You do not have permission to print question papers.'
-      : ''
+    : !intakeGuid
+      ? 'Academic intake could not be determined. Please refresh.'
+      : !canPrint
+        ? 'You do not have permission to print question papers.'
+        : ''
 
   return (
     <div className="page active">
@@ -340,6 +363,23 @@ export default function UniversityExamQpBookletPrintPage() {
                 <span className="font-medium">{type}</span>
               </label>
             ))}
+          </div>
+        )}
+
+        {validationError && (
+          <div className="mx-5 mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <i className="lni lni-warning text-base text-red-500 flex-shrink-0" />
+              <span className="font-medium">{validationError}</span>
+            </div>
+            <button
+              type="button"
+              className="text-red-400 hover:text-red-700 p-1 rounded transition-colors"
+              onClick={() => setValidationError(null)}
+              title="Dismiss"
+            >
+              <i className="lni lni-close text-xs" />
+            </button>
           </div>
         )}
 
