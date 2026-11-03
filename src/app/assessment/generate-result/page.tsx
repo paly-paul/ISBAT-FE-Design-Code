@@ -119,6 +119,97 @@ function warningText(w: GenerateWarning) {
   return { unit, message: w.message ?? '', rows: w.rowCount ?? null }
 }
 
+interface MissingWeightageUnit {
+  unitCode: string
+  unitName: string
+  detail: string
+  missingCbt: boolean
+  missingCw: boolean
+  missingUe: boolean
+  missingComponents: string[]
+}
+
+interface WeightageErrorState {
+  title: string
+  units: MissingWeightageUnit[]
+  totalCbtMissing: number
+  totalCwMissing: number
+  totalUeMissing: number
+}
+
+function parseWeightageError(msg: string): WeightageErrorState | null {
+  if (!msg || !msg.toLowerCase().includes('weightage is not configured')) return null
+
+  const colonIndex = msg.indexOf(':')
+  const title = colonIndex !== -1 ? msg.substring(0, colonIndex + 1).trim() : 'Weightage is not configured for the following course unit(s):'
+  const rest = colonIndex !== -1 ? msg.substring(colonIndex + 1) : msg
+
+  const items = rest.split(/\s*-\s+(?=[A-Za-z]{2,6}\d{3,5})/g)
+  const units: MissingWeightageUnit[] = []
+
+  for (const item of items) {
+    const trimmed = item.replace(/^-\s*/, '').trim()
+    if (!trimmed) continue
+
+    const lastColon = trimmed.lastIndexOf(':')
+    let left = trimmed
+    let detail = 'CBT, CW, UE weightage not set'
+    if (lastColon !== -1) {
+      left = trimmed.substring(0, lastColon).trim()
+      detail = trimmed.substring(lastColon + 1).trim()
+    }
+
+    const upper = detail.toUpperCase()
+    const missingCbt = upper.includes('CBT')
+    const missingCw = upper.includes('CW') || upper.includes('COURSEWORK')
+    const missingUe = upper.includes('UE') || upper.includes('UNIVERSITY EXAM')
+    const missingComponents: string[] = []
+    if (missingCbt) missingComponents.push('CBT')
+    if (missingCw) missingComponents.push('CW')
+    if (missingUe) missingComponents.push('UE')
+
+    const codeMatch = left.match(/^([A-Za-z0-9/_-]+)\s+(.+)$/)
+    if (codeMatch) {
+      units.push({
+        unitCode: codeMatch[1].trim(),
+        unitName: codeMatch[2].trim(),
+        detail: detail || 'Weightage not set',
+        missingCbt,
+        missingCw,
+        missingUe,
+        missingComponents,
+      })
+    } else {
+      units.push({
+        unitCode: '',
+        unitName: left,
+        detail: detail || 'Weightage not set',
+        missingCbt,
+        missingCw,
+        missingUe,
+        missingComponents,
+      })
+    }
+  }
+
+  const validUnits = units.length > 0 ? units : [{
+    unitCode: '',
+    unitName: rest.trim(),
+    detail: 'Weightage not set',
+    missingCbt: true,
+    missingCw: true,
+    missingUe: true,
+    missingComponents: ['CBT', 'CW', 'UE'],
+  }]
+
+  return {
+    title,
+    units: validUnits,
+    totalCbtMissing: validUnits.filter(u => u.missingCbt).length,
+    totalCwMissing: validUnits.filter(u => u.missingCw).length,
+    totalUeMissing: validUnits.filter(u => u.missingUe).length,
+  }
+}
 export default function GenerateResultPage() {
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 4500) }
@@ -181,6 +272,10 @@ export default function GenerateResultPage() {
     setApplied(null) // grid belongs to one intake
     setSearchInput('')
     setSearch('')
+    setWeightageError(null)
+    setShowWeightageModal(false)
+    setWeightageSearch('')
+    setWeightageComponentFilter('ALL')
   }
 
   function showResult() {
@@ -198,6 +293,9 @@ export default function GenerateResultPage() {
     setSearchInput('')
     setSearch('')
     setPage(1)
+    setWeightageError(null)
+    setShowWeightageModal(false)
+    setWeightageSearch('')
   }
 
   function handleTableSearchChange(val: string) {
@@ -285,6 +383,10 @@ export default function GenerateResultPage() {
 
   const [confirm, setConfirm] = useState<ConfirmState>(null)
   const [generated, setGenerated] = useState<GenerateResultResponse | null>(null)
+  const [weightageError, setWeightageError] = useState<WeightageErrorState | null>(null)
+  const [showWeightageModal, setShowWeightageModal] = useState(false)
+  const [weightageSearch, setWeightageSearch] = useState('')
+  const [weightageComponentFilter, setWeightageComponentFilter] = useState<'ALL' | 'CBT' | 'CW' | 'UE'>('ALL')
 
   function doGenerate() {
     if (!draft.intakeGuid) { showToast('Select an Academic Intake.', 'error'); return }
@@ -294,6 +396,8 @@ export default function GenerateResultPage() {
       confirmLabel: 'Generate',
       onConfirm: () => generateMut.mutate(draft.intakeGuid, {
         onSuccess: res => {
+          setWeightageError(null)
+          setShowWeightageModal(false)
           setGenerated(res)
           // Show the new results straight away and ensure applied state is updated
           const term = draft.studentName?.trim() || ''
@@ -308,7 +412,17 @@ export default function GenerateResultPage() {
           setSearch(term)
           setPage(1)
         },
-        onError: err => showToast(errMsg(err, 'Could not generate the results.'), 'error'),
+        onError: err => {
+          const msg = errMsg(err, 'Could not generate the results.')
+          const parsed = parseWeightageError(msg)
+          if (parsed && parsed.units.length > 0) {
+            setWeightageError(parsed)
+            setShowWeightageModal(true)
+            showToast(`Weightage is not configured for ${parsed.units.length} course unit(s).`, 'error')
+          } else {
+            showToast(msg, 'error')
+          }
+        },
       }),
     })
   }
@@ -485,7 +599,31 @@ export default function GenerateResultPage() {
           </div>
         </div>
 
-        {/* Actions */}
+        {/* Missing weightage banner */}
+{weightageError && (
+  <div className="card p-4 mb-4 border-red-200 bg-red-50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+    <div className="flex items-start gap-3">
+      <i className="lni lni-warning text-red-600 text-xl flex-shrink-0 mt-0.5" />
+      <div>
+        <span className="font-bold text-red-800 text-sm">
+          Weightage not configured for {weightageError.units.length} course unit(s)
+        </span>
+        <p className="text-xs text-red-700 mt-0.5">
+          Results cannot be generated for <strong>{intakeLabel}</strong> until CBT, Coursework, and UE weightages are configured.
+        </p>
+      </div>
+    </div>
+    <button
+      type="button"
+      className="btn btn-neu btn-sm text-red-700 border-red-300 hover:bg-red-100 flex items-center gap-1.5 flex-shrink-0 self-start sm:self-center"
+      onClick={() => setShowWeightageModal(true)}
+    >
+      <i className="lni lni-list"></i> View Course Units ({weightageError.units.length})
+    </button>
+  </div>
+)}
+
+{/* Actions */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
           <div className="card" style={{ padding: 20, marginBottom: 0 }}>
             <div className="card-title mb-1"><span className="ctitle-icon"><i className="lni lni-cogs"></i></span> Intake Actions</div>
@@ -761,7 +899,209 @@ export default function GenerateResultPage() {
         </div>
       )}
 
-      <Toast toast={toast} />
+      {/* Weightage validation modal */}
+{showWeightageModal && weightageError && (
+  <div className="modal-overlay open" onClick={() => setShowWeightageModal(false)} style={{ zIndex: 600 }}>
+    <div
+      className="modal modal-flex"
+      style={{ maxWidth: 720, borderRadius: 12, height: 'auto', maxHeight: '88vh' }}
+      onClick={e => e.stopPropagation()}
+    >
+            <div
+        className="modal-hdr"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          padding: '16px 20px',
+          background: '#fef2f2',
+          borderBottom: '1px solid #fee2e2',
+          borderTopLeftRadius: 12,
+          borderTopRightRadius: 12,
+        }}
+      >
+        <div className="modal-title font-semibold text-base flex items-center gap-2.5" style={{ color: "#991b1b" }}>
+          <span style={{ width: 28, height: 28, borderRadius: "50%", background: "#fee2e2", display: "flex", alignItems: "center", justifyContent: "center", color: "#dc2626" }}>
+            <i className="lni lni-warning" style={{ fontSize: 16 }}></i>
+          </span>
+          <span>Weightage Configuration Required (CBT, CW, UE)</span>
+        </div>
+        <button
+          type="button"
+          className="modal-close transition-colors ml-auto text-slate-400 hover:text-slate-600"
+          onClick={() => setShowWeightageModal(false)}
+          style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 18 }}
+          aria-label="Close"
+        >
+          <i className="lni lni-close"></i>
+        </button>
+      </div>
+
+      <div className="p-6 bg-white flex-1 overflow-y-auto">
+        {/* Guidance and Component Count Chips */}
+        <div className="p-3.5 mb-4 rounded-lg bg-red-50 border border-red-200 text-red-800 text-xs flex items-start gap-2.5">
+          <i className="lni lni-information text-red-600 text-base mt-0.5 flex-shrink-0" />
+          <div className="flex-1">
+            <p className="font-semibold mb-1">
+              Weightage missing for {weightageError.units.length} course unit(s) in {intakeLabel}
+            </p>
+            <p className="text-red-700 leading-relaxed mb-2">
+              Results cannot be generated until each course unit has its <strong>CBT</strong>, <strong>CW (Coursework)</strong>, and <strong>UE (University Exam)</strong> weightage set (totaling 100%).
+            </p>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[11px] text-red-900 font-medium">Missing across units:</span>
+              {weightageError.totalCbtMissing > 0 && (
+                <span className="badge badge-red font-bold text-[11px] px-2 py-0.5">
+                  CBT: {weightageError.totalCbtMissing} unit(s)
+                </span>
+              )}
+              {weightageError.totalCwMissing > 0 && (
+                <span className="badge badge-amber font-bold text-[11px] px-2 py-0.5" style={{ background: "#fef3c7", color: "#92400e", border: "1px solid #fde68a" }}>
+                  CW: {weightageError.totalCwMissing} unit(s)
+                </span>
+              )}
+              {weightageError.totalUeMissing > 0 && (
+                <span className="badge badge-indigo font-bold text-[11px] px-2 py-0.5" style={{ background: "#ede9fe", color: "#5b21b6", border: "1px solid #ddd6fe" }}>
+                  UE: {weightageError.totalUeMissing} unit(s)
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Filter Bar: Search + Component Tabs */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mb-3">
+          <div className="flex-1">
+            <input
+              type="text"
+              className="ctrl text-xs w-full"
+              placeholder="Filter by course code or name…"
+              value={weightageSearch}
+              onChange={e => setWeightageSearch(e.target.value)}
+            />
+          </div>
+          <div className="pc-tabs flex-shrink-0" style={{ marginBottom: 0, padding: 3 }}>
+            <button
+              type="button"
+              className={`pc-tab-btn ${weightageComponentFilter === "ALL" ? "active" : ""}`}
+              style={{ padding: "4px 10px", fontSize: 11 }}
+              onClick={() => setWeightageComponentFilter("ALL")}
+            >
+              All ({weightageError.units.length})
+            </button>
+            <button
+              type="button"
+              className={`pc-tab-btn ${weightageComponentFilter === "CBT" ? "active" : ""}`}
+              style={{ padding: "4px 10px", fontSize: 11 }}
+              onClick={() => setWeightageComponentFilter("CBT")}
+            >
+              CBT ({weightageError.totalCbtMissing})
+            </button>
+            <button
+              type="button"
+              className={`pc-tab-btn ${weightageComponentFilter === "CW" ? "active" : ""}`}
+              style={{ padding: "4px 10px", fontSize: 11 }}
+              onClick={() => setWeightageComponentFilter("CW")}
+            >
+              CW ({weightageError.totalCwMissing})
+            </button>
+            <button
+              type="button"
+              className={`pc-tab-btn ${weightageComponentFilter === "UE" ? "active" : ""}`}
+              style={{ padding: "4px 10px", fontSize: 11 }}
+              onClick={() => setWeightageComponentFilter("UE")}
+            >
+              UE ({weightageError.totalUeMissing})
+            </button>
+          </div>
+        </div>
+
+        {/* Table with explicitly highlighted CBT, CW, UE pills */}
+        <div className="border border-slate-200 rounded-lg max-h-[340px] overflow-auto">
+          <table className="tbl w-full text-xs" style={{ width: "100%", minWidth: 620, tableLayout: "fixed" }}>
+            <thead className="bg-slate-50 sticky top-0 z-10">
+              <tr>
+                <th style={{ width: 44, textAlign: "center" }}>#</th>
+                <th style={{ width: 115 }}>Course Code</th>
+                <th style={{ width: "auto" }}>Course Unit Name</th>
+                <th style={{ width: 160, textAlign: "right" }}>Missing Components</th>
+              </tr>
+            </thead>
+            <tbody>
+              {weightageError.units
+                .filter(u => {
+                  if (weightageComponentFilter === "CBT" && !u.missingCbt) return false
+                  if (weightageComponentFilter === "CW" && !u.missingCw) return false
+                  if (weightageComponentFilter === "UE" && !u.missingUe) return false
+                  if (weightageSearch.trim()) {
+                    const s = weightageSearch.toLowerCase().trim()
+                    return u.unitCode.toLowerCase().includes(s) || u.unitName.toLowerCase().includes(s)
+                  }
+                  return true
+                })
+                .map((u, idx) => (
+                  <tr key={idx} className="hover:bg-slate-50">
+                    <td style={{ textAlign: "center", color: "var(--g400)" }}>{idx + 1}</td>
+                    <td>
+                      <span className="font-mono font-semibold text-slate-800 bg-slate-100 px-1.5 py-0.5 rounded text-[11px]">
+                        {u.unitCode || "—"}
+                      </span>
+                    </td>
+                    <td className="font-medium text-slate-700" style={{ whiteSpace: "normal", wordBreak: "break-word", lineHeight: 1.4 }}>{u.unitName}</td>
+                    <td style={{ textAlign: "right" }}>
+                      <div className="flex items-center justify-end gap-1 flex-wrap">
+                        {u.missingCbt && (
+                          <span className="badge badge-red text-[10px] font-bold px-1.5 py-0.5" title="CBT weightage not set">
+                            CBT
+                          </span>
+                        )}
+                        {u.missingCw && (
+                          <span
+                            className="badge badge-amber text-[10px] font-bold px-1.5 py-0.5"
+                            style={{ background: "#fef3c7", color: "#92400e", border: "1px solid #fde68a" }}
+                            title="CW (Coursework) weightage not set"
+                          >
+                            CW
+                          </span>
+                        )}
+                        {u.missingUe && (
+                          <span
+                            className="badge badge-indigo text-[10px] font-bold px-1.5 py-0.5"
+                            style={{ background: "#ede9fe", color: "#5b21b6", border: "1px solid #ddd6fe" }}
+                            title="UE (University Exam) weightage not set"
+                          >
+                            UE
+                          </span>
+                        )}
+                        {u.missingComponents.length === 0 && (
+                          <span className="badge badge-red text-[10px]">{u.detail}</span>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Modal Footer */}
+        <div className="flex items-center justify-between mt-5 pt-4 border-t border-slate-200 text-xs">
+          <span className="text-slate-500">
+            Total affected course units: <strong>{weightageError.units.length}</strong>
+          </span>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => setShowWeightageModal(false)}
+          >
+            Understood, Close
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+)}
+
+<Toast toast={toast} />
     </>
   )
 }
