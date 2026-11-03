@@ -10,8 +10,6 @@ import { SuccessPopup } from '@/components/modals/shared/SuccessPopup'
 import { SingleQuestionModal } from '@/components/modals/assessment/SingleQuestionModal'
 import { RichTextDisplay, stripHtmlTags } from '@/components/RichTextEditor'
 import { useIntakesDropdown, useCurrentAcademicIntake } from '@/hooks/academic/useIntakes'
-import { useEmployees } from '@/hooks/employee/useEmployees'
-import { EmployeeListItem } from '@/lib/api/employee/employee'
 import { getSessionIdentity, getLoggedInUserGuid } from '@/lib/session'
 import {
   useSingleQuestionCategories,
@@ -56,7 +54,7 @@ export default function QuestionBankUploadPage() {
   // ── Global Scope State: Academic Intake & Faculty ───────────────────────────
   const [intakeGuid, setIntakeGuid] = useState<string>('')
   const [loggedInUserGuid, setLoggedInUserGuid] = useState<string>(() => getLoggedInUserGuid())
-  const [loggedInUserName, setLoggedInUserName] = useState<string>('')
+  const [loggedInUserName, setLoggedInUserName] = useState<string>(() => getSessionIdentity()?.displayName || '')
 
   // ── Tab 1: Question Repository Scope (Single Question API) ──────────────────
   // Categories: Class Test (1), Course Work (2), Class Activity (3)
@@ -96,7 +94,6 @@ export default function QuestionBankUploadPage() {
   // ── Global Queries ──────────────────────────────────────────────────────────
   const { data: intakes, isLoading: isLoadingIntakes } = useIntakesDropdown()
   const { data: currentIntake } = useCurrentAcademicIntake()
-  const { data: employeesData } = useEmployees()
 
   // ── Tab 1 Queries: Question Repository (Single Question Endpoints) ──────────
   const { data: singleCategories, isLoading: isLoadingSingleCategories } = useSingleQuestionCategories()
@@ -454,13 +451,6 @@ export default function QuestionBankUploadPage() {
     return intakes?.find(i => i.intakeGuid === intakeGuid)
   }, [intakes, intakeGuid])
 
-  const loggedInEmployee = useMemo(() => {
-    if (loggedInUserGuid && employeesData) {
-      return employeesData.find((e: EmployeeListItem) => e.employeeGuid === loggedInUserGuid)
-    }
-    return null
-  }, [employeesData, loggedInUserGuid])
-
   // ── Filtered Live Questions ─────────────────────────────────────────────────
   const filteredLiveQuestions = useMemo(() => {
     if (!liveQuestions) return []
@@ -666,11 +656,11 @@ export default function QuestionBankUploadPage() {
             </div>
 
             <div className="flex items-center gap-2 text-xs">
-              {(loggedInEmployee || loggedInUserName || loggedInUserGuid) && (
+              {(loggedInUserName || loggedInUserGuid) && (
                 <span className="flex items-center gap-1.5 bg-slate-50 text-slate-600 px-2.5 py-1 rounded-md border border-slate-200">
                   <i className="lni lni-user text-indigo-600 text-xs"></i>
                   <span>
-                    Faculty: <strong className="text-slate-800">{loggedInEmployee?.empName || loggedInUserName || 'Current User'}</strong>
+                    Faculty: <strong className="text-slate-800">{loggedInUserName || 'Current User'}</strong>
                   </span>
                 </span>
               )}
