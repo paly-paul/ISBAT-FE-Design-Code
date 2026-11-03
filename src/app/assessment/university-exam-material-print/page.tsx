@@ -118,8 +118,11 @@ export default function UniversityExamMaterialPrintPage() {
   const effectiveType: EffectiveType = selectedUnitType === 'Combined' ? combinedType : selectedUnitType
   const intakeGuid = selectedIntakeGuid || currentIntake?.intakeGuid || ''
   const formComplete = Boolean(intakeGuid && programGuid && semesterGuid && courseUnitGuid)
-  const canPrintBooklet = formComplete && effectiveType === 'Theory' && permissions.add
-  const canPrintQuestionPaper = formComplete && effectiveType !== 'Project' && permissions.add
+  const canPrint = permissions.print !== false && Boolean(
+    permissions.print || permissions.generate || permissions.add || permissions.view || permissions.get
+  )
+  const canPrintBooklet = formComplete && effectiveType === 'Theory' && canPrint
+  const canPrintQuestionPaper = formComplete && effectiveType !== 'Project' && canPrint
 
   const printBooklet = usePrintUeBooklet()
   const downloadBooklet = useDownloadUeBookletPdf()
@@ -232,7 +235,7 @@ export default function UniversityExamMaterialPrintPage() {
 
   const bookletHint = !formComplete ? 'Select Programme, Semester and Course Unit first.'
     : effectiveType !== 'Theory' ? 'Booklet printing is currently available for Theory only.'
-      : !permissions.add ? 'You do not have permission to print booklets.' : ''
+      : !canPrint ? 'You do not have permission to print booklets.' : ''
 
   return (
     <div className="page active">
@@ -295,7 +298,7 @@ export default function UniversityExamMaterialPrintPage() {
           </button>
           {effectiveType !== 'Project' && (
             <button className="btn btn-neu" onClick={() => handleQuestionPaperPrint()} disabled={!canPrintQuestionPaper || isWorking}
-              title={!permissions.add ? 'You do not have permission to print question papers.' : ''}>
+              title={!canPrint ? 'You do not have permission to print question papers.' : ''}>
               <i className="lni lni-download" /> QP Print in MS Word
             </button>
           )}

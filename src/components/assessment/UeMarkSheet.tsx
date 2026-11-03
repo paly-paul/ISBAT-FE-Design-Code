@@ -14,7 +14,7 @@ import {
 } from '@/hooks/assessment/useUeMarks'
 import { getUeMarkImportExam, UeMarkImportExam } from '@/lib/api/assessment/ueMarkImport'
 import {
-  ALL_UE_MARK_FIELDS, ueColumnsFor,
+  ALL_UE_MARK_FIELDS, ueColumnsFor, hasTheoryMarks,
   UeDetailedMarkRowDto, UeMarkField, UeMarkValues,
 } from '@/lib/api/assessment/ueMarks'
 
@@ -136,6 +136,10 @@ export function UeMarkSheet({ mode }: { mode: UeMarkSheetMode }) {
   // ── Row editing ──
   const columns = sheet ? ueColumnsFor(sheet.layout, sheet.maxMarks) : []
   const isVerified = sheet?.isVerified ?? exam?.isVerified ?? false
+  const isTheory = (sheet?.layout === 'Theory') || (exam?.layout === 0)
+  const isTheoryNoRule = Boolean(isTheory && (
+    sheet ? !hasTheoryMarks(sheet.maxMarks) : (exam ? !hasTheoryMarks(exam.maxMarks) : false)
+  ))
 
   function canEdit(row: UeDetailedMarkRowDto) {
     return canSave && !row.isAbsent && !isVerified
@@ -331,8 +335,17 @@ export function UeMarkSheet({ mode }: { mode: UeMarkSheetMode }) {
           </div>
         )}
 
+        {isTheoryNoRule && (
+          <div className="px-5 pb-3">
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm flex items-center gap-2">
+              <i className="lni lni-warning text-base text-red-500 flex-shrink-0" />
+              <span>The exam rule has no section marks configured for this exam.</span>
+            </div>
+          </div>
+        )}
+
         <div className="px-5 pb-5 flex gap-2">
-          <button className="btn btn-primary" disabled={!exam || grid.isFetching} onClick={handleShowSheet}>
+          <button className="btn btn-primary" disabled={!exam || grid.isFetching || isTheoryNoRule} onClick={handleShowSheet} title={isTheoryNoRule ? 'The exam rule has no section marks configured for this exam.' : undefined}>
             <i className="lni lni-eye"></i> Show Mark Sheet
           </button>
           <button className="btn btn-neu" onClick={handleRefresh}>
@@ -360,6 +373,10 @@ export function UeMarkSheet({ mode }: { mode: UeMarkSheetMode }) {
           {gridError ? (
             <div className="p-8 text-center text-sm" style={{ color: 'var(--red)' }}>
               <i className="lni lni-warning text-2xl block mb-2"></i>{gridErrorText}
+            </div>
+          ) : columns.length === 0 && sheet?.layout === 'Theory' ? (
+            <div className="p-8 text-center text-sm" style={{ color: 'var(--red)' }}>
+              <i className="lni lni-warning text-2xl block mb-2"></i>The exam rule has no section marks configured for this exam.
             </div>
           ) : (
             <ScrollTable>
