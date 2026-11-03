@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import { Toast } from '@/components/Toast'
 import { SearchSelect } from '@/components/SearchSelect'
-import { useIntakes, useCurrentAcademicIntake } from '@/hooks/academic/useIntakes'
+import { useIntakesDropdown, useCurrentAcademicIntake } from '@/hooks/academic/useIntakes'
 import { useUeMaterialPrintPrograms, useUeMaterialPrintSemesters } from '@/hooks/assessment/useUeMaterialPrint'
 import {
   useResitCourseUnits,
@@ -44,7 +44,7 @@ export default function ResitQuestionPrintPage() {
   const [confirmMessage, setConfirmMessage] = useState('')
 
   // Data Hooks
-  const { data: intakes, isLoading: intakesLoading } = useIntakes()
+  const { data: intakes, isLoading: intakesLoading } = useIntakesDropdown()
   const { data: currentIntake } = useCurrentAcademicIntake()
   const { data: programs, isLoading: programsLoading } = useUeMaterialPrintPrograms()
   const { data: semesters, isLoading: semLoading } = useUeMaterialPrintSemesters(selectedProgramGuid || null)

@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import { Toast } from '@/components/Toast'
 import { SearchSelect } from '@/components/SearchSelect'
-import { useIntakes } from '@/hooks/academic/useIntakes'
+import { useIntakesDropdown } from '@/hooks/academic/useIntakes'
 import {
   useUePracticalPrintPrograms as useUeProjectPrintPrograms,
   useUePracticalPrintSemesters as useUeProjectPrintSemesters,
@@ -25,7 +25,7 @@ export default function UniversityExamProjectBookletPrintPage() {
   const [selectedCourseUnitGuid, setSelectedCourseUnitGuid] = useState<string>('')
 
   // Data Hooks
-  const { data: intakes, isLoading: intakesLoading } = useIntakes()
+  const { data: intakes, isLoading: intakesLoading } = useIntakesDropdown()
   const { data: programs, isLoading: programsLoading } = useUeProjectPrintPrograms()
   const { data: semesters, isLoading: semLoading } = useUeProjectPrintSemesters(selectedProgramGuid || null)
   const { data: allProgramUnits, isLoading: unitsLoading } = useUeProjectProgramUnits(selectedProgramGuid || null)

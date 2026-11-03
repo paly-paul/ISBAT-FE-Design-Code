@@ -6,7 +6,7 @@ import { SearchSelect } from '@/components/SearchSelect'
 import { SuccessPopup } from '@/components/modals/shared/SuccessPopup'
 import { Toast } from '@/components/Toast'
 import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
-import { useIntakes, useCurrentAcademicIntake } from '@/hooks/academic/useIntakes'
+import { useIntakesDropdown, useCurrentAcademicIntake } from '@/hooks/academic/useIntakes'
 import {
   useUeMarkImportUnits,
   useUeMarkImportExam,
@@ -54,7 +54,7 @@ export default function UeMarkImportPage() {
 
   // -- Queries --
   const { data: semesters, isLoading: isLoadingSemesters } = useSemestersForProgram(program?.programGuid || null, !!program)
-  const { data: intakes, isLoading: isLoadingIntakes } = useIntakes()
+  const { data: intakes, isLoading: isLoadingIntakes } = useIntakesDropdown()
   const { data: currentIntake } = useCurrentAcademicIntake()
 
   // Auto-select current intake

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { SuccessPopup } from '@/components/modals/shared/SuccessPopup'
 import { useCreateResitConfig, useResitConfig, useUpdateResitConfig } from '@/hooks/assessment/useResitConfigs'
-import { useIntakes } from '@/hooks/academic/useIntakes'
+import { useIntakesDropdown } from '@/hooks/academic/useIntakes'
 import { SearchSelect } from '@/components/SearchSelect'
 
 interface ResitConfigFormModalProps {
@@ -17,7 +17,7 @@ export function ResitConfigFormModal({ isOpen, onClose, showToast, editingGuid }
   const createMut = useCreateResitConfig()
   const updateMut = useUpdateResitConfig()
   
-  const { data: intakes } = useIntakes()
+  const { data: intakes } = useIntakesDropdown()
 
   const [refCode, setRefCode] = useState('')
   const [academicIntakeGuid, setAcademicIntakeGuid] = useState('')

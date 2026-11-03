@@ -6,7 +6,7 @@ import { Toast } from '@/components/Toast'
 import { DocumentPreviewModal } from '@/components/modals/shared/DocumentPreviewModal'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { EmptyState } from '@/components/EmptyState'
-import { useIntakes } from '@/hooks/academic/useIntakes'
+import { useIntakesDropdown } from '@/hooks/academic/useIntakes'
 import {
   usePendingEvaluations,
   useStudentsForEvaluation,
@@ -50,7 +50,7 @@ export default function IaEvaluationPage() {
   const [rosterStatusTab, setRosterStatusTab] = useState<RosterStatusTab>('All')
 
   // ── 1. Academic Intake Selection ──────────────────────────────────────────
-  const { data: intakesData, isLoading: isIntakesLoading } = useIntakes()
+  const { data: intakesData, isLoading: isIntakesLoading } = useIntakesDropdown()
   const [selectedIntakeGuid, setSelectedIntakeGuid] = useState<string>('')
 
   // Automatically select current intake or first available
