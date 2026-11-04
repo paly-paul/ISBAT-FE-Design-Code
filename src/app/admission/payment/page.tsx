@@ -11,18 +11,19 @@ import { SearchSelect } from '@/components/SearchSelect'
 import DatePicker from '@/components/DatePicker'
 import { useCurrentAcademicIntake, useCurrentAdmissionIntake, useIntake } from '@/hooks/academic/useIntakes'
 import { useSearchCampusesInfinite } from '@/hooks/config/useCampuses'
-import { useCountries, useSearchCountriesInfinite } from '@/hooks/config/useCountries'
+import { HOME_COUNTRY_NAME, useCountryLookup, useKnownCountries, useSearchCountriesInfinite } from '@/hooks/config/useCountries'
 import { useSearchProgramMastersByCampusInfinite } from '@/hooks/academic/useProgramMaster'
 import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
 import { useProgramFeeStructures } from '@/hooks/academic/useProgramFeeStructure'
 import { useBatchTimes } from '@/hooks/config/useBatchTimes'
-import { useBatches } from '@/hooks/academic/useBatches'
-import { useFinanceCurrencies, getDefaultFinanceCurrencyGuid } from '@/hooks/finance/useFinanceCurrencies'
+import { useFilteredBatches } from '@/hooks/academic/useBatches'
+import { getDefaultFinanceCurrencyGuid } from '@/hooks/finance/useFinanceCurrencies'
+import { useCurrenciesDropdown } from '@/hooks/finance/useCurrencies'
+import { ProcBankSearchSelect } from '@/components/ProcBankSearchSelect'
 import { useExchangeRateExists, useExchangeRatesByDate } from '@/hooks/finance/useExchangeRates'
 import { TodayExchangeRateModal } from '@/components/modals/finance/TodayExchangeRateModal'
 import { RatesAlreadySetNote } from '@/components/finance/RatesAlreadySetNote'
-import { useReceiptBooks } from '@/hooks/finance/useReceiptBooks'
-import { useProcBanks } from '@/hooks/finance/useProcBanks'
+import { useReceiptBookDropdown } from '@/hooks/finance/useReceiptBooks'
 import { Country, dialCode, findDefaultCountry } from '@/lib/api/academic/country'
 import { EMPTY_GUID } from '@/lib/api/academic/batch'
 import { useEnquiry, useEnquiries } from '@/hooks/admission/useEnquiries'
@@ -445,11 +446,6 @@ function PaymentPageContent() {
   const campuses = useMemo(() => flattenUniquePages(campusQuery.data?.pages ?? [], c => c.campusGuid), [campusQuery.data])
   const programsByCampus = useMemo(() => flattenUniquePages(programQuery.data?.pages ?? [], p => p.programGuid), [programQuery.data])
   const countries = useMemo(() => flattenUniquePages(countryQuery.data?.pages ?? [], c => c.countryGuid), [countryQuery.data])
-  // `countries` above is only the picker's current search page (20 rows,
-  // fetched once a picker opens) — too partial to pick the default country
-  // or match an enquiry's country against. The full list (one request,
-  // cached) backs those lookups instead; the picker keeps its paged search.
-  const { data: allCountries = [] } = useCountries()
   const { data: semesters = [] } = useSemestersForProgram(form.programGuid, !!form.programGuid)
   const { data: batchTimes = [] } = useBatchTimes()
   // The payment-scoped Dropdowns/Batches.bru endpoint returns a real 200
@@ -459,9 +455,15 @@ function PaymentPageContent() {
   // generic Batches list (same one Batch Management uses, real
   // programGuid/semesterGuid/batchTimeGuid), filtered client-side instead.
   // Same "payment-scoped endpoint is unreliable, use the generic one"
-  // pattern as the Receipt Books field below.
-  const { data: allBatchesData }     = useBatches(1, 1000)
-  const batches = (allBatchesData?.items ?? []).filter(b =>
+  // pattern as the Receipt Books field below. The server narrows by programme
+  // and batch time (it filters by semCode, not semesterGuid), the semester
+  // here; fetched once all three are picked.
+  const { data: batchesData } = useFilteredBatches(
+    1, 100, '', {},
+    { programGuids: [form.programGuid], batchTimeGuids: [form.batchTimeGuid] },
+    !!form.programGuid && !!form.semesterGuid && !!form.batchTimeGuid,
+  )
+  const batches = (batchesData?.items ?? []).filter(b =>
     b.programGuid === form.programGuid && b.semesterGuid === form.semesterGuid && b.batchTimeGuid === form.batchTimeGuid,
   )
   // The payment-scoped Dropdowns/Fees.bru endpoint (getApplicationPaymentFees
@@ -471,31 +473,26 @@ function PaymentPageContent() {
   // "payment-scoped endpoint is unreliable for this page, use the generic
   // master instead" pattern already applied to Batches and Receipt Books
   // above: fall back to the already-confirmed-real Programme Fee Structure
-  // list (same one /academic/fee-structure's own table uses), filtered
-  // client-side by the selected Programme and Active status instead.
-  const { data: allFeeStructuresData } = useProgramFeeStructures(1, 1000)
-  const fees = (allFeeStructuresData?.items ?? []).filter(f => f.programGuid === form.programGuid && f.status)
+  // list (same one /academic/fee-structure's own table uses), asked for just
+  // the selected Programme, with Active status filtered client-side.
+  const { data: feeStructuresData } = useProgramFeeStructures(1, 100, form.programGuid, !!form.programGuid)
+  const fees = (feeStructuresData?.items ?? []).filter(f => f.programGuid === form.programGuid && f.status)
   const { data: exemptionTypes = [] } = useApplicationPaymentExemptionTypes()
   const { data: paymentTypes = [] }  = useApplicationPaymentTypes()
-  const { data: currencies = [] }    = useFinanceCurrencies()
-  // Per Application_Payment_Change_Requests_Final_Updated.md #4 — sourced
-  // from the Proc Bank Master API (m_proc_bank), not the generic Finance
-  // Banks endpoint. CONFIRMED (the hard way): swapping this to the generic
-  // Banks master produced a live "Bank account not found" 400 on submit —
-  // the payment's bankGuid needs a real bank ACCOUNT (ProcBank has
-  // compCode/branchCode/accountCode; the generic Banks master returns those
-  // as null on every row, i.e. it's a bank-name list only, not accounts).
-  // Same status enum convention as procBank.ts's STATUS_VALUES
-  // (1 = Inactive, 2 = Active) — only offer Active.
-  const { data: allProcBanks = [] }  = useProcBanks()
-  const banks = allProcBanks.filter(b => b.status === 2)
+  // The dropdown's isDefault is a boolean, GET /currencies' a number; the rest
+  // of this page and getDefaultFinanceCurrencyGuid expect the number.
+  const { data: currencyDropdownItems } = useCurrenciesDropdown()
+  const currencies = useMemo(
+    () => (currencyDropdownItems ?? []).flatMap(c => c.currencyGuid
+      ? [{ currencyGuid: c.currencyGuid, currencyCode: c.currencyCode, currencyName: c.currencyName, isDefault: c.isDefault ? 1 : 0 }]
+      : []),
+    [currencyDropdownItems],
+  )
   // The payment-scoped Dropdowns/ReceiptBooks.bru endpoint 500s server-side
   // (undocumented required "category" int query param) — fall back to the
-  // already-working generic Finance Receipt Books endpoint instead. Same
-  // receiptBookGuid/bookCode shape, just the full master list rather than a
-  // payment-filtered one, so only offer Active (status === 1) ones here.
-  const { data: allReceiptBooks = [] } = useReceiptBooks()
-  const receiptBooks = allReceiptBooks.filter(r => r.status === 1)
+  // generic Finance Receipt Books dropdown instead, which returns active
+  // books only. Filtered by payment method below.
+  const { data: receiptBooks = [] } = useReceiptBookDropdown()
 
   // Country and phone-code dropdowns now use the server-backed search/scroll
   // list, same pattern as the public enquiry pages, instead of a one-shot
@@ -519,6 +516,15 @@ function PaymentPageContent() {
   // carry) and prefill the form from it, confirmed via a real GET
   // /api/v1/admissions/enquiries/:guid response.
   const { data: selectedEnquiry } = useEnquiry(form.enquiryGuid || null, !!form.enquiryGuid)
+  // `countries` above is only the picker's current search page, too partial to
+  // default from or match an enquiry against. These small lookups cover the
+  // home country and the enquiry's own countries, plus whatever pickers loaded.
+  const { home: homeCountry, known: knownCountries } = useKnownCountries(countries)
+  const countryLookup = useCountryLookup([HOME_COUNTRY_NAME, selectedEnquiry?.countryName ?? '', selectedEnquiry?.mobileCountryName ?? ''])
+  const allCountries = useMemo(
+    () => [...new Map([...knownCountries, ...countryLookup.countries].map(c => [c.countryGuid, c])).values()],
+    [knownCountries, countryLookup.countries],
+  )
   // Guards against re-applying the same enquiry's data over edits the user
   // has since made — e.g. a background refetch on window focus returning a
   // new object for the same guid shouldn't stomp on manual changes.
@@ -544,6 +550,9 @@ function PaymentPageContent() {
 
   useEffect(() => {
     if (!selectedEnquiry) return
+    // The prefill below runs once per enquiry, so wait for its countries: the
+    // dial code would otherwise fall back to the API's prefix (e.g. "IND").
+    if (countryLookup.isLoading) return
 
     const enquiryGuid = selectedEnquiry.enquiryGuid
     const isNewEnquiry = appliedEnquiryGuidRef.current !== enquiryGuid
@@ -602,21 +611,18 @@ function PaymentPageContent() {
         }))
       }
     }
-  }, [selectedEnquiry, allCountries, form.countryGuid])
+  }, [selectedEnquiry, allCountries, form.countryGuid, countryLookup.isLoading])
 
-  // Pre-select the home country (Uganda) on page load once the full list is in
+  // Pre-select the home country (Uganda) on page load once it's loaded
   useEffect(() => {
-    if (allCountries.length > 0 && !form.countryGuid && !form.enquiryGuid) {
-      const defaultCountry = findDefaultCountry(allCountries)
-      if (defaultCountry) {
-        setForm(prev => ({
-          ...prev,
-          countryGuid: defaultCountry.countryGuid,
-          phoneCode: dialCode(defaultCountry),
-        }))
-      }
+    if (homeCountry && !form.countryGuid && !form.enquiryGuid) {
+      setForm(prev => ({
+        ...prev,
+        countryGuid: homeCountry.countryGuid,
+        phoneCode: dialCode(homeCountry),
+      }))
     }
-  }, [allCountries, form.countryGuid, form.enquiryGuid])
+  }, [homeCountry, form.countryGuid, form.enquiryGuid])
 
   // Pre-select default currency on page load once currencies list is loaded
   useEffect(() => {
@@ -711,7 +717,6 @@ function PaymentPageContent() {
   const exemptionOptions: Option[] = [{ value: '', label: '-- None (Pay Full Fee) --' }, ...exemptionTypes.map(e => ({ value: e.exemptionTypeGuid, label: e.label }))]
   const payTypeOptions  = paymentTypes.map(t => ({ value: String(t.intPaymentType), label: t.paymentTypeName }))
   const currencyOptions = currencies.map(c => ({ value: c.currencyGuid, label: c.currencyCode }))
-  const bankOptions     = banks.map(b => ({ value: b.procBankGuid, label: b.bankName }))
 
 
   const isWaived = !!form.exemptionTypeGuid
@@ -1334,12 +1339,10 @@ function PaymentPageContent() {
               <div className="mt-4 p-4 rounded-xl bg-g50 border border-g200">
                 <h3 className="font-semibold text-g700 mb-3" style={{ fontSize: 'var(--fs-sm)' }}>Bank Transfer Details</h3>
                 <Field label="Bank Name" req error={errorFor('bankGuid')}>
-                  <select className="ctrl" value={form.bankGuid} onChange={e => set('bankGuid', e.target.value)} disabled={isWaived}>
-                    <option value="">Select bank</option>
-                    {bankOptions.map(option => (
-                      <option key={option.value} value={option.value}>{option.label}</option>
-                    ))}
-                  </select>
+                  {/* Proc Bank Master, not the generic Banks master: bankGuid must
+                      be a real bank account, or submit fails with "Bank account
+                      not found" (Application_Payment_Change_Requests_Final_Updated.md #4). */}
+                  <ProcBankSearchSelect value={form.bankGuid} onChange={v => set('bankGuid', v)} disabled={isWaived} />
                 </Field>
               </div>
             )}

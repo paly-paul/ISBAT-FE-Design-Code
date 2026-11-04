@@ -1,8 +1,8 @@
 'use client'
 import { useEffect, useMemo, useState } from 'react'
 import { SearchSelect } from '@/components/SearchSelect'
-import { useCountries, useSearchCountriesInfinite } from '@/hooks/config/useCountries'
-import { countryPickerOptions, findDefaultCountry, phoneCountryOptions } from '@/lib/api/academic/country'
+import { useKnownCountries, useSearchCountriesInfinite } from '@/hooks/config/useCountries'
+import { countryPickerOptions, phoneCountryOptions } from '@/lib/api/academic/country'
 import { flattenUniquePages } from '@/lib/pagination'
 import type { EnquiryInput } from '@/lib/api/admission/enquiry'
 
@@ -76,14 +76,13 @@ export function EnquirySponsorFields({ value, onChange, errors, onClearError }: 
 
   const countryQuery = useSearchCountriesInfinite(committedSearch, 20, countryPickerOpen || phoneCodePickerOpen)
   const countries = useMemo(() => flattenUniquePages(countryQuery.data?.pages ?? [], c => c.countryGuid), [countryQuery.data])
-  const { data: allCountries = [] } = useCountries()
+  const { home: homeCountry, known: allCountries } = useKnownCountries(countries)
 
   // Default the dial code to Uganda, like the student's phone.
   useEffect(() => {
-    if (value.spPhoneCountryGuid || !allCountries.length) return
-    const home = findDefaultCountry(allCountries)
-    if (home) onChange({ ...value, spPhoneCountryGuid: home.countryGuid })
-  }, [allCountries, value, onChange])
+    if (value.spPhoneCountryGuid || !homeCountry) return
+    onChange({ ...value, spPhoneCountryGuid: homeCountry.countryGuid })
+  }, [homeCountry, value, onChange])
 
   const spCountryOptions = countryPickerOptions(countries, allCountries, value.spCountryGuid)
   const phoneCodeOptions = phoneCountryOptions(countries, allCountries, value.spPhoneCountryGuid)

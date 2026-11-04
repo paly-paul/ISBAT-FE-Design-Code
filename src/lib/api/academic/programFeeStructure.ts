@@ -14,9 +14,8 @@ export interface ProgramFeeStructureHeaderInput {
   lef: number | null
   cef: number | null
   ace: number | null
-  // Lec/Cec/Acec are the currency's intCurrency (a plain int from
-  // /finance/currencies), not its currencyGuid — confirmed via the real
-  // save-complete payload. Fee lines are the opposite: currencyGuid.
+  // Integers, per the API (int?), and null unless already set on a saved
+  // record — not currencies. Only fee lines carry a currency (currencyGuid).
   lec: number | null
   cec: number | null
   acec: number | null

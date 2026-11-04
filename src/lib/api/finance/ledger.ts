@@ -55,6 +55,17 @@ export function getLedgers(): Promise<Ledger[]> {
   return apiGet<LedgerListResponse | null>(`/api/v1/finance/ledgers?page=1&pageSize=${ALL_LEDGERS_PAGE_SIZE}`).then(data => data?.items ?? [])
 }
 
+// One page at a time, for the scrolling ledger picker. No search param: the
+// endpoint only takes page and pageSize.
+export function getLedgersPaged(page: number, pageSize: number): Promise<LedgerListResponse> {
+  if (MOCK_AUTH) {
+    const start = (page - 1) * pageSize
+    return Promise.resolve({ items: mockLedgers.slice(start, start + pageSize), totalCount: mockLedgers.length, pageNumber: page, pageSize })
+  }
+  return apiGet<LedgerListResponse | null>(`/api/v1/finance/ledgers?page=${page}&pageSize=${pageSize}`)
+    .then(data => data ?? { items: [], totalCount: 0, pageNumber: page, pageSize })
+}
+
 export function createLedger(input: LedgerInput): Promise<Ledger> {
   if (MOCK_AUTH) {
     const ledger: Ledger = { ledgerGuid: crypto.randomUUID(), ledgerCode: input.ledgerCode, ledgerName: input.ledgerName, intLedger: mockLedgers.length + 1, ledgerNum: mockLedgers.length + 1, intGlAccount: null }
@@ -97,19 +108,4 @@ export function deleteLedger(guid: string): Promise<boolean> {
     return Promise.resolve(true)
   }
   return apiDelete<boolean>(`/api/v1/finance/ledgers/${guid}`)
-}
-
-export interface LedgerDropdownItem {
-  ledgerGuid: string
-  ledgerCode: string
-  ledgerName: string
-  intLedger?: number
-  ledgerNum?: number
-}
-
-export function getLedgersDropdown(search = ''): Promise<LedgerDropdownItem[]> {
-  if (MOCK_AUTH) return Promise.resolve(mockLedgers)
-  const q = search.trim() ? `?search=${encodeURIComponent(search.trim())}` : ''
-  return apiGet<LedgerDropdownItem[] | null>(`/api/v1/finance/ledgers/dropdown${q}`)
-    .then((data: any) => Array.isArray(data) ? data : (data && typeof data === 'object' ? (data.items || Object.values(data).find(Array.isArray) || []) : []))
 }

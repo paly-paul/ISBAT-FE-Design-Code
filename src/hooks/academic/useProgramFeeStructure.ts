@@ -1,4 +1,4 @@
-import { useInfiniteQuery, useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
+import { useInfiniteQuery, useQuery, useMutation, useQueryClient, keepPreviousData, type QueryClient } from '@tanstack/react-query'
 import {
   getProgramFeeStructures,
   getProgramFeeLines,
@@ -73,13 +73,22 @@ export function useProgramFeeLines(feeHdGuid: string | null, enabled: boolean) {
   })
 }
 
+// Everything that can show a fee structure: its lists, its fee lines, and the
+// programme's full details. refetchType 'all' includes closed modals' queries,
+// and it's awaited, because the edit forms prefill once from whatever is cached
+// when they open — a stale entry would load old fee lines into the form.
+function refreshFeeStructureQueries(queryClient: QueryClient, programGuid: string) {
+  return Promise.all([
+    queryClient.invalidateQueries({ queryKey: PROGRAM_FEE_STRUCTURES_KEY, refetchType: 'all' }),
+    queryClient.invalidateQueries({ queryKey: [...PROGRAM_MASTERS_KEY, 'fullDetails', programGuid], refetchType: 'all' }),
+  ])
+}
+
 export function useSaveProgramFeeStructureComplete() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (input: ProgramFeeStructureSaveCompleteInput) => saveProgramFeeStructureComplete(input),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [...PROGRAM_FEE_STRUCTURES_KEY, 'paged'] })
-    },
+    onSuccess: (_result, input) => refreshFeeStructureQueries(queryClient, input.programGuid),
   })
 }
 
@@ -87,9 +96,7 @@ export function useUpdateProgramFeeStructureComplete() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: ({ feeHdGuid, input }: { feeHdGuid: string; input: ProgramFeeStructureUpdateInput }) => updateProgramFeeStructureComplete(feeHdGuid, input),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [...PROGRAM_FEE_STRUCTURES_KEY, 'paged'] })
-    },
+    onSuccess: (_result, { input }) => refreshFeeStructureQueries(queryClient, input.programGuid),
   })
 }
 

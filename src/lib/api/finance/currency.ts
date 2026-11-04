@@ -47,7 +47,7 @@ export function getFinanceCurrencies(): Promise<FinanceCurrency[]> {
 // matching the `UGX` code directly when no row is flagged, then to the
 // first currency in the list as a last resort so the picker is never left
 // on a value that isn't actually one of the options.
-export function getDefaultFinanceCurrencyGuid(currencies: FinanceCurrency[]): string {
+export function getDefaultFinanceCurrencyGuid(currencies: Pick<FinanceCurrency, 'currencyGuid' | 'currencyCode' | 'isDefault'>[]): string {
   const preferred = currencies.find(c => c.isDefault === 1) ?? currencies.find(c => c.currencyCode === 'UGX')
   return preferred?.currencyGuid ?? currencies[0]?.currencyGuid ?? ''
 }

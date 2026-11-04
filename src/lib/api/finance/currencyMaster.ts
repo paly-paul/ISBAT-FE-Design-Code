@@ -136,12 +136,12 @@ export function deleteCurrency(guid: string): Promise<boolean> {
   return apiDelete<boolean>(`/api/v1/finance/currencies/${guid}`)
 }
 
+// No intCurrency here, and isDefault is a boolean, unlike GET /currencies.
 export interface CurrencyDropdownItem {
-  intCurrency: number
   currencyGuid?: string
   currencyCode: string
   currencyName: string
-  isDefault?: number
+  isDefault?: boolean | number
 }
 
 export function getCurrenciesDropdown(search = ''): Promise<CurrencyDropdownItem[]> {

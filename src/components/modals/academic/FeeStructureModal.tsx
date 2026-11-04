@@ -10,7 +10,7 @@ import { useIntakesByGuids, useCurrentAcademicIntake } from '@/hooks/academic/us
 import { IntakeSearchPicker } from '@/components/IntakeSearchPicker'
 import { useCurrenciesDropdown } from '@/hooks/finance/useCurrencies'
 import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
-import { useLedgersDropdown } from '@/hooks/finance/useLedgers'
+import { LedgerSearchSelect } from '@/components/LedgerSearchSelect'
 import { flattenUniquePages } from '@/lib/pagination'
 import {
   useSaveProgramFeeStructureComplete,
@@ -65,11 +65,13 @@ type Structure = {
   status: boolean
   amtPer: string
   lef: string
-  lefCurrency: string
   cef: string
-  cefCurrency: string
   ace: string
-  aceCurrency: string
+  // No input for these: null on a new structure, and a saved record's own
+  // values are sent back unchanged.
+  lec: number | null
+  cec: number | null
+  acec: number | null
 }
 
 function blankItem(id: number): FeeItem {
@@ -79,7 +81,7 @@ function blankItem(id: number): FeeItem {
 function makeDefaultStructures(): Structure[] {
   return [{
     id: 1, programme: '', feeCode: '', description: '', currency: 'UGX', intake: '', discountType: 'Amount', createdVia: 'new', semFees: {},
-    localOrForeign: false, status: true, amtPer: '', lef: '', lefCurrency: '', cef: '', cefCurrency: '', ace: '', aceCurrency: '',
+    localOrForeign: false, status: true, amtPer: '', lef: '', cef: '', ace: '', lec: null, cec: null, acec: null,
   }]
 }
 
@@ -100,7 +102,7 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
   const updateFeeStructureComplete = useUpdateProgramFeeStructureComplete()
   const { data: programDropdownItems = [], isLoading: isProgramLoading } = useProgramDropdown(undefined, isOpen)
   const copyQuery = useSearchProgramFeeStructuresInfinite(committedCopySearch, 20, isOpen && copyPickerOpen)
-  const { data: currencyDropdownItems = [], isLoading: isCurrenciesLoading } = useCurrenciesDropdown(isOpen)
+  const { data: currencyDropdownItems = [] } = useCurrenciesDropdown(isOpen)
   // Real fetch-by-guid now — GET fee-lines/:feeHdGuid, same convention as
   // the rest of the app's real Edit modals. Header fields (feeCode,
   // calcType, lef/cef/ace, intakeGuid, etc.) come from editData itself (the
@@ -122,16 +124,7 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
   const { data: currentAcademicIntake } = useCurrentAcademicIntake(isOpen)
 
   const programOptions = programDropdownItems.map(p => ({ value: p.programGuid, label: `${p.programName} (${p.programCode})` }))
-  // Lec/Cec/Acec carry the currency's intCurrency (a plain int), not its
-  // GUID — confirmed via the real save-complete payload. Rows without one
-  // are left out rather than collapsing onto a shared empty key.
   const financeCurrencies = currencyDropdownItems
-  const currencyIntOptions = useMemo(
-    () => currencyDropdownItems
-      .filter(c => c.intCurrency != null)
-      .map(c => ({ value: String(c.intCurrency), label: `${c.currencyCode} — ${c.currencyName}` })),
-    [currencyDropdownItems],
-  )
 
 
   useEffect(() => {
@@ -209,11 +202,11 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
       status: editData.status,
       amtPer: editData.amtPer != null ? String(editData.amtPer) : '',
       lef: editData.lef != null ? String(editData.lef) : '',
-      lefCurrency: editData.lec != null ? String(editData.lec) : '',
       cef: editData.cef != null ? String(editData.cef) : '',
-      cefCurrency: editData.cec != null ? String(editData.cec) : '',
       ace: editData.ace != null ? String(editData.ace) : '',
-      aceCurrency: editData.acec != null ? String(editData.acec) : '',
+      lec: editData.lec ?? null,
+      cec: editData.cec ?? null,
+      acec: editData.acec ?? null,
     }])
     setActiveIdx(0)
   }, [isOpen, mode, editData, feeLines])
@@ -288,11 +281,11 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
       discountType: source.calcType === 2 ? 'Percentage' : 'Amount',
       amtPer: source.amtPer != null ? String(source.amtPer) : '',
       lef: source.lef != null ? String(source.lef) : '',
-      lefCurrency: source.lec != null ? String(source.lec) : '',
       cef: source.cef != null ? String(source.cef) : '',
-      cefCurrency: source.cec != null ? String(source.cec) : '',
       ace: source.ace != null ? String(source.ace) : '',
-      aceCurrency: source.acec != null ? String(source.acec) : '',
+      lec: source.lec ?? null,
+      cec: source.cec ?? null,
+      acec: source.acec ?? null,
       semFees,
     }))
     showToast(
@@ -323,16 +316,13 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
   const financeCurrencyOptions = financeCurrencies.filter(c => c.currencyGuid).map(c => ({ value: c.currencyGuid!, label: `${c.currencyCode} — ${c.currencyName}` }))
   // Base Currency keeps holding a currency code (its existing value shape).
   const baseCurrencyOptions = financeCurrencies.map(c => ({ value: c.currencyCode, label: `${c.currencyCode} (${c.currencyName})` }))
-  const { data: ledgers = [] } = useLedgersDropdown(isOpen)
-  // Base options from the Ledger master list, PLUS a synthesized option for
-  // any ledgerGuid already sitting on a loaded fee item (from GET fee-lines
-  // or a Copy Fee Code source) that isn't in that list — using the real
+  // A synthesized option for any ledgerGuid already sitting on a loaded fee
+  // item (from GET fee-lines or a Copy Fee Code source), using the real
   // ledgerName the API already carried for it (see the FeeItem.ledgerName
-  // note above), rather than leaving the picker showing its blank
-  // placeholder for a genuinely real, already-known selection.
-  const ledgerOptions = (() => {
-    const base = ledgers.map(l => ({ value: l.ledgerGuid, label: l.ledgerName }))
-    const known = new Set(base.map(o => o.value))
+  // note above) — the picker loads a page at a time, so its page may not be
+  // in yet, and this keeps a real selection from showing a blank placeholder.
+  const ledgerFallbackOptions = (() => {
+    const known = new Set<string>()
     const extra: { value: string; label: string }[] = []
     structures.forEach(s => Object.values(s.semFees).forEach(items => items.forEach(item => {
       if (item.ledgerGuid && item.ledgerName && !known.has(item.ledgerGuid)) {
@@ -340,28 +330,8 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
         extra.push({ value: item.ledgerGuid, label: item.ledgerName })
       }
     })))
-    return [...base, ...extra]
+    return extra
   })()
-
-  // New structures start with the shared fee currency on their Base
-  // Currency once the currency list has loaded (Create only — in Edit an
-  // empty value is the saved state and shouldn't be filled in silently).
-  // Kept inline (not via baseCurrencyGuid below) since hooks must sit above
-  // the early return.
-  useEffect(() => {
-    if (!isOpen || mode === 'edit' || financeCurrencies.length === 0) return
-    setStructures(prev => {
-      let changed = false
-      const next = prev.map(s => {
-        if (s.lefCurrency || s.cefCurrency || s.aceCurrency) return s
-        const int = financeCurrencies.find(c => c.currencyCode === s.currency)?.intCurrency
-        if (int == null) return s
-        changed = true
-        return { ...s, lefCurrency: String(int), cefCurrency: String(int), aceCurrency: String(int) }
-      })
-      return changed ? next : prev
-    })
-  }, [isOpen, mode, financeCurrencies, structures.length])
 
   if (!isOpen) return null
 
@@ -425,7 +395,7 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
       id: nextStructId++, programme: '', feeCode: '', description: '', currency: 'UGX',
       intake: mode !== 'edit' ? (currentAcademicIntake?.intakeGuid ?? '') : '',
       discountType: 'Amount', createdVia: 'new', semFees: {},
-      localOrForeign: false, status: true, amtPer: '', lef: '', lefCurrency: '', cef: '', cefCurrency: '', ace: '', aceCurrency: '',
+      localOrForeign: false, status: true, amtPer: '', lef: '', cef: '', ace: '', lec: null, cec: null, acec: null,
     }
     setStructures(prev => [...prev, newStruct])
     setActiveIdx(structures.length)
@@ -437,22 +407,16 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
     setActiveIdx(prev => (prev >= idx && prev > 0 ? prev - 1 : prev))
   }
 
-  function updateStructureMeta(field: 'programme' | 'feeCode' | 'description' | 'currency' | 'intake' | 'discountType' | 'amtPer' | 'lef' | 'lefCurrency' | 'cef' | 'cefCurrency' | 'ace' | 'aceCurrency', val: string) {
+  function updateStructureMeta(field: 'programme' | 'feeCode' | 'description' | 'currency' | 'intake' | 'discountType' | 'amtPer' | 'lef' | 'cef' | 'ace', val: string) {
     setStructures(prev => prev.map((s, i) => i === activeIdx ? { ...s, [field]: val } : s))
   }
 
-  // Base Currency drives the other currency fields' defaults: the shared
-  // Lateral Entry/Credit Exemption/Aptech currency and every fee line's
-  // currency. Changing it moves each field that's still empty or still on
-  // the old base over to the new one; anything picked by hand stays put.
+  // Base Currency drives every fee line's default currency. Changing it moves
+  // each line that's still empty or still on the old base over to the new
+  // one; anything picked by hand stays put.
   // Base Currency holds a currency code from the finance master.
   function baseCurrencyGuid(code: string): string {
     return financeCurrencies.find(c => c.currencyCode === code)?.currencyGuid ?? ''
-  }
-  // Lec/Cec/Acec hold intCurrency (as a string), fee lines hold currencyGuid.
-  function baseCurrencyInt(code: string): string {
-    const int = financeCurrencies.find(c => c.currencyCode === code)?.intCurrency
-    return int != null ? String(int) : ''
   }
 
   function updateBaseCurrency(code: string) {
@@ -460,10 +424,9 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
       if (i !== activeIdx) return s
       const follower = (oldVal: string, newVal: string) => (v: string) => (!v || v === oldVal) && newVal ? newVal : v
       const followGuid = follower(baseCurrencyGuid(s.currency), baseCurrencyGuid(code))
-      const followInt = follower(baseCurrencyInt(s.currency), baseCurrencyInt(code))
       const semFees: SemFeesMap = {}
       for (const [sem, items] of Object.entries(s.semFees)) semFees[sem] = items.map(f => ({ ...f, currencyGuid: followGuid(f.currencyGuid) }))
-      return { ...s, currency: code, lefCurrency: followInt(s.lefCurrency), cefCurrency: followInt(s.cefCurrency), aceCurrency: followInt(s.aceCurrency), semFees }
+      return { ...s, currency: code, semFees }
     }))
   }
 
@@ -471,18 +434,6 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
     setStructures(prev => prev.map((s, i) => i === activeIdx ? { ...s, localOrForeign: val === 'true' } : s))
   }
 
-  // Lateral Entry/Credit Exemption/Aptech Credit Exemption Fee each had their
-  // own Currency dropdown, even though in practice all three are meant to
-  // share one currency — same consolidation as ProgrammeModal's identical
-  // section. lefCurrency/cefCurrency/aceCurrency remain genuinely separate
-  // wire fields (Lec/Cec/Acec on the header payload — see handleSubmitAll), this
-  // only collapses the UI to one control that sets all three at once.
-  function updateSharedFeeCurrency(val: string) {
-    setStructures(prev => prev.map((s, i) => i === activeIdx
-      ? { ...s, lefCurrency: val, cefCurrency: val, aceCurrency: val }
-      : s
-    ))
-  }
 
   // ── Fee item management (scoped to active structure, keyed by semesterGuid) ─
   function addItem(semesterGuid: string) {
@@ -563,9 +514,9 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
             lef: s.lef ? +s.lef : null,
             cef: s.cef ? +s.cef : null,
             ace: s.ace ? +s.ace : null,
-            lec: s.lefCurrency ? +s.lefCurrency : null,
-            cec: s.cefCurrency ? +s.cefCurrency : null,
-            acec: s.aceCurrency ? +s.aceCurrency : null,
+            lec: s.lec,
+            cec: s.cec,
+            acec: s.acec,
             calcType: s.discountType === 'Percentage' ? 2 : 1,
             amtPer: s.amtPer ? +s.amtPer : null,
             intakeGuid: s.intake || null,
@@ -583,9 +534,9 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
             lef: s.lef ? +s.lef : null,
             cef: s.cef ? +s.cef : null,
             ace: s.ace ? +s.ace : null,
-            lec: s.lefCurrency ? +s.lefCurrency : null,
-            cec: s.cefCurrency ? +s.cefCurrency : null,
-            acec: s.aceCurrency ? +s.aceCurrency : null,
+            lec: s.lec,
+            cec: s.cec,
+            acec: s.acec,
             calcType: s.discountType === 'Percentage' ? 2 : 1,
             amtPer: s.amtPer ? +s.amtPer : null,
             intakeGuid: s.intake || null,
@@ -729,11 +680,11 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
             {/* Global fee controls */}
             <div className="g3 mb-[14px]">
               <div className="fg m-0">
-                <div className="lbl">Fee Code</div>
+                <div className="lbl">Fee Code <span className="req">*</span></div>
                 <input className="ctrl font-mono uppercase" type="text" value={active.feeCode} onChange={e => updateStructureMeta('feeCode', e.target.value)} />
               </div>
               <div className="fg m-0">
-                <div className="lbl">Fee Description</div>
+                <div className="lbl">Fee Description <span className="req">*</span></div>
                 <input className="ctrl" type="text" placeholder="e.g. Local undergraduate fee structure" value={active.description} onChange={e => updateStructureMeta('description', e.target.value)} />
               </div>
               <div className="fg m-0">
@@ -818,19 +769,6 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
                 <div className="fg m-0"><div className="lbl">Lateral Entry Fee</div><input className="ctrl" type="number" placeholder="0" min={0} value={active.lef} onChange={e => updateStructureMeta('lef', e.target.value)} /></div>
                 <div className="fg m-0"><div className="lbl">Credit Exemption Fee</div><input className="ctrl" type="number" placeholder="0" min={0} value={active.cef} onChange={e => updateStructureMeta('cef', e.target.value)} /></div>
                 <div className="fg m-0"><div className="lbl">Aptech Credit Exemption Fee</div><input className="ctrl" type="number" placeholder="0" min={0} value={active.ace} onChange={e => updateStructureMeta('ace', e.target.value)} /></div>
-                {/* One shared Currency picker for all three fees above, replacing the
-                    three separate-but-identical dropdowns each used to have — see
-                    updateSharedFeeCurrency() above. Same consolidation as
-                    ProgrammeModal's identical section. */}
-                <div className="fg m-0">
-                  <div className="lbl">Currency <span className="text-g400 font-normal normal-case">(Lateral Entry / Credit Exemption / Aptech Credit Exemption)</span></div>
-                  <SearchSelect
-                    options={currencyIntOptions}
-                    value={active.lefCurrency}
-                    onChange={updateSharedFeeCurrency}
-                    isLoading={isCurrenciesLoading}
-                  />
-                </div>
               </div>
             </div>
 
@@ -868,7 +806,7 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
                       <div style={{ padding: '10px 14px' }}>
                         {items.length > 0 && (
                           <div className="fsm-item-hdr">
-                            <span style={{ textAlign: 'center' }}>Pri.</span><span>Ledger</span><span>Ledger Priority</span><span>Amount</span><span>Currency</span><span></span>
+                            <span style={{ textAlign: 'center' }}>Pri.</span><span>Ledger <span className="req">*</span></span><span>Ledger Priority</span><span>Amount</span><span>Currency <span className="req">*</span></span><span></span>
                           </div>
                         )}
                         <div className="flex flex-col gap-1">
@@ -881,7 +819,7 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
                                 <button className="btn btn-neu" style={{ width: 26, height: 14, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10 }} onClick={() => moveItem(sem.semesterGuid, idx, -1)} disabled={idx === 0}><i className="lni lni-chevron-up"></i></button>
                                 <button className="btn btn-neu" style={{ width: 26, height: 14, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10 }} onClick={() => moveItem(sem.semesterGuid, idx, 1)} disabled={idx === items.length - 1}><i className="lni lni-chevron-down"></i></button>
                               </div>
-                              <SearchSelect placeholder="— Select Ledger —" options={ledgerOptions} value={f.ledgerGuid} onChange={val => updateItem(sem.semesterGuid, f.id, 'ledgerGuid', val)} />
+                              <LedgerSearchSelect fallbackOptions={ledgerFallbackOptions} value={f.ledgerGuid} onChange={val => updateItem(sem.semesterGuid, f.id, 'ledgerGuid', val)} />
                               <input className="ctrl" value={f.ledgerPriority} onChange={e => updateItem(sem.semesterGuid, f.id, 'ledgerPriority', e.target.value)} type="number" min={0} placeholder="e.g. 1" />
                               <input className="ctrl" value={f.amount} onChange={e => updateItem(sem.semesterGuid, f.id, 'amount', stripLeadingZeros(e.target.value))} type="number" min={0} placeholder="0" />
                               <SearchSelect placeholder="— Currency —" options={financeCurrencyOptions} value={f.currencyGuid} onChange={val => updateItem(sem.semesterGuid, f.id, 'currencyGuid', val)} />

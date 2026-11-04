@@ -1,7 +1,18 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createReceiptBook, CreateReceiptBookInput, deleteReceiptBook, getReceiptBookById, getReceiptBooks, ReceiptBook, updateReceiptBook, UpdateReceiptBookInput } from '@/lib/api/finance/receiptBook'
+import { createReceiptBook, CreateReceiptBookInput, deleteReceiptBook, getReceiptBookById, getReceiptBookDropdown, getReceiptBooks, ReceiptBook, updateReceiptBook, UpdateReceiptBookInput } from '@/lib/api/finance/receiptBook'
 
 const RECEIPT_BOOKS_KEY = ['receipt-books']
+
+// Active books only, for pickers that don't need the full master rows.
+export function useReceiptBookDropdown(enabled = true) {
+  return useQuery({
+    queryKey: [...RECEIPT_BOOKS_KEY, 'dropdown'],
+    queryFn: () => getReceiptBookDropdown(),
+    staleTime: Infinity,
+    gcTime: Infinity,
+    enabled,
+  })
+}
 
 export function useReceiptBooks(enabled = true) {
   return useQuery({

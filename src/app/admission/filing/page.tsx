@@ -10,9 +10,8 @@ import { useSearchCampusesInfinite } from '@/hooks/config/useCampuses'
 import { useProgramMaster, useProgramMasterByGuid, useSearchProgramMastersInfinite } from '@/hooks/academic/useProgramMaster'
 import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
 import { useBatchTimes } from '@/hooks/config/useBatchTimes'
-import { useBatch, useBatches } from '@/hooks/academic/useBatches'
-import { useCountries, useSearchCountriesInfinite } from '@/hooks/config/useCountries'
-import { findDefaultCountry } from '@/lib/api/academic/country'
+import { useBatch, useFilteredBatches } from '@/hooks/academic/useBatches'
+import { useCountries, useCountryLookup, useKnownCountries, useSearchCountriesInfinite } from '@/hooks/config/useCountries'
 import { useProgramFeeStructures } from '@/hooks/academic/useProgramFeeStructure'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { sanitizePhoneInput, sanitizeNameInput } from '@/lib/errorMessages'
@@ -470,16 +469,20 @@ export default function FilingPage() {
   // Same payment-scoped Dropdowns/Batches.bru endpoint that turned out
   // unreliable on the Payment page (200 with an empty array for
   // combinations that do have a matching batch) — use the generic,
-  // already-confirmed-correct Batches list filtered client-side instead.
-  const { data: allBatchesData }  = useBatches(1, 20, '', !!selectedApplication)
-  const batches = (allBatchesData?.items ?? []).filter(b =>
+  // already-confirmed-correct Batches list instead. The server narrows by
+  // programme and batch time (it filters by semCode, not semesterGuid), the
+  // semester here; fetched once all three are set.
+  const { data: batchesData } = useFilteredBatches(
+    1, 100, '', {},
+    { programGuids: [programGuid], batchTimeGuids: [batchTimeGuid] },
+    !!selectedApplication && !!programGuid && !!semesterGuid && !!batchTimeGuid,
+  )
+  const batches = (batchesData?.items ?? []).filter(b =>
     b.programGuid === programGuid && b.semesterGuid === semesterGuid && b.batchTimeGuid === batchTimeGuid,
   )
   // Same gap as Programme above: a real selected application's batchGuid
-  // (prefilled from the payment record) can be a genuinely valid batch that
-  // just isn't in useBatches()' own first 1000 rows — the university has
-  // more than 1000 real batches, so page 1 alone doesn't cover every
-  // possible combination. Fetches that one specific batch directly and
+  // (prefilled from the payment record) may not be among those, or its batch
+  // time may not be set yet. Fetches that one specific batch directly and
   // merges it in below, same "guarantee the selected option's label
   // resolves even if the general list doesn't carry it" fix.
   const missingSelectedBatch = !!batchGuid && !batches.some(b => b.batchGuid === batchGuid)
@@ -487,11 +490,11 @@ export default function FilingPage() {
   // Same payment-scoped Dropdowns/Fees.bru endpoint that turned out
   // unreliable on the Payment page (blank for a Programme that does have
   // real fee structures) — use the generic, already-confirmed-correct
-  // Programme Fee Structure list filtered client-side instead, same fix as
-  // applied there.
-  const { data: allFeeStructuresData } = useProgramFeeStructures(1, 20, undefined, !!selectedApplication)
-  const fees = (allFeeStructuresData?.items ?? []).filter(f => f.programGuid === programGuid && f.status)
-  const { data: countries = [] }  = useCountries(!!selectedApplication || countryPickerOpen)
+  // Programme Fee Structure list instead, asked for just this Programme, same
+  // fix as applied there.
+  const { data: feeStructuresData } = useProgramFeeStructures(1, 100, programGuid, !!selectedApplication && !!programGuid)
+  const fees = (feeStructuresData?.items ?? []).filter(f => f.programGuid === programGuid && f.status)
+  const { home: homeCountry, known: knownCountries } = useKnownCountries(countrySearchResults)
 
   // CONFIRMED live: a real selected application's programGuid (locked/
   // prefilled from the payment record, see selectApplication above) can
@@ -535,20 +538,12 @@ export default function FilingPage() {
     ...batches.map(b => ({ value: b.batchGuid, label: b.batchCode })),
     ...(selectedBatchFallback ? [{ value: selectedBatchFallback.batchGuid, label: selectedBatchFallback.batchCode }] : []),
   ]
-  const countryOptions   = useMemo(() => {
-    const map = new Map<string, string>()
-    for (const c of countries) map.set(c.countryGuid, c.countryName)
-    for (const c of countrySearchResults) {
-      if (!map.has(c.countryGuid)) map.set(c.countryGuid, c.countryName)
-    }
-    return Array.from(map.entries()).map(([value, label]) => ({ value, label }))
-  }, [countries, countrySearchResults])
 
   // Passport/Visa/Refugee sections only apply to non-home-country nationals.
-  // findDefaultCountry, not "first flagged": the live master flags BOTH
-  // Equatorial Guinea and Uganda as default (EG first), which made Uganda
-  // look foreign and Equatorial Guinea look like home.
-  const homeCountryGuid = findDefaultCountry(countries)?.countryGuid
+  // findDefaultCountry (in useKnownCountries), not "first flagged": the live
+  // master flags BOTH Equatorial Guinea and Uganda as default (EG first), which
+  // made Uganda look foreign and Equatorial Guinea look like home.
+  const homeCountryGuid = homeCountry?.countryGuid
   const isForeign = countryGuid !== '' && !!homeCountryGuid && countryGuid !== homeCountryGuid
 
   // Per the requirements doc (req. 8): entering any Passport or Visa detail
@@ -603,6 +598,25 @@ export default function FilingPage() {
     // as a quiet no-op by the enrichment effect below, not a real failure.
     !!selectedApplication,
   )
+
+  // Country pickers: the home country, whatever the picker has loaded, and a
+  // small search for any country name the application came with. There's no
+  // lookup by guid, and by-payment usually 400s, so a saved country with no
+  // name (e.g. one taken from the enquiry) can only get its label from the full
+  // list. That's fetched only then, or the field would look blank while set.
+  const savedCountryLookup = useCountryLookup([
+    applicationDetail?.countryName ?? '',
+    applicationDetail?.spCountryName ?? '',
+  ])
+  const needsFullCountryList = applicationDetailFetched && !savedCountryLookup.isLoading && [countryGuid, spCountryGuid].some(
+    guid => !!guid && ![...knownCountries, ...savedCountryLookup.countries].some(c => c.countryGuid === guid),
+  )
+  const { data: fullCountryList = [] } = useCountries(needsFullCountryList)
+  const countryOptions = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const c of [...knownCountries, ...savedCountryLookup.countries, ...fullCountryList]) map.set(c.countryGuid, c.countryName)
+    return Array.from(map.entries()).map(([value, label]) => ({ value, label }))
+  }, [knownCountries, savedCountryLookup.countries, fullCountryList])
 
   // Sponsor details can now come pre-filled from the enquiry (sponsor
   // fallback, 2026-10-15). by-payment sends spCountryName alongside the

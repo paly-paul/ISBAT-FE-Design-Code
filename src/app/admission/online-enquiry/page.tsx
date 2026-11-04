@@ -7,8 +7,8 @@ import { SuccessPopup } from '@/components/modals/shared/SuccessPopup'
 import { FailurePopup } from '@/components/modals/shared/FailurePopup'
 import { useSearchIntakesInfinite } from '@/hooks/academic/useIntakes'
 import { useSearchCampusesInfinite } from '@/hooks/config/useCampuses'
-import { useCountries, useSearchCountriesInfinite } from '@/hooks/config/useCountries'
-import { countryPickerOptions, findDefaultCountry, phoneCountryOptions } from '@/lib/api/academic/country'
+import { useKnownCountries, useSearchCountriesInfinite } from '@/hooks/config/useCountries'
+import { countryPickerOptions, phoneCountryOptions } from '@/lib/api/academic/country'
 import { useSearchProgramMastersByCampusInfinite } from '@/hooks/academic/useProgramMaster'
 import { useEnquirySourceMasters } from '@/hooks/admission/useEnquirySourceMasters'
 import { useEnquirySources } from '@/hooks/admission/useEnquirySources'
@@ -75,6 +75,8 @@ export default function OnlineEnquiryPage() {
   // dial code is never joined into `mobile`, which stays digits only.
   // Defaults to Uganda once the full country list loads (effect below).
   const [mobileCountryGuid, setMobileCountryGuid] = useState('')
+  // Once the code is picked by hand, choosing a Country no longer changes it.
+  const [phoneCodePicked, setPhoneCodePicked] = useState(false)
   const [phone, setPhone]         = useState('')
   const [email, setEmail]         = useState('')
   const [dob, setDob]             = useState('')
@@ -138,20 +140,18 @@ export default function OnlineEnquiryPage() {
   const campuses = useMemo(() => flattenUniquePages(campusQuery.data?.pages ?? [], c => c.campusGuid), [campusQuery.data])
   const programsByCampus = useMemo(() => flattenUniquePages(programQuery.data?.pages ?? [], p => p.programGuid), [programQuery.data])
   const countries = useMemo(() => flattenUniquePages(countryQuery.data?.pages ?? [], c => c.countryGuid), [countryQuery.data])
-  // Full list (one cached request) — the default dial-code country and the
-  // selected one's label can't rely on the picker's 20-row search page.
-  const { data: allCountries = [] } = useCountries()
+  // The default dial-code country and the selected one's label can't rely on
+  // the picker's 20-row search page, so they come from this small lookup.
+  const { home: homeCountry, known: allCountries } = useKnownCountries(countries)
   useEffect(() => {
-    if (mobileCountryGuid || !allCountries.length) return
-    const home = findDefaultCountry(allCountries)
-    if (home) setMobileCountryGuid(home.countryGuid)
-  }, [allCountries, mobileCountryGuid])
-  // Country also defaults to Uganda, once, when the list loads — not on every
+    if (mobileCountryGuid || !homeCountry) return
+    setMobileCountryGuid(homeCountry.countryGuid)
+  }, [homeCountry, mobileCountryGuid])
+  // Country also defaults to Uganda, once, when it loads — not on every
   // clear, so the user can empty the picker to search for another country.
   useEffect(() => {
-    const home = findDefaultCountry(allCountries)
-    if (home) setCountryGuid(prev => prev || home.countryGuid)
-  }, [allCountries])
+    if (homeCountry) setCountryGuid(prev => prev || homeCountry.countryGuid)
+  }, [homeCountry])
 
   // Same "programmes scoped to the selected campus" convention as the
   // Payment and Filing pages — a programme belongs to one campus, so the
@@ -177,12 +177,12 @@ export default function OnlineEnquiryPage() {
   const phoneCodeOptions = phoneCountryOptions(countries, allCountries, mobileCountryGuid)
 
   // Selecting a Country also points the phone code at that country's own
-  // dial code — still just a UX default, freely overridable via the phone
-  // code dropdown itself afterwards.
+  // dial code, unless one was already picked by hand — the Country field sits
+  // below Phone, so this would otherwise replace it without anyone noticing.
   function selectCountry(guid: string) {
     setCountryGuid(guid)
     clearError('countryGuid')
-    if (guid) setMobileCountryGuid(guid)
+    if (guid && !phoneCodePicked) setMobileCountryGuid(guid)
   }
 
   function setCampus(v: string) { setCampusGuid(v); setProgramGuid(''); clearError('campusGuid') }
@@ -227,9 +227,9 @@ export default function OnlineEnquiryPage() {
   }
 
   function resetForm() {
-    setFirstName(''); setLastName(''); setGender(''); setMobileCountryGuid(findDefaultCountry(allCountries)?.countryGuid ?? ''); setPhone(''); setEmail(''); setVerifiedEmail(null); setDob('')
+    setFirstName(''); setLastName(''); setGender(''); setMobileCountryGuid(homeCountry?.countryGuid ?? ''); setPhoneCodePicked(false); setPhone(''); setEmail(''); setVerifiedEmail(null); setDob('')
     setEnquiryDate(todayAtMidnight().slice(0, 10))
-    setIntakeGuid(''); setCampusGuid(''); setProgramGuid(''); setSourceGuid(''); setCountryGuid(findDefaultCountry(allCountries)?.countryGuid ?? ''); setNotes('')
+    setIntakeGuid(''); setCampusGuid(''); setProgramGuid(''); setSourceGuid(''); setCountryGuid(homeCountry?.countryGuid ?? ''); setNotes('')
     setIsbatSourceGuid(''); setSourceName('')
     setSponsor(EMPTY_SPONSOR)
     setErrors({})
@@ -349,7 +349,7 @@ export default function OnlineEnquiryPage() {
               <SearchSelect
                 options={phoneCodeOptions}
                 value={mobileCountryGuid}
-                onChange={v => { setMobileCountryGuid(v); clearError('phone') }}
+                onChange={v => { setMobileCountryGuid(v); setPhoneCodePicked(true); clearError('phone') }}
                 onSearch={setCountrySearch}
                 onOpenChange={setPhoneCodePickerOpen}
                 isLoading={countryQuery.isLoading}

@@ -14,7 +14,6 @@ import { useStreamsByGuids } from '@/hooks/config/useStreams'
 import { ProgramMasterInput } from '@/lib/api/academic/programMaster'
 import { useProgramLevelsDropdown, useProgramLevel } from '@/hooks/academic/useProgramLevels'
 import { useSearchProgramGroupsInfinite } from '@/hooks/academic/useProgramGroups'
-import { useSearchCurrenciesInfinite } from '@/hooks/finance/useCurrencies'
 import { useFinanceCurrencies } from '@/hooks/finance/useFinanceCurrencies'
 import { useCourseUnit, useCourseUnitsByGuids } from '@/hooks/academic/useCourseUnits'
 import { CourseUnitSearchPicker, CourseUnitPickOption } from '@/components/CourseUnitSearchPicker'
@@ -24,7 +23,7 @@ import { FacultySearchPicker } from '@/components/FacultySearchPicker'
 import { useFacultiesByGuids } from '@/hooks/config/useFaculties'
 import { useUnitTypes } from '@/hooks/config/useUnitTypes'
 import { useUnitCategories } from '@/hooks/config/useUnitCategories'
-import { useLedgers } from '@/hooks/finance/useLedgers'
+import { LedgerSearchSelect } from '@/components/LedgerSearchSelect'
 import {
   ProgramUnitUpdateInput, FeeStructureUpdateInput, ProgramMasterUpdateInput,
   ProgramMasterCreateInput, ProgramMasterSemester, useProgramMasterFullDetails, useCreateProgramMasterStep1,
@@ -61,10 +60,6 @@ const CALC_TYPES = [
   { value: '2', label: 'Percentage' },
 ]
 
-// SearchSelect works with strings, so store the selected currency id as text.
-// currencyGuid is the edit-mode counterpart of currency (intCurrency) — Update
-// wants a real currencyGuid on FeeLines where Create wants intCurrency, see
-// the note on ProgramMasterUpdateInput in lib/api/academic/programMaster.ts.
 // title dropped per Fee_Structure_Change_Requests.md (mirrored from the
 // standalone /academic/fee-structure page's FeeStructureModal.tsx) — it was
 // never part of FeeStructureInput's feeLines contract. Ledger Priority
@@ -82,7 +77,7 @@ const CALC_TYPES = [
 // genuinely used on this fee line could still be missing from them, which
 // was silently leaving the pickers blank despite a real, already-known
 // selection.
-type FeeItem     = { id: number; amount: string; currency: string; currencyGuid: string; currencyName?: string; ledger: string; ledgerName?: string }
+type FeeItem     = { id: number; amount: string; currencyGuid: string; currencyName?: string; ledger: string; ledgerName?: string }
 type SemFees     = FeeItem[][]
 // streamGuid here is the per-course-unit specialization pick — only meaningful
 // (and only editable) when unitCat resolves to a "Specialization" category;
@@ -114,16 +109,18 @@ type FeeStructure = {
   discountType: string
   discountAmount: string
   lateralEntryFee: string
-  lateralEntryFeeCurrency: string
   creditExemptionFee: string
-  creditExemptionFeeCurrency: string
   aptechCreditExemptionFee: string
-  aptechCreditExemptionFeeCurrency: string
+  // No input for these: null on a new structure, and a saved record's own
+  // values are sent back unchanged.
+  lec: number | null
+  cec: number | null
+  acec: number | null
   semFees: SemFees
 }
 
-function blankItem(id: number, defaultCurrencyGuid = '', defaultCurrencyLegacy = ''): FeeItem {
-  return { id, amount: '', currency: defaultCurrencyLegacy, currencyGuid: defaultCurrencyGuid, ledger: '' }
+function blankItem(id: number, defaultCurrencyGuid = ''): FeeItem {
+  return { id, amount: '', currencyGuid: defaultCurrencyGuid, ledger: '' }
 }
 
 // Semester count varies per programme rather than being a fixed number, so
@@ -148,11 +145,11 @@ function blankFeeStructure(id: number, semCount: number): FeeStructure {
     discountType: '1',
     discountAmount: '',
     lateralEntryFee: '',
-    lateralEntryFeeCurrency: '',
     creditExemptionFee: '',
-    creditExemptionFeeCurrency: '',
     aptechCreditExemptionFee: '',
-    aptechCreditExemptionFeeCurrency: '',
+    lec: null,
+    cec: null,
+    acec: null,
     semFees: makeEmptySemFees(semCount),
   }
 }
@@ -341,9 +338,6 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   const [programGroupLabel, setProgramGroupLabel] = useState('')
   const [programLevelLabel, setProgramLevelLabel] = useState('')
   const [streamNames, setStreamNames] = useState<Record<string, string>>({})
-  const [currencySearch, setCurrencySearch] = useState('')
-  const [committedCurrencySearch, setCommittedCurrencySearch] = useState('')
-  const [currencyPickerOpen, setCurrencyPickerOpen] = useState(false)
   const [facultyGuid, setFacultyGuid] = useState('')
   const [facultyLabel, setFacultyLabel] = useState('')
   // The picked faculty's campus, shown read-only beside it — not saved (a
@@ -414,10 +408,6 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   }, [programGroupSearch])
 
 
-  useEffect(() => {
-    const timer = setTimeout(() => setCommittedCurrencySearch(currencySearch.trim()), 300)
-    return () => clearTimeout(timer)
-  }, [currencySearch])
 
   const programGroupQuery = useSearchProgramGroupsInfinite(
     committedProgramGroupSearch,
@@ -427,7 +417,6 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   const programLevelQuery = useProgramLevelsDropdown(isOpen)
   const selectedProgramLevelQuery = useProgramLevel(programLevelGuid, isOpen && !!programLevelGuid)
   const selectedProgramLevel = selectedProgramLevelQuery.data
-  const currencyQuery = useSearchCurrenciesInfinite(committedCurrencySearch, 20, isOpen && currencyPickerOpen)
 
   const programGroups = useMemo(() => {
     const items = flattenUniquePages(programGroupQuery.data?.pages ?? [], g => g.programGroupGuid)
@@ -449,27 +438,17 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   const programLevelOptions = programLevels.map(p => ({ value: p.guid, label: p.name }))
   const programGroupOptions = programGroups.map(g => ({ value: g.programGroupGuid, label: `${g.groupCode} — ${g.groupName}` }))
 
-  // Faculty picker (Step 1) — optional, per post-program-master.md
-  // (facultyGuid: guid?). The label comes from the pick itself, or in Edit
+  // Faculty picker (Step 1) — required by validateStep1, though the API itself
+  // takes it as optional (post-program-master.md: facultyGuid: guid?). The
+  // label comes from the pick itself, or in Edit
   // from full-details' schoolName; when that's missing the faculty is looked
   // up by guid so the picker never shows a bare placeholder for a real value.
   // The same lookup gives the campus in Edit, where full-details has none.
   const facultyLookup = useFacultiesByGuids(facultyGuid && (!facultyLabel || !facultyCampus) ? [facultyGuid] : [])
   const facultyDisplay = facultyLabel || facultyLookup.get(facultyGuid)?.facultyName || null
   const campusDisplay = facultyCampus || facultyLookup.get(facultyGuid)?.campusName || ''
-
-  const currencies = useMemo(
-    () => flattenUniquePages(currencyQuery.data?.pages ?? [], c => String(c.intCurrency)),
-    [currencyQuery.data],
-  )
-  // Lec/Cec/Acec (Lateral Entry/Credit Exemption/Aptech Credit Exemption Fee
-  // Currency) carry the currency's intCurrency (a plain int), not its GUID —
-  // confirmed via the real save-complete payload. Rows without one are left
-  // out rather than collapsing onto a shared empty key. Used only for those
-  // three fields; fee lines use currencyGuid.
-  const currencyIntOptions = flattenUniquePages(currencyQuery.data?.pages ?? [], c => String(c.intCurrency ?? ''))
-    .filter(c => c.intCurrency != null)
-    .map(c => ({ value: String(c.intCurrency), label: `${c.currencyCode} — ${c.currencyName}` }))
+  // Only true once the faculty has loaded, so a slow lookup isn't an error.
+  const facultyHasNoCampus = !campusDisplay && !!facultyLookup.get(facultyGuid)
 
   // Update wants a real currencyGuid, confirmed via the "three currency guid
   // spaces" gotcha elsewhere in this app — useFinanceCurrencies() carries the
@@ -522,7 +501,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
       const si = byName ?? (srcIdx >= 0 && srcIdx < semLabels.length ? srcIdx : -1)
       if (si < 0) { dropped++; return }
       semFees[si].push({
-        id: nextId++, amount: String(l.amount), currency: '', currencyGuid: l.currencyGuid,
+        id: nextId++, amount: String(l.amount), currencyGuid: l.currencyGuid,
         currencyName: l.currencyName ?? undefined, ledger: l.ledgerGuid, ledgerName: l.ledgerName ?? undefined,
       })
     })
@@ -534,11 +513,11 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
       discountType: String(src.calcType ?? 1),
       discountAmount: src.amtPer != null ? String(src.amtPer) : '',
       lateralEntryFee: src.lef != null ? String(src.lef) : '',
-      lateralEntryFeeCurrency: src.lec != null ? String(src.lec) : '',
       creditExemptionFee: src.cef != null ? String(src.cef) : '',
-      creditExemptionFeeCurrency: src.cec != null ? String(src.cec) : '',
       aptechCreditExemptionFee: src.ace != null ? String(src.ace) : '',
-      aptechCreditExemptionFeeCurrency: src.acec != null ? String(src.acec) : '',
+      lec: src.lec ?? null,
+      cec: src.cec ?? null,
+      acec: src.acec ?? null,
       semFees,
     }))
     const code = src.feeCode.trim()
@@ -550,25 +529,6 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     )
   }, [savedCopyGuid, savedCopySource, savedCopyLines, savedCopySemesters, semLabels, activeFeeIdx, showToast])
 
-  // New structures start with the shared Lateral Entry/Credit Exemption/
-  // Aptech currency on their Base Currency once the currency list has
-  // loaded (Create only — in Edit an empty value is the saved state and
-  // shouldn't be filled in silently). See updateBaseCurrency.
-  useEffect(() => {
-    if (!isOpen || mode === 'edit' || financeCurrencies.length === 0) return
-    setFeeStructures(prev => {
-      let changed = false
-      const next = prev.map(s => {
-        if (s.lateralEntryFeeCurrency || s.creditExemptionFeeCurrency || s.aptechCreditExemptionFeeCurrency) return s
-        const { legacy } = defaultFeeItemCurrency(s.localOrForeign)
-        if (!legacy) return s
-        changed = true
-        return { ...s, lateralEntryFeeCurrency: legacy, creditExemptionFeeCurrency: legacy, aptechCreditExemptionFeeCurrency: legacy }
-      })
-      return changed ? next : prev
-    })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, mode, financeCurrencies, feeStructures.length])
 
   // Structures open in this modal first, then saved ones from any programme.
   // A saved structure already open here (Edit) is only listed once, as its
@@ -652,9 +612,8 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     return !!cat && cat.unitCatName.trim().toLowerCase() === 'specialization'
   }
 
-  const { data: ledgers = [] } = useLedgers(isOpen && step === 3)
-  // Base options from the Ledger master list, PLUS a synthesized option for
-  // any ledger/currency guid already sitting on a loaded fee item (from
+  // Base options from a master list, PLUS a synthesized option for any
+  // ledger/currency guid already sitting on a loaded fee item (from
   // full-details) that isn't in its respective master list — using the real
   // name full-details already carried for it (see the FeeItem.ledgerName/
   // currencyName note above), rather than leaving the picker showing its
@@ -672,10 +631,9 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     })))
     return [...base, ...extra]
   }
-  const ledgerOptions = withFallbackOptions(
-    ledgers.map(l => ({ value: l.ledgerGuid, label: l.ledgerName })),
-    item => ({ guid: item.ledger, name: item.ledgerName }),
-  )
+  // LedgerSearchSelect loads its own pages; these keep a saved pick's name
+  // showing until the page holding it has loaded.
+  const ledgerFallbackOptions = withFallbackOptions([], item => ({ guid: item.ledger, name: item.ledgerName }))
 
   // Per Fee_Structure_Change_Requests.md #3/#4 (mirrored from the standalone
   // /academic/fee-structure page) — Step 3's per-structure Intake is now
@@ -796,7 +754,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     // Same as the level prefill: 0 or null shows as an empty box.
     setAppFee(fullDetails.appFee ? String(fullDetails.appFee) : '')
     setLateFee(fullDetails.lateFee ? String(fullDetails.lateFee) : '')
-    setUnitCount(String(fullDetails.unitCount))
+    setUnitCount(fullDetails.unitCount ? String(fullDetails.unitCount) : '')
     setDateAcc(fullDetails.dateAcc ? fullDetails.dateAcc.slice(0, 10) : '')
     // full-details returns streamGuids (plural) — Create/Update's top-level
     // field only accepts one (see the streamGuids state comment above), but
@@ -929,7 +887,6 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
             semFees[si].push({
               id: nextId++,
               amount: String(l.amount),
-              currency: '',
               currencyGuid: l.currencyGuid,
               currencyName: l.currencyName ?? undefined,
               ledger: l.ledgerGuid,
@@ -946,11 +903,11 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
             discountType: String(s.calcType),
             discountAmount: s.amtPer != null ? String(s.amtPer) : '',
             lateralEntryFee: s.lef != null ? String(s.lef) : '',
-            lateralEntryFeeCurrency: s.lec != null ? String(s.lec) : '',
             creditExemptionFee: s.cef != null ? String(s.cef) : '',
-            creditExemptionFeeCurrency: s.cec != null ? String(s.cec) : '',
             aptechCreditExemptionFee: s.ace != null ? String(s.ace) : '',
-            aptechCreditExemptionFeeCurrency: s.acec != null ? String(s.acec) : '',
+            lec: s.lec ?? null,
+            cec: s.cec ?? null,
+            acec: s.acec ?? null,
             semFees,
           }
         })
@@ -1041,7 +998,8 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
 
   // Header rules from the program-master validator: code ≤ 25, name ≤ 150,
   // level required, unitCount > 0 when given, appFee ≥ 0. The backend does
-  // not check lateFee at all, so the ≥ 0 rule for it lives only here.
+  // not check lateFee at all, so the ≥ 0 rule for it lives only here. Faculty,
+  // campus and unitCount being required also lives only here.
   function validateStep1() {
     const e: Record<string, string> = {}
     if (!programCode.trim()) e.programCode = 'Programme Code is required'
@@ -1051,16 +1009,22 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     if (!programGroupGuid) e.programGroupGuid = 'Please select a Programme Group'
     if (!programLevelGuid) e.programLevelGuid = 'Please select a Programme Level'
     if (!intakeGuid) e.intakeGuid = 'Please select an Intake'
-    if (unitCount.trim() && (!Number.isInteger(+unitCount) || +unitCount <= 0)) e.unitCount = 'No. of Course Units must be a whole number greater than 0, or left blank'
+    if (!facultyGuid) {
+      e.facultyGuid = 'Please select a Faculty'
+      e.campus = 'Select a Faculty to set the Campus'
+    } else if (facultyHasNoCampus) {
+      e.campus = 'This faculty has no campus. Set one in Faculty Master first.'
+    }
+    if (!unitCount.trim()) e.unitCount = 'No. of Course Units is required'
+    else if (!Number.isInteger(+unitCount) || +unitCount <= 0) e.unitCount = 'No. of Course Units must be a whole number greater than 0'
     if (appFee === '') e.appFee = 'Application Fee is required'
     else if (+appFee < 0) e.appFee = 'Application Fee can\'t be negative'
     if (lateFee === '') e.lateFee = 'Late Fee is required'
     else if (+lateFee < 0) e.lateFee = 'Late Fee can\'t be negative'
     if (!currencyGuid) e.currencyCode = 'Please select a Currency'
-    // No. of Course Units, Accreditation Date, and Specialization are all
-    // optional per Program_Master_Change_Requests_Final.md — unitCount is
-    // still validated against Step 2's actual course-unit count (but only
-    // when the user did fill it in — see the Step 2 validation below).
+    // Accreditation Date and Specialization are optional per
+    // Program_Master_Change_Requests_Final.md. That doc had No. of Course
+    // Units optional too; it's required now, per later client feedback.
     // Intake no longer has a dropdown to validate at all — it's auto-filled
     // from the Current Academic Intake (see the effect below).
     setStep1Errors(e)
@@ -1093,10 +1057,9 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     return true
   }
 
-  // No. of Course Units (Step 1) is optional — when left blank, Course Unit
-  // Allocation has nothing to enforce. When filled in, the actual number of
-  // units added across every semester must match it exactly, neither more
-  // nor fewer, per Program_Master_Change_Requests_Final.md.
+  // The actual number of units added across every semester must match No. of
+  // Course Units (Step 1) exactly, neither more nor fewer, per
+  // Program_Master_Change_Requests_Final.md.
   // TEMPORARILY DISABLED for testing the rest of the flow — re-enable by
   // restoring the commented-out body below (kept here rather than deleted).
   function validateStep2() {
@@ -1277,9 +1240,9 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
             lef: s.lateralEntryFee ? +s.lateralEntryFee : null,
             cef: s.creditExemptionFee ? +s.creditExemptionFee : null,
             ace: s.aptechCreditExemptionFee ? +s.aptechCreditExemptionFee : null,
-            lec: s.lateralEntryFeeCurrency ? +s.lateralEntryFeeCurrency : null,
-            cec: s.creditExemptionFeeCurrency ? +s.creditExemptionFeeCurrency : null,
-            acec: s.aptechCreditExemptionFeeCurrency ? +s.aptechCreditExemptionFeeCurrency : null,
+            lec: s.lec,
+            cec: s.cec,
+            acec: s.acec,
             intakeGuid: s.intakeGuid || null,
             feeLines,
           }
@@ -1294,9 +1257,9 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
             lef: s.lateralEntryFee ? +s.lateralEntryFee : null,
             cef: s.creditExemptionFee ? +s.creditExemptionFee : null,
             ace: s.aptechCreditExemptionFee ? +s.aptechCreditExemptionFee : null,
-            lec: s.lateralEntryFeeCurrency ? +s.lateralEntryFeeCurrency : null,
-            cec: s.creditExemptionFeeCurrency ? +s.creditExemptionFeeCurrency : null,
-            acec: s.aptechCreditExemptionFeeCurrency ? +s.aptechCreditExemptionFeeCurrency : null,
+            lec: s.lec,
+            cec: s.cec,
+            acec: s.acec,
             calcType: +s.discountType || 1,
             amtPer: s.discountAmount ? +s.discountAmount : null,
             intakeGuid: s.intakeGuid || null,
@@ -1488,9 +1451,9 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
         lef: s.lateralEntryFee ? +s.lateralEntryFee : null,
         cef: s.creditExemptionFee ? +s.creditExemptionFee : null,
         ace: s.aptechCreditExemptionFee ? +s.aptechCreditExemptionFee : null,
-        lec: s.lateralEntryFeeCurrency ? +s.lateralEntryFeeCurrency : null,
-        cec: s.creditExemptionFeeCurrency ? +s.creditExemptionFeeCurrency : null,
-        acec: s.aptechCreditExemptionFeeCurrency ? +s.aptechCreditExemptionFeeCurrency : null,
+        lec: s.lec,
+        cec: s.cec,
+        acec: s.acec,
         calcType: +s.discountType || 1,
         amtPer: s.discountAmount ? +s.discountAmount : null,
         intakeGuid: s.intakeGuid || null,
@@ -1571,9 +1534,9 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
       lef: s.lateralEntryFee ? +s.lateralEntryFee : null,
       cef: s.creditExemptionFee ? +s.creditExemptionFee : null,
       ace: s.aptechCreditExemptionFee ? +s.aptechCreditExemptionFee : null,
-      lec: s.lateralEntryFeeCurrency ? +s.lateralEntryFeeCurrency : null,
-      cec: s.creditExemptionFeeCurrency ? +s.creditExemptionFeeCurrency : null,
-      acec: s.aptechCreditExemptionFeeCurrency ? +s.aptechCreditExemptionFeeCurrency : null,
+      lec: s.lec,
+      cec: s.cec,
+      acec: s.acec,
       calcType: +s.discountType || 1,
       amtPer: s.discountAmount ? +s.discountAmount : null,
       intakeGuid: s.intakeGuid || null,
@@ -1660,61 +1623,39 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
       discountType: source.discountType,
       discountAmount: source.discountAmount,
       lateralEntryFee: source.lateralEntryFee,
-      lateralEntryFeeCurrency: source.lateralEntryFeeCurrency,
       creditExemptionFee: source.creditExemptionFee,
-      creditExemptionFeeCurrency: source.creditExemptionFeeCurrency,
       aptechCreditExemptionFee: source.aptechCreditExemptionFee,
-      aptechCreditExemptionFeeCurrency: source.aptechCreditExemptionFeeCurrency,
+      lec: source.lec,
+      cec: source.cec,
+      acec: source.acec,
       semFees: source.semFees.map(items => items.map(item => ({ ...item, id: nextId++ }))),
     }))
     showToast(`Copied fees from ${source.feeCode || 'New Fee Structure'}`, 'info')
   }
 
-  function updateFeeStructureMeta(field: Exclude<keyof FeeStructure, 'id' | 'semFees'>, val: string) {
+  function updateFeeStructureMeta(field: Exclude<keyof FeeStructure, 'id' | 'semFees' | 'lec' | 'cec' | 'acec'>, val: string) {
     setFeeStructures(prev => prev.map((s, i) => i === activeFeeIdx ? { ...s, [field]: val } : s))
   }
 
   // Base Currency (Local → UGX, Foreign → USD, same mapping as
-  // defaultFeeItemCurrency) drives the other currency fields' defaults: the
-  // shared Lateral Entry/Credit Exemption/Aptech currency and every fee
-  // line's currency. Changing it moves each field that's still empty or still
-  // on the old base over to the new one; anything picked by hand stays put.
+  // defaultFeeItemCurrency) drives every fee line's default currency. Changing
+  // it moves each line that's still empty or still on the old base over to the
+  // new one; anything picked by hand stays put.
   function updateBaseCurrency(localOrForeign: string) {
     setFeeStructures(prev => prev.map((s, i) => {
       if (i !== activeFeeIdx) return s
       const oldBase = defaultFeeItemCurrency(s.localOrForeign)
       const newBase = defaultFeeItemCurrency(localOrForeign)
       const follow = (g: string) => (!g || g === oldBase.guid) && newBase.guid ? newBase.guid : g
-      // Lec/Cec/Acec hold intCurrency (as a string), fee lines currencyGuid.
-      const followInt = (v: string) => (!v || v === oldBase.legacy) && newBase.legacy ? newBase.legacy : v
       return {
         ...s,
         localOrForeign,
-        lateralEntryFeeCurrency: followInt(s.lateralEntryFeeCurrency),
-        creditExemptionFeeCurrency: followInt(s.creditExemptionFeeCurrency),
-        aptechCreditExemptionFeeCurrency: followInt(s.aptechCreditExemptionFeeCurrency),
         semFees: s.semFees.map(items => items.map(f => {
           const guid = follow(f.currencyGuid)
-          return guid === f.currencyGuid ? f : { ...f, currencyGuid: guid, currency: newBase.legacy || f.currency, currencyName: undefined }
+          return guid === f.currencyGuid ? f : { ...f, currencyGuid: guid, currencyName: undefined }
         })),
       }
     }))
-  }
-
-  // Lateral Entry/Credit Exemption/Aptech Credit Exemption Fee each kept
-  // their own Currency dropdown, even though in practice a programme's
-  // Lateral Entry Fee, Credit Exemption Fee, and Aptech Credit Exemption Fee
-  // are always meant to share one currency — three separate pickers just
-  // meant picking (and re-checking) the same value three times. FeeStructure
-  // still carries all three underlying fields (FeeStructureInput's
-  // lec/cec/acec are genuinely separate wire fields — see handleFinalSubmit),
-  // this only collapses the UI down to one control that drives all three at
-  // once, in a single state update so they can never drift apart from here.
-  function updateSharedFeeCurrency(val: string) {
-    setFeeStructures(prev => prev.map((s, i) => i === activeFeeIdx
-      ? { ...s, lateralEntryFeeCurrency: val, creditExemptionFeeCurrency: val, aptechCreditExemptionFeeCurrency: val }
-      : s
-    ))
   }
 
   // Fee Currency default (program_master_frontend_fixes.md, "Programme
@@ -1723,20 +1664,18 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   // toggle (UGX for Local, USD for Foreign) via the same real currencyGuid
   // source the picker itself uses, falling back to whichever currency
   // happens to load first if neither code is found.
-  function defaultFeeItemCurrency(localOrForeign: string): { guid: string; legacy: string } {
+  function defaultFeeItemCurrency(localOrForeign: string): { guid: string } {
     const code = localOrForeign === 'true' ? 'USD' : 'UGX'
     const fc = financeCurrencies.find(c => c.currencyCode === code) ?? financeCurrencies[0]
-    // intCurrency from the same full finance list — the paged `currencies`
-    // only loads once its picker opens, so it can't be relied on here.
-    return { guid: fc?.currencyGuid ?? '', legacy: fc?.intCurrency != null ? String(fc.intCurrency) : '' }
+    return { guid: fc?.currencyGuid ?? '' }
   }
 
   /* ── fee item helpers ── */
   function addItem(si: number) {
-    const { guid, legacy } = defaultFeeItemCurrency(feeStructures[activeFeeIdx].localOrForeign)
+    const { guid } = defaultFeeItemCurrency(feeStructures[activeFeeIdx].localOrForeign)
     setFeeStructures(prev => prev.map((s, i) =>
       i === activeFeeIdx
-        ? { ...s, semFees: s.semFees.map((items, j) => j === si ? [...items, blankItem(nextId++, guid, legacy)] : items) }
+        ? { ...s, semFees: s.semFees.map((items, j) => j === si ? [...items, blankItem(nextId++, guid)] : items) }
         : s
     ))
   }
@@ -1756,16 +1695,11 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   }
   // Fee-item Currency picker is sourced from useFinanceCurrencies() (real
   // currencyGuid) in both modes now — see the FeeLineInput.currencyGuid note
-  // in lib/api/academic/programMaster.ts for why Create needs a real guid
-  // too, not just intCurrency. Also derives the legacy intCurrency string
-  // (by matching currencyCode against useCurrencies()) so Create's payload
-  // can keep sending both.
+  // in lib/api/academic/programMaster.ts for why Create needs a real guid too.
   function selectFeeItemCurrency(si: number, id: number, currencyGuid: string) {
-    const fc = financeCurrencies.find(c => c.currencyGuid === currencyGuid)
-    const legacy = fc ? currencies.find(c => c.currencyCode === fc.currencyCode) : undefined
     setFeeStructures(prev => prev.map((s, i) =>
       i === activeFeeIdx
-        ? { ...s, semFees: s.semFees.map((items, j) => j === si ? items.map(f => f.id === id ? { ...f, currencyGuid, currency: legacy ? String(legacy.intCurrency) : f.currency } : f) : items) }
+        ? { ...s, semFees: s.semFees.map((items, j) => j === si ? items.map(f => f.id === id ? { ...f, currencyGuid } : f) : items) }
         : s
     ))
   }
@@ -2043,16 +1977,17 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                 </div>
 
                 <div className="fg">
-                  <div className="lbl">Faculty</div>
+                  <div className="lbl">Faculty <span className="req">*</span></div>
                   <FacultySearchPicker
                     placeholder="— Select faculty —"
                     selectedLabel={facultyDisplay}
-                    onSelect={f => { setFacultyGuid(f.facultyGuid); setFacultyLabel(f.facultyName); setFacultyCampus(f.campusName ?? '') }}
+                    onSelect={f => { setFacultyGuid(f.facultyGuid); setFacultyLabel(f.facultyName); setFacultyCampus(f.campusName ?? ''); setStep1Errors(p => ({ ...p, facultyGuid: '', campus: '' })) }}
                     onClear={() => { setFacultyGuid(''); setFacultyLabel(''); setFacultyCampus('') }}
                   />
+                  {step1Errors.facultyGuid && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{step1Errors.facultyGuid}</p>}
                 </div>
                 <div className="fg span2">
-                  <div className="lbl">Campus</div>
+                  <div className="lbl">Campus <span className="req">*</span></div>
                   {/* Each faculty belongs to one campus, so this follows the
                       Faculty pick and isn't editable or saved. */}
                   <input
@@ -2061,13 +1996,14 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                     tabIndex={-1}
                     aria-readonly="true"
                     value={campusDisplay}
-                    placeholder={facultyGuid ? 'Loading campus…' : 'Select a faculty to see its campus'}
-                    style={{ background: 'var(--surface)', color: 'var(--g700)', cursor: 'default' }}
+                    placeholder={!facultyGuid ? 'Select a faculty to see its campus' : facultyHasNoCampus ? 'No campus on this faculty' : 'Loading campus…'}
+                    style={{ background: 'var(--surface)', color: 'var(--g700)', cursor: 'default', ...(step1Errors.campus ? { borderColor: 'var(--red)' } : {}) }}
                   />
+                  {step1Errors.campus && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{step1Errors.campus}</p>}
                 </div>
 
                 <div className="fg">
-                  <div className="lbl">No. of Course Units</div>
+                  <div className="lbl">No. of Course Units <span className="req">*</span></div>
                   <input
                     className="ctrl"
                     type="number"
@@ -2364,9 +2300,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                       <div className="flex items-center gap-2">
                         {/* Percentage indicator is unambiguous, kept as-is. The
                             Amount-mode badge is commented out for now, not just
-                            re-labeled — unlike Lateral Entry/Credit Exemption/Aptech
-                            Credit Exemption Fee (each paired with its own Currency
-                            dropdown), a Lumpsum Discount Amount has no currency field
+                            re-labeled — a Lumpsum Discount Amount has no currency field
                             of its own on FeeStructureInput; showing UGX/USD here would
                             be inferring that it silently follows this structure's own
                             Local/Foreign designation (defaultFeeItemCurrency()'s
@@ -2393,30 +2327,6 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                     <div className="fg m-0">
                       <div className="lbl">Aptech Credit Exemption Fee</div>
                       <input className="ctrl" type="number" placeholder="0" min={0} value={activeFeeStruct.aptechCreditExemptionFee} onChange={e => updateFeeStructureMeta('aptechCreditExemptionFee', e.target.value)} />
-                    </div>
-                    {/* One shared Currency picker for all three fees above (Lateral
-                        Entry/Credit Exemption/Aptech Credit Exemption Fee), replacing
-                        the three separate-but-identical dropdowns each used to have —
-                        see updateSharedFeeCurrency() above. Displays whichever of the
-                        three is currently set on Lateral Entry Fee; if an existing
-                        programme somehow has them saved as different currencies
-                        (Edit-mode prefill, pre-dating this change), picking a value
-                        here still normalizes all three to match, same as any other
-                        edit. */}
-                    <div className="fg m-0">
-                      <div className="lbl">Currency <span className="text-g400 font-normal normal-case">(Lateral Entry / Credit Exemption / Aptech Credit Exemption)</span></div>
-                      <SearchSelect
-                        placeholder="Currency"
-                        options={currencyIntOptions}
-                        value={activeFeeStruct.lateralEntryFeeCurrency}
-                        onChange={updateSharedFeeCurrency}
-                        onSearch={setCurrencySearch}
-                        onOpenChange={setCurrencyPickerOpen}
-                        isLoading={currencyQuery.isLoading}
-                        hasNextPage={currencyQuery.hasNextPage}
-                        isFetchingNextPage={currencyQuery.isFetchingNextPage}
-                        onLoadMore={() => currencyQuery.fetchNextPage()}
-                      />
                     </div>
                   </div>
                 </div>
@@ -2494,7 +2404,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                                     <button className="btn btn-neu" style={{ width: 26, height: 14, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10 }} onClick={() => moveItem(si, idx, -1)} disabled={idx === 0}><i className="lni lni-chevron-up"></i></button>
                                     <button className="btn btn-neu" style={{ width: 26, height: 14, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10 }} onClick={() => moveItem(si, idx, 1)} disabled={idx === items.length - 1}><i className="lni lni-chevron-down"></i></button>
                                   </div>
-                                  <SearchSelect placeholder="— Select Ledger —" options={ledgerOptions} value={f.ledger} onChange={val => updateItem(si, f.id, 'ledger', val)} />
+                                  <LedgerSearchSelect fallbackOptions={ledgerFallbackOptions} value={f.ledger} onChange={val => updateItem(si, f.id, 'ledger', val)} />
                                   <input className="ctrl" value={idx + 1} readOnly disabled title="Auto-assigned from this item's position — drag the handle or use the Pri. arrows to reorder" />
                                   <input className="ctrl" value={f.amount} onChange={e => updateItem(si, f.id, 'amount', stripLeadingZeros(e.target.value))} type="number" min={0} placeholder="0" />
                                   <SearchSelect placeholder="— Currency —" options={financeCurrencyOptions} value={f.currencyGuid} onChange={val => selectFeeItemCurrency(si, f.id, val)} />
