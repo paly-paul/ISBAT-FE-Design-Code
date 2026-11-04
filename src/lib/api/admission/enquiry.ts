@@ -138,55 +138,18 @@ export interface Enquiry {
   spPhoneCountryPrefix?: string | null
 }
 
-// Full number for display — just the digits when there's no prefix (older
-// enquiries). Some master prefixes aren't real dial codes (e.g. "IND"); that's
-// a data fix on the backend's side.
+// Full number for display — just the digits when there's no code (older
+// enquiries). mobileCountryPrefix comes from the master's countryPrefix, which
+// isn't always a dial code (e.g. "IND"), so the code is taken the same way the
+// form's picker labels it: dialCode() of the saved country. The prefix is only
+// the fallback while the country list loads or if it doesn't have that country.
 export function formatEnquiryPhone(
-  e: Pick<Enquiry, 'mobile'> & Partial<Pick<Enquiry, 'mobileCountryPrefix' | 'mobileCountryGuid'>>,
-  countries?: Country[]
+  e: Pick<Enquiry, 'mobile' | 'mobileCountryGuid' | 'mobileCountryPrefix'>,
+  countries: Pick<Country, 'countryGuid' | 'countryCode'>[] = [],
 ): string {
-  if (!e.mobile) return '—'
-
-  // 1. Resolve by mobileCountryGuid if countries list is available
-  if (countries?.length && e.mobileCountryGuid) {
-    const match = countries.find(c => c.countryGuid?.toLowerCase() === e.mobileCountryGuid?.toLowerCase())
-    if (match) return `${dialCode(match)} ${e.mobile}`
-  }
-
-  // 2. Resolve by mobileCountryPrefix if countries list is available
-  const rawPrefix = e.mobileCountryPrefix?.trim()
-  if (countries?.length && rawPrefix) {
-    const match = countries.find(
-      c => c.countryPrefix?.toLowerCase() === rawPrefix.toLowerCase() ||
-           c.countryCode?.replace(/^0+/, '') === rawPrefix.replace(/^\+/, '').replace(/^0+/, '')
-    )
-    if (match) return `${dialCode(match)} ${e.mobile}`
-  }
-
-  // 3. Fallback normalization: convert known ISO/abbreviations or pure digits to dial codes
-  if (rawPrefix) {
-    if (rawPrefix.startsWith('+')) return `${rawPrefix} ${e.mobile}`
-    if (/^\d+$/.test(rawPrefix)) return `+${rawPrefix.replace(/^0+/, '')} ${e.mobile}`
-    const knownDialCodes: Record<string, string> = {
-      IND: '+91', IN: '+91',
-      UG: '+256', UGA: '+256',
-      KEN: '+254', KE: '+254',
-      TZ: '+255', TZA: '+255',
-      RWA: '+250', RW: '+250',
-      SSD: '+211', SS: '+211',
-      COD: '+243', CD: '+243',
-      GBR: '+44', UK: '+44', GB: '+44',
-      USA: '+1', US: '+1',
-      UAE: '+971', AE: '+971',
-      NGA: '+234', NG: '+234',
-      ZMB: '+260', ZM: '+260',
-    }
-    const mapped = knownDialCodes[rawPrefix.toUpperCase()]
-    if (mapped) return `${mapped} ${e.mobile}`
-    return `${rawPrefix} ${e.mobile}`
-  }
-
-  return e.mobile
+  const country = countries.find(c => c.countryGuid === e.mobileCountryGuid)
+  const prefix = country ? dialCode(country) : e.mobileCountryPrefix?.trim()
+  return prefix ? `${prefix} ${e.mobile}` : e.mobile
 }
 
 interface EnquiryListResult {
