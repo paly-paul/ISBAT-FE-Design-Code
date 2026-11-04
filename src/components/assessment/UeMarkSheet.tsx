@@ -5,12 +5,14 @@ import { ScrollTable } from '@/components/ScrollTable'
 import { SearchSelect } from '@/components/SearchSelect'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Toast } from '@/components/Toast'
+import { useProgramDropdown } from '@/hooks/academic/useProgramMaster'
+import { useIntakesDropdown } from '@/hooks/academic/useIntakes'
 import { SuccessPopup } from '@/components/modals/shared/SuccessPopup'
 import { AuthError } from '@/lib/api/client'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import {
   useUeDetailedMarks, useSaveUeMark, useVerifyUeMarks,
-  useUeMarkFormInit, useUeMarkFormSemesters, useUeMarkFormUnits,
+  useUeMarkFormSemesters, useUeMarkFormUnits,
 } from '@/hooks/assessment/useUeMarks'
 import { getUeMarkImportExam, UeMarkImportExam } from '@/lib/api/assessment/ueMarkImport'
 import {
@@ -53,6 +55,7 @@ export function UeMarkSheet({ mode }: { mode: UeMarkSheetMode }) {
   // exam whose sheet is shown. The sheet loads only on "Show Mark Sheet".
   const [exam, setExam] = useState<UeMarkImportExam | null>(null)
   const [examLoading, setExamLoading] = useState(false)
+  const [examError, setExamError] = useState<string | null>(null)
   const [sheetGuid, setSheetGuid] = useState<string | null>(null)
 
   const [editing, setEditing] = useState<Editing | null>(null)
@@ -64,7 +67,9 @@ export function UeMarkSheet({ mode }: { mode: UeMarkSheetMode }) {
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 4000) }
 
-  const { data: init, isLoading: initLoading } = useUeMarkFormInit()
+  const { data: programs = [], isLoading: programsLoading } = useProgramDropdown()
+  const { data: intakes = [], isLoading: intakesLoading } = useIntakesDropdown()
+  const initLoading = programsLoading || intakesLoading
   const { data: semesters = [], isLoading: semLoading } = useUeMarkFormSemesters(programGuid, intakeGuid)
   const { data: units = [], isLoading: unitsLoading } = useUeMarkFormUnits(programGuid, semesterGuid, mode)
   const selectedUnit = units.find(u => u.courseUnitGuid === unitGuid)
@@ -76,7 +81,7 @@ export function UeMarkSheet({ mode }: { mode: UeMarkSheetMode }) {
   const verify = useVerifyUeMarks(exam?.universityExamGuid ?? null)
 
   // Default the intake to the current one once the list loads.
-  const currentIntakeGuid = init?.intakes.find(i => i.currentIntake)?.intakeGuid ?? ''
+  const currentIntakeGuid = intakes.find(i => i.currentIntake)?.intakeGuid ?? ''
   useEffect(() => {
     if (!intakeGuid && currentIntakeGuid) setIntakeGuid(currentIntakeGuid)
   }, [currentIntakeGuid, intakeGuid])
@@ -87,48 +92,75 @@ export function UeMarkSheet({ mode }: { mode: UeMarkSheetMode }) {
   // query so a 404 can reset the unit and still re-run if the same unit is
   // picked again. lookupSeq drops a response that a newer pick has replaced.
   const lookupSeq = useRef(0)
-  function lookupExam(nextUnitGuid: string, nextUeType: string) {
-    clearExam()
-    if (!nextUnitGuid || !programGuid || !semesterGuid || !intakeGuid) return
-    const seq = ++lookupSeq.current
-    setExamLoading(true)
-    getUeMarkImportExam(programGuid, semesterGuid, nextUnitGuid, intakeGuid, Number(nextUeType))
-      .then(found => { if (seq === lookupSeq.current) setExam(found) })
-      .catch(err => {
-        if (seq !== lookupSeq.current) return
-        if (err instanceof AuthError && err.code === 'not_found') {
-          // The server's own message; the fixed text only when it sends none.
-          showToast(errMessage(err, EXAM_NOT_FOUND), 'error')
-          setUnitGuid('')
-        } else {
-          showToast(errMessage(err, 'Could not find the exam for this course unit.'), 'error')
-        }
-      })
-      .finally(() => { if (seq === lookupSeq.current) setExamLoading(false) })
-  }
 
-  function handleIntake(v: string) { setIntakeGuid(v); setSemesterGuid(''); setUnitGuid(''); clearExam() }
-  function handleProgram(v: string) { setProgramGuid(v); setSemesterGuid(''); setUnitGuid(''); clearExam() }
-  function handleSemester(v: string) { setSemesterGuid(v); setUnitGuid(''); clearExam() }
+  function handleIntake(v: string) { setIntakeGuid(v); setSemesterGuid(''); setUnitGuid(''); setExamError(null); clearExam() }
+  function handleProgram(v: string) { setProgramGuid(v); setSemesterGuid(''); setUnitGuid(''); setExamError(null); clearExam() }
+  function handleSemester(v: string) { setSemesterGuid(v); setUnitGuid(''); setExamError(null); clearExam() }
   function handleUnit(v: string) {
     setUnitGuid(v)
     // Only Combined units choose Theory/Practical; everything else is Theory.
     const nextType = units.find(u => u.courseUnitGuid === v)?.unitType === 3 ? ueType : '0'
     setUeType(nextType)
-    lookupExam(v, nextType)
+    setExamError(null)
+    clearExam()
   }
-  function handleUeType(v: string) { setUeType(v); lookupExam(unitGuid, v) }
+  function handleUeType(v: string) {
+    setUeType(v)
+    setExamError(null)
+    clearExam()
+  }
 
-  function handleShowSheet() {
-    if (!exam) return
-    setEditing(null); setInvalid(new Set())
-    if (sheetGuid === exam.universityExamGuid) grid.refetch()
-    else setSheetGuid(exam.universityExamGuid)
+  async function handleShowSheet() {
+    if (!programGuid || !semesterGuid || !unitGuid || !intakeGuid) return
+    setEditing(null)
+    setInvalid(new Set())
+    setExamError(null)
+
+    if (exam) {
+      if (isTheoryNoRule) {
+        setExamError('The exam rule has no section marks configured for this exam.')
+        return
+      }
+      if (sheetGuid === exam.universityExamGuid) {
+        grid.refetch()
+      } else {
+        setSheetGuid(exam.universityExamGuid)
+      }
+      return
+    }
+
+    const seq = ++lookupSeq.current
+    setExamLoading(true)
+    try {
+      const found = await getUeMarkImportExam(programGuid, semesterGuid, unitGuid, intakeGuid, Number(ueType))
+      if (seq !== lookupSeq.current) return
+      setExam(found)
+      setExamError(null)
+
+      const isTheoryFound = (found.layout === 0)
+      const hasNoRule = Boolean(isTheoryFound && !hasTheoryMarks(found.maxMarks))
+      if (hasNoRule) {
+        setExamError('The exam rule has no section marks configured for this exam.')
+        return
+      }
+
+      setSheetGuid(found.universityExamGuid)
+    } catch (err) {
+      if (seq !== lookupSeq.current) return
+      clearExam()
+      const msg = errMessage(err, EXAM_NOT_FOUND)
+      setExamError(msg)
+      showToast(msg, 'error')
+    } finally {
+      if (seq === lookupSeq.current) {
+        setExamLoading(false)
+      }
+    }
   }
 
   function handleRefresh() {
     lookupSeq.current++
-    setIntakeGuid(currentIntakeGuid); setProgramGuid(''); setSemesterGuid(''); setUnitGuid(''); setUeType('0')
+    setIntakeGuid(currentIntakeGuid); setProgramGuid(''); setSemesterGuid(''); setUnitGuid(''); setUeType('0'); setExamError(null)
     setExamLoading(false)
     clearExam()
   }
@@ -219,6 +251,7 @@ export function UeMarkSheet({ mode }: { mode: UeMarkSheetMode }) {
       : errMessage(gridError, 'Could not load the mark sheet.')
 
   const unitLabel = selectedUnit ? `${selectedUnit.courseUnitCode} — ${selectedUnit.courseUnitName}` : ''
+  const canShowSheet = Boolean(programGuid && intakeGuid && semesterGuid && unitGuid)
   const showEditColumn = canSave && !isVerified
   const colCount = 3 + columns.length + (showEditColumn ? 1 : 0)
 
@@ -260,7 +293,7 @@ export function UeMarkSheet({ mode }: { mode: UeMarkSheetMode }) {
               value={programGuid}
               onChange={handleProgram}
               disabled={initLoading}
-              options={(init?.programs ?? []).map(p => ({ value: p.programGuid, label: `${p.programCode} — ${p.programName}` }))}
+              options={programs.map(p => ({ value: p.programGuid, label: `${p.programCode} — ${p.programName}` }))}
             />
           </div>
           <div className="fg mb-0">
@@ -270,7 +303,7 @@ export function UeMarkSheet({ mode }: { mode: UeMarkSheetMode }) {
               value={intakeGuid}
               onChange={handleIntake}
               disabled={initLoading}
-              options={(init?.intakes ?? []).map(i => ({ value: i.intakeGuid, label: `${i.description || `Intake ${i.intakeCode}`}${i.currentIntake ? ' (Current)' : ''}` }))}
+              options={intakes.map(i => ({ value: i.intakeGuid, label: `${i.description || `Intake ${i.intakeCode}`}${i.currentIntake ? ' (Current)' : ''}` }))}
             />
           </div>
           <div className="fg mb-0">
@@ -335,6 +368,25 @@ export function UeMarkSheet({ mode }: { mode: UeMarkSheetMode }) {
           </div>
         )}
 
+        {examError && !examLoading && unitGuid && (
+          <div className="px-5 pb-3">
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <i className="lni lni-warning text-base text-red-500 flex-shrink-0" />
+                <span>{examError}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setExamError(null)}
+                className="text-red-400 hover:text-red-600 transition-colors p-1"
+                aria-label="Dismiss error"
+              >
+                <i className="lni lni-close text-xs" />
+              </button>
+            </div>
+          </div>
+        )}
+
         {isTheoryNoRule && (
           <div className="px-5 pb-3">
             <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm flex items-center gap-2">
@@ -345,8 +397,12 @@ export function UeMarkSheet({ mode }: { mode: UeMarkSheetMode }) {
         )}
 
         <div className="px-5 pb-5 flex gap-2">
-          <button className="btn btn-primary" disabled={!exam || grid.isFetching || isTheoryNoRule} onClick={handleShowSheet} title={isTheoryNoRule ? 'The exam rule has no section marks configured for this exam.' : undefined}>
-            <i className="lni lni-eye"></i> Show Mark Sheet
+          <button
+            className="btn btn-primary"
+            disabled={!canShowSheet || examLoading || grid.isFetching}
+            onClick={handleShowSheet}
+          >
+            <i className="lni lni-eye"></i> {examLoading ? 'Finding Exam…' : 'Show Mark Sheet'}
           </button>
           <button className="btn btn-neu" onClick={handleRefresh}>
             <i className="lni lni-reload"></i> Refresh

@@ -18,6 +18,7 @@ import { useSearchIntakesInfinite } from '@/hooks/academic/useIntakes'
 import { useEnquiryStatuses } from '@/hooks/config/useEnquiryStatuses'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { formatEnquiryPhone } from '@/lib/api/admission/enquiry'
+import { useCountries } from '@/hooks/config/useCountries'
 import { flattenUniquePages } from '@/lib/pagination'
 
 // Real server-side pagination — only DISPLAY_PAGE_SIZE rows are ever
@@ -53,6 +54,7 @@ export default function EnquiryListPage() {
   const router = useRouter()
   const permissions = usePagePermissions()
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
+  const { data: countries = [] } = useCountries()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [viewingGuid, setViewingGuid] = useState<string | null>(null)
   const [search, setSearch] = useState('')
@@ -262,7 +264,7 @@ export default function EnquiryListPage() {
                   </td>
                   <td className="font-mono text-sm">{r.enquiryCode}</td>
                   <td>{r.studentName}</td>
-                  <td className="text-sm text-g600">{formatEnquiryPhone(r)}</td>
+                  <td className="text-sm text-g600">{formatEnquiryPhone(r, countries)}</td>
                   <td className="text-sm text-g600">
                     {r.email}
                     {r.email && r.emailVerified === true && <span className="eq-email-flag ok" title="Email verified" aria-label="Email verified"><i className="lni lni-checkmark-circle" /></span>}

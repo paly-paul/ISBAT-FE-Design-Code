@@ -75,6 +75,7 @@ export default function OnlineEnquiryPage() {
   // dial code is never joined into `mobile`, which stays digits only.
   // Defaults to Uganda once the full country list loads (effect below).
   const [mobileCountryGuid, setMobileCountryGuid] = useState('')
+  const [phoneCodeTouched, setPhoneCodeTouched] = useState(false)
   const [phone, setPhone]         = useState('')
   const [email, setEmail]         = useState('')
   const [dob, setDob]             = useState('')
@@ -182,7 +183,7 @@ export default function OnlineEnquiryPage() {
   function selectCountry(guid: string) {
     setCountryGuid(guid)
     clearError('countryGuid')
-    if (guid) setMobileCountryGuid(guid)
+    if (guid && !phoneCodeTouched) setMobileCountryGuid(guid)
   }
 
   function setCampus(v: string) { setCampusGuid(v); setProgramGuid(''); clearError('campusGuid') }
@@ -232,6 +233,7 @@ export default function OnlineEnquiryPage() {
     setIntakeGuid(''); setCampusGuid(''); setProgramGuid(''); setSourceGuid(''); setCountryGuid(findDefaultCountry(allCountries)?.countryGuid ?? ''); setNotes('')
     setIsbatSourceGuid(''); setSourceName('')
     setSponsor(EMPTY_SPONSOR)
+    setPhoneCodeTouched(false)
     setErrors({})
   }
 
@@ -349,7 +351,7 @@ export default function OnlineEnquiryPage() {
               <SearchSelect
                 options={phoneCodeOptions}
                 value={mobileCountryGuid}
-                onChange={v => { setMobileCountryGuid(v); clearError('phone') }}
+                onChange={v => { setMobileCountryGuid(v); setPhoneCodeTouched(true); clearError('phone') }}
                 onSearch={setCountrySearch}
                 onOpenChange={setPhoneCodePickerOpen}
                 isLoading={countryQuery.isLoading}
