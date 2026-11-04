@@ -53,6 +53,7 @@ function parseOutcome(result: any): { outcome: QpOutcome | null; message: string
 export default function UniversityExamMaterialPrintPage() {
   const permissions = usePagePermissions()
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
+  const [validationError, setValidationError] = useState<string | null>(null)
   const [selectedIntakeGuid, setSelectedIntakeGuid] = useState('')
   const [programGuid, setProgramGuid] = useState('')
   const [semesterGuid, setSemesterGuid] = useState('')
@@ -107,22 +108,45 @@ export default function UniversityExamMaterialPrintPage() {
   const { data: programUnits } = useUeMaterialPrintProgramUnits(programGuid || null)
 
   const selectedUnitRow = useMemo(() => {
-    return (programUnits ?? []).find(unit =>
-      unit.courseUnitGuid === courseUnitGuid && unit.semesterGuid === semesterGuid,
+    if (!courseUnitGuid) return null
+    // 1. Try finding in programUnits with semester match (case-insensitive)
+    const exact = (programUnits ?? []).find(unit =>
+      unit.courseUnitGuid?.toLowerCase() === courseUnitGuid.toLowerCase() &&
+      unit.semesterGuid?.toLowerCase() === semesterGuid?.toLowerCase()
     )
-  }, [courseUnitGuid, programUnits, semesterGuid])
+    if (exact) return exact
+
+    // 2. Try finding in programUnits by courseUnitGuid alone (case-insensitive)
+    const byUnit = (programUnits ?? []).find(unit =>
+      unit.courseUnitGuid?.toLowerCase() === courseUnitGuid.toLowerCase()
+    )
+    if (byUnit) return byUnit
+
+    // 3. Try finding in courseUnits (from ue-question-print/course-units)
+    const fromCourseUnits = (courseUnits ?? []).find((unit: any) =>
+      unit.courseUnitGuid?.toLowerCase() === courseUnitGuid.toLowerCase()
+    )
+    return fromCourseUnits ?? null
+  }, [courseUnitGuid, courseUnits, programUnits, semesterGuid])
 
   const selectedUnitType = useMemo(() => {
-    return unitType(selectedUnitRow?.unitTypeName)
+    const rawType = (selectedUnitRow as any)?.unitTypeName
+      || (selectedUnitRow as any)?.unitType
+      || (selectedUnitRow as any)?.courseUnitType
+    return unitType(rawType)
   }, [selectedUnitRow])
+
   const effectiveType: EffectiveType = selectedUnitType === 'Combined' ? combinedType : selectedUnitType
   const intakeGuid = selectedIntakeGuid || currentIntake?.intakeGuid || ''
   const formComplete = Boolean(intakeGuid && programGuid && semesterGuid && courseUnitGuid)
   const canPrint = permissions.print !== false && Boolean(
     permissions.print || permissions.generate || permissions.add || permissions.view || permissions.get
   )
-  const canPrintBooklet = formComplete && effectiveType === 'Theory' && canPrint
-  const canPrintQuestionPaper = formComplete && effectiveType !== 'Project' && canPrint
+
+  // Both actions are enabled when form inputs are complete and user has print permissions.
+  // Validation is driven by the real backend API responses when printing is attempted.
+  const canPrintBooklet = formComplete && canPrint
+  const canPrintQuestionPaper = formComplete && canPrint
 
   const printBooklet = usePrintUeBooklet()
   const downloadBooklet = useDownloadUeBookletPdf()
@@ -141,15 +165,18 @@ export default function UniversityExamMaterialPrintPage() {
     streamGuid: (selectedUnitRow as any)?.streamGuid ?? null,
     confirm,
   })
+
   const reset = () => {
     setProgramGuid('')
     setSemesterGuid('')
     setCourseUnitGuid('')
     setCombinedType('Theory')
+    setValidationError(null)
     if (intakeOptions.length > 0) {
       setSelectedIntakeGuid(intakeOptions[0].value)
     }
   }
+
   const download = (blob: Blob, filename: string | null, fallback: string) => {
     const url = window.URL.createObjectURL(blob)
     const link = document.createElement('a')
@@ -163,6 +190,7 @@ export default function UniversityExamMaterialPrintPage() {
 
   const handleBookletPrint = async (confirm = false) => {
     if (!canPrintBooklet || isWorking) return
+    setValidationError(null)
     try {
       const result = await printBooklet.mutateAsync(request(confirm))
       if (result.confirmationRequired && !confirm) {
@@ -176,12 +204,15 @@ export default function UniversityExamMaterialPrintPage() {
       download(file.blob, file.filename, 'Booklet.pdf')
       showToast(result.wasReprint ? 'Booklet reprinted successfully.' : 'Booklet downloaded successfully.', 'success')
     } catch (error: any) {
-      showToast(error?.message || 'Failed to print booklet.', 'error')
+      const errMsg = error?.message || 'Failed to print booklet. Please verify enrollment and exam schedules.'
+      setValidationError(errMsg)
+      showToast(errMsg, 'error')
     }
   }
 
   const handleQuestionPaperPrint = async (confirm = false) => {
     if (!canPrintQuestionPaper || isWorking) return
+    setValidationError(null)
     try {
       const result = effectiveType === 'Practical'
         ? await printPractical.mutateAsync(request(confirm))
@@ -197,14 +228,19 @@ export default function UniversityExamMaterialPrintPage() {
         return
       }
       if (outcome === 'ExamRuleNotSet') {
-        showToast(message || 'University Exam not yet Scheduled!!', 'error')
+        const msg = message || 'University Exam not yet Scheduled for this course unit!!'
+        setValidationError(msg)
+        showToast(msg, 'error')
         return
       }
       if (outcome === 'QuestionsNotAvailable') {
-        showToast(message || 'Questions are not yet uploaded!!', 'error')
+        const msg = message || 'Questions are not yet uploaded for this course unit!!'
+        setValidationError(msg)
+        showToast(msg, 'error')
         return
       }
       if (outcome === 'Printed' || outcome === 'Reprinted') {
+        setValidationError(null)
         const file = effectiveType === 'Practical'
           ? await downloadPracticalWord.mutateAsync(request())
           : await downloadTheoryWord.mutateAsync(request())
@@ -222,20 +258,28 @@ export default function UniversityExamMaterialPrintPage() {
         showToast(message || 'Question paper downloaded successfully.', 'success')
         return
       } catch (downloadErr: any) {
-        if (message) {
-          showToast(message, 'info')
-        } else {
-          showToast(downloadErr?.message || 'Failed to download question paper.', 'error')
-        }
+        const msg = message || downloadErr?.message || 'Failed to download question paper.'
+        setValidationError(msg)
+        showToast(msg, 'error')
       }
     } catch (error: any) {
-      showToast(error?.message || 'Failed to print question paper.', 'error')
+      const errMsg = error?.message || 'Failed to print question paper.'
+      setValidationError(errMsg)
+      showToast(errMsg, 'error')
     }
   }
 
-  const bookletHint = !formComplete ? 'Select Programme, Semester and Course Unit first.'
-    : effectiveType !== 'Theory' ? 'Booklet printing is currently available for Theory only.'
-      : !canPrint ? 'You do not have permission to print booklets.' : ''
+  const bookletHint = !formComplete
+    ? 'Select Academic Intake, Programme, Semester and Course Unit first.'
+    : !canPrint
+      ? 'You do not have permission to print booklets.'
+      : ''
+
+  const qpHint = !formComplete
+    ? 'Select Academic Intake, Programme, Semester and Course Unit first.'
+    : !canPrint
+      ? 'You do not have permission to print question papers.'
+      : ''
 
   return (
     <div className="page active">
@@ -258,24 +302,48 @@ export default function UniversityExamMaterialPrintPage() {
           </div>
           <div className="fg mb-0">
             <label className="lbl">Programme <span className="text-red-500">*</span></label>
-            <SearchSelect placeholder="— Select Programme —" value={programGuid}
-              onChange={guid => { setProgramGuid(guid); setSemesterGuid(''); setCourseUnitGuid(''); setCombinedType('Theory') }}
+            <SearchSelect
+              placeholder="— Select Programme —"
+              value={programGuid}
+              onChange={guid => {
+                setProgramGuid(guid)
+                setSemesterGuid('')
+                setCourseUnitGuid('')
+                setCombinedType('Theory')
+                setValidationError(null)
+              }}
               disabled={programsLoading || intakeLoading}
-              options={(programs ?? []).map(program => ({ value: program.programGuid, label: program.programName }))} />
+              options={(programs ?? []).map(program => ({ value: program.programGuid, label: program.programName }))}
+            />
           </div>
           <div className="fg mb-0">
             <label className="lbl">Semester <span className="text-red-500">*</span></label>
-            <SearchSelect placeholder="— Select Semester —" value={semesterGuid}
-              onChange={guid => { setSemesterGuid(guid); setCourseUnitGuid(''); setCombinedType('Theory') }}
+            <SearchSelect
+              placeholder="— Select Semester —"
+              value={semesterGuid}
+              onChange={guid => {
+                setSemesterGuid(guid)
+                setCourseUnitGuid('')
+                setCombinedType('Theory')
+                setValidationError(null)
+              }}
               disabled={!programGuid || semestersLoading}
-              options={(semesters ?? []).map(semester => ({ value: semester.semesterGuid, label: semester.semName }))} />
+              options={(semesters ?? []).map(semester => ({ value: semester.semesterGuid, label: semester.semName }))}
+            />
           </div>
           <div className="fg mb-0">
             <label className="lbl">Course Unit <span className="text-red-500">*</span></label>
-            <SearchSelect placeholder="— Select Course Unit —" value={courseUnitGuid}
-              onChange={guid => { setCourseUnitGuid(guid); setCombinedType('Theory') }}
+            <SearchSelect
+              placeholder="— Select Course Unit —"
+              value={courseUnitGuid}
+              onChange={guid => {
+                setCourseUnitGuid(guid)
+                setCombinedType('Theory')
+                setValidationError(null)
+              }}
               disabled={!semesterGuid || unitsLoading}
-              options={(courseUnits ?? []).map(unit => ({ value: unit.courseUnitGuid, label: `${unit.courseUnitCode} - ${unit.courseUnitName}` }))} />
+              options={(courseUnits ?? []).map(unit => ({ value: unit.courseUnitGuid, label: `${unit.courseUnitCode} - ${unit.courseUnitName}` }))}
+            />
           </div>
         </div>
 
@@ -284,25 +352,66 @@ export default function UniversityExamMaterialPrintPage() {
             <span className="lbl mb-0">Print component</span>
             {(['Theory', 'Practical'] as const).map(type => (
               <label key={type} className="flex items-center gap-2 cursor-pointer text-sm text-gray-700">
-                <input type="radio" name="combined-unit-type" checked={combinedType === type}
-                  onChange={() => setCombinedType(type)} className="w-4 h-4 text-primary" />
+                <input
+                  type="radio"
+                  name="combined-unit-type"
+                  checked={combinedType === type}
+                  onChange={() => setCombinedType(type)}
+                  className="w-4 h-4 text-primary"
+                />
                 {type}
               </label>
             ))}
           </div>
         )}
 
-        <div className="p-5 pt-0 flex flex-wrap gap-3">
-          <button className="btn btn-primary" onClick={() => handleBookletPrint()} disabled={!canPrintBooklet || isWorking} title={bookletHint}>
-            <i className="lni lni-printer" /> Print
-          </button>
-          {effectiveType !== 'Project' && (
-            <button className="btn btn-neu" onClick={() => handleQuestionPaperPrint()} disabled={!canPrintQuestionPaper || isWorking}
-              title={!canPrint ? 'You do not have permission to print question papers.' : ''}>
-              <i className="lni lni-download" /> QP Print in MS Word
+        {/* Real Backend API Validation Banner */}
+        {validationError && (
+          <div className="mx-5 mb-4 p-3.5 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <i className="lni lni-warning text-base text-red-500 flex-shrink-0" />
+              <span className="font-medium">{validationError}</span>
+            </div>
+            <button
+              type="button"
+              className="text-red-400 hover:text-red-700 p-1 rounded transition-colors"
+              onClick={() => setValidationError(null)}
+              title="Dismiss"
+            >
+              <i className="lni lni-close text-xs" />
             </button>
-          )}
-          <button className="btn btn-neu" onClick={reset} disabled={isWorking}><i className="lni lni-reload" /> Refresh</button>
+          </div>
+        )}
+
+        {formComplete && !canPrint && (
+          <div className="mx-5 mb-4 p-3.5 bg-amber-50 border border-amber-200 rounded-lg text-amber-900 text-sm flex items-center gap-2.5">
+            <i className="lni lni-warning text-base text-amber-600 flex-shrink-0" />
+            <span className="font-medium">You do not have permission to print university exam materials.</span>
+          </div>
+        )}
+
+        <div className="p-5 pt-0 flex flex-wrap gap-3">
+          <button
+            className="btn btn-primary"
+            onClick={() => handleBookletPrint()}
+            disabled={!canPrintBooklet || isWorking}
+            title={bookletHint}
+          >
+            <i className={`lni ${printBooklet.isPending || downloadBooklet.isPending ? 'lni-spinner lni-is-spinning' : 'lni-printer'}`} />
+            {printBooklet.isPending || downloadBooklet.isPending ? ' Printing...' : ' Print'}
+          </button>
+          <button
+            className="btn btn-neu"
+            onClick={() => handleQuestionPaperPrint()}
+            disabled={!canPrintQuestionPaper || isWorking}
+            title={qpHint}
+          >
+            <i className={`lni ${printTheory.isPending || downloadTheoryWord.isPending || printPractical.isPending || downloadPracticalWord.isPending ? 'lni-spinner lni-is-spinning' : 'lni-download'}`} />
+            {printTheory.isPending || downloadTheoryWord.isPending || printPractical.isPending || downloadPracticalWord.isPending ? ' Downloading...' : ' QP Print in MS Word'}
+          </button>
+          <button className="btn btn-neu" onClick={reset} disabled={isWorking}>
+            <i className="lni lni-reload" /> Refresh
+          </button>
         </div>
       </div>
 

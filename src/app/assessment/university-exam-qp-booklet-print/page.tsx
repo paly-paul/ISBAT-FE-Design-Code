@@ -63,8 +63,6 @@ function parseOutcome(result: any): { outcome: QpOutcome | null; message: string
 
 export default function UniversityExamQpBookletPrintPage() {
   const permissions = usePagePermissions()
-  // Printing question papers and booklets is a print/generate action.
-  // Real backend roles assign 'print'/'generate' (or 'get'/'view') on this page, not 'add'.
   const canPrint = permissions.print !== false && Boolean(
     permissions.print || permissions.generate || permissions.add || permissions.view || permissions.get
   )
@@ -101,7 +99,7 @@ export default function UniversityExamQpBookletPrintPage() {
 
   const selectedUnitRow = useMemo(() => {
     if (!courseUnitGuid || !courseUnits) return null
-    return courseUnits.find(u => u.courseUnitGuid === courseUnitGuid)
+    return courseUnits.find(u => u.courseUnitGuid?.toLowerCase() === courseUnitGuid?.toLowerCase())
   }, [courseUnits, courseUnitGuid])
 
   const selectedUnitType = useMemo(() => {
@@ -111,8 +109,9 @@ export default function UniversityExamQpBookletPrintPage() {
   const effectiveType: EffectiveType = selectedUnitType === 'Combined' ? combinedType : selectedUnitType
 
   const formComplete = Boolean(programGuid && semesterGuid && courseUnitGuid)
-  const canPrintBooklet = formComplete && Boolean(intakeGuid) && effectiveType === 'Theory' && canPrint
-  const canPrintQuestionPaper = formComplete && Boolean(intakeGuid) && effectiveType !== 'Project' && canPrint
+  // Both actions enabled when formComplete && Boolean(intakeGuid) && canPrint
+  const canPrintBooklet = formComplete && Boolean(intakeGuid) && canPrint
+  const canPrintQuestionPaper = formComplete && Boolean(intakeGuid) && canPrint
   const canDeletePracticalQp = formComplete && Boolean(intakeGuid) && effectiveType === 'Practical' && permissions.delete
 
   // Mutations
@@ -165,9 +164,10 @@ export default function UniversityExamQpBookletPrintPage() {
     window.URL.revokeObjectURL(url)
   }
 
-  // Booklet Print (Theory only)
+  // Booklet Print
   const handleBookletPrint = async (confirm = false) => {
     if (!canPrintBooklet || isWorking) return
+    setValidationError(null)
     try {
       const result = await printBooklet.mutateAsync(request(confirm))
       if (result.confirmationRequired && !confirm) {
@@ -181,7 +181,7 @@ export default function UniversityExamQpBookletPrintPage() {
       download(file.blob, file.filename, 'Booklet.pdf')
       showToast(result.wasReprint ? 'Booklet reprinted successfully.' : 'Booklet downloaded successfully.', 'success')
     } catch (error: any) {
-      const errMsg = error?.message || 'Failed to print booklet. Questions may not be uploaded.'
+      const errMsg = error?.message || 'Failed to print booklet. Please verify enrollment and exam schedules.'
       setValidationError(errMsg)
       showToast(errMsg, 'error')
     }
@@ -190,6 +190,7 @@ export default function UniversityExamQpBookletPrintPage() {
   // QP Print in MS Word (Theory & Practical)
   const handleQuestionPaperPrint = async (confirm = false) => {
     if (!canPrintQuestionPaper || isWorking) return
+    setValidationError(null)
     try {
       const result = effectiveType === 'Practical'
         ? await printPractical.mutateAsync(practicalRequest(confirm))
@@ -205,7 +206,7 @@ export default function UniversityExamQpBookletPrintPage() {
         return
       }
       if (outcome === 'ExamRuleNotSet') {
-        const msg = message || 'University Exam not yet Scheduled!!'
+        const msg = message || 'University Exam not yet Scheduled for this course unit!!'
         setValidationError(msg)
         showToast(msg, 'error')
         return
@@ -226,13 +227,20 @@ export default function UniversityExamQpBookletPrintPage() {
         return
       }
 
-      if (message) {
-        showToast(message, 'info')
-      } else {
-        showToast('Unexpected response from the server — the question paper may not have been printed.', 'error')
+      try {
+        const file = effectiveType === 'Practical'
+          ? await downloadPracticalWord.mutateAsync(practicalRequest())
+          : await downloadTheoryWord.mutateAsync(request())
+        download(file.blob, file.filename, 'QuestionPaper.doc')
+        showToast(message || 'Question paper downloaded successfully.', 'success')
+        return
+      } catch (downloadErr: any) {
+        const msg = message || downloadErr?.message || 'Failed to download question paper.'
+        setValidationError(msg)
+        showToast(msg, 'error')
       }
     } catch (error: any) {
-      const errMsg = error?.message || 'Failed to print question paper. Questions may not be uploaded.'
+      const errMsg = error?.message || 'Failed to print question paper.'
       setValidationError(errMsg)
       showToast(errMsg, 'error')
     }
@@ -266,11 +274,9 @@ export default function UniversityExamQpBookletPrintPage() {
     ? 'Select Programme, Semester and Course Unit first.'
     : !intakeGuid
       ? 'Academic intake could not be determined. Please refresh.'
-      : effectiveType !== 'Theory'
-        ? 'Booklet printing is currently available for Theory only.'
-        : !canPrint
-          ? 'You do not have permission to print booklets.'
-          : ''
+      : !canPrint
+        ? 'You do not have permission to print booklets.'
+        : ''
 
   const qpHint = !formComplete
     ? 'Select Programme, Semester and Course Unit first.'
@@ -301,6 +307,7 @@ export default function UniversityExamQpBookletPrintPage() {
                 setSemesterGuid('')
                 setCourseUnitGuid('')
                 setCombinedType('Theory')
+                setValidationError(null)
               }}
               disabled={programsLoading}
               options={(programs ?? []).map((p: any) => ({
@@ -318,6 +325,7 @@ export default function UniversityExamQpBookletPrintPage() {
                 setSemesterGuid(guid)
                 setCourseUnitGuid('')
                 setCombinedType('Theory')
+                setValidationError(null)
               }}
               disabled={!programGuid || semestersLoading}
               options={(semesters ?? []).map((s: any) => ({
@@ -334,6 +342,7 @@ export default function UniversityExamQpBookletPrintPage() {
               onChange={guid => {
                 setCourseUnitGuid(guid)
                 setCombinedType('Theory')
+                setValidationError(null)
               }}
               disabled={!semesterGuid || unitsLoading}
               options={courseUnits.map(unit => ({
@@ -363,6 +372,13 @@ export default function UniversityExamQpBookletPrintPage() {
           </div>
         )}
 
+        {formComplete && !canPrint && (
+          <div className="mx-5 mb-4 p-3.5 bg-amber-50 border border-amber-200 rounded-lg text-amber-900 text-sm flex items-center gap-2.5">
+            <i className="lni lni-warning text-base text-amber-600 flex-shrink-0" />
+            <span className="font-medium">You do not have permission to print university exam materials.</span>
+          </div>
+        )}
+
         {validationError && (
           <div className="mx-5 mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
@@ -387,19 +403,19 @@ export default function UniversityExamQpBookletPrintPage() {
             disabled={!canPrintBooklet || isWorking}
             title={bookletHint}
           >
-            <i className="lni lni-printer" /> Print (Booklet)
+            <i className={`lni ${printBooklet.isPending || downloadBooklet.isPending ? 'lni-spinner lni-is-spinning' : 'lni-printer'}`} />
+            {printBooklet.isPending || downloadBooklet.isPending ? ' Printing...' : ' Print (Booklet)'}
           </button>
 
-          {effectiveType !== 'Project' && (
-            <button
-              className="btn btn-neu"
-              onClick={() => handleQuestionPaperPrint()}
-              disabled={!canPrintQuestionPaper || isWorking}
-              title={qpHint}
-            >
-              <i className="lni lni-download" /> QP Print in MS Word
-            </button>
-          )}
+          <button
+            className="btn btn-neu"
+            onClick={() => handleQuestionPaperPrint()}
+            disabled={!canPrintQuestionPaper || isWorking}
+            title={qpHint}
+          >
+            <i className={`lni ${printTheory.isPending || downloadTheoryWord.isPending || printPractical.isPending || downloadPracticalWord.isPending ? 'lni-spinner lni-is-spinning' : 'lni-download'}`} />
+            {printTheory.isPending || downloadTheoryWord.isPending || printPractical.isPending || downloadPracticalWord.isPending ? ' Downloading...' : ' QP Print in MS Word'}
+          </button>
 
           {effectiveType === 'Practical' && (
             <button
