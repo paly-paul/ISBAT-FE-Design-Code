@@ -593,11 +593,7 @@ export default function IaEvaluationPage() {
                 ? `Student Roster — ${selectedCoursework?.unitName || selectedCoursework?.unitCode}`
                 : `Evaluation Detail — ${selectedStudent?.studentName}`}
             </span>
-            {currentStep === 'dashboard' && (
-              <span className="badge badge-purple text-[11px] font-semibold">
-                Coursework &amp; Test Workflow
-              </span>
-            )}
+            
             {currentStep === 'roster' && selectedCoursework && (
               <span className="badge badge-blue text-[11px] font-semibold">
                 {selectedCoursework.categoryLabel}

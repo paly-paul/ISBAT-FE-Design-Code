@@ -8,19 +8,17 @@ import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { Toast } from '@/components/Toast'
 import { SearchSelect } from '@/components/SearchSelect'
-import { useCurrentAcademicIntake, useSearchIntakesInfinite } from '@/hooks/academic/useIntakes'
-import { useSearchCampusesInfinite } from '@/hooks/config/useCampuses'
+import { useCurrentAcademicIntake, useIntakesDropdown } from '@/hooks/academic/useIntakes'
+import { useProgramDropdown } from '@/hooks/academic/useProgramMaster'
+import { useCampusDropdown } from '@/hooks/config/useCampuses'
 import { useSessions } from '@/hooks/academic/useSessionManagement'
 import { SessionListItemDto } from '@/lib/api/academic/sessionManagement'
-import { flattenUniquePages } from '@/lib/pagination'
 import {
   BulkScheduleModal,
   BulkAssessmentType,
   BulkScheduleScope,
 } from '@/components/modals/assessment/BulkScheduleModal'
-import { getIaCreationInit, IaProgramDto } from '@/lib/api/assessment/iaCreation'
 import {
-  getBulkScheduleInit,
   getBulkCwScheduleStatus,
   getBulkTestScheduleStatus,
   // getBulkUeScheduleStatus,
@@ -45,42 +43,18 @@ export default function BulkExamSchedulerPage() {
   const [term, setTerm] = useState<number>(1) // 1 = Term 1, 2 = Term 2, 3 = Both
   const [page, setPage] = useState(1)
 
-  // Autocomplete / Search filters
-  const [intakeSearch, setIntakeSearch] = useState('')
-  const [campusSearch, setCampusSearch] = useState('')
-  const [committedIntakeSearch, setCommittedIntakeSearch] = useState('')
-  const [committedCampusSearch, setCommittedCampusSearch] = useState('')
-  const [intakePickerOpen, setIntakePickerOpen] = useState(false)
-  const [campusPickerOpen, setCampusPickerOpen] = useState(false)
-
-  useEffect(() => {
-    const timer = setTimeout(() => setCommittedIntakeSearch(intakeSearch.trim()), 300)
-    return () => clearTimeout(timer)
-  }, [intakeSearch])
-
-  useEffect(() => {
-    const timer = setTimeout(() => setCommittedCampusSearch(campusSearch.trim()), 300)
-    return () => clearTimeout(timer)
-  }, [campusSearch])
-
-  const intakeQuery = useSearchIntakesInfinite(committedIntakeSearch, 20, intakePickerOpen || !intakeGuid)
-  const campusQuery = useSearchCampusesInfinite(committedCampusSearch, 20, campusPickerOpen)
+  const { data: intakesData = [], isLoading: isIntakesLoading } = useIntakesDropdown()
+  const { data: campuses = [], isLoading: isCampusesLoading } = useCampusDropdown()
   const { data: currentIntake } = useCurrentAcademicIntake()
 
-  // Intakes list
+  // Intakes list from /api/v1/academic/intakes/dropdown
   const intakes = useMemo(() => {
-    const items = flattenUniquePages(intakeQuery.data?.pages ?? [], i => i.intakeGuid)
+    const items = [...intakesData]
     if (currentIntake && !items.some(i => i.intakeGuid === currentIntake.intakeGuid)) {
       items.unshift(currentIntake)
     }
     return items
-  }, [currentIntake, intakeQuery.data])
-
-  // Campuses list
-  const campuses = useMemo(
-    () => flattenUniquePages(campusQuery.data?.pages ?? [], c => c.campusGuid),
-    [campusQuery.data]
-  )
+  }, [currentIntake, intakesData])
 
   // Default to current intake on load
   useEffect(() => {
@@ -98,19 +72,14 @@ export default function BulkExamSchedulerPage() {
   // Current selected intake label
   const selectedIntake = intakes.find(i => i.intakeGuid === intakeGuid)
   const selectedIntakeLabel = selectedIntake
-    ? `${selectedIntake.description} (${selectedIntake.intakeCode})`
+    ? `${selectedIntake.description || `Intake ${selectedIntake.intakeCode}`} (${selectedIntake.intakeCode})`
     : 'Selected Academic Session'
 
   const selectedCampus = campuses.find(c => c.campusGuid === campusGuid)
   const selectedCampusLabel = selectedCampus ? selectedCampus.campusName : 'All Campuses'
 
-  // ── 2. Programs Metadata for GUID resolution ────────────────────────────────
-  const [allPrograms, setAllPrograms] = useState<IaProgramDto[]>([])
-  useEffect(() => {
-    getIaCreationInit()
-      .then(res => setAllPrograms(res?.programs || []))
-      .catch(() => { })
-  }, [])
+  // ── 2. Programs Metadata for GUID resolution (from /program-master/dropdown) ──
+  const { data: allPrograms = [] } = useProgramDropdown()
 
   // ── 3. Table Rows from Session Management API ───────────────────────────────
   const { data: sessionList, isLoading: isTableLoading } = useSessions(
@@ -131,18 +100,6 @@ export default function BulkExamSchedulerPage() {
   useEffect(() => {
     setStatusOverrides({})
   }, [intakeGuid, campusGuid, page])
-
-  // Call GET /api/v1/assessment/ia-bulk-cw-schedule/init on mount
-  useEffect(() => {
-    getBulkScheduleInit()
-      .then(res => {
-        if (res?.intakes?.length > 0 && !intakeGuid) {
-          const current = res.intakes.find(i => i.currentIntake) || res.intakes[0]
-          if (current) setIntakeGuid(current.intakeGuid)
-        }
-      })
-      .catch(() => { })
-  }, [intakeGuid])
 
   // Pre-fetch live status for visible rows using the dedicated status endpoints (ia-bulk-cw-schedule/status, ia-bulk-test-schedule/status, ia-bulk-ue-schedule/status)
   useEffect(() => {
@@ -372,10 +329,7 @@ export default function BulkExamSchedulerPage() {
         {/* ── Page Header ─────────────────────────────────────────────────── */}
         <div className="pg-hdr flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-3">
           <div>
-            <div className="pg-title flex items-center gap-2">
-              <span>Bulk Scheduler</span>
-              <span className="badge badge-purple text-[11px] font-semibold">Assessment Ops</span>
-            </div>
+            <div className="pg-title">Bulk Scheduler</div>
             <div className="pg-sub text-xs text-slate-500">
               Schedule examinations in bulk or manage session-wise examination schedules
             </div>
@@ -394,17 +348,12 @@ export default function BulkExamSchedulerPage() {
                 <SearchSelect
                   options={intakes.map(i => ({
                     value: i.intakeGuid,
-                    label: `${i.description} (${i.intakeCode})`,
+                    label: `${i.description || `Intake ${i.intakeCode}`} (${i.intakeCode})`,
                   }))}
                   value={intakeGuid}
-                  onSearch={setIntakeSearch}
-                  onOpenChange={setIntakePickerOpen}
-                  isLoading={intakeQuery.isLoading}
-                  hasNextPage={intakeQuery.hasNextPage}
-                  isFetchingNextPage={intakeQuery.isFetchingNextPage}
-                  onLoadMore={() => intakeQuery.fetchNextPage()}
+                  isLoading={isIntakesLoading}
                   onChange={setIntakeGuid}
-                  placeholder="Select Academic Session..."
+                  placeholder={isIntakesLoading ? "Loading Academic Sessions..." : "Select Academic Session..."}
                 />
               </div>
             </div>
@@ -440,12 +389,7 @@ export default function BulkExamSchedulerPage() {
                     })),
                   ]}
                   value={campusGuid}
-                  onSearch={setCampusSearch}
-                  onOpenChange={setCampusPickerOpen}
-                  isLoading={campusQuery.isLoading}
-                  hasNextPage={campusQuery.hasNextPage}
-                  isFetchingNextPage={campusQuery.isFetchingNextPage}
-                  onLoadMore={() => campusQuery.fetchNextPage()}
+                  isLoading={isCampusesLoading}
                   onChange={setCampusGuid}
                 />
               </div>

@@ -373,12 +373,7 @@ export default function CwRectificationPage() {
       {/* ── Page Header ───────────────────────────────────────────────────── */}
       <div className="pg-hdr flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
         <div className="flex-1 min-w-0">
-          <div className="pg-title flex items-center gap-2 flex-wrap">
-            <span>Coursework Rectification</span>
-            <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
-              Live Gateway
-            </span>
-          </div>
+          <div className="pg-title">Coursework Rectification</div>
           <div className="pg-sub text-xs text-slate-500">
             Reopen, delete, re-evaluate or review a student&apos;s coursework from one consolidated lookup — only actions valid for the current state are enabled.
           </div>

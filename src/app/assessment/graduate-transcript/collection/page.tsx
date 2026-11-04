@@ -53,10 +53,7 @@ export default function GraduateTranscriptCollectionPage() {
 
       <div className="pg-hdr flex justify-between items-end">
         <div>
-          <h1 className="pg-title flex items-center gap-2">
-            <span>Transcript Collection</span>
-            <span className="badge badge-purple text-[11px] font-semibold">Assessment Ops</span>
-          </h1>
+          <h1 className="pg-title">Transcript Collection</h1>
           <p className="pg-sub">Record physical collection of printed graduate transcripts.</p>
         </div>
       </div>
