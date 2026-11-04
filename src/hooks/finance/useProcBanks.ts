@@ -1,7 +1,19 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createProcBank, deleteProcBank, getProcBankById, getProcBanks, ProcBank, ProcBankInput, updateProcBank } from '@/lib/api/finance/procBank'
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { createProcBank, deleteProcBank, getProcBankById, getProcBanks, getProcBanksPaged, ProcBank, ProcBankInput, updateProcBank } from '@/lib/api/finance/procBank'
+import { getNextPageParam } from '@/lib/pagination'
 
 const PROC_BANKS_KEY = ['proc-banks']
+
+export function useProcBanksInfinite(pageSize: number) {
+  return useInfiniteQuery({
+    queryKey: [...PROC_BANKS_KEY, 'infinite', pageSize],
+    queryFn: ({ pageParam }) => getProcBanksPaged(pageParam, pageSize),
+    initialPageParam: 1,
+    getNextPageParam,
+    staleTime: Infinity,
+    gcTime: Infinity,
+  })
+}
 
 export function useProcBanks(enabled = true) {
   return useQuery({

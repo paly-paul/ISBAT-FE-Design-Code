@@ -1,4 +1,5 @@
 import { apiGet, apiPost, apiPut, AuthError } from '../client'
+import { dialCode, type Country } from '../academic/country'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
@@ -128,8 +129,7 @@ export interface Enquiry {
   // and there's no longer any endpoint to verify an existing enquiry.
   emailVerified?: boolean | null
   // Phone dial-code countries (2026-10) — all null on older enquiries, and
-  // names/prefixes null on the PUT response. Display as
-  // `${mobileCountryPrefix} ${mobile}` (formatEnquiryPhone).
+  // names/prefixes null on the PUT response. Display via formatEnquiryPhone.
   mobileCountryGuid?: string | null
   mobileCountryName?: string | null
   mobileCountryPrefix?: string | null
@@ -138,11 +138,17 @@ export interface Enquiry {
   spPhoneCountryPrefix?: string | null
 }
 
-// Full number for display — just the digits when there's no prefix (older
-// enquiries). Some master prefixes aren't real dial codes (e.g. "IND"); that's
-// a data fix on the backend's side.
-export function formatEnquiryPhone(e: Pick<Enquiry, 'mobile' | 'mobileCountryPrefix'>): string {
-  const prefix = e.mobileCountryPrefix?.trim()
+// Full number for display — just the digits when there's no code (older
+// enquiries). mobileCountryPrefix comes from the master's countryPrefix, which
+// isn't always a dial code (e.g. "IND"), so the code is taken the same way the
+// form's picker labels it: dialCode() of the saved country. The prefix is only
+// the fallback while the country list loads or if it doesn't have that country.
+export function formatEnquiryPhone(
+  e: Pick<Enquiry, 'mobile' | 'mobileCountryGuid' | 'mobileCountryPrefix'>,
+  countries: Pick<Country, 'countryGuid' | 'countryCode'>[] = [],
+): string {
+  const country = countries.find(c => c.countryGuid === e.mobileCountryGuid)
+  const prefix = country ? dialCode(country) : e.mobileCountryPrefix?.trim()
   return prefix ? `${prefix} ${e.mobile}` : e.mobile
 }
 

@@ -8,7 +8,7 @@ import DatePicker from '@/components/DatePicker'
 import { BatchCreateInput, BatchUpdateInput, EMPTY_GUID } from '@/lib/api/academic/batch'
 import { useBatch } from '@/hooks/academic/useBatches'
 import { useProgramMasterByGuid, useProgramDropdown } from '@/hooks/academic/useProgramMaster'
-import { useCurrentAcademicIntake, useIntake } from '@/hooks/academic/useIntakes'
+import { useCurrentAcademicIntake, useIntake, useIntakesDropdown } from '@/hooks/academic/useIntakes'
 import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
 import { useSpecializationsDropdown, useStream } from '@/hooks/config/useStreams'
 import { useBatchTimesDropdown } from '@/hooks/config/useBatchTimes'
@@ -61,8 +61,8 @@ function earliestBatchStart(intake: { financialYear?: number; intakes?: number }
 // Server "not found" messages (all HTTP 400) → the field the user should fix.
 const NOT_FOUND_FIELDS: [RegExp, string, string][] = [
   [/intake not found/i,     'intakeGuid',    'This intake no longer exists, or has no month / financial year set. Pick another intake.'],
-  // The current intake changed while the form was open.
-  [/only be created for the current intake/i, 'intakeGuid', 'Batches can only be created for the current intake. Close and reopen this form to load it.'],
+  // The picked intake isn't the current one, and the backend still requires it.
+  [/only be created for the current intake/i, 'intakeGuid', 'The server only accepts the current intake for new batches right now. Pick the current intake, or ask the backend team to allow upcoming intakes.'],
   [/program not found/i,    'programGuid',   'This programme no longer exists. Pick another programme.'],
   [/semester not found/i,   'semesterGuid',  'This semester no longer exists. Pick another semester.'],
   [/stream not found/i,     'streamGuid',    'This specialization no longer exists. Pick another one.'],
@@ -103,11 +103,13 @@ export function BatchFormModal({ isOpen, onClose, showToast, mode, batchGuid, cr
   const selectedHead = useEmployee(pHeadGuid || null)
 
   const { data: programDropdownItems = [], isLoading: isProgramLoading } = useProgramDropdown(undefined, isOpen)
-  // Create only allows the current intake (POST /batches rejects any other
-  // with "Batches can only be created for the current intake"), so the
-  // dropdown offers just that one — via the intakes list's currentIntake
-  // filter. Edit keeps the batch's own (locked) intake, whatever it is.
+  // Create offers the current intake and any upcoming one (a higher intake
+  // code), with the current one preselected. post-batch.md still documents
+  // POST /batches as rejecting anything but the current intake, so an upcoming
+  // pick needs that rule lifted on the backend. Edit keeps the batch's own
+  // (locked) intake, whatever it is.
   const currentIntake = useCurrentAcademicIntake(isOpen && !isEdit)
+  const { data: intakeDropdownItems = [] } = useIntakesDropdown(isOpen && !isEdit)
   const { data: specializationDropdownItems = [], isLoading: isSpecializationLoading } = useSpecializationsDropdown(isOpen)
   const { data: employeeDropdownItems = [], isLoading: isEmployeesLoading } = useEmployeeDropdown(isOpen)
 
@@ -120,11 +122,17 @@ export function BatchFormModal({ isOpen, onClose, showToast, mode, batchGuid, cr
   }, [programDropdownItems, programGuid, selectedProgram.data])
 
   const intakeOptions = useMemo(() => {
-    const intake = isEdit ? selectedIntake.data : currentIntake.data
-    return intake ? [{ value: intake.intakeGuid, label: `${intake.intakeCode} — ${intake.description}` }] : []
-  }, [isEdit, selectedIntake.data, currentIntake.data])
+    const toOption = (i: { intakeGuid: string; intakeCode: number; description: string }) => ({ value: i.intakeGuid, label: `${i.intakeCode} — ${i.description}` })
+    if (isEdit) return selectedIntake.data ? [toOption(selectedIntake.data)] : []
+    const current = currentIntake.data
+    if (!current) return []
+    return intakeDropdownItems
+      .filter(i => i.intakeCode >= current.intakeCode)
+      .sort((a, b) => a.intakeCode - b.intakeCode)
+      .map(toOption)
+  }, [isEdit, selectedIntake.data, currentIntake.data, intakeDropdownItems])
 
-  // Only one valid choice on create, so pick it as soon as it loads.
+  // Preselect the current intake on create as soon as it loads.
   useEffect(() => {
     if (isOpen && !isEdit && !intakeGuid && currentIntake.data) setIntakeGuid(currentIntake.data.intakeGuid)
   }, [isOpen, isEdit, intakeGuid, currentIntake.data])
@@ -424,7 +432,7 @@ export function BatchFormModal({ isOpen, onClose, showToast, mode, batchGuid, cr
             />
             {errors.intakeGuid
               ? <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.intakeGuid}</p>
-              : !isEdit && <p className="text-xs text-g500 mt-1">New batches can only be created for the current intake.</p>}
+              : !isEdit && <p className="text-xs text-g500 mt-1">Showing the current intake and upcoming intakes.</p>}
           </div>
           <div className="fg">
             <div className="lbl">Programme <span className="req">*</span></div>

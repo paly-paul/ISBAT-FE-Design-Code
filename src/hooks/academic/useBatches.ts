@@ -6,11 +6,12 @@ const BATCHES_KEY = ['batches']
 // Batch Management's table: one server page, with search and the
 // Excel-style column filters applied server-side. Keeps the previous page
 // on screen while the next one loads.
-export function useFilteredBatches(pageNumber: number, pageSize: number, search: string, scope: BatchScope, filters: BatchColumnFilters) {
+export function useFilteredBatches(pageNumber: number, pageSize: number, search: string, scope: BatchScope, filters: BatchColumnFilters, enabled = true) {
   return useQuery({
     queryKey: [...BATCHES_KEY, 'filtered', pageNumber, pageSize, search, scope.intakeGuid ?? '', scope.campusGuid ?? '', JSON.stringify(filters)],
     queryFn: () => getBatches(pageNumber, pageSize, search, scope, filters),
     placeholderData: keepPreviousData,
+    enabled,
   })
 }
 

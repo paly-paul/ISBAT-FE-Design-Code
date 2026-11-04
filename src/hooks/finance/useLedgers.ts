@@ -1,5 +1,6 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createLedger, deleteLedger, getLedgerById, getLedgers, Ledger, LedgerInput, updateLedger, getLedgersDropdown, LedgerDropdownItem } from '@/lib/api/finance/ledger'
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { createLedger, deleteLedger, getLedgerById, getLedgers, getLedgersPaged, Ledger, LedgerInput, updateLedger } from '@/lib/api/finance/ledger'
+import { getNextPageParam } from '@/lib/pagination'
 
 const LEDGERS_KEY = ['ledgers']
 
@@ -16,6 +17,17 @@ export function useLedgers(enabled = true) {
     staleTime: Infinity,
     gcTime: Infinity,
     enabled,
+  })
+}
+
+export function useLedgersInfinite(pageSize: number) {
+  return useInfiniteQuery({
+    queryKey: [...LEDGERS_KEY, 'infinite', pageSize],
+    queryFn: ({ pageParam }) => getLedgersPaged(pageParam, pageSize),
+    initialPageParam: 1,
+    getNextPageParam,
+    staleTime: Infinity,
+    gcTime: Infinity,
   })
 }
 
@@ -60,13 +72,3 @@ export function useDeleteLedger() {
 }
 
 export type { Ledger, LedgerInput }
-
-export function useLedgersDropdown(enabled = true) {
-  return useQuery<LedgerDropdownItem[]>({
-    queryKey: [...LEDGERS_KEY, 'dropdown'],
-    queryFn: () => getLedgersDropdown(),
-    staleTime: Infinity,
-    gcTime: Infinity,
-    enabled,
-  })
-}

@@ -39,7 +39,7 @@ export interface FeeStructureInput {
   lef: number | null
   cef: number | null
   ace: number | null
-  // intCurrency, not currencyGuid — see ProgramFeeStructureHeaderInput.
+  // Integers, not currencies — see ProgramFeeStructureHeaderInput.
   lec: number | null
   cec: number | null
   acec: number | null
@@ -614,11 +614,7 @@ export interface FeeLineUpdateInput {
 }
 
 // Confirmed via UpdateComplete.bru: IntakeGuid (a real guid) replaces
-// Create's IntakeCode (a number). Lec/Cec/Acec are NOT confirmed to have
-// switched to guids the way CurrencyGuid/IntakeGuid did — the docs list
-// them under the same short names with no "Guid" suffix, unlike the fields
-// that did change — so they're treated as still intCurrency-based here,
-// same as Create, until a real response proves otherwise.
+// Create's IntakeCode (a number). Lec/Cec/Acec are integers, same as Create.
 export interface FeeStructureUpdateInput {
   feeCode: string
   feeDesc: string

@@ -17,6 +17,7 @@ import { useProgramDropdown } from '@/hooks/academic/useProgramMaster'
 import { useSearchIntakesInfinite } from '@/hooks/academic/useIntakes'
 import { useEnquiryStatuses } from '@/hooks/config/useEnquiryStatuses'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
+import { useCountriesByName } from '@/hooks/config/useCountries'
 import { formatEnquiryPhone } from '@/lib/api/admission/enquiry'
 import { flattenUniquePages } from '@/lib/pagination'
 
@@ -81,6 +82,8 @@ export default function EnquiryListPage() {
   const { data, isLoading: loading } = useEnquiries(page, DISPLAY_PAGE_SIZE, activeSearch, statusGuid)
   const updateEnquiry = useUpdateEnquiry()
   const rows = data?.items ?? []
+  // Dial codes for just the countries on this page, for the Phone column.
+  const countries = useCountriesByName(rows.map(r => r.mobileCountryName ?? ''))
   const totalCount = data?.totalCount ?? 0
   const totalPages = Math.max(1, Math.ceil(totalCount / DISPLAY_PAGE_SIZE))
   const hasActiveFilters = !!search.trim() || !!channel || !!intakeGuid || !!statusGuid
@@ -262,7 +265,7 @@ export default function EnquiryListPage() {
                   </td>
                   <td className="font-mono text-sm">{r.enquiryCode}</td>
                   <td>{r.studentName}</td>
-                  <td className="text-sm text-g600">{formatEnquiryPhone(r)}</td>
+                  <td className="text-sm text-g600">{formatEnquiryPhone(r, countries)}</td>
                   <td className="text-sm text-g600">
                     {r.email}
                     {r.email && r.emailVerified === true && <span className="eq-email-flag ok" title="Email verified" aria-label="Email verified"><i className="lni lni-checkmark-circle" /></span>}

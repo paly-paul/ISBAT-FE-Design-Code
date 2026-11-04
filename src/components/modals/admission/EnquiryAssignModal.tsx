@@ -9,6 +9,7 @@ import { useEnquiry, useEnquiryGenders } from '@/hooks/admission/useEnquiries'
 import { useEmployees } from '@/hooks/employee/useEmployees'
 import { useSearchProgramMastersInfinite } from '@/hooks/academic/useProgramMaster'
 import { useCampuses } from '@/hooks/config/useCampuses'
+import { useCountriesByName } from '@/hooks/config/useCountries'
 import { useIntakes } from '@/hooks/academic/useIntakes'
 import { AuthError } from '@/lib/api/client'
 import { flattenUniquePages } from '@/lib/pagination'
@@ -36,6 +37,7 @@ export function EnquiryAssignModal({ isOpen, onClose, showToast, enquiryGuid, up
   const { data: enquiry, isLoading, isError, error } = useEnquiry(enquiryGuid, isOpen)
   const { data: employees = [] } = useEmployees(isOpen)
   const { data: campuses = [] }  = useCampuses(isOpen)
+  const countries = useCountriesByName(isOpen && enquiry?.mobileCountryName ? [enquiry.mobileCountryName] : [])
   // No intakeName/intakeCode field exists on the enquiry response itself —
   // resolve intakeGuid against the real Intake master, same client-side
   // resolution pattern as the enquiry-list page's own resolveProgramName.
@@ -218,7 +220,7 @@ export function EnquiryAssignModal({ isOpen, onClose, showToast, enquiryGuid, up
           {/* Read-only — the update endpoint doesn't accept these fields at all */}
           <div className="g2" style={{ marginBottom: 18 }}>
             <div className="fg m-0"><div className="lbl">Name</div><div style={{ fontSize: 13.5, color: 'var(--g700)' }}>{enquiry.studentName}</div></div>
-            <div className="fg m-0"><div className="lbl">Phone</div><div style={{ fontSize: 13.5, color: 'var(--g700)' }}>{formatEnquiryPhone(enquiry)}</div></div>
+            <div className="fg m-0"><div className="lbl">Phone</div><div style={{ fontSize: 13.5, color: 'var(--g700)' }}>{formatEnquiryPhone(enquiry, countries)}</div></div>
             <div className="fg m-0"><div className="lbl">Email</div><div style={{ fontSize: 13.5, color: 'var(--g700)' }}>{enquiry.email || '—'}</div></div>
             <div className="fg m-0"><div className="lbl">Gender</div><div style={{ fontSize: 13.5, color: 'var(--g700)' }}>{resolveGenderName(enquiry.genderLabel, enquiry.gender)}</div></div>
             <div className="fg m-0"><div className="lbl">Enquiry Date</div><div style={{ fontSize: 13.5, color: 'var(--g700)' }}>{enquiry.enquiryDate.slice(0, 10)}</div></div>

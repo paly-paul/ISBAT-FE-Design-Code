@@ -45,6 +45,16 @@ export function getProcBanks(): Promise<ProcBank[]> {
   return apiGet<ProcBankListResponse | null>(`/api/v1/finance/proc-banks?page=1&pageSize=${PROC_BANKS_LOAD_SIZE}`).then(data => data?.items ?? [])
 }
 
+// One page at a time, for scrolling pickers.
+export function getProcBanksPaged(page: number, pageSize: number): Promise<ProcBankListResponse> {
+  if (MOCK_AUTH) {
+    const start = (page - 1) * pageSize
+    return Promise.resolve({ items: mockProcBanks.slice(start, start + pageSize), totalCount: mockProcBanks.length, pageNumber: page, pageSize })
+  }
+  return apiGet<ProcBankListResponse | null>(`/api/v1/finance/proc-banks?page=${page}&pageSize=${pageSize}`)
+    .then(data => data ?? { items: [], totalCount: 0, pageNumber: page, pageSize })
+}
+
 export function createProcBank(input: ProcBankInput): Promise<ProcBank> {
   if (MOCK_AUTH) {
     const bank: ProcBank = { procBankGuid: crypto.randomUUID(), ...input }
