@@ -29,6 +29,18 @@ export function getEnquirySourceMasters(): Promise<EnquirySourceMaster[]> {
   return apiGet<EnquirySourceMaster[] | null>('/api/v1/admissions/enquiry-sources').then((data: any) => Array.isArray(data) ? data : (data && typeof data === 'object' ? (data.items || Object.values(data).find(Array.isArray) || []) : []))
 }
 
+// GET /enquiry-sources/dropdown (get-enquiry-source-dropdown.md). Soft-deleted rows
+// are excluded.
+export interface EnquirySourceMasterDropdownItem {
+  enquirySourceGuid: string
+  enquirySourceName: string
+}
+
+export function getEnquirySourceMastersDropdown(): Promise<EnquirySourceMasterDropdownItem[]> {
+  if (MOCK_AUTH) return Promise.resolve(mockEnquirySourceMasters)
+  return apiGet<EnquirySourceMasterDropdownItem[] | null>('/api/v1/admissions/enquiry-sources/dropdown').then(data => data ?? [])
+}
+
 // Create a new enquiry source and return the saved record.
 export function createEnquirySourceMaster(input: EnquirySourceMasterInput): Promise<EnquirySourceMaster> {
   if (MOCK_AUTH) {

@@ -5,11 +5,11 @@ import { Toast } from '@/components/Toast'
 import { SearchSelect } from '@/components/SearchSelect'
 import { useSearchStudentsInfinite, useStudentProfile } from '@/hooks/finance/usePaymentConsole'
 import { refugeeLabel, studCategoryLabel, searchStudents } from '@/lib/api/finance/paymentConsole'
-import { useCampuses } from '@/hooks/config/useCampuses'
+import { useCampusDropdown } from '@/hooks/config/useCampuses'
 import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
 import { useBatch } from '@/hooks/academic/useBatches'
 import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
-import { useDiscounts } from '@/hooks/finance/useDiscounts'
+import { useDiscountsDropdown } from '@/hooks/finance/useDiscounts'
 import { useCooperates } from '@/hooks/finance/useCooperates'
 import {
   useStudentDiscount,
@@ -187,7 +187,7 @@ function DiscountAllocationContent() {
   // Client-side name resolution for the profile's guid FKs — same fallback
   // pattern as Payment Console (prefer the server-resolved name, fall back
   // to the client-side lookup only when the server sends null).
-  const { data: campuses = [] } = useCampuses(!!profile)
+  const { data: campuses = [] } = useCampusDropdown(!!profile)
   const { data: programs = [] } = useProgramMasters(!profile?.programName && !!profile)
   // The student's own batch by guid — the /batches list only covers one
   // intake (the current one by default), so an older student's batch
@@ -200,7 +200,7 @@ function DiscountAllocationContent() {
   const semName = profile?.semesterName ?? semesters.find(s => s.semesterGuid === profile?.semesterGuid)?.semName
 
   // ── Discount catalogue + this student's current assignment. ──
-  const { data: discountCatalogue = [] } = useDiscounts(!!selectedApplicationGuid)
+  const { data: discountCatalogue = [] } = useDiscountsDropdown(!!selectedApplicationGuid)
   const { data: discountDetail, isLoading: isDiscountLoading, isError: isDiscountError } = useStudentDiscount(studentGuid, !!selectedApplicationGuid && !!studentGuid)
   const assignDiscount = useAssignStudentDiscount()
   const updateDiscount = useUpdateStudentDiscount()

@@ -141,6 +141,13 @@ export default function Page() {
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
   const pageItems = filteredRows
 
+  // Approving or deleting the only row on the last page leaves this page past
+  // the end of the list, so step back to the new last page instead of showing
+  // an empty table.
+  useEffect(() => {
+    if (approvalsData && page > totalPages) setPage(totalPages)
+  }, [approvalsData, page, totalPages])
+
   function fth(label: string, col: string, opts: string[]) {
     return (
       <FilterTh

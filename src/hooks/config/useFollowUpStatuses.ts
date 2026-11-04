@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createFollowUpStatus, deleteFollowUpStatus, FollowUpStatus, FollowUpStatusInput, getFollowUpStatusById, getFollowUpStatuses, updateFollowUpStatus } from '@/lib/api/academic/followUpStatus'
+import { createFollowUpStatus, deleteFollowUpStatus, FollowUpStatus, FollowUpStatusInput, getFollowUpStatusesDropdown, getFollowUpStatusById, getFollowUpStatuses, updateFollowUpStatus } from '@/lib/api/academic/followUpStatus'
 
 const FOLLOWUP_STATUSES_KEY = ['followup-statuses']
 
@@ -10,6 +10,16 @@ export function useFollowUpStatuses(enabled = true) {
     // Never treat the cached list as stale on its own — only refetch when a
     // mutation (create/update/delete) explicitly invalidates this key below,
     // instead of on every remount/window focus.
+    staleTime: Infinity,
+    gcTime: Infinity,
+    enabled,
+  })
+}
+
+export function useFollowUpStatusesDropdown(enabled = true) {
+  return useQuery({
+    queryKey: [...FOLLOWUP_STATUSES_KEY, 'dropdown'],
+    queryFn: () => getFollowUpStatusesDropdown(),
     staleTime: Infinity,
     gcTime: Infinity,
     enabled,

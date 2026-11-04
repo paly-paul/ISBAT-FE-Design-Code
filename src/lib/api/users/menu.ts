@@ -39,6 +39,7 @@ const MOCK_FULL_ACCESS: MenuPermissions = {
   print: true, export: true, import: true, download: true, send: true,
   approve: true, reject: true, hold: true, verify: true, assign: true, submit: true,
   register: true, execute: true, cancel: true,
+  generate: true, publish: true, moderate: true, push: true, save: true, preview: true, record: true, search: true,
   learningMode: true, refugee: true, sponsor: true,
 }
 

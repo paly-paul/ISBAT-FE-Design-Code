@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createFollowUpMode, deleteFollowUpMode, FollowUpMode, FollowUpModeInput, getFollowUpModeById, getFollowUpModes, updateFollowUpMode } from '@/lib/api/admission/followUpMode'
+import { createFollowUpMode, deleteFollowUpMode, FollowUpMode, FollowUpModeInput, getFollowUpModesDropdown, getFollowUpModeById, getFollowUpModes, updateFollowUpMode } from '@/lib/api/admission/followUpMode'
 
 const FOLLOWUP_MODES_KEY = ['followup-modes']
 
@@ -10,6 +10,16 @@ export function useFollowUpModes(enabled = true) {
     // Never treat the cached list as stale on its own — only refetch when a
     // mutation (create/update/delete) explicitly invalidates this key below,
     // instead of on every remount/window focus.
+    staleTime: Infinity,
+    gcTime: Infinity,
+    enabled,
+  })
+}
+
+export function useFollowUpModesDropdown(enabled = true) {
+  return useQuery({
+    queryKey: [...FOLLOWUP_MODES_KEY, 'dropdown'],
+    queryFn: () => getFollowUpModesDropdown(),
     staleTime: Infinity,
     gcTime: Infinity,
     enabled,

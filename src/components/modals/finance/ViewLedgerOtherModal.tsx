@@ -2,7 +2,7 @@
 import { ModalProps } from '../types'
 import { useLedgerOther } from '@/hooks/finance/useLedgerOthersMaster'
 import { LedgerOther } from '@/lib/api/finance/ledgerOthersMaster'
-import { useProcGlAccounts } from '@/hooks/finance/useProcGlAccounts'
+import { useProcGlAccountsDropdown } from '@/hooks/finance/useProcGlAccounts'
 import { AuthError } from '@/lib/api/client'
 import { FailurePopup } from '../shared/FailurePopup'
 
@@ -24,7 +24,7 @@ function Field({ label, value, mono, wide }: { label: string; value: React.React
 // Same structure as ViewLedgerModal (tuition ledgers).
 export function ViewLedgerOtherModal({ isOpen, onClose, ledgerOthersGuid, onEdit, canEdit }: ViewLedgerOtherModalProps) {
   const { data: ledgerOther, isLoading, isError, error } = useLedgerOther(ledgerOthersGuid, isOpen)
-  const { data: glAccounts = [] } = useProcGlAccounts()
+  const { data: glAccounts = [] } = useProcGlAccountsDropdown()
 
   if (!isOpen) return null
 

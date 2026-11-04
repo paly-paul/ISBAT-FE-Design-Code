@@ -11,9 +11,8 @@ import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { useProgramFeeStructuresPaged, ProgramFeeStructureHeader } from '@/hooks/academic/useProgramFeeStructure'
-import { useProgramMastersByGuids } from '@/hooks/academic/useProgramMaster'
-import { useProgramApprovals } from '@/hooks/academic/useProgramApproval'
-import { useIntakesByGuids } from '@/hooks/academic/useIntakes'
+import { useProgramsByGuids } from '@/hooks/academic/useProgramMaster'
+import { useIntakesDropdown } from '@/hooks/academic/useIntakes'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
@@ -48,25 +47,8 @@ export default function Page() {
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
   const searchPending = searchTrimmed.length >= MIN_SEARCH_CHARS && isFetching
 
-  // Programme column — resolves only the guids actually on the current page
-  // (2026-09-10) instead of useProgramMasters()' full unconditional list
-  // fetched just to look up a handful of programGuids at a time, same
-  // batched-by-guid convention as the Intake column below.
-  const programGuidsOnPage = records.map(r => r.programGuid)
-  const { byGuid: programsByGuid, isLoading: programsByGuidLoading } = useProgramMastersByGuids(programGuidsOnPage)
-  // GET /api/v1/academic/program-master only lists approved programmes — a
-  // fee structure can already be attached to one still pending approval
-  // (see programme-approval/page.tsx), which programmeFor() below silently
-  // showed as "—" for. Only fall back to the (still full-list, no by-guid
-  // endpoint exists to batch it) not-approved list once the batched lookup
-  // above has actually finished and a row is still unresolved, instead of
-  // always fetching all pending not-approved rows on every load — including
-  // while that batch is simply still in flight, which would otherwise fire
-  // this fallback on every fresh page load regardless of whether it's ever
-  // actually needed.
-  const needsNotApprovedFallback = !programsByGuidLoading && records.some(r => !programsByGuid.has(r.programGuid))
-  const { data: notApprovedData } = useProgramApprovals(1, PAGE_SIZE, '', needsNotApprovedFallback)
-  const notApprovedPrograms = notApprovedData?.items ?? []
+  // Programme column — one by-guids request for the programmes on this page.
+  const programsByGuid = useProgramsByGuids(records.map(r => r.programGuid))
 
   function nav(id: string) { router.push('/academic/' + id) }
   function openModal(id: string)  { setOpenModals(prev => new Set(prev).add(id)) }
@@ -77,11 +59,6 @@ export default function Page() {
     setViewRecord(r)
     openModal('view-fee-structure-modal')
     setSearch('')
-  }
-
-  function programmeFor(programGuid: string) {
-    return programsByGuid.get(programGuid)
-      ?? notApprovedPrograms.find(p => p.programGuid === programGuid)
   }
 
   // No delete endpoint is confirmed for this resource yet (only
@@ -114,14 +91,12 @@ export default function Page() {
     [records, searchTrimmed],
   )
 
-  // Intake column — resolves only the guids actually on the current page
-  // (2026-09-10) instead of useIntakes()' full 1000-row snapshot fetched
-  // just to look up a handful of intakeGuids at a time, same batched-by-guid
-  // convention as Programme Master's own table (see useIntakesByGuids).
-  const intakesByGuid = useIntakesByGuids(pageItems.map(r => r.intakeGuid).filter((g): g is string => !!g))
+  // Intake column — the dropdown carries every intake's code in one cached
+  // request, and there's no by-guids endpoint for intakes.
+  const { data: intakeDropdownItems = [] } = useIntakesDropdown()
   function intakeCodeFor(intakeGuid: string | null) {
     if (!intakeGuid) return '—'
-    const intake = intakesByGuid.get(intakeGuid)
+    const intake = intakeDropdownItems.find(i => i.intakeGuid === intakeGuid)
     return intake ? String(intake.intakeCode) : '—'
   }
 
@@ -185,7 +160,7 @@ export default function Page() {
                   ? <EmptyState colSpan={999} hasFilters={!!search} onClearFilters={() => { setSearch(''); setPage(1) }} />
                   : null}
               {!(isLoading || searchPending) && pageItems.map(r => {
-                const programme = programmeFor(r.programGuid)
+                const programme = programsByGuid.get(r.programGuid)
                 return (
                   <tr key={r.feeHdGuid}>
                     <td>

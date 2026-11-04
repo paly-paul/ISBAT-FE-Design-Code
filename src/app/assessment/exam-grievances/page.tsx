@@ -1,5 +1,6 @@
 'use client'
 
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { useEffect, useMemo, useState } from 'react'
 import { SearchSelect } from '@/components/SearchSelect'
 import { ScrollTable } from '@/components/ScrollTable'
@@ -288,6 +289,7 @@ interface GrievancePanelProps {
 }
 
 function GrievancePanel({ grievanceGuid, statuses, onClose, onSaved, onStale }: GrievancePanelProps) {
+  const permissions = usePagePermissions()
   const [localToast, setLocalToast] = useState<{ msg: string; type: string } | null>(null)
   function showLocalToast(msg: string, type = 'error') { setLocalToast({ msg, type }); setTimeout(() => setLocalToast(null), 4000) }
 
@@ -298,7 +300,8 @@ function GrievancePanel({ grievanceGuid, statuses, onClose, onSaved, onStale }: 
   const [status, setStatus] = useState('')
   const [response, setResponse] = useState('')
   const [errors, setErrors] = useState<{ status?: string; response?: string }>({})
-  const [forbidden, setForbidden] = useState(false)
+  const [saveRefused, setForbidden] = useState(false)
+  const forbidden = saveRefused || !permissions.edit
   const [confirmDiscard, setConfirmDiscard] = useState(false)
   const [copied, setCopied] = useState(false)
 

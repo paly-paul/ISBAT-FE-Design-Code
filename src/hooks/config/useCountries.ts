@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useInfiniteQuery, useMutation, useQueries, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query'
-import { Country, CountryInput, CountryListResponse, createCountry, deleteCountry, findDefaultCountry, getCountries, getCountriesPaged, updateCountry } from '@/lib/api/academic/country'
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Country, CountryInput, createCountry, deleteCountry, findDefaultCountry, getCountries, getCountriesByGuids, getCountriesPaged, updateCountry } from '@/lib/api/academic/country'
 import { getNextPageParam } from '@/lib/pagination'
 
 const COUNTRIES_KEY = ['countries']
@@ -9,7 +9,7 @@ const COUNTRIES_KEY = ['countries']
 const COUNTRIES_PAGE_SIZE = 1000
 // One search page, for looking up specific countries by name.
 const COUNTRY_LOOKUP_PAGE_SIZE = 20
-export const HOME_COUNTRY_NAME = 'Uganda'
+const HOME_COUNTRY_NAME = 'Uganda'
 
 export function useCountries(enabled = true) {
   return useQuery({
@@ -34,39 +34,33 @@ export function useSearchCountriesInfinite(search: string, pageSize: number, ena
   })
 }
 
-function combineCountryLookups(results: UseQueryResult<CountryListResponse>[]) {
-  return {
-    countries: results.flatMap(r => r.data?.items ?? []),
-    isLoading: results.some(r => r.isLoading),
-  }
-}
+const NO_COUNTRIES: Country[] = []
 
-// Only the named countries, one small search per distinct name (cached), for
-// screens that need a few countries rather than the whole list. A search can
-// also match similar names, so callers should pick their row by guid.
-export function useCountryLookup(names: string[]) {
-  const unique = Array.from(new Set(names.filter(Boolean)))
-  return useQueries({
-    queries: unique.map(name => ({
-      queryKey: [...COUNTRIES_KEY, 'by-name', name],
-      queryFn: () => getCountriesPaged(1, COUNTRY_LOOKUP_PAGE_SIZE, name),
-      gcTime: Infinity,
-    })),
-    combine: combineCountryLookups,
+// Only the given countries, in one request, for screens that hold a few guids
+// and need their names or dial codes rather than the whole list.
+export function useCountriesByGuids(guids: string[]) {
+  const unique = Array.from(new Set(guids.filter(Boolean))).sort()
+  const query = useQuery({
+    queryKey: [...COUNTRIES_KEY, 'by-guids', unique],
+    queryFn: () => getCountriesByGuids(unique),
+    enabled: unique.length > 0,
+    gcTime: Infinity,
   })
-}
-
-export function useCountriesByName(names: string[]): Country[] {
-  return useCountryLookup(names).countries
+  return { countries: query.data ?? NO_COUNTRIES, isLoading: query.isLoading }
 }
 
 // For the country pickers on the enquiry forms, without loading the full list:
 // the home country to default to, plus every country seen so far (home and the
-// pickers' loaded pages). A selection always comes from one of those, so its
-// label stays available after the picker's search moves on.
+// pickers' loaded pages). A selection made in the picker comes from one of
+// those, so its label stays available after the picker's search moves on.
 export function useKnownCountries(pageCountries: Country[]) {
-  const homeMatches = useCountriesByName([HOME_COUNTRY_NAME])
-  const home = findDefaultCountry(homeMatches)
+  // There's no guid to ask for yet, since the home country is what's being found.
+  const { data: homeMatches } = useQuery({
+    queryKey: [...COUNTRIES_KEY, 'by-name', HOME_COUNTRY_NAME],
+    queryFn: () => getCountriesPaged(1, COUNTRY_LOOKUP_PAGE_SIZE, HOME_COUNTRY_NAME),
+    gcTime: Infinity,
+  })
+  const home = findDefaultCountry(homeMatches?.items ?? NO_COUNTRIES)
   const [seen, setSeen] = useState<Country[]>([])
   useEffect(() => {
     setSeen(prev => {

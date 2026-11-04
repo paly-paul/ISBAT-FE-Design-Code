@@ -12,12 +12,12 @@ import { EnquiryFormModal } from '@/components/modals/admission/EnquiryFormModal
 import { EnquiryAssignModal } from '@/components/modals/admission/EnquiryAssignModal'
 import type { Enquiry } from '@/hooks/admission/useEnquiries'
 import { useEnquiries, useEnquiryCounts, useUpdateEnquiry } from '@/hooks/admission/useEnquiries'
-import { useEnquirySourceMasters } from '@/hooks/admission/useEnquirySourceMasters'
+import { useEnquirySourceMastersDropdown } from '@/hooks/admission/useEnquirySourceMasters'
 import { useProgramDropdown } from '@/hooks/academic/useProgramMaster'
 import { useSearchIntakesInfinite } from '@/hooks/academic/useIntakes'
-import { useEnquiryStatuses } from '@/hooks/config/useEnquiryStatuses'
+import { useEnquiryStatusesDropdown } from '@/hooks/config/useEnquiryStatuses'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
-import { useCountriesByName } from '@/hooks/config/useCountries'
+import { useCountriesByGuids } from '@/hooks/config/useCountries'
 import { formatEnquiryPhone } from '@/lib/api/admission/enquiry'
 import { flattenUniquePages } from '@/lib/pagination'
 
@@ -83,7 +83,7 @@ export default function EnquiryListPage() {
   const updateEnquiry = useUpdateEnquiry()
   const rows = data?.items ?? []
   // Dial codes for just the countries on this page, for the Phone column.
-  const countries = useCountriesByName(rows.map(r => r.mobileCountryName ?? ''))
+  const { countries } = useCountriesByGuids(rows.map(r => r.mobileCountryGuid ?? ''))
   const totalCount = data?.totalCount ?? 0
   const totalPages = Math.max(1, Math.ceil(totalCount / DISPLAY_PAGE_SIZE))
   const hasActiveFilters = !!search.trim() || !!channel || !!intakeGuid || !!statusGuid
@@ -116,7 +116,7 @@ export default function EnquiryListPage() {
     ...intakes.map(i => ({ value: i.intakeGuid, label: `${i.intakeCode} — ${i.description}` })),
   ]
 
-  const { data: enquiryStatuses = [] } = useEnquiryStatuses()
+  const { data: enquiryStatuses = [] } = useEnquiryStatusesDropdown()
   function resolveStatusName(enquiryStatusGuid: string | null) {
     if (!enquiryStatusGuid) return undefined
     return enquiryStatuses.find(s => s.enquiryStatusGuid === enquiryStatusGuid)?.enquiryStatusName
@@ -132,7 +132,7 @@ export default function EnquiryListPage() {
   // currently-loaded rows — with only DISPLAY_PAGE_SIZE rows loaded at a
   // time now (server-side pagination, see above), deriving from rows would
   // make the dropdown miss every channel not present on the current page.
-  const { data: enquirySources = [] } = useEnquirySourceMasters()
+  const { data: enquirySources = [] } = useEnquirySourceMastersDropdown()
   const channelOptions = [
     { value: '', label: 'All Channels' },
     ...enquirySources.map(s => ({ value: s.enquirySourceGuid, label: s.enquirySourceName })),

@@ -22,6 +22,18 @@ export function getInterestLevels(): Promise<InterestLevel[]> {
   return apiGet<InterestLevel[] | null>('/api/v1/admissions/interest-levels').then((data: any) => Array.isArray(data) ? data : (data && typeof data === 'object' ? (data.items || Object.values(data).find(Array.isArray) || []) : []))
 }
 
+// GET /interest-levels/dropdown (get-interest-level-dropdown.md). Soft-deleted rows
+// are excluded.
+export interface InterestLevelDropdownItem {
+  interestLevelGuid: string
+  interestLevelName: string
+}
+
+export function getInterestLevelsDropdown(): Promise<InterestLevelDropdownItem[]> {
+  if (MOCK_AUTH) return Promise.resolve(mockInterestLevels)
+  return apiGet<InterestLevelDropdownItem[] | null>('/api/v1/admissions/interest-levels/dropdown').then(data => data ?? [])
+}
+
 // Create a new interest level and return the saved record.
 export function createInterestLevel(input: InterestLevelInput): Promise<InterestLevel> {
   if (MOCK_AUTH) {

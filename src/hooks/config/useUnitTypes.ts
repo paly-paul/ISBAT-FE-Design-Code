@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createUnitType, deleteUnitType, getUnitTypeById, getUnitTypes, updateUnitType, UnitType, UnitTypeInput } from '@/lib/api/academic/unitType'
+import { createUnitType, deleteUnitType, getUnitTypeById, getUnitTypes, getUnitTypesDropdown, updateUnitType, UnitType, UnitTypeInput } from '@/lib/api/academic/unitType'
 
 const UNIT_TYPES_KEY = ['unit-types']
 
@@ -11,6 +11,16 @@ export function useUnitTypes(enabled = true) {
     queryKey: UNIT_TYPES_KEY,
     queryFn: () => getUnitTypes(),
     // Keep the cached list until a mutation explicitly refreshes it.
+    staleTime: Infinity,
+    gcTime: Infinity,
+    enabled,
+  })
+}
+
+export function useUnitTypesDropdown(enabled = true) {
+  return useQuery({
+    queryKey: [...UNIT_TYPES_KEY, 'dropdown'],
+    queryFn: () => getUnitTypesDropdown(),
     staleTime: Infinity,
     gcTime: Infinity,
     enabled,

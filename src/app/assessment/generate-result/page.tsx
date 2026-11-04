@@ -1,5 +1,6 @@
 'use client'
 
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { useEffect, useMemo, useState } from 'react'
 import { SearchSelect } from '@/components/SearchSelect'
 import { ScrollTable } from '@/components/ScrollTable'
@@ -211,6 +212,7 @@ function parseWeightageError(msg: string): WeightageErrorState | null {
   }
 }
 export default function GenerateResultPage() {
+  const permissions = usePagePermissions()
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 4500) }
 
@@ -631,21 +633,30 @@ export default function GenerateResultPage() {
               Applies to the whole of <strong>{intakeLabel}</strong>; the programme, semester, unit and total filters are not used.
             </div>
             <div className="flex flex-wrap gap-2">
-              <button className="btn btn-primary" onClick={doGenerate} disabled={busy || !draft.intakeGuid}>
-                <i className="lni lni-bolt"></i> {generateMut.isPending ? 'Generating…' : 'Generate Result'}
-              </button>
-              <button className="btn btn-neu" onClick={() => doPublish(true)} disabled={busy || !draft.intakeGuid}>
-                <i className="lni lni-eye"></i> Publish
-              </button>
-              <button className="btn btn-neu" onClick={() => doPublish(false)} disabled={busy || !draft.intakeGuid}>
-                <i className="lni lni-close"></i> Withdraw
-              </button>
-              <button className="btn btn-neu" style={{ color: 'var(--red)' }} onClick={doDelete} disabled={busy || !draft.intakeGuid}>
-                <i className="lni lni-trash-can"></i> {deleteMut.isPending ? 'Deleting…' : 'Delete Result'}
-              </button>
+              {permissions.generate && (
+                <button className="btn btn-primary" onClick={doGenerate} disabled={busy || !draft.intakeGuid}>
+                  <i className="lni lni-bolt"></i> {generateMut.isPending ? 'Generating…' : 'Generate Result'}
+                </button>
+              )}
+              {permissions.publish && (
+                <>
+                  <button className="btn btn-neu" onClick={() => doPublish(true)} disabled={busy || !draft.intakeGuid}>
+                    <i className="lni lni-eye"></i> Publish
+                  </button>
+                  <button className="btn btn-neu" onClick={() => doPublish(false)} disabled={busy || !draft.intakeGuid}>
+                    <i className="lni lni-close"></i> Withdraw
+                  </button>
+                </>
+              )}
+              {permissions.delete && (
+                <button className="btn btn-neu" style={{ color: 'var(--red)' }} onClick={doDelete} disabled={busy || !draft.intakeGuid}>
+                  <i className="lni lni-trash-can"></i> {deleteMut.isPending ? 'Deleting…' : 'Delete Result'}
+                </button>
+              )}
             </div>
           </div>
 
+          {permissions.moderate && (
           <div className="card" style={{ padding: 20, marginBottom: 0 }}>
             <div className="card-title mb-1"><span className="ctitle-icon"><i className="lni lni-pencil-alt"></i></span> Apply Moderation</div>
             <div className="text-xs text-g500 mb-4">
@@ -679,6 +690,7 @@ export default function GenerateResultPage() {
               </div>
             )}
           </div>
+          )}
         </div>
 
         {/* Results */}
@@ -715,9 +727,11 @@ export default function GenerateResultPage() {
                   </button>
                 )}
               </div>
-              <button className="btn btn-neu btn-sm" onClick={doExport} disabled={!applied || totalCount === 0 || exportMut.isPending}>
-                <i className="lni lni-download"></i> {exportMut.isPending ? 'Exporting…' : 'Export to Excel'}
-              </button>
+              {permissions.export && (
+                <button className="btn btn-neu btn-sm" onClick={doExport} disabled={!applied || totalCount === 0 || exportMut.isPending}>
+                  <i className="lni lni-download"></i> {exportMut.isPending ? 'Exporting…' : 'Export to Excel'}
+                </button>
+              )}
             </div>
           </div>
 

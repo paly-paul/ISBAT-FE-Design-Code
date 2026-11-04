@@ -2764,7 +2764,8 @@ input[type="number"] {
    inner field-pairs alone. At this width there's no such thing to
    preserve; every grid on the page should just stack. */
 @media(max-width:640px) {
-  #page-payment-console .g2 {
+  #page-payment-console .g2,
+  #page-nche-guild-payment .g2 {
     grid-template-columns: 1fr
   }
 }
@@ -4715,6 +4716,11 @@ th:hover .th-fi {
 
 .recgrid-4col .recgrid-foot>span:first-child {
   grid-column: 1 / 4;
+}
+
+/* Name + one value — NCHE & Guild's semester status has no amounts. */
+.recgrid.recgrid-2col {
+  grid-template-columns: minmax(0, 1fr) auto;
 }
 
 .recgrid-hdr {
@@ -16551,7 +16557,9 @@ body:has(.drawer-overlay) {
    --amber) for 4.5:1 contrast on white.
 ═══════════════════════════════════════ */
 #page-payment-console .pcx-student .text-amber,
-#page-payment-console .pcx-panel .text-amber { color: var(--gold) }
+#page-payment-console .pcx-panel .text-amber,
+#page-nche-guild-payment .pcx-student .text-amber,
+#page-nche-guild-payment .pcx-panel .text-amber { color: var(--gold) }
 #page-payment-console .pcx-panel .text-blue { color: var(--b800) }
 
 /* Student header */

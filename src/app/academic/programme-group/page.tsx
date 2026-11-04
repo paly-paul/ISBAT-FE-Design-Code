@@ -144,7 +144,7 @@ export default function Page() {
                 minChars={MIN_SEARCH_CHARS}
                 onSelect={(r) => openViewModal(r.id)}
               />
-              <button className="btn btn-neu btn-sm"><i className="lni lni-upload"></i> Export</button>
+              {permissions.export && <button className="btn btn-neu btn-sm"><i className="lni lni-upload"></i> Export</button>}
             </div>
           </div>
           <ScrollTable filters={filters} onResetFilters={() => setFilters({})}>

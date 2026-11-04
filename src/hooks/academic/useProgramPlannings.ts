@@ -13,19 +13,13 @@ import {
 
 const PROGRAM_PLANNINGS_KEY = ['program-plannings']
 
-// GET /program-plannings returns the FULL filtered list — no paging and no
-// text search (get-program-plannings.md: only unitGuid / schoolGuid /
-// intakeGuid / lecturerGuid). The page used to send search + page/pageSize,
-// which the endpoint ignored: page 1 showed every row, every other page
-// repeated them, and the search box did nothing. So this fetches the whole
-// (optionally guid-filtered) list once; the page searches, sorts and pages
-// it on screen. The large pageSize only matters if the API ever pages.
-const FETCH_ALL_PAGE_SIZE = 10000
-
-export function useProgramPlannings(filters: Omit<ProgramPlanningListParams, 'search'> = {}) {
+// One server page (get-program-plannings.md, paginated since 2026-11-02),
+// newest intake first. Search and the guid filters apply server-side, across
+// all pages.
+export function useProgramPlannings(page: number, pageSize: number, filters: ProgramPlanningListParams = {}) {
   return useQuery<ProgramPlanningListResult>({
-    queryKey: [...PROGRAM_PLANNINGS_KEY, filters],
-    queryFn: () => getProgramPlannings(filters, 1, FETCH_ALL_PAGE_SIZE),
+    queryKey: [...PROGRAM_PLANNINGS_KEY, 'list', page, pageSize, filters],
+    queryFn: () => getProgramPlannings(filters, page, pageSize),
     placeholderData: keepPreviousData,
     staleTime: Infinity,
     gcTime: Infinity,

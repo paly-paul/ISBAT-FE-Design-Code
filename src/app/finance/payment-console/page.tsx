@@ -12,9 +12,10 @@ import { EditPaymentModal, EditablePaymentTarget } from '@/components/modals/fin
 import { EditPaymentOtherModal, EditablePaymentOtherTarget } from '@/components/modals/finance/EditPaymentOtherModal'
 import DatePicker from '@/components/DatePicker'
 import { SearchSelect } from '@/components/SearchSelect'
-import { useProcBanks } from '@/hooks/finance/useProcBanks'
-import { useReceiptBooks } from '@/hooks/finance/useReceiptBooks'
-import { useFinanceCurrencies, getDefaultFinanceCurrencyGuid } from '@/hooks/finance/useFinanceCurrencies'
+import { ProcBankSearchSelect } from '@/components/ProcBankSearchSelect'
+import { useReceiptBookDropdown } from '@/hooks/finance/useReceiptBooks'
+import { useCurrenciesDropdown } from '@/hooks/finance/useCurrencies'
+import { getDefaultFinanceCurrencyGuid } from '@/hooks/finance/useFinanceCurrencies'
 import { useExchangeRatesByDate, ExchangeRate } from '@/hooks/finance/useExchangeRates'
 import { TodayExchangeRateModal } from '@/components/modals/finance/TodayExchangeRateModal'
 import { RatesAlreadySetNote } from '@/components/finance/RatesAlreadySetNote'
@@ -289,11 +290,17 @@ export default function PaymentConsolePage() {
   // handler's own onError). null when closed.
   const [successModal, setSuccessModal] = useState<{ title: string; rows: [string, string][]; notices?: string[] } | null>(null)
 
-  const { data: allProcBanks = [] } = useProcBanks()
-  const banks = allProcBanks.filter(b => b.status === 2)
-  const { data: allReceiptBooks = [] } = useReceiptBooks()
-  const activeReceiptBooks = allReceiptBooks.filter(r => r.status === 1)
-  const { data: currencies = [] } = useFinanceCurrencies()
+  const { data: receiptBookOptions = [] } = useReceiptBookDropdown()
+  const activeReceiptBooks = receiptBookOptions.filter(r => r.isActive)
+  // The dropdown returns isDefault as a boolean and may omit currencyGuid;
+  // the rest of Payment Console expects the full FinanceCurrency shape.
+  const { data: currencyDropdownItems = [] } = useCurrenciesDropdown()
+  const currencies = useMemo(
+    () => currencyDropdownItems.flatMap(c => c.currencyGuid
+      ? [{ currencyGuid: c.currencyGuid, currencyCode: c.currencyCode, currencyName: c.currencyName, isDefault: c.isDefault ? 1 : 0 }]
+      : []),
+    [currencyDropdownItems],
+  )
 
   // Exchange Rate bar now lives behind the header's "Exchange Rates"
   // toggle instead of always showing — collapsed by default so the page
@@ -2187,9 +2194,8 @@ export default function PaymentConsolePage() {
                         {Number(otherPayType) > 1 && (
                           <div className="fg">
                             <div className="lbl">Bank Name <span className="req">*</span></div>
-                            <SearchSelect
+                            <ProcBankSearchSelect
                               placeholder="— Select Bank —"
-                              options={banks.map(b => ({ value: b.procBankGuid, label: b.bankName }))}
                               value={otherProcBankGuid}
                               onChange={setOtherProcBankGuid}
                             />
@@ -2724,9 +2730,8 @@ export default function PaymentConsolePage() {
                             <div className="g2">
                               <div className="fg">
                                 <div className="lbl">Bank Name <span className="req">*</span></div>
-                                <SearchSelect
+                                <ProcBankSearchSelect
                                   placeholder="— Select Bank —"
-                                  options={banks.map(b => ({ value: b.procBankGuid, label: b.bankName }))}
                                   value={procBankGuid}
                                   onChange={v => { setProcBankGuid(v); clearPayError('procBankGuid') }}
                                 />

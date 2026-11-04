@@ -25,6 +25,19 @@ export function getUnitTypes(): Promise<UnitType[]> {
   return apiGet<UnitType[] | null>('/api/v1/academic/unit-types').then((data: any) => Array.isArray(data) ? data : (data && typeof data === 'object' ? (data.items || Object.values(data).find(Array.isArray) || []) : []))
 }
 
+// GET /unit-types/dropdown (get-unit-type-dropdown.md). Soft-deleted rows are
+// excluded.
+export interface UnitTypeDropdownItem {
+  guid: string
+  id: number
+  name: string
+}
+
+export function getUnitTypesDropdown(): Promise<UnitTypeDropdownItem[]> {
+  if (MOCK_AUTH) return Promise.resolve(mockUnitTypes.map((t, i) => ({ guid: t.unitTypeGuid, id: i + 1, name: t.unitTypeName })))
+  return apiGet<UnitTypeDropdownItem[] | null>('/api/v1/academic/unit-types/dropdown').then(data => data ?? [])
+}
+
 // Create a new unit type and return the saved record.
 export function createUnitType(input: UnitTypeInput): Promise<UnitType> {
   if (MOCK_AUTH) {

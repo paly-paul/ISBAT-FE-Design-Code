@@ -10,8 +10,8 @@ import { useSearchCampusesInfinite } from '@/hooks/config/useCampuses'
 import { useKnownCountries, useSearchCountriesInfinite } from '@/hooks/config/useCountries'
 import { countryPickerOptions, phoneCountryOptions } from '@/lib/api/academic/country'
 import { useSearchProgramMastersByCampusInfinite } from '@/hooks/academic/useProgramMaster'
-import { useEnquirySourceMasters } from '@/hooks/admission/useEnquirySourceMasters'
-import { useEnquirySources } from '@/hooks/admission/useEnquirySources'
+import { useEnquirySourceMastersDropdown } from '@/hooks/admission/useEnquirySourceMasters'
+import { useEnquirySourcesDropdown } from '@/hooks/admission/useEnquirySources'
 import { useCreateEnquiry, useEnquiryGenders, useReloadEnquiryDropdowns } from '@/hooks/admission/useEnquiries'
 import { EnquiryEmailField, EnquirySaveStatus, VerifiedEmail, isValidEnquiryEmail, isVerifiedFor } from '@/components/EnquiryEmailField'
 import { EnquirySponsorFields, EMPTY_SPONSOR, SponsorValues, sponsorErrorField, sponsorPayload, validateSponsor } from '@/components/EnquirySponsorFields'
@@ -59,8 +59,8 @@ export default function OnlineEnquiryPage() {
   // token from EnquiryEmailField goes out as emailVerificationToken.
   const [verifiedEmail, setVerifiedEmail] = useState<VerifiedEmail | null>(null)
 
-  const { data: enquirySources = [] }      = useEnquirySourceMasters()
-  const { data: isbatSources = [] }        = useEnquirySources()
+  const { data: enquirySources = [] }      = useEnquirySourceMastersDropdown()
+  const { data: isbatSources = [] }        = useEnquirySourcesDropdown()
   const { data: genders = [] }             = useEnquiryGenders()
   const createEnquiry = useCreateEnquiry()
   const reloadDropdowns = useReloadEnquiryDropdowns()

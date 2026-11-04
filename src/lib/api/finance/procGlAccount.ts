@@ -46,6 +46,19 @@ export function getProcGlAccounts(): Promise<ProcGlAccount[]> {
   return apiGet<ProcGlAccountListResponse | null>(`/api/v1/finance/proc-gl-accounts?page=1&pageSize=${PROC_GL_ACCOUNTS_LOAD_SIZE}`).then(data => data?.items ?? [])
 }
 
+// GET /proc-gl-accounts/dropdown (get-proc-gl-account-dropdown.md). Soft-deleted
+// accounts are excluded; blocked ones are still returned.
+export interface ProcGlAccountDropdownItem {
+  procGlAccountGuid: string
+  shortCode: string
+  accName: string
+}
+
+export function getProcGlAccountsDropdown(): Promise<ProcGlAccountDropdownItem[]> {
+  if (MOCK_AUTH) return Promise.resolve(mockProcGlAccounts)
+  return apiGet<ProcGlAccountDropdownItem[] | null>('/api/v1/finance/proc-gl-accounts/dropdown').then(data => data ?? [])
+}
+
 export function createProcGlAccount(input: ProcGlAccountInput): Promise<ProcGlAccount> {
   if (MOCK_AUTH) {
     const account: ProcGlAccount = { procGlAccountGuid: crypto.randomUUID(), ...input }

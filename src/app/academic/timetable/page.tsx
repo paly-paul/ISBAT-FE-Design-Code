@@ -7,7 +7,7 @@ import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { useIntakesDropdown } from '@/hooks/academic/useIntakes'
-import { useBatchTimes } from '@/hooks/config/useBatchTimes'
+import { useBatchTimesDropdown } from '@/hooks/config/useBatchTimes'
 import {
   useTimetableIntakes, useTimetableLecturers, useTimetableCourseUnits, useTimetableEligibleBatches,
   useTimetableByLecturer, useTimetableByRoom, useTimetableSlots, useLecturerLoad, useTimeSlots,
@@ -56,7 +56,7 @@ export default function SchedulePage() {
   })
   const intakeName = intakeOptions.find(o => o.value === intakeGuid)?.label.replace(/ · (Current|Next)$/, '') ?? ''
 
-  const { data: batchTimes = [] } = useBatchTimes()
+  const { data: batchTimes = [] } = useBatchTimesDropdown()
   useEffect(() => {
     if (!batchTimeGuid && batchTimes.length) setBatchTimeGuid((batchTimes.find(b => /^day/i.test(b.batchTime)) ?? batchTimes[0]).batchTimeGuid)
   }, [batchTimeGuid, batchTimes])

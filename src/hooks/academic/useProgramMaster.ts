@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient, useInfiniteQuery, useQueries, keepPreviousData } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient, useInfiniteQuery, keepPreviousData } from '@tanstack/react-query'
 import {
   createProgramMaster,
   createProgramMasterStep1,
@@ -8,6 +8,7 @@ import {
   getProgramMasters,
   getProgramMastersPage,
   getProgramDropdown,
+  getProgramsByGuids,
   getProgramMastersByCampus,
   getProgramMastersByCampusPaged,
   updateProgramMasterComplete,
@@ -38,6 +39,11 @@ import { getNextPageParam } from '@/lib/pagination'
 // instead of leaving it stale until the next hard reload.
 export const PROGRAM_MASTERS_KEY = ['programMasters']
 
+// The Programme Approval queue's list. Declared here rather than in
+// useProgramApproval.ts, which already imports from this file, because
+// deleting a programme has to refresh that queue too.
+export const PROGRAM_APPROVALS_KEY = ['programApprovals']
+
 // Single-programme fetch, for when a real programGuid (e.g. prefilled from
 // another record, like Application Filing's locked Programme field) isn't
 // found in useProgramMasters()' own list — CONFIRMED live: a real
@@ -58,34 +64,18 @@ export function useProgramMasterByGuid(programGuid: string, enabled: boolean) {
   })
 }
 
-// Batched-by-guid lookup — same convention as useCourseUnitsByGuids/
-// useIntakesByGuids/useFacultiesByGuids, used to resolve display labels for
-// a bounded set of specific programGuids (e.g. just the ones referenced by
-// the current page of the standalone Fee Structure page's own table)
-// without holding the whole programme list in memory. Shares the same
-// query key as useProgramMasterByGuid above, so a guid already resolved by
-// one is reused by the other.
-//
-// Unlike the other useXByGuids hooks in this app, this one also reports
-// isLoading — the Fee Structure page uses it to decide whether a guid this
-// endpoint came back without (a programme still pending approval — see GET
-// /api/v1/academic/program-master's own "approved only" note) is a genuine
-// gap worth falling back to the separate not-approved list for, or just
-// this batch still being in flight.
-export function useProgramMastersByGuids(guids: string[]) {
-  const unique = Array.from(new Set(guids.filter(Boolean)))
-  const results = useQueries({
-    queries: unique.map(guid => ({
-      queryKey: [...PROGRAM_MASTERS_KEY, 'by-guid', guid],
-      queryFn: () => getProgramMasterByGuid(guid),
-      staleTime: Infinity,
-      gcTime: Infinity,
-    })),
+// Code and name for a set of programmes in one request, for labelling a page
+// of rows that carry only programGuid (e.g. the Fee Structure table).
+export function useProgramsByGuids(guids: string[]) {
+  const unique = Array.from(new Set(guids.filter(Boolean))).sort()
+  const { data } = useQuery({
+    queryKey: [...PROGRAM_MASTERS_KEY, 'names-by-guids', unique],
+    queryFn: () => getProgramsByGuids(unique),
+    enabled: unique.length > 0,
+    staleTime: Infinity,
+    gcTime: Infinity,
   })
-  const byGuid = new Map<string, ProgramMaster>()
-  results.forEach((r, i) => { if (r.data) byGuid.set(unique[i], r.data) })
-  const isLoading = results.some(r => r.isLoading)
-  return { byGuid, isLoading }
+  return new Map((data ?? []).map(p => [p.programGuid, p]))
 }
 
 export function useProgramMasters(enabled = true) {
@@ -250,7 +240,10 @@ export function useDeleteProgramMasterComplete() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (programGuid: string) => deleteProgramMasterComplete(programGuid),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: PROGRAM_MASTERS_KEY }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: PROGRAM_MASTERS_KEY })
+      queryClient.invalidateQueries({ queryKey: PROGRAM_APPROVALS_KEY })
+    },
   })
 }
 

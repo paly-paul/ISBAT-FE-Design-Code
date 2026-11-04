@@ -59,11 +59,16 @@ export function getEnquiryFollowUps(page = 1, pageSize = 10, search = ''): Promi
 // Confirmed via GetByAdvisor.bru: same PagedResult<EnquiryFollowUpListDto>
 // shape as getEnquiryFollowUps, just scoped server-side to the
 // currently-authenticated advisor (no advisorGuid param to pass).
-export function getEnquiryFollowUpsByAdvisor(page = 1, pageSize = 10): Promise<EnquiryFollowUpListResult> {
+export function getEnquiryFollowUpsByAdvisor(page = 1, pageSize = 10, search = ''): Promise<EnquiryFollowUpListResult> {
   if (MOCK_AUTH) {
-    return Promise.resolve({ items: mockEnquiryFollowUps, totalCount: mockEnquiryFollowUps.length, pageNumber: page, pageSize })
+    const q = search.toLowerCase()
+    const items = mockEnquiryFollowUps.filter(f => !q || `${f.enquiryCode} ${f.studentName}`.toLowerCase().includes(q))
+    const start = (page - 1) * pageSize
+    return Promise.resolve({ items: items.slice(start, start + pageSize), totalCount: items.length, pageNumber: page, pageSize })
   }
-  return apiGet<EnquiryFollowUpListResult | null>(`/api/v1/admissions/enquiry-followups/getbyadvisor?page=${page}&pageSize=${pageSize}`)
+  const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) })
+  if (search) params.set('search', search)
+  return apiGet<EnquiryFollowUpListResult | null>(`/api/v1/admissions/enquiry-followups/getbyadvisor?${params}`)
     .then(data => data ?? { items: [], totalCount: 0, pageNumber: page, pageSize })
 }
 

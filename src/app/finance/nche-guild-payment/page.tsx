@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Toast } from '@/components/Toast'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
@@ -26,7 +26,8 @@ import {
 } from '@/hooks/finance/useNcheGuildPayment'
 import { refugeeLabel, studCategoryLabel } from '@/lib/api/finance/paymentConsole'
 import { SearchSelect } from '@/components/SearchSelect'
-import { useFinanceCurrencies, getDefaultFinanceCurrencyGuid } from '@/hooks/finance/useFinanceCurrencies'
+import { getDefaultFinanceCurrencyGuid } from '@/hooks/finance/useFinanceCurrencies'
+import { useCurrenciesDropdown } from '@/hooks/finance/useCurrencies'
 import { scrollToFirstError } from '@/lib/scrollToFirstError'
 import { stripLeadingZeros } from '@/lib/errorMessages'
 
@@ -107,18 +108,9 @@ function statusBadgeClass(status: string | null | undefined) {
   return 'badge-grey'
 }
 
-// Same label-left/value-right row + summary-footer treatment the old
-// amount-based version used (itself matching Payment Console's own
-// OutstandingCategoryTable) — but sourced from get-semester-status
-// (nche/get-semester-status.md, guild/get-semester-status.md) instead of
-// get-all-outstanding-ledgers, since that's what the card-header badge
-// above already fetches. One row per semester in the program; the status
-// badge stands in for a currency amount, since this response carries none.
-// Same .pc-ledger-item/.pc-total-due treatment as Payment Console's own
-// Outstanding Balance (Tuition tab) — icon-per-row plus a summary footer —
-// in place of this page's previous plain .receipt-row + manually-styled
-// summary box, per request to bring this page's look in line with the rest
-// of Finance.
+// One row per semester from get-semester-status (nche/get-semester-status.md,
+// guild/get-semester-status.md), in Payment Console's Fee Breakdown grid. That
+// response carries no amounts, so a status badge stands in for them.
 function RegulatoryOutstandingTable({ items, isLoading, isError, category }: { items: RegulatorySemesterStatus[] | null | undefined; isLoading: boolean; isError: boolean; category: PaymentCategory }) {
   if (isLoading) return <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>Loading outstanding balance…</div>
   if (isError) return <div className="text-clr-red text-center" style={{ padding: 16, fontSize: 12.5 }}><i className="lni lni-warning"></i> Couldn&apos;t load the outstanding balance.</div>
@@ -128,32 +120,22 @@ function RegulatoryOutstandingTable({ items, isLoading, isError, category }: { i
   const paidCount = semesters.filter(s => s.status === 'Paid').length
   return (
     <>
-      {semesters.map(s => {
-        const isPaid = s.status === 'Paid'
-        const isDue = s.status === 'Due'
-        return (
-          <div className={`pc-ledger-item${isPaid ? ' paid' : ''}`} key={s.semesterGuid}>
-            {/* lni-invoice (the Due icon this used before) isn't a real
-                LineIcons 4.0 class — it's the only place in this codebase
-                that ever referenced it (vs. lni-timer/lni-checkmark-circle
-                below, both confirmed working elsewhere), so it silently
-                rendered blank instead of an icon (2026-09-09 bug report:
-                "the Due row has no icon"). lni-alarm-clock is a real,
-                already-used icon and reads well for "due now" next to
-                lni-timer's own "not yet due" waiting look. */}
-            <span className="pc-ledger-icon"><i className={isPaid ? 'lni lni-checkmark-circle' : isDue ? 'lni lni-alarm-clock' : 'lni lni-timer'}></i></span>
-            <div className="flex-1 min-w-0">
-              <div className="pc-ledger-name truncate">{s.semName}</div>
-              {isPaid && <div className="pc-ledger-sub">Paid</div>}
-            </div>
-            <span className={`badge ${statusBadgeClass(s.status)}`}>{s.status || 'Not Yet Due'}</span>
+      <div className="recgrid recgrid-2col pcx-ledgers">
+        <div className="recgrid-row recgrid-hdr">
+          <span>Semester</span>
+          <span>Status</span>
+        </div>
+        {semesters.map(s => (
+          <div className="recgrid-row recgrid-body" key={s.semesterGuid}>
+            <span className="pcx-ledger-cell"><span className="pcx-ledger-name">{s.semName}</span></span>
+            <span data-label="Status"><span className={`badge ${statusBadgeClass(s.status)}`}>{s.status || 'Not Yet Due'}</span></span>
           </div>
-        )
-      })}
-      <div className="pc-total-due">
-        <span className="text-muted" style={{ fontSize: 12 }}>Semesters Due</span>
-        <span className="font-bold text-blue" style={{ fontSize: 15 }}>{dueCount} of {semesters.length}{paidCount > 0 ? ` · ${paidCount} Paid` : ''}</span>
+        ))}
       </div>
+      <dl className="pcx-summary">
+        <div><dt>Semesters paid</dt><dd>{paidCount} of {semesters.length}</dd></div>
+        <div className="pcx-summary-total"><dt>Semesters due</dt><dd className={dueCount > 0 ? 'text-amber' : undefined}>{dueCount}</dd></div>
+      </dl>
     </>
   )
 }
@@ -193,6 +175,7 @@ export default function NcheGuildPaymentPage() {
 
   const searchTermLen = search.trim().length
   const searchEnabled = searchFocused && (searchTermLen === 0 || searchTermLen >= 2)
+  const searchTooShort = searchTermLen === 1
   const searchTerm = committedSearch || search.trim()
 
   // NCHE has its own dedicated picker (get-nche-search.md); Guild has no
@@ -288,7 +271,15 @@ export default function NcheGuildPaymentPage() {
   // Required on create (post-payment-nche.md / post-payment-guild.md).
   // Recorded only — the rate and balance checks assume the base currency —
   // so it defaults to the default finance currency once the list loads.
-  const { data: currencies = [] } = useFinanceCurrencies()
+  // The dropdown's isDefault is a boolean, GET /currencies' a number;
+  // getDefaultFinanceCurrencyGuid expects the number.
+  const { data: currencyDropdownItems = [] } = useCurrenciesDropdown()
+  const currencies = useMemo(
+    () => currencyDropdownItems.flatMap(c => c.currencyGuid
+      ? [{ currencyGuid: c.currencyGuid, currencyCode: c.currencyCode, currencyName: c.currencyName, isDefault: c.isDefault ? 1 : 0 }]
+      : []),
+    [currencyDropdownItems],
+  )
   const [currencyGuid, setCurrencyGuid] = useState('')
   const defaultCurrencyGuid = getDefaultFinanceCurrencyGuid(currencies)
   useEffect(() => {
@@ -435,21 +426,51 @@ export default function NcheGuildPaymentPage() {
 
   const isSaving = createPayment.isPending
 
+  const fullName = profile ? applicantName(profile) : ''
+  const intake = profile?.intakeCode && profile.intakeCode !== 'null' ? profile.intakeCode : null
+  const regStatus = profile?.regStatusName?.trim() || null
+  const regTone = regStatus && /yet|pending|not|block|hold/i.test(regStatus) ? 'amber' : 'green'
+  const semesterCount = semesterStatusList?.length ?? 0
+  const dueCount = semesterStatusList?.filter(s => s.status === 'Due').length ?? 0
+  const paidCount = semesterStatusList?.filter(s => s.status === 'Paid').length ?? 0
+  const paidPct = semesterCount > 0 ? (paidCount / semesterCount) * 100 : 0
+  const facts: { label: string; value: string | null | undefined; mono?: boolean }[] = profile ? [
+    // Often the same number — shown once when they match.
+    ...(profile.studentNum && profile.studentNum === profile.studentRegNo
+      ? [{ label: 'Student / Reg. no.', value: profile.studentNum, mono: true }]
+      : [
+          { label: 'Student no.', value: profile.studentNum, mono: true },
+          { label: 'Reg. no.', value: profile.studentRegNo, mono: true },
+        ]),
+    { label: 'Campus', value: profile.campusName },
+    { label: 'Semester', value: profile.semesterName },
+    { label: 'Intake', value: intake },
+    { label: 'Batch · Year', value: [profile.batchCode, profile.yearCode].filter(Boolean).join(' · ') || null },
+    { label: 'Phone', value: profile.phone },
+    { label: 'Email', value: profile.emailId ?? profile.universityEmail },
+    { label: 'Refugee', value: refugeeLabel(profile.refugee) },
+    { label: 'Category', value: studCategoryLabel(profile.studCategory) },
+  ] : []
+  const payAmountNum = parseFloat(amount) || 0
+  const payCurrencyCode = currencies.find(c => c.currencyGuid === currencyGuid)?.currencyCode ?? ''
+  const reference = category === 'nche' ? pnrNumber.trim() : bankDeposit.trim()
+
   return (
     <>
-      {/* id no longer scopes a .pc-body override (2026-09-15 — this page's
-          body moved to the same full-width-hero + .pc-tuition-split layout
-          Payment Console's own Semester Payment tab uses, see below); kept
-          on the wrapper regardless, same as #page-payment-console's own id,
-          in case a future page-specific override is ever needed here. */}
       <div className="page active" id="page-nche-guild-payment">
         <div className="pg-hdr">
           <div>
             <div className="pg-title">NCHE &amp; Guild Payment</div>
             <div className="pg-sub">Search student → view outstanding balance → record payment</div>
           </div>
-          <div className="flex gap-2">
-            {selectedApplicationGuid && <button className="btn btn-neu" onClick={handleClear}><i className="lni lni-reload"></i> New Search</button>}          </div>
+          <div className="flex gap-2 flex-wrap">
+            {profile && (
+              <button className="btn btn-neu btn-sm" onClick={() => setShowHistory(true)}>
+                <i className="lni lni-folder"></i> Payment History
+              </button>
+            )}
+            {selectedApplicationGuid && <button className="btn btn-neu btn-sm" onClick={handleClear}><i className="lni lni-reload"></i> New Search</button>}
+          </div>
         </div>
 
         <div className="card">
@@ -492,6 +513,9 @@ export default function NcheGuildPaymentPage() {
                     goes true for a load-more fetch, which must not blank out
                     an already-loaded list; isFetchingNextSearchPage's own row
                     further down covers that case instead. */}
+                {searchTooShort ? (
+                  <div className="text-g400 px-3 py-2" style={{ fontSize: 12.5 }}>Type at least 2 characters to search.</div>
+                ) : <>
                 {isSearching && matches.length === 0 && <div className="text-g400 px-3 py-2" style={{ fontSize: 12.5 }}>Searching…</div>}
                 {!isSearching && isSearchError && matches.length === 0 && (
                   <div className="text-clr-red px-3 py-2" style={{ fontSize: 12.5 }}>
@@ -520,6 +544,7 @@ export default function NcheGuildPaymentPage() {
                     <i className="lni lni-reload"></i> Loading more…
                   </div>
                 )}
+                </>}
               </div>
             )}
           </div>
@@ -536,13 +561,6 @@ export default function NcheGuildPaymentPage() {
 
         {profile && (
           <>
-            {/* Same rounded-pill .pc-tabs/.pc-tab-btn switcher as Payment
-                Console's own Semester Payment/Other Payment tabs, moved
-                below Student Search and gated on a selected student
-                (2026-09-09, per request) — matches Payment Console's own
-                .pc-tabs, which only renders once selectedApplicationGuid is
-                set, rather than showing category-selection ahead of picking
-                who it's even for. */}
             <div className="pc-tabs">
               <button className={`pc-tab-btn${category === 'nche' ? ' active' : ''}`} onClick={() => switchCategory('nche')}>
                 <i className="lni lni-graduation"></i> NCHE
@@ -552,53 +570,55 @@ export default function NcheGuildPaymentPage() {
               </button>
             </div>
 
-            {/* Full-width hero card, promoted out of a 2-column split
-                (2026-09-15) — same move Payment Console's own Semester
-                Payment tab made: Payment History is now a popup opened from
-                a pc-hero-action button here instead of a permanent section
-                merged into this card. */}
-            <div className="card p-0 overflow-hidden">
-              <div className="pc-hero">
-                <div className="pc-hero-top">
-                  <div className="pc-hero-avatar">{initialsFor(applicantName(profile))}</div>
-                  <div className="flex-1 min-w-0">
-                    <div className="pc-hero-name truncate">{applicantName(profile)}</div>
-                    <div className="pc-hero-sub truncate">{profile.programName ?? '—'}</div>
-                    <span className="pc-hero-badge"><i className="lni lni-bookmark"></i> {profile.appRefNo}</span>
-                  </div>
-                  <div className="pc-hero-actions pc-hero-actions-top">
-                    <button type="button" className="pc-hero-action" onClick={() => setShowHistory(true)}>
-                      <i className="lni lni-folder"></i>
-                      <span>Payment History</span>
-                      {history.length > 0 && <strong>{history.length}</strong>}
-                    </button>
+            {/* Same .pcx-student card as Payment Console: identity on the left,
+                this category's figures on the right, facts in a row below. */}
+            <section className="card pcx-student" aria-label="Student">
+              <div className="pcx-student-top">
+                <div className="pcx-student-id">
+                  <div className="pcx-avatar" aria-hidden="true">{initialsFor(fullName)}</div>
+                  <div className="min-w-0">
+                    <div className="pcx-name-row">
+                      <h2 className="pcx-name">{fullName}</h2>
+                      {regStatus && <span className={`pcx-pill pcx-pill-${regTone}`}><span className="pcx-dot" aria-hidden="true"></span>{regStatus}</span>}
+                    </div>
+                    <p className="pcx-sub">{profile.programName ?? '—'}</p>
+                    <div className="pcx-meta">
+                      {intake && <span className="pcx-meta-chip">Intake <b>{intake}</b></span>}
+                      <span className="pcx-meta-chip">Application <b className="tabular-nums">{profile.appRefNo}</b></span>
+                    </div>
                   </div>
                 </div>
-                <div className="pc-hero-facts">
-                  {/* Student identifiers first, same as Payment Console. Null
-                      until the applicant is registered, so an applicant
-                      shows "—". */}
-                  <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Student No</span><span className="pc-hero-fact-val tabular-nums" title={profile.studentNum || '—'}>{profile.studentNum || '—'}</span></div>
-                  <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Reg. No</span><span className="pc-hero-fact-val tabular-nums" title={profile.studentRegNo || '—'}>{profile.studentRegNo || '—'}</span></div>
-                  {/* Was hard-coded "—"; the profile response does carry campusName. */}
-                  <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Campus</span><span className="pc-hero-fact-val" title={profile.campusName || '—'}>{profile.campusName || '—'}</span></div>
-                  <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Semester</span><span className="pc-hero-fact-val" title={profile.semesterName ?? '—'}>{profile.semesterName ?? '—'}</span></div>
-                  {/* Guards against the literal string "null" — same live
-                      quirk Payment Console's own Intake tile guards against. */}
-                  <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Intake</span><span className="pc-hero-fact-val" title={profile.intakeCode && profile.intakeCode !== 'null' ? profile.intakeCode : '—'}>{profile.intakeCode && profile.intakeCode !== 'null' ? profile.intakeCode : '—'}</span></div>
-                  <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Batch</span><span className="pc-hero-fact-val" title={profile.batchCode ?? '—'}>{profile.batchCode ?? '—'}</span></div>
-                  <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Year</span><span className="pc-hero-fact-val" title={profile.yearCode ?? '—'}>{profile.yearCode ?? '—'}</span></div>
-                  <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Phone</span><span className="pc-hero-fact-val" title={profile.phone ?? '—'}>{profile.phone ?? '—'}</span></div>
-                  <div className="pc-hero-fact pc-hero-fact-span2">
-                    <span className="pc-hero-fact-lbl">Email</span>
-                    <span className="pc-hero-fact-val truncate" title={profile.emailId ?? profile.universityEmail ?? '—'}>{profile.emailId ?? profile.universityEmail ?? '—'}</span>
+                {semesterCount > 0 && (
+                  <div className="pcx-figures">
+                    <div className={`pcx-figure${dueCount > 0 ? ' pcx-figure-due' : ''}`}>
+                      <span className="pcx-figure-lbl">{CATEGORY_LABEL[category]} semesters due</span>
+                      <span className={`pcx-figure-val${dueCount > 0 ? ' text-amber' : ''}`}>{dueCount}</span>
+                      {dueSemester && <span className="pcx-figure-note">{dueSemester.semName}</span>}
+                    </div>
+                    <div className="pcx-figure">
+                      <span className="pcx-figure-lbl">{CATEGORY_LABEL[category]} paid</span>
+                      <span className="pcx-figure-val">{paidPct.toFixed(1).replace(/\.0$/, '')}%</span>
+                      <span className="pcx-mini-bar" role="img" aria-label={`${paidCount} of ${semesterCount} semesters paid`}>
+                        <span style={{ width: `${paidPct}%` }}></span>
+                      </span>
+                      <span className={`pcx-figure-note${allSemestersPaid ? ' is-done' : ''}`}>
+                        {allSemestersPaid
+                          ? <><i className="lni lni-checkmark-circle" aria-hidden="true"></i> Fully settled</>
+                          : <>{paidCount} of {semesterCount} semesters</>}
+                      </span>
+                    </div>
                   </div>
-                  <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Reg Status</span><span className="pc-hero-fact-val" title={profile.regStatusName ?? '—'}>{profile.regStatusName ?? '—'}</span></div>
-                  <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Refugee</span><span className="pc-hero-fact-val">{refugeeLabel(profile.refugee)}</span></div>
-                  <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Category</span><span className="pc-hero-fact-val">{studCategoryLabel(profile.studCategory)}</span></div>
-                </div>
+                )}
               </div>
-            </div>
+              <dl className="pcx-facts" style={{ '--n': facts.length } as React.CSSProperties}>
+                {facts.map(f => (
+                  <div key={f.label}>
+                    <dt>{f.label}</dt>
+                    <dd className={f.mono ? 'tabular-nums' : undefined} title={f.value || '—'}>{f.value || '—'}</dd>
+                  </div>
+                ))}
+              </dl>
+            </section>
 
             {/* Payment History — popup (2026-09-15), same modal-overlay/
                 modal-lg shell as Payment Console's own showPaymentHistory. */}
@@ -692,32 +712,46 @@ export default function NcheGuildPaymentPage() {
               </div>
             )}
 
-            {/* .pc-tuition-split — Outstanding Balance (left) / Payment
-                Detail (right), same two-card split as Payment Console's own
-                Semester Payment tab. Only once there's something to bill (or
-                the status failed to load — the table shows that error and
-                the cashier can still record a payment). */}
+            {/* Outstanding Balance (left) / Record Payment (right), same split
+                as Payment Console. Only once there's something to bill, or the
+                status failed to load — the grid shows that error and the
+                cashier can still record a payment. */}
             {!isOutstandingLoading && (isOutstandingError || (!!semesterStatusList?.length && !allSemestersPaid)) && (
             <div className="pc-tuition-split">
-              <div className="card flex flex-col gap-4 min-w-0">
-                <div className="card-hdr">
-                  <div className="card-title"><span className="ctitle-icon"><i className="lni lni-dollar"></i></span> Outstanding Balance ({CATEGORY_LABEL[category]})</div>
-                  {dueSemester ? (
-                    <span className={`badge ${statusBadgeClass(dueSemester.status)}`}>{dueSemester.semName} — Due</span>
-                  ) : allSemestersPaid ? (
-                    <span className="badge badge-green">Fully Paid</span>
-                  ) : null}
+              <div className="card pcx-panel min-w-0">
+                <div className="pcx-panel-hdr">
+                  <div className="min-w-0">
+                    <h3 className="pcx-panel-title">Outstanding Balance</h3>
+                    <p className="pcx-panel-sub">{CATEGORY_LABEL[category]} status for each semester</p>
+                  </div>
+                  {dueSemester && <span className={`badge ${statusBadgeClass(dueSemester.status)}`}>{dueSemester.semName} — Due</span>}
                 </div>
                 <RegulatoryOutstandingTable items={semesterStatusList} isLoading={isOutstandingLoading} isError={isOutstandingError} category={category} />
               </div>
 
-              <div className="card flex flex-col gap-4 min-w-0">
-                <div className="sec-divider" style={{ marginTop: 0 }}>
-                  <i className="lni lni-wallet"></i> Payment Detail
+              <div className="card pcx-panel min-w-0">
+                <div className="pcx-panel-hdr">
+                  <div>
+                    <h3 className="pcx-panel-title">Record Payment</h3>
+                    <p className="pcx-panel-sub">Fields marked <span className="req">*</span> are required</p>
+                  </div>
+                  <button type="button" className="btn btn-neu btn-sm" onClick={() => setShowHistory(true)}>
+                    <i className="lni lni-folder"></i> Payment History
+                  </button>
                 </div>
-                {/* Currency + Amount paired, then Date + the category's
-                    reference field — same arrangement as Payment Console. */}
-                <div className="g2 mb-[14px]">
+
+                <div className="pcx-collect" aria-live="polite">
+                  <span className="pcx-collect-lbl">Amount to collect</span>
+                  <div className="pcx-collect-amt">
+                    <span className="pcx-collect-cur">{payCurrencyCode}</span>
+                    <span className="pcx-collect-val">{payAmountNum.toLocaleString()}</span>
+                  </div>
+                  <span className="pcx-collect-meta">
+                    {CATEGORY_LABEL[category]} · {payDate || 'No date'} · {reference || (category === 'nche' ? 'No PNR number yet' : 'No bank deposit yet')}
+                  </span>
+                </div>
+
+                <div className="g2">
                   <div className="fg">
                     <div className="lbl">Currency Received <span className="req">*</span></div>
                     <SearchSelect
@@ -729,19 +763,25 @@ export default function NcheGuildPaymentPage() {
                     {fieldErr('currencyGuid')}
                   </div>
                   <div className="fg">
-                    <div className="lbl">Amount <span className="req">*</span></div>
-                    <input type="number" min={0} step={0.01} className="amt-val-input" placeholder="0.00"
-                      style={{ fontSize: 18, fontWeight: 700, ...(errors.amount ? { borderColor: 'var(--red)' } : {}) }}
-                      aria-invalid={!!errors.amount}
-                      // Number inputs still accept e/E/+/-; none is a valid amount (> 0).
-                      onKeyDown={e => { if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault() }}
-                      value={amount} onChange={e => { setAmount(stripLeadingZeros(e.target.value)); clearError('amount') }} />
+                    <label className="lbl" htmlFor="pcx-amount">Amount Received <span className="req">*</span></label>
+                    <div className={`pcx-amount${errors.amount ? ' has-error' : ''}`}>
+                      {payCurrencyCode && <span className="pcx-amount-cur">{payCurrencyCode}</span>}
+                      <input
+                        id="pcx-amount"
+                        type="number" min={0} step={0.01} placeholder="0.00"
+                        aria-invalid={!!errors.amount}
+                        // Number inputs still accept e/E/+/-; none is a valid amount (> 0).
+                        onKeyDown={e => { if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault() }}
+                        value={amount} onChange={e => { setAmount(stripLeadingZeros(e.target.value)); clearError('amount') }}
+                      />
+                    </div>
                     {errors.amount
                       ? fieldErr('amount')
                       : <div style={{ fontSize: 11, color: 'var(--g500)', marginTop: 4 }}>Must be a multiple of the configured {CATEGORY_LABEL[category]} rate, and not more than the outstanding balance.</div>}
                   </div>
                 </div>
-                <div className="g2 mb-[14px]">
+
+                <div className="g2">
                   <div className="fg">
                     <div className="lbl">Payment Date <span className="req">*</span></div>
                     <DatePicker value={payDate} onChange={v => { setPayDate(v); clearError('payDate') }} hasError={!!errors.payDate} />
@@ -749,26 +789,32 @@ export default function NcheGuildPaymentPage() {
                   </div>
                   {category === 'nche' ? (
                     <div className="fg">
-                      <div className="lbl">PNR Number</div>
-                      <input className="ctrl" type="text" placeholder="Optional reference number" value={pnrNumber} onChange={e => setPnrNumber(e.target.value)} />
+                      <div className="lbl">PNR Number <span className="text-g400" style={{ fontWeight: 500 }}>(optional)</span></div>
+                      <input className="ctrl" type="text" placeholder="Reference number" value={pnrNumber} onChange={e => setPnrNumber(e.target.value)} />
                     </div>
                   ) : (
                     <div className="fg">
-                      <div className="lbl">Bank Deposit</div>
-                      <input className="ctrl" type="text" placeholder="Optional bank deposit reference" value={bankDeposit} onChange={e => setBankDeposit(e.target.value)} />
+                      <div className="lbl">Bank Deposit <span className="text-g400" style={{ fontWeight: 500 }}>(optional)</span></div>
+                      <input className="ctrl" type="text" placeholder="Bank deposit reference" value={bankDeposit} onChange={e => setBankDeposit(e.target.value)} />
                     </div>
                   )}
                 </div>
+
                 {category === 'nche' && (
-                  <div className="fg mb-4">
-                    <div className="lbl">Remarks</div>
-                    <textarea className="ctrl" rows={2} placeholder="Optional notes" value={remarks} onChange={e => setRemarks(e.target.value)} />
+                  <div className="fg">
+                    <div className="lbl">Remarks <span className="text-g400" style={{ fontWeight: 500 }}>(optional)</span></div>
+                    <textarea className="ctrl" rows={2} placeholder="Notes" value={remarks} onChange={e => setRemarks(e.target.value)} />
                   </div>
                 )}
-                <div className="flex gap-[10px] justify-end items-center">
+
+                <div className="pcx-actions">
+                  {/* Cancel clears the form back to its defaults — nothing has been sent. */}
+                  <button type="button" className="btn btn-neu btn-lg" onClick={resetForm} disabled={isSaving}>
+                    Cancel
+                  </button>
                   {permissions.add && (
-                    <button className="btn btn-primary btn-lg" disabled={isSaving} onClick={handleSave}>
-                      <i className="lni lni-save"></i> {isSaving ? 'Saving…' : 'Submit'}
+                    <button type="button" className="btn btn-primary btn-lg pcx-submit" disabled={isSaving} onClick={handleSave}>
+                      <i className="lni lni-save"></i> {isSaving ? 'Saving…' : 'Save Payment'}
                     </button>
                   )}
                 </div>

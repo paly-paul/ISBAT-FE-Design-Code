@@ -282,7 +282,7 @@ export default function Page() {
                 placeholder="All Types"
                 options={['Theory', 'Practical', 'Combined', 'Project']}
               />
-              <button className="btn btn-neu btn-sm"><i className="lni lni-upload"></i> Export</button>
+              {permissions.export && <button className="btn btn-neu btn-sm"><i className="lni lni-upload"></i> Export</button>}
             </div> */}
           </div>
           <ScrollTable filters={filters} onResetFilters={() => setFilters({})}>

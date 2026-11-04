@@ -1,5 +1,6 @@
 'use client'
 
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { useState } from 'react'
 import { SearchSelect } from '@/components/SearchSelect'
 import { ScrollTable } from '@/components/ScrollTable'
@@ -16,6 +17,7 @@ import {
 import { Toast } from '@/components/Toast'
 
 export default function TranscriptPrintPage() {
+  const permissions = usePagePermissions()
   const [academicIntakeGuid, setAcademicIntakeGuid] = useState<string>('')
   const [programGuid, setProgramGuid] = useState<string>('')
   const [semesterGuid, setSemesterGuid] = useState<string>('')
@@ -91,14 +93,16 @@ export default function TranscriptPrintPage() {
           <p className="pg-sub">Print student academic transcripts (Statement of Marks) with QR verification.</p>
         </div>
         <div>
-          <button 
-            className="btn btn-primary" 
-            onClick={handlePrintBulk} 
-            disabled={isBulkPrintDisabled}
-          >
-            {bulkPrintMut.isPending ? <i className="lni lni-spinner-solid animate-spin"></i> : <i className="lni lni-printer"></i>} 
-            Print All Eligible
-          </button>
+          {permissions.print && (
+            <button
+              className="btn btn-primary"
+              onClick={handlePrintBulk}
+              disabled={isBulkPrintDisabled}
+            >
+              {bulkPrintMut.isPending ? <i className="lni lni-spinner-solid animate-spin"></i> : <i className="lni lni-printer"></i>}
+              Print All Eligible
+            </button>
+          )}
         </div>
       </div>
 
@@ -189,13 +193,15 @@ export default function TranscriptPrintPage() {
                       )}
                     </td>
                     <td>
-                      <button 
-                        className="btn btn-neu btn-sm w-full"
-                        onClick={() => handlePrintSingle(student.studentGuid, student.studentName)}
-                        disabled={singlePrintMut.isPending}
-                      >
-                        <i className="lni lni-printer"></i> Print
-                      </button>
+                      {permissions.print && (
+                        <button
+                          className="btn btn-neu btn-sm w-full"
+                          onClick={() => handlePrintSingle(student.studentGuid, student.studentName)}
+                          disabled={singlePrintMut.isPending}
+                        >
+                          <i className="lni lni-printer"></i> Print
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))

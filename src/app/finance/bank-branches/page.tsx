@@ -12,7 +12,7 @@ import { usePagination } from '@/hooks/usePagination'
 import { BankBranchFormModal } from '@/components/modals/finance/BankBranchFormModal'
 import { ViewBankBranchModal } from '@/components/modals/finance/ViewBankBranchModal'
 import { useBankBranches, useCreateBankBranch, useUpdateBankBranch, useDeleteBankBranch, BankBranch } from '@/hooks/finance/useBankBranches'
-import { useBanks } from '@/hooks/finance/useBanks'
+import { useBanksDropdown } from '@/hooks/finance/useBanks'
 import { STATUS_LABELS } from '@/lib/api/finance/procBank'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
@@ -33,7 +33,7 @@ export default function Page() {
   const [search, setSearch] = useState('')
 
   const { data: rows = [], isLoading } = useBankBranches()
-  const { data: banks = [] } = useBanks()
+  const { data: banks = [] } = useBanksDropdown()
   const createBankBranch = useCreateBankBranch()
   const updateBankBranch = useUpdateBankBranch()
   const deleteBankBranch = useDeleteBankBranch()

@@ -7,7 +7,7 @@ import { SearchSelect } from '@/components/SearchSelect'
 import { BankBranchInput } from '@/lib/api/finance/bankBranch'
 import { ProcBankStatus, STATUS_LABELS, STATUS_VALUES } from '@/lib/api/finance/procBank'
 import { useBankBranch } from '@/hooks/finance/useBankBranches'
-import { useBanks } from '@/hooks/finance/useBanks'
+import { useBanksDropdown } from '@/hooks/finance/useBanks'
 import { AuthError } from '@/lib/api/client'
 import { scrollToFirstError } from '@/lib/scrollToFirstError'
 
@@ -28,7 +28,7 @@ interface BankBranchFormModalProps extends ModalProps {
 export function BankBranchFormModal({ isOpen, onClose, showToast, mode, bankBranchGuid, createBankBranch, updateBankBranch }: BankBranchFormModalProps) {
   const isEdit = mode === 'edit'
   const { data: branch, isLoading, isError, error } = useBankBranch(isEdit ? bankBranchGuid : null, isEdit && isOpen)
-  const { data: banks = [] } = useBanks()
+  const { data: banks = [] } = useBanksDropdown()
 
   const [saved, setSaved]           = useState(false)
   const [failure, setFailure]       = useState<string | null>(null)

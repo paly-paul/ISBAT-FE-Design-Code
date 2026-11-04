@@ -1,7 +1,7 @@
 'use client'
 import { ModalProps } from '../types'
 import { useLedger, Ledger } from '@/hooks/finance/useLedgers'
-import { useProcGlAccounts } from '@/hooks/finance/useProcGlAccounts'
+import { useProcGlAccountsDropdown } from '@/hooks/finance/useProcGlAccounts'
 import { AuthError } from '@/lib/api/client'
 import { FailurePopup } from '../shared/FailurePopup'
 
@@ -22,7 +22,7 @@ function Field({ label, value, mono, wide }: { label: string; value: React.React
 
 export function ViewLedgerModal({ isOpen, onClose, ledgerGuid, onEdit, canEdit }: ViewLedgerModalProps) {
   const { data: ledger, isLoading, isError, error } = useLedger(ledgerGuid, isOpen)
-  const { data: glAccounts = [] } = useProcGlAccounts()
+  const { data: glAccounts = [] } = useProcGlAccountsDropdown()
 
   if (!isOpen) return null
 

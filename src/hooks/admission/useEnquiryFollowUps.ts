@@ -71,10 +71,11 @@ export function useEnquiryFollowUpsInfinite(pageSize: number, enabled: boolean) 
 // Real (paginated), scoped to the authenticated advisor server-side. Kept
 // under a distinct query key from useEnquiryFollowUps so the two lists
 // cache independently.
-export function useEnquiryFollowUpsByAdvisor(page: number, pageSize: number) {
+export function useEnquiryFollowUpsByAdvisor(page: number, pageSize: number, search = '') {
   return useQuery({
-    queryKey: [...ENQUIRY_FOLLOW_UPS_BY_ADVISOR_KEY, page, pageSize],
-    queryFn: () => getEnquiryFollowUpsByAdvisor(page, pageSize),
+    queryKey: [...ENQUIRY_FOLLOW_UPS_BY_ADVISOR_KEY, page, pageSize, search],
+    queryFn: () => getEnquiryFollowUpsByAdvisor(page, pageSize, search),
+    placeholderData: keepPreviousData,
     staleTime: Infinity,
     gcTime: Infinity,
   })

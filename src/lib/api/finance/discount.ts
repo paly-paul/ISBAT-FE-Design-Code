@@ -46,6 +46,13 @@ export function getDiscounts(): Promise<Discount[]> {
   return apiGet<DiscountListResponse | null>(`/api/v1/finance/discounts?page=1&pageSize=${ALL_DISCOUNTS_PAGE_SIZE}`).then(data => data?.items ?? [])
 }
 
+// GET /discounts/dropdown (get-discount-dropdown.md): unpaged, same fields as a
+// list row.
+export function getDiscountsDropdown(): Promise<Discount[]> {
+  if (MOCK_AUTH) return Promise.resolve(mockDiscounts)
+  return apiGet<Discount[] | null>('/api/v1/finance/discounts/dropdown').then(data => data ?? [])
+}
+
 export function createDiscount(input: DiscountInput): Promise<Discount> {
   if (MOCK_AUTH) {
     const discount: Discount = { discountGuid: crypto.randomUUID(), ...input }

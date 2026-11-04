@@ -1,5 +1,6 @@
 'use client'
 
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { useState, useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { SearchSelect } from '@/components/SearchSelect'
@@ -168,6 +169,7 @@ function ModerationRowItem({ row, studentGuid, onSuccess, onError }: {
   onSuccess: () => void, 
   onError: (msg: string) => void 
 }) {
+  const permissions = usePagePermissions()
   const [isViewModalOpen, setViewModalOpen] = useState(false)
   const [isEditModalOpen, setEditModalOpen] = useState(false)
   
@@ -195,9 +197,11 @@ function ModerationRowItem({ row, studentGuid, onSuccess, onError }: {
             <button className="btn btn-neu btn-sm" onClick={() => setViewModalOpen(true)}>
               <i className="lni lni-eye"></i> View Details
             </button>
-            <button className="btn btn-neu btn-sm" onClick={() => setEditModalOpen(true)}>
-              <i className="lni lni-pencil"></i> Edit Moderation
-            </button>
+            {permissions.edit && (
+              <button className="btn btn-neu btn-sm" onClick={() => setEditModalOpen(true)}>
+                <i className="lni lni-pencil"></i> Edit Moderation
+              </button>
+            )}
           </ActionMenu>
         </td>
         <td className="text-[12px] text-slate-500 whitespace-nowrap">{row.semesterName || '—'}</td>

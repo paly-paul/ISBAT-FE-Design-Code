@@ -6,7 +6,7 @@ import { FailurePopup } from '../shared/FailurePopup'
 import { SearchSelect } from '@/components/SearchSelect'
 import { LedgerOtherInput } from '@/lib/api/finance/ledgerOthersMaster'
 import { useLedgerOther } from '@/hooks/finance/useLedgerOthersMaster'
-import { useProcGlAccounts } from '@/hooks/finance/useProcGlAccounts'
+import { useProcGlAccountsDropdown } from '@/hooks/finance/useProcGlAccounts'
 import { AuthError } from '@/lib/api/client'
 import { scrollToFirstError } from '@/lib/scrollToFirstError'
 
@@ -32,7 +32,7 @@ interface LedgerOtherFormModalProps extends ModalProps {
 export function LedgerOtherFormModal({ isOpen, onClose, showToast, mode, ledgerOthersGuid, createLedgerOther, updateLedgerOther }: LedgerOtherFormModalProps) {
   const isEdit = mode === 'edit'
   const { data: ledgerOther, isLoading, isError, error } = useLedgerOther(isEdit ? ledgerOthersGuid : null, isEdit && isOpen)
-  const { data: glAccounts = [] } = useProcGlAccounts()
+  const { data: glAccounts = [] } = useProcGlAccountsDropdown()
 
   const [saved, setSaved]           = useState(false)
   const [failure, setFailure]       = useState<string | null>(null)

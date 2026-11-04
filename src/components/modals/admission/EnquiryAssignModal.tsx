@@ -6,11 +6,11 @@ import { FailurePopup } from '../shared/FailurePopup'
 import { SearchSelect } from '@/components/SearchSelect'
 import { EnquiryUpdateInput, formatEnquiryPhone } from '@/lib/api/admission/enquiry'
 import { useEnquiry, useEnquiryGenders } from '@/hooks/admission/useEnquiries'
-import { useEmployees } from '@/hooks/employee/useEmployees'
+import { useSearchEmployeesInfinite } from '@/hooks/employee/useEmployees'
 import { useSearchProgramMastersInfinite } from '@/hooks/academic/useProgramMaster'
-import { useCampuses } from '@/hooks/config/useCampuses'
-import { useCountriesByName } from '@/hooks/config/useCountries'
-import { useIntakes } from '@/hooks/academic/useIntakes'
+import { useCampusDropdown } from '@/hooks/config/useCampuses'
+import { useCountriesByGuids } from '@/hooks/config/useCountries'
+import { useIntakesByGuids } from '@/hooks/academic/useIntakes'
 import { AuthError } from '@/lib/api/client'
 import { flattenUniquePages } from '@/lib/pagination'
 import { scrollToFirstError } from '@/lib/scrollToFirstError'
@@ -35,16 +35,15 @@ interface EnquiryAssignModalProps extends ModalProps {
 // see the note on EnquiryUpdateInput in lib/api/admission/enquiry.ts.
 export function EnquiryAssignModal({ isOpen, onClose, showToast, enquiryGuid, updateEnquiry, canAssign = true }: EnquiryAssignModalProps) {
   const { data: enquiry, isLoading, isError, error } = useEnquiry(enquiryGuid, isOpen)
-  const { data: employees = [] } = useEmployees(isOpen)
-  const { data: campuses = [] }  = useCampuses(isOpen)
-  const countries = useCountriesByName(isOpen && enquiry?.mobileCountryName ? [enquiry.mobileCountryName] : [])
+  const { data: campuses = [] }  = useCampusDropdown(isOpen)
+  const { countries } = useCountriesByGuids(isOpen && enquiry?.mobileCountryGuid ? [enquiry.mobileCountryGuid] : [])
   // No intakeName/intakeCode field exists on the enquiry response itself —
   // resolve intakeGuid against the real Intake master, same client-side
   // resolution pattern as the enquiry-list page's own resolveProgramName.
-  const { data: intakes = [] }   = useIntakes(isOpen)
+  const intakesByGuid = useIntakesByGuids(isOpen && enquiry?.intakeGuid ? [enquiry.intakeGuid] : [])
   function resolveIntakeLabel(guid: string | null) {
     if (!guid) return '—'
-    const intake = intakes.find(i => i.intakeGuid === guid)
+    const intake = intakesByGuid.get(guid)
     return intake ? `${intake.intakeCode} — ${intake.description}` : '—'
   }
   // enquiry.campusName is confirmed null on both GET and this modal's own
@@ -74,13 +73,32 @@ export function EnquiryAssignModal({ isOpen, onClose, showToast, enquiryGuid, up
   const [programSearch, setProgramSearch] = useState('')
   const [committedProgramSearch, setCommittedProgramSearch] = useState('')
   const [programPickerOpen, setProgramPickerOpen] = useState(false)
+  const [advisorSearch, setAdvisorSearch] = useState('')
+  const [committedAdvisorSearch, setCommittedAdvisorSearch] = useState('')
+  const [advisorPickerOpen, setAdvisorPickerOpen] = useState(false)
 
   useEffect(() => {
     const timer = setTimeout(() => setCommittedProgramSearch(programSearch.trim()), 300)
     return () => clearTimeout(timer)
   }, [programSearch])
 
+  useEffect(() => {
+    const timer = setTimeout(() => setCommittedAdvisorSearch(advisorSearch.trim()), 300)
+    return () => clearTimeout(timer)
+  }, [advisorSearch])
+
   const programQuery = useSearchProgramMastersInfinite(committedProgramSearch, 20, isOpen && programPickerOpen)
+  const advisorQuery = useSearchEmployeesInfinite(committedAdvisorSearch, 20, isOpen && advisorPickerOpen)
+  // The picker only loads once opened, so the enquiry's own advisor is added
+  // here to keep its name showing before then.
+  const advisorOptions = useMemo(() => {
+    const options = flattenUniquePages(advisorQuery.data?.pages ?? [], e => e.employeeGuid)
+      .map(e => ({ value: e.employeeGuid, label: e.empName }))
+    if (enquiry?.advisorGuid && enquiry.advisorName && !options.some(o => o.value === enquiry.advisorGuid)) {
+      options.unshift({ value: enquiry.advisorGuid, label: enquiry.advisorName })
+    }
+    return options
+  }, [advisorQuery.data, enquiry?.advisorGuid, enquiry?.advisorName])
   const programs = useMemo(() => {
     const items = flattenUniquePages(programQuery.data?.pages ?? [], p => p.programGuid)
     if (enquiry?.programGuid && enquiry.programName && !items.some(p => p.programGuid === enquiry.programGuid)) {
@@ -89,7 +107,6 @@ export function EnquiryAssignModal({ isOpen, onClose, showToast, enquiryGuid, up
     return items
   }, [enquiry?.programCode, enquiry?.programGuid, enquiry?.programName, programQuery.data])
 
-  const advisorOptions = employees.map(e => ({ value: e.employeeGuid, label: e.empName }))
   const programOptions = programs.map(p => ({ value: p.programGuid, label: `${p.programName} (${p.programCode})` }))
   const campusOptions  = campuses.map(c => ({ value: c.campusGuid, label: c.campusName }))
 
@@ -239,7 +256,7 @@ export function EnquiryAssignModal({ isOpen, onClose, showToast, enquiryGuid, up
               {/* PUT can reassign the advisor but never clear it (null/omitted
                   = keep), so once one is set the picker has no placeholder —
                   and with it no ✕ — to clear back to. */}
-              <SearchSelect placeholder={enquiry.advisorGuid ? undefined : '— unassigned —'} options={advisorOptions} value={advisorGuid} onChange={v => { setAdvisorGuid(v); setErrors(prev => ({ ...prev, advisorGuid: '' })) }} />
+              <SearchSelect placeholder={enquiry.advisorGuid ? undefined : '— unassigned —'} options={advisorOptions} onSearch={setAdvisorSearch} onOpenChange={setAdvisorPickerOpen} isLoading={advisorQuery.isLoading} hasNextPage={advisorQuery.hasNextPage} isFetchingNextPage={advisorQuery.isFetchingNextPage} onLoadMore={() => advisorQuery.fetchNextPage()} value={advisorGuid} onChange={v => { setAdvisorGuid(v); setErrors(prev => ({ ...prev, advisorGuid: '' })) }} />
               {errors.advisorGuid && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.advisorGuid}</p>}
             </div>
             <div className="fg">

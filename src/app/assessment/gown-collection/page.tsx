@@ -1,5 +1,6 @@
 'use client'
 
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { useState, useEffect } from 'react'
 import { TableSearch } from '@/components/TableSearch'
 import { ActionMenu } from '@/components/ActionMenu'
@@ -11,6 +12,7 @@ import { useGownCollectionSearch, useRecordGownCollection } from '@/hooks/assess
 import type { GownCollectionRow } from '@/lib/api/assessment/gownCollection'
 
 export default function GownCollectionPage() {
+  const permissions = usePagePermissions()
   const [searchInput, setSearchInput] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [recordingRow, setRecordingRow] = useState<GownCollectionRow | null>(null)
@@ -45,12 +47,14 @@ export default function GownCollectionPage() {
           <div className="card-title">
             <span className="ctitle-icon"><i className="lni lni-graduation"></i></span> Students
           </div>
-          <TableSearch 
-            value={searchInput} 
-            onChange={setSearchInput} 
-            placeholder="Search by student no or name..." 
-            className="w-80"
-          />
+          {permissions.search && (
+            <TableSearch
+              value={searchInput}
+              onChange={setSearchInput}
+              placeholder="Search by student no or name..."
+              className="w-80"
+            />
+          )}
         </div>
 
         <ScrollTable>
@@ -79,7 +83,7 @@ export default function GownCollectionPage() {
                   <tr key={row.studentGuid}>
                     <td className="text-center">
                       <ActionMenu>
-                        {!row.isGownCollected && (
+                        {!row.isGownCollected && permissions.record && (
                           <button
                             className="btn btn-sm btn-outline-primary w-full text-left"
                             onClick={() => setRecordingRow(row)}

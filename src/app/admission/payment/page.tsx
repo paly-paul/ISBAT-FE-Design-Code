@@ -11,11 +11,11 @@ import { SearchSelect } from '@/components/SearchSelect'
 import DatePicker from '@/components/DatePicker'
 import { useCurrentAcademicIntake, useCurrentAdmissionIntake, useIntake } from '@/hooks/academic/useIntakes'
 import { useSearchCampusesInfinite } from '@/hooks/config/useCampuses'
-import { HOME_COUNTRY_NAME, useCountryLookup, useKnownCountries, useSearchCountriesInfinite } from '@/hooks/config/useCountries'
+import { useCountriesByGuids, useKnownCountries, useSearchCountriesInfinite } from '@/hooks/config/useCountries'
 import { useSearchProgramMastersByCampusInfinite } from '@/hooks/academic/useProgramMaster'
 import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
 import { useProgramFeeStructures } from '@/hooks/academic/useProgramFeeStructure'
-import { useBatchTimes } from '@/hooks/config/useBatchTimes'
+import { useBatchTimesDropdown } from '@/hooks/config/useBatchTimes'
 import { useFilteredBatches } from '@/hooks/academic/useBatches'
 import { getDefaultFinanceCurrencyGuid } from '@/hooks/finance/useFinanceCurrencies'
 import { useCurrenciesDropdown } from '@/hooks/finance/useCurrencies'
@@ -447,7 +447,7 @@ function PaymentPageContent() {
   const programsByCampus = useMemo(() => flattenUniquePages(programQuery.data?.pages ?? [], p => p.programGuid), [programQuery.data])
   const countries = useMemo(() => flattenUniquePages(countryQuery.data?.pages ?? [], c => c.countryGuid), [countryQuery.data])
   const { data: semesters = [] } = useSemestersForProgram(form.programGuid, !!form.programGuid)
-  const { data: batchTimes = [] } = useBatchTimes()
+  const { data: batchTimes = [] } = useBatchTimesDropdown()
   // The payment-scoped Dropdowns/Batches.bru endpoint returns a real 200
   // with an empty array for combinations that do have a matching batch in
   // the generic Batches list — its filtering logic looks broken server-side,
@@ -520,7 +520,10 @@ function PaymentPageContent() {
   // default from or match an enquiry against. These small lookups cover the
   // home country and the enquiry's own countries, plus whatever pickers loaded.
   const { home: homeCountry, known: knownCountries } = useKnownCountries(countries)
-  const countryLookup = useCountryLookup([HOME_COUNTRY_NAME, selectedEnquiry?.countryName ?? '', selectedEnquiry?.mobileCountryName ?? ''])
+  const countryLookup = useCountriesByGuids([
+    selectedEnquiry?.countryGuid && selectedEnquiry.countryGuid !== EMPTY_GUID ? selectedEnquiry.countryGuid : '',
+    selectedEnquiry?.mobileCountryGuid ?? '',
+  ])
   const allCountries = useMemo(
     () => [...new Map([...knownCountries, ...countryLookup.countries].map(c => [c.countryGuid, c])).values()],
     [knownCountries, countryLookup.countries],
