@@ -658,7 +658,20 @@ export default function PaymentConsolePage() {
   // semester-grouping/picking step left to do the way the old
   // ledgerGroups/currentSemesterGroup had to.
   const { data: currentSemesterPayable, isLoading: isLedgersLoading } = useCurrentSemesterPayable(selectedApplicationGuid, !!selectedApplicationGuid, studentGuid)
-  const ledgers = currentSemesterPayable?.ledgers ?? []
+  const currentLedgers = currentSemesterPayable?.ledgers ?? []
+  // Current semester paid up → the cashier can bill the next semester that
+  // still owes. This only changes which ledgers Fee Breakdown shows: the
+  // payment itself carries no semester, the server allocates it.
+  const [payNextSemester, setPayNextSemester] = useState(false)
+  const nextSemester = currentLedgers.length > 0 ? null
+    : [...(currentSemesterPayable?.upcomingSemesters ?? [])]
+        .sort((a, b) => a.semCode - b.semCode)
+        .find(s => s.ledgers.some(l => l.outstanding > 0)) ?? null
+  const payingNextSemester = payNextSemester && !!nextSemester
+  const ledgers = payingNextSemester ? nextSemester.ledgers : currentLedgers
+  // Back to the current semester's view on a new student or a saved payment,
+  // so the screen never moves on to a further semester by itself.
+  useEffect(() => setPayNextSemester(false), [selectedApplicationGuid, receipt])
   // Whole-programme progress (every semester, not just the current one) —
   // shown alongside the current semester's own ledger table below, not
   // folded into ledgerTotals/convertedLedgers which stay scoped to `ledgers`.
@@ -816,6 +829,16 @@ export default function PaymentConsolePage() {
     return sum + (conv ?? 0)
   }, 0)
   const hasUnconvertibleLedger = convertedLedgers.some(l => l.convOutstanding === null)
+  // The header's semester tile follows the semester being paid. The API only
+  // sends these figures for the current semester, and an upcoming semester's
+  // ledgers can mix currencies, so they're summed from the converted rows
+  // (the currency received) — and not shown at all if any row has no rate.
+  const tileAmount = payingNextSemester ? convertedLedgers.reduce((sum, l) => sum + (l.convScheduled ?? 0), 0) : semesterAmount
+  const tileOutstanding = payingNextSemester ? convertedLedgers.reduce((sum, l) => sum + (l.convOutstanding ?? 0), 0) : semesterOutstanding
+  const tileRateMissing = payingNextSemester && (hasUnconvertibleLedger || convertedLedgers.some(l => l.convScheduled === null))
+  const tilePaidPct = !payingNextSemester ? semesterPaidPercentage : tileAmount > 0 ? ((tileAmount - tileOutstanding) / tileAmount) * 100 : 0
+  const tileRemainingPct = payingNextSemester ? 100 - tilePaidPct : semesterRemainingPercentage
+  const tileComplete = !payingNextSemester && semesterComplete
   // All four categories in one call (get-all-outstanding-ledgers.md) — used
   // to show a real outstanding figure on the Other Payment tab, whose own
   // payment-entry form stays mock (no documented single-category submit
@@ -1370,21 +1393,6 @@ export default function PaymentConsolePage() {
     )
   }
 
-  function handleClear() {
-    setSelectedApplicationGuid(null)
-    setSelectedStudentGuidHint(null)
-    setSearch('')
-    setCommittedSearch('')
-    resetPaymentForm()
-    setActivePayTab('tuition')
-    setTuitionMode('payment')
-    resetAdjustmentForm()
-    setOtherPayments([])
-    resetOtherForm()
-    setSuccessModal(null)
-    showToast('Form cleared.', 'warn')
-  }
-
   return (
     <>
       {/* id scopes the .g2 override in globals.css to just this page's outer
@@ -1672,18 +1680,27 @@ export default function PaymentConsolePage() {
                       <span className="pcx-figure-lbl">Total outstanding <i className="lni lni-chevron-right" aria-hidden="true"></i></span>
                       <span className="pcx-figure-val text-amber">{fmtAmt(totalProgramOutstanding)}</span>
                     </button>
-                    {semesterAmount > 0 && (
-                      <div className="pcx-figure">
-                        <span className="pcx-figure-lbl">Semester paid</span>
-                        <span className="pcx-figure-val">{semesterPaidPercentage.toFixed(1).replace(/\.0$/, '')}%</span>
-                        <span className="pcx-mini-bar" role="img" aria-label={`${semesterPaidPercentage.toFixed(1)} percent of the current semester paid, ${semesterRemainingPercentage.toFixed(1)} percent remaining`}>
-                          <span style={{ width: `${Math.min(100, Math.max(0, semesterPaidPercentage))}%` }}></span>
-                        </span>
-                        <span className={`pcx-figure-note${semesterComplete ? ' is-done' : ''}`}>
-                          {semesterComplete
-                            ? <><i className="lni lni-checkmark-circle" aria-hidden="true"></i> Semester complete</>
-                            : <>{fmtAmt(semesterOutstanding)} left of {fmtAmt(semesterAmount)}</>}
-                        </span>
+                    {(payingNextSemester || semesterAmount > 0) && (
+                      <div className="pcx-figure" title={payingNextSemester ? nextSemester.semesterName : undefined}>
+                        <span className="pcx-figure-lbl">{payingNextSemester ? 'Selected semester paid' : 'Semester paid'}</span>
+                        {tileRateMissing ? (
+                          <>
+                            <span className="pcx-figure-val">—</span>
+                            <span className="pcx-figure-note">No exchange rate for today</span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="pcx-figure-val">{tilePaidPct.toFixed(1).replace(/\.0$/, '')}%</span>
+                            <span className="pcx-mini-bar" role="img" aria-label={`${tilePaidPct.toFixed(1)} percent of ${payingNextSemester ? nextSemester.semesterName : 'the current semester'} paid, ${tileRemainingPct.toFixed(1)} percent remaining`}>
+                              <span style={{ width: `${Math.min(100, Math.max(0, tilePaidPct))}%` }}></span>
+                            </span>
+                            <span className={`pcx-figure-note${tileComplete ? ' is-done' : ''}`}>
+                              {tileComplete
+                                ? <><i className="lni lni-checkmark-circle" aria-hidden="true"></i> Semester complete</>
+                                : <>{fmtAmt(tileOutstanding)} left of {fmtAmt(tileAmount)}</>}
+                            </span>
+                          </>
+                        )}
                       </div>
                     )}
                     <div className="pcx-figure">
@@ -2262,6 +2279,11 @@ export default function PaymentConsolePage() {
                         <div className="text-g400 mt-1" style={{ fontSize: 12.5 }}>
                           Nothing to bill this semester. Later semesters still owe {fmtAmt(totalProgramOutstanding)} — see Total outstanding.
                         </div>
+                        {nextSemester && (
+                          <button type="button" className="btn btn-primary mt-3" onClick={() => setPayNextSemester(true)}>
+                            <i className="lni lni-arrow-right" aria-hidden="true"></i> Pay {nextSemester.semesterName}
+                          </button>
+                        )}
                       </>
                     ) : (
                       <>
@@ -2292,10 +2314,16 @@ export default function PaymentConsolePage() {
                         <div className="min-w-0">
                           <h3 className="pcx-panel-title">Fee Breakdown</h3>
                           <p className="pcx-panel-sub">
+                            {payingNextSemester && <><b>{nextSemester.semesterName}</b> · </>}
                             Amounts in {targetCurrencyName || 'the currency received'} — set via <b>Currency Received</b>
                           </p>
                         </div>
                         <div className="flex items-center gap-2 flex-wrap">
+                          {payingNextSemester && (
+                            <button type="button" className="btn btn-neu btn-sm" onClick={() => setPayNextSemester(false)}>
+                              <i className="lni lni-arrow-left" aria-hidden="true"></i> Back
+                            </button>
+                          )}
                           {/* Apply Advance — hidden when there's no deposit to
                               draw from. Both modes settle the same ledgers. */}
                           {hasAdvanceDeposits && (
@@ -3020,7 +3048,8 @@ export default function PaymentConsolePage() {
                       <i className="lni lni-files"></i> Student Statement
                     </button>
                   )}
-                  <button className="btn btn-primary flex-1 justify-center" onClick={handleClear}>← New Payment</button>
+                  {/* Same student, blank form — Change Student moves on to someone else. */}
+                  <button className="btn btn-primary flex-1 justify-center" onClick={resetPaymentForm}>← New Payment</button>
                 </div>
               </div>
             )}

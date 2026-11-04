@@ -406,9 +406,8 @@ export interface CurrentSemesterPayableTotal {
   totalNetPayable: number
 }
 
-// One row of the upcomingSemesters breakdown — purely informational
-// (nothing on the page reads this yet), kept typed for whenever it's
-// surfaced rather than left as an untyped blob on CurrentSemesterPayableResult.
+// One row of the upcomingSemesters breakdown — shown in UpcomingSemestersModal,
+// and in Payment Console's Fee Breakdown once the current semester is paid up.
 export interface CurrentSemesterUpcomingSemester {
   semesterGuid: string
   semesterName: string
