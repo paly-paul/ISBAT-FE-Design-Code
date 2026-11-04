@@ -252,7 +252,7 @@ export default function QpUploadVettingPage() {
           <div className="pg-sub">Faculty upload · Committee split-pane review · Lock on verify</div>
         </div>
         <div className="flex flex-wrap gap-2">
-          {!isLocked && (
+          {!isLocked && permissions.add && (
             <button
               type="button"
               className="btn btn-primary"
@@ -262,7 +262,7 @@ export default function QpUploadVettingPage() {
               <i className="lni lni-plus"></i> Add Question
             </button>
           )}
-          {!isLocked && summary.totalCount > 0 && (
+          {!isLocked && summary.totalCount > 0 && (permissions.approve || permissions.edit) && (
             <button
               type="button"
               className="btn btn-neu"
@@ -510,7 +510,7 @@ export default function QpUploadVettingPage() {
                                 >
                                   <i className="lni lni-search-alt" /> View Details
                                 </button>
-                                {!isLocked && !q.isVerified && (
+                                {!isLocked && !q.isVerified && permissions.edit && (
                                   <button
                                     className="btn btn-neu btn-sm"
                                     onClick={() => handleOpenEditModal(q)}

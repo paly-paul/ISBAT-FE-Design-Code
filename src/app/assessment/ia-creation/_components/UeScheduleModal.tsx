@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { Toast } from '@/components/Toast'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { SearchSelect } from '@/components/SearchSelect'
 import DatePicker from '@/components/DatePicker'
 import TimeRangePicker, { isTimeRangeValid } from '@/components/TimeRangePicker'
@@ -27,6 +28,7 @@ function getTodayYmd(): string {
 }
 
 export function UeScheduleModal({ isOpen, onClose, examGuid, unitCode, unitName }: UeScheduleModalProps) {
+  const permissions = usePagePermissions('/assessment/ia-creation')
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const toastTimerRef = useRef<NodeJS.Timeout | null>(null)
   const [saved, setSaved] = useState(false)
@@ -352,6 +354,7 @@ export function UeScheduleModal({ isOpen, onClose, examGuid, unitCode, unitName 
               <button className="btn btn-neu" onClick={onClose} disabled={updateMut.isPending}>
                 Cancel
               </button>
+              {(permissions.add || permissions.edit) && (
               <button
                 className="btn btn-primary"
                 onClick={handleSave}
@@ -359,6 +362,7 @@ export function UeScheduleModal({ isOpen, onClose, examGuid, unitCode, unitName 
               >
                 {updateMut.isPending ? 'Saving...' : 'Save Schedule'}
               </button>
+              )}
             </div>
           </div>
         </div>

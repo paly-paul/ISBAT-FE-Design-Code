@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { SearchSelect } from '@/components/SearchSelect'
 import { Toast } from '@/components/Toast'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { useIntakesDropdown } from '@/hooks/academic/useIntakes'
 import { useHallTicketScopeStudents, HallTicketTerm } from '@/hooks/assessment/useHallTicket'
 import { downloadBulkHallTicketPdf } from '@/lib/api/assessment/hallTicketIssue'
@@ -22,6 +23,7 @@ import { downloadBlob } from '@/lib/downloadBlob'
 const TERM_OPTIONS = [{ value: '1', label: 'Term 1' }, { value: '2', label: 'Term 2' }]
 
 export default function HallTicketPrintAllPage() {
+  const permissions = usePagePermissions()
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 5000) }
 
@@ -107,9 +109,11 @@ export default function HallTicketPrintAllPage() {
           )}
 
           <div className="flex" style={{ justifyContent: 'flex-end' }}>
+            {permissions.print !== false && (
             <button className="btn btn-primary" onClick={handlePrintAll} disabled={printing || !intakeGuid || previewLoading || (!previewError && issued.length === 0)}>
               <i className="lni lni-printer"></i> {printing ? 'Generating PDF…' : 'Print All'}
             </button>
+            )}
           </div>
         </div>
       </div>

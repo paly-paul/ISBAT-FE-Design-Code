@@ -18,6 +18,8 @@ interface ExistingQuestionsTableProps {
   courseUnitName?: string | null
   categoryName?: string | null
   intakeCode?: string | number | null
+  canAdd?: boolean
+  canDelete?: boolean
 }
 
 export function ExistingQuestionsTable({
@@ -32,6 +34,8 @@ export function ExistingQuestionsTable({
   courseUnitName,
   categoryName,
   intakeCode,
+  canAdd = true,
+  canDelete = true,
 }: ExistingQuestionsTableProps) {
   const [filterType, setFilterType] = useState<'ALL' | 'MCQ' | 'DQ'>('ALL')
   const [search, setSearch] = useState('')
@@ -82,6 +86,7 @@ export function ExistingQuestionsTable({
         </div>
 
         <div className="flex items-center gap-2">
+          {canAdd && (
           <button
             type="button"
             className="btn btn-primary btn-sm flex items-center gap-1.5 shadow-xs"
@@ -91,6 +96,7 @@ export function ExistingQuestionsTable({
             <i className="lni lni-cloud-upload"></i>
             <span>Upload / Replace via Excel</span>
           </button>
+          )}
 
           <button
             type="button"
@@ -103,6 +109,7 @@ export function ExistingQuestionsTable({
             <span>Refresh</span>
           </button>
 
+          {canDelete && (
           <button
             type="button"
             className="btn btn-danger btn-sm flex items-center gap-1.5"
@@ -112,6 +119,7 @@ export function ExistingQuestionsTable({
             <i className="lni lni-trash-can"></i>
             <span>Delete All</span>
           </button>
+          )}
         </div>
       </div>
 

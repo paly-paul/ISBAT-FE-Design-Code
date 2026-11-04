@@ -8,6 +8,7 @@ import { ScrollTable } from '@/components/ScrollTable'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { EmptyState } from '@/components/EmptyState'
 import { ActionMenu } from '@/components/ActionMenu'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { Toast } from '@/components/Toast'
 import { useProgramDropdown } from '@/hooks/academic/useProgramMaster'
 import { useIntakesDropdown } from '@/hooks/academic/useIntakes'
@@ -20,6 +21,7 @@ import {
 } from '@/lib/api/assessment/ueAttendance'
 
 export default function UeAttendancePage() {
+  const permissions = usePagePermissions()
   const queryClient = useQueryClient()
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null)
 
@@ -311,18 +313,22 @@ export default function UeAttendancePage() {
             <span className="ctitle-icon"><i className="lni lni-users"></i></span> Eligible Students
           </div>
           <div className="card-hdr-actions">
+            {permissions.edit && (
             <button className="btn btn-primary" disabled={!isReadyForData || !students || students.length === 0 || saving} onClick={handleSave}>
               {saving ? <i className="lni lni-spinner-solid animate-spin mr-2"></i> : <i className="lni lni-save mr-2"></i>}
               Save Attendance
             </button>
+            )}
           </div>
         </div>
         
         <div className="p-4 border-b border-slate-200 bg-slate-50 flex flex-col md:flex-row items-center justify-between gap-4">
+          {permissions.edit && (
           <div className="flex gap-2">
             <button className="btn btn-neu btn-sm" onClick={() => handleMarkAll(true)} disabled={isLoadingData || !students}>Mark All Present</button>
             <button className="btn btn-neu btn-sm" onClick={() => handleMarkAll(false)} disabled={isLoadingData || !students}>Mark All Absent</button>
           </div>
+          )}
           <div className="w-full md:w-64">
             <TableSearch value={searchTerm} onChange={setSearchTerm} placeholder="Search students..." disabled={!isReadyForData} />
           </div>
@@ -354,6 +360,7 @@ export default function UeAttendancePage() {
                   return (
                     <tr key={student.studentGuid}>
                       <td>
+                        {permissions.edit && (
                         <ActionMenu>
                           <button className="btn btn-neu btn-sm" onClick={() => setConfirmStudent({
                                 studentGuid: student.studentGuid,
@@ -364,11 +371,13 @@ export default function UeAttendancePage() {
                             Mark {isPresent ? 'Absent' : 'Present'}
                           </button>
                         </ActionMenu>
+                        )}
                       </td>
                       <td className="text-slate-500 font-mono text-[12px]">{index + 1}</td>
                       <td className="font-mono text-slate-700">{student.studentRegNo}</td>
                       <td className="font-medium text-slate-900">{student.studentName}</td>
                       <td>
+                        {permissions.edit ? (
                         <button 
                           onClick={() => handleToggleAttendance(student.studentGuid)}
                           className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[12px] font-bold transition-colors ${
@@ -380,6 +389,18 @@ export default function UeAttendancePage() {
                           <i className={`lni ${isPresent ? 'lni-checkmark-circle' : 'lni-close'}`}></i>
                           {isPresent ? 'Present' : 'Absent'}
                         </button>
+                        ) : (
+                        <span 
+                          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[12px] font-bold ${
+                            isPresent 
+                              ? 'bg-green-50 text-green-700 border border-green-200' 
+                              : 'bg-red-50 text-red-700 border border-red-200'
+                          }`}
+                        >
+                          <i className={`lni ${isPresent ? 'lni-checkmark-circle' : 'lni-close'}`}></i>
+                          {isPresent ? 'Present' : 'Absent'}
+                        </span>
+                        )}
                       </td>
                     </tr>
                   )

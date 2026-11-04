@@ -6,6 +6,7 @@ import { SearchSelect } from '@/components/SearchSelect'
 import { TableSearch } from '@/components/TableSearch'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { SuccessPopup } from '@/components/modals/shared/SuccessPopup'
 import { SingleQuestionModal } from '@/components/modals/assessment/SingleQuestionModal'
 import { RichTextDisplay, stripHtmlTags } from '@/components/RichTextEditor'
@@ -31,6 +32,7 @@ import { QuestionDto } from '@/lib/api/assessment/questions'
 import { ExistingQuestionsTable } from './ExistingQuestionsTable'
 
 export default function QuestionBankUploadPage() {
+  const permissions = usePagePermissions()
   // ── Toast State ─────────────────────────────────────────────────────────────
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const showToast = (msg: string, type = 'success') => {
@@ -858,6 +860,7 @@ export default function QuestionBankUploadPage() {
                   </div>
 
                   <div className="flex items-center gap-2">
+                    {permissions.add && (
                     <button
                       type="button"
                       className="btn btn-primary btn-sm flex items-center gap-1.5"
@@ -868,6 +871,7 @@ export default function QuestionBankUploadPage() {
                       <i className="lni lni-plus"></i>
                       <span>Add Single Question</span>
                     </button>
+                    )}
 
                     <button
                       type="button"
@@ -999,6 +1003,7 @@ export default function QuestionBankUploadPage() {
                               There are currently no active questions for {selectedRepoUnit?.courseUnitCode} under {selectedRepoCategoryObj?.name || 'this category'}.
                             </div>
                             <div className="mt-4 flex items-center justify-center gap-2">
+                              {permissions.add && (
                               <button
                                 type="button"
                                 className="btn btn-primary btn-sm flex items-center gap-1.5"
@@ -1007,6 +1012,7 @@ export default function QuestionBankUploadPage() {
                                 <i className="lni lni-plus"></i>
                                 <span>Add First Question</span>
                               </button>
+                              )}
                               <button
                                 type="button"
                                 className="btn btn-neu btn-sm flex items-center gap-1.5"
@@ -1032,22 +1038,26 @@ export default function QuestionBankUploadPage() {
                                   <i className="lni lni-eye text-indigo-600"></i>
                                   <span>View Details</span>
                                 </button>
-                                <button
-                                  type="button"
-                                  className="btn btn-neu btn-sm flex items-center gap-1.5"
-                                  onClick={() => setEditingQuestion(q)}
-                                >
-                                  <i className="lni lni-pencil-alt text-amber-600"></i>
-                                  <span>Edit Question</span>
-                                </button>
-                                <button
-                                  type="button"
-                                  className="btn btn-neu btn-sm flex items-center gap-1.5 text-red-600"
-                                  onClick={() => setQuestionToDelete(q)}
-                                >
-                                  <i className="lni lni-trash-can"></i>
-                                  <span>Delete Question</span>
-                                </button>
+                                {permissions.edit && (
+                                  <button
+                                    type="button"
+                                    className="btn btn-neu btn-sm flex items-center gap-1.5"
+                                    onClick={() => setEditingQuestion(q)}
+                                  >
+                                    <i className="lni lni-pencil-alt text-amber-600"></i>
+                                    <span>Edit Question</span>
+                                  </button>
+                                )}
+                                {permissions.delete && (
+                                  <button
+                                    type="button"
+                                    className="btn btn-neu btn-sm flex items-center gap-1.5 text-red-600"
+                                    onClick={() => setQuestionToDelete(q)}
+                                  >
+                                    <i className="lni lni-trash-can"></i>
+                                    <span>Delete Question</span>
+                                  </button>
+                                )}
                               </ActionMenu>
                             </td>
 
@@ -1162,6 +1172,8 @@ export default function QuestionBankUploadPage() {
               {/* If questions already exist and user has not toggled upload box: Show Existing Questions */}
               {importExistingQuestions && importExistingQuestions.length > 0 && !showUploadBox ? (
                 <ExistingQuestionsTable
+                  canAdd={permissions.add}
+                  canDelete={permissions.delete}
                   questions={importExistingQuestions}
                   isLoading={isLoadingImportExistingQuestions}
                   isFetching={isFetchingImportExistingQuestions}

@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect } from 'react'
 import { Toast } from '@/components/Toast'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { SearchSelect } from '@/components/SearchSelect'
 import { useIntakesDropdown } from '@/hooks/academic/useIntakes'
 import {
@@ -11,6 +12,7 @@ import {
 } from '@/hooks/assessment/useUePracticalPrint'
 
 export default function UniversityExamProjectBookletPrintPage() {
+  const permissions = usePagePermissions()
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
 
   const showToast = (msg: string, type = '') => {

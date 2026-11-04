@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { SearchSelect } from '@/components/SearchSelect'
 import { TableSearch } from '@/components/TableSearch'
 import { Toast } from '@/components/Toast'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import {
   SEARCH_MAX_RESULTS,
   SEARCH_MIN_CHARS,
@@ -39,6 +40,7 @@ function errMsg(err: unknown, fallback: string) { return (err as { message?: str
 type ConfirmState = { title: string; body: React.ReactNode; confirmLabel: string; danger?: boolean; onConfirm: () => void } | null
 
 export default function ExamCancelPage() {
+  const permissions = usePagePermissions()
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 4500) }
 
@@ -296,9 +298,11 @@ export default function ExamCancelPage() {
             <div className="text-xs text-g500 mb-4">
               Deletes the student&apos;s {categoryLabel} answers and marks for this unit so they can sit it again. This also works after the attempt was submitted.
             </div>
+            {(permissions.delete || permissions.cancel || permissions.edit) && (
             <button className="btn btn-danger" onClick={doCancel} disabled={!ready || busy || statusMissing}>
               <i className="lni lni-trash-can"></i> {cancelMut.isPending ? 'Deleting…' : `Delete ${categoryLabel} Attempt`}
             </button>
+            )}
           </div>
 
           <div className="card" style={{ padding: 20, marginBottom: 0, opacity: ready && category === 1 ? 1 : 0.55 }}>
@@ -326,9 +330,11 @@ export default function ExamCancelPage() {
                   <span className="text-sm text-g500">min</span>
                 </div>
               </div>
+              {(permissions.edit || permissions.add) && (
               <button className="btn btn-primary" onClick={doExtraTime} disabled={!ready || category !== 1 || busy || statusMissing}>
                 <i className="lni lni-checkmark"></i> {extraMut.isPending ? 'Saving…' : 'Save Extra Time'}
               </button>
+              )}
             </div>
           </div>
         </div>

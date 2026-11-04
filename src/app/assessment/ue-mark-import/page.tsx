@@ -6,6 +6,7 @@ import { useProgramDropdown } from '@/hooks/academic/useProgramMaster'
 import type { ProgramDropdownItem } from '@/lib/api/academic/programMaster'
 import { SuccessPopup } from '@/components/modals/shared/SuccessPopup'
 import { Toast } from '@/components/Toast'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
 import { useIntakesDropdown, useCurrentAcademicIntake } from '@/hooks/academic/useIntakes'
 import {
@@ -20,6 +21,7 @@ import { UeMarkImportPreviewItem } from '@/lib/api/assessment/ueMarkImport'
 import { hasTheoryMarks } from '@/lib/api/assessment/ueMarks'
 
 export default function UeMarkImportPage() {
+  const permissions = usePagePermissions()
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const toastTimerRef = useRef<NodeJS.Timeout | null>(null)
   const showToast = (msg: string, type = 'success') => {
@@ -387,6 +389,7 @@ export default function UeMarkImportPage() {
             {previewMut.isPending ? 'Previewing...' : 'Preview'}
           </button>
 
+          {permissions.add && (
           <button
             type="button"
             className="btn btn-success"
@@ -395,6 +398,7 @@ export default function UeMarkImportPage() {
           >
             {importMut.isPending ? 'Saving...' : 'Save & Import'}
           </button>
+          )}
 
           <button
             type="button"

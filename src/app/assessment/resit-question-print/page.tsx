@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect } from 'react'
 import { Toast } from '@/components/Toast'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { SearchSelect } from '@/components/SearchSelect'
 import { useIntakesDropdown, useCurrentAcademicIntake } from '@/hooks/academic/useIntakes'
 import { useUeMaterialPrintPrograms, useUeMaterialPrintSemesters } from '@/hooks/assessment/useUeMaterialPrint'
@@ -24,6 +25,7 @@ import {
 } from '@/hooks/assessment/useResitQuestionPrint'
 
 export default function ResitQuestionPrintPage() {
+  const permissions = usePagePermissions()
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
 
   const showToast = (msg: string, type = '') => {
@@ -391,6 +393,7 @@ export default function ResitQuestionPrintPage() {
                 </button>
               )}
 
+              {permissions.delete && (
               <button 
                 className="flex flex-col items-center justify-center p-4 border rounded-xl gap-2 text-sm font-medium transition-all hover:border-red-500 hover:text-red-600 hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-gray-200 disabled:hover:shadow-none disabled:hover:text-gray-700 bg-red-50 border-red-100"
                 onClick={() => handleDeleteQP()}
@@ -399,6 +402,7 @@ export default function ResitQuestionPrintPage() {
                 <i className="lni lni-trash-can text-3xl text-red-600"></i>
                 Delete QP
               </button>
+              )}
             </div>
           </div>
 

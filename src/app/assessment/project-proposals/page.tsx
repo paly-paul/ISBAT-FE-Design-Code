@@ -5,6 +5,7 @@ import { ScrollTable } from '@/components/ScrollTable'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { ActionMenu } from '@/components/ActionMenu'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { Toast } from '@/components/Toast'
 import { ProjectProposalFormModal } from '@/components/modals/assessment/ProjectProposalFormModal'
 import { ProjectProposalViewModal } from '@/components/modals/assessment/ProjectProposalViewModal'
@@ -18,6 +19,7 @@ import {
 import { getProjectProposalSynopsis, ProjectProposalRow } from '@/lib/api/assessment/projectProposals'
 
 export default function ProjectProposalsPage() {
+  const permissions = usePagePermissions()
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [editingGuid, setEditingGuid] = useState<string | null>(null)
   
@@ -129,12 +131,16 @@ export default function ProjectProposalsPage() {
           <p className="pg-sub">Manage and track student project proposals for the current intake.</p>
         </div>
         <div className="flex items-center gap-2">
-          <button className="btn btn-neu" onClick={() => handleOpenUpload(null)}>
-            <i className="lni lni-cloud-upload"></i> Upload Document
-          </button>
-          <button className="btn btn-primary" onClick={handleAdd}>
-            <i className="lni lni-plus"></i> Add New Proposal
-          </button>
+          {permissions.add && (
+            <button className="btn btn-neu" onClick={() => handleOpenUpload(null)}>
+              <i className="lni lni-cloud-upload"></i> Upload Document
+            </button>
+          )}
+          {permissions.add && (
+            <button className="btn btn-primary" onClick={handleAdd}>
+              <i className="lni lni-plus"></i> Add New Proposal
+            </button>
+          )}
         </div>
       </div>
 
@@ -181,20 +187,26 @@ export default function ProjectProposalsPage() {
                         <button className="btn btn-neu btn-sm" onClick={() => handleView(row.proposalGuid)}>
                           <i className="lni lni-eye"></i> View Details
                         </button>
-                        <button className="btn btn-neu btn-sm" onClick={() => handleOpenUpload(row)}>
-                          <i className="lni lni-cloud-upload"></i> Upload Document
-                        </button>
+                        {permissions.add && (
+                          <button className="btn btn-neu btn-sm" onClick={() => handleOpenUpload(row)}>
+                            <i className="lni lni-cloud-upload"></i> Upload Document
+                          </button>
+                        )}
                         <button className="btn btn-neu btn-sm" onClick={() => handleDownloadSynopsis(row.proposalGuid, row.studentName || 'Student')}>
                           <i className="lni lni-download"></i> Download Synopsis
                         </button>
                         {row.canEdit && (
                           <>
-                            <button className="btn btn-neu btn-sm" onClick={() => handleEdit(row.proposalGuid)}>
-                              <i className="lni lni-pencil-alt"></i> Edit
-                            </button>
-                            <button className="btn btn-neu btn-sm text-rose-600 hover:text-rose-700" onClick={() => handleDeleteRequest(row.proposalGuid)}>
-                              <i className="lni lni-trash-can"></i> Delete
-                            </button>
+                            {permissions.edit && (
+                              <button className="btn btn-neu btn-sm" onClick={() => handleEdit(row.proposalGuid)}>
+                                <i className="lni lni-pencil-alt"></i> Edit
+                              </button>
+                            )}
+                            {permissions.delete && (
+                              <button className="btn btn-neu btn-sm text-rose-600 hover:text-rose-700" onClick={() => handleDeleteRequest(row.proposalGuid)}>
+                                <i className="lni lni-trash-can"></i> Delete
+                              </button>
+                            )}
                           </>
                         )}
                       </ActionMenu>
