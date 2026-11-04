@@ -1,7 +1,8 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { SearchSelect } from '@/components/SearchSelect'
 import { useCreateExchangeRate, useExchangeRateExists } from '@/hooks/finance/useExchangeRates'
+import { getMarketRates, marketRateFor } from '@/lib/api/finance/marketRates'
 
 // Enter today's rate for a currency that has none on file — POST
 // /exchange-rates (exRate = base units per 1 unit of the currency, e.g.
@@ -19,6 +20,7 @@ interface Props {
 }
 
 const fmtRate = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+const fmtDay = (ymd: string) => new Date(`${ymd}T00:00:00`).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
 
 export function TodayExchangeRateModal({ isOpen, onClose, currencies, initialCurrencyGuid, baseCode, date, onSaved }: Props) {
   const [currencyGuid, setCurrencyGuid] = useState('')
@@ -26,11 +28,19 @@ export function TodayExchangeRateModal({ isOpen, onClose, currencies, initialCur
   const [error, setError] = useState('')
   const create = useCreateExchangeRate()
   const existing = useExchangeRateExists(currencyGuid || null, date, isOpen)
+  const [fetching, setFetching] = useState(false)
+  // The fetched figure and the provider's date for it, shown under the input.
+  const [market, setMarket] = useState<{ rate: number; date: string } | null>(null)
+  // Bumped on close and on currency change, so a fetch still in flight can't
+  // fill the wrong currency's rate when it lands.
+  const fetchId = useRef(0)
 
   useEffect(() => {
+    fetchId.current++
+    setFetching(false)
     if (!isOpen) return
     setCurrencyGuid(initialCurrencyGuid ?? currencies[0]?.currencyGuid ?? '')
-    setValue(''); setError('')
+    setValue(''); setError(''); setMarket(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen])
 
@@ -39,7 +49,28 @@ export function TodayExchangeRateModal({ isOpen, onClose, currencies, initialCur
   const currencyCode = currencies.find(c => c.currencyGuid === currencyGuid)?.currencyCode ?? ''
   const alreadySet = !!existing.data?.exists
   const checking = !!currencyGuid && existing.isLoading
-  const dateLabel = new Date(`${date}T00:00:00`).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+  const dateLabel = fmtDay(date)
+
+  // Fills the input with the market figure; nothing is saved until Save Rate.
+  async function handleFetchMarketRate() {
+    const id = ++fetchId.current
+    setFetching(true); setError(''); setMarket(null)
+    try {
+      const rates = await getMarketRates()
+      if (id !== fetchId.current) return
+      const rate = marketRateFor(rates, currencyCode, baseCode)
+      if (rate == null) { setError(`No market rate found for ${currencyCode}. Enter it by hand.`); return }
+      // Two decimals, like the rates finance enters by hand.
+      const rounded = rate.toFixed(2)
+      setValue(rounded)
+      setMarket({ rate: Number(rounded), date: rates.date })
+    } catch (e) {
+      if (id !== fetchId.current) return
+      setError(e instanceof Error ? e.message : 'Could not fetch the market rate.')
+    } finally {
+      if (id === fetchId.current) setFetching(false)
+    }
+  }
 
   function handleSave() {
     if (!currencyGuid) { setError('Select a currency.'); return }
@@ -80,7 +111,7 @@ export function TodayExchangeRateModal({ isOpen, onClose, currencies, initialCur
               placeholder="— Select Currency —"
               options={currencies.map(c => ({ value: c.currencyGuid, label: c.currencyCode }))}
               value={currencyGuid}
-              onChange={v => { setCurrencyGuid(v); setValue(''); setError('') }}
+              onChange={v => { fetchId.current++; setFetching(false); setCurrencyGuid(v); setValue(''); setError(''); setMarket(null) }}
               disabled={create.isPending}
             />
           </div>
@@ -118,13 +149,28 @@ export function TodayExchangeRateModal({ isOpen, onClose, currencies, initialCur
                     placeholder="0.00"
                     value={value}
                     autoFocus
-                    disabled={!currencyGuid || create.isPending}
+                    disabled={!currencyGuid || create.isPending || fetching}
                     onChange={e => { setValue(e.target.value); setError('') }}
                     onKeyDown={e => { if (e.key === 'Enter') handleSave() }}
                   />
                   <span className="ctrl-addon">{baseCode}</span>
                 </div>
-                {!error && <p className="text-g500" style={{ fontSize: 11.5, marginTop: 6 }}>How many {baseCode} make 1 {currencyCode || 'unit'}.</p>}
+                <div className="flex items-center gap-2" style={{ marginTop: 6 }}>
+                  <p className="text-g500" style={{ fontSize: 11.5, flex: 1, minWidth: 0 }}>
+                    {!error && (market
+                      ? <>Market rate {fmtRate(market.rate)}{market.date ? ` on ${fmtDay(market.date)}` : ''}. Adjust to the bank rate if needed, then save.</>
+                      : <>How many {baseCode} make 1 {currencyCode || 'unit'}.</>)}
+                  </p>
+                  <button
+                    type="button"
+                    className="btn btn-neu btn-sm"
+                    style={{ flexShrink: 0 }}
+                    disabled={!currencyGuid || create.isPending || fetching || existing.isError}
+                    onClick={handleFetchMarketRate}
+                  >
+                    <i className={`lni lni-reload${fetching ? ' er-spin' : ''}`} aria-hidden="true"></i> {fetching ? 'Fetching…' : 'Fetch market rate'}
+                  </button>
+                </div>
               </>
             )}
             {existing.isError && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 6 }}>Couldn&apos;t check today&apos;s {currencyCode} rate. Close and try again.</p>}
@@ -135,7 +181,7 @@ export function TodayExchangeRateModal({ isOpen, onClose, currencies, initialCur
         <div className="modal-footer">
           <button className="btn btn-neu" onClick={onClose} disabled={create.isPending}>{alreadySet ? 'Close' : 'Cancel'}</button>
           {!alreadySet && (
-            <button className="btn btn-primary" onClick={handleSave} disabled={create.isPending || !currencyGuid || checking || existing.isError}>
+            <button className="btn btn-primary" onClick={handleSave} disabled={create.isPending || !currencyGuid || checking || existing.isError || fetching}>
               <i className="lni lni-checkmark"></i> {create.isPending ? 'Saving…' : 'Save Rate'}
             </button>
           )}

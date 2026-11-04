@@ -2841,7 +2841,7 @@ input[type="number"] {
    see its own former comment). minmax(320px, 1fr) on the right track for
    the same reason .g2/.g3/.pc-body elsewhere on this page all use it —
    guards the payment fields from shrinking illegibly narrow before the
-   whole grid collapses to one column at 1100px. */
+   whole grid collapses to one column at 1200px. */
 .pc-tuition-split {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(320px, 1fr);
@@ -2849,7 +2849,7 @@ input[type="number"] {
   align-items: start;
 }
 
-@media(max-width:1100px) {
+@media(max-width:1200px) {
   .pc-tuition-split {
     grid-template-columns: 1fr;
   }
@@ -16691,7 +16691,13 @@ body:has(.drawer-overlay) {
 .pcx-ledgers .recgrid-total:last-child > span { padding-top: 13px; padding-bottom: 13px }
 .pcx-ledgers .recgrid-total:last-child > span:first-child { color: var(--g900); font-size: var(--fs-md) }
 @media(max-width:640px) {
+  /* Stacked rows: the row holds the padding (lined up with the footer), not
+     each cell, and the currency code sits right-aligned under its amount. */
+  .pcx-ledgers .recgrid-body { padding: 14px; gap: 8px }
+  .pcx-ledgers .recgrid-body > span { padding: 0 }
+  .pcx-ledgers .recgrid-body > span > span { text-align: right }
   .pcx-ledgers .recgrid-body > span.pcx-ledger-cell { flex-direction: column; justify-content: flex-start }
+  .pcx-ledgers .recgrid-body > span.pcx-ledger-cell > span { text-align: left }
 }
 
 /* Record Payment */
