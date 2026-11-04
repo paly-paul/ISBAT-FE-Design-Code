@@ -8,7 +8,7 @@ import {
   searchRejectedApplications,
 } from '@/lib/api/academic/refundSearch'
 
-const REFUND_SEARCH_KEY = ['refund-search']
+export const REFUND_SEARCH_KEY = ['refund-search']
 
 // Backs Payment Console → Refund's three eligibility-search tabs. Paged like
 // every other master table in this app (keepPreviousData so the page number

@@ -12,8 +12,9 @@ import { CwScheduleModal } from './_components/CwScheduleModal'
 import { CbtScheduleModal } from './_components/CbtScheduleModal'
 import { UeScheduleModal } from './_components/UeScheduleModal'
 import { type IaStructureRowDto } from '@/lib/api/assessment/iaCreation'
+import { useCurrentAcademicIntake } from '@/hooks/academic/useIntakes'
+import { useProgramDropdown } from '@/hooks/academic/useProgramMaster'
 import {
-  useIaCreationInit,
   useIaCreationSemesters,
   useIaCreationStructure,
   useCreateIaStructure,
@@ -57,11 +58,12 @@ export default function IaCreationPage() {
   const [selectedUeData, setSelectedUeData] = useState<{ examGuid: string, unitCode: string, unitName: string } | null>(null)
 
   // ── Data fetching ─────────────────────────────────
-  const { data: initData, isLoading: initLoading } = useIaCreationInit()
   // Structures are only created/edited for the current academic intake — the
   // session is locked to it, not a choice. (assessment-structure-page.md lists
   // every intake; locked at the product owner's request.)
-  const currentIntake = initData?.intakes?.find(i => i.currentIntake)
+  const { data: currentIntake, isLoading: intakeLoading } = useCurrentAcademicIntake()
+  const { data: programs, isLoading: programsLoading } = useProgramDropdown()
+  const initLoading = intakeLoading || programsLoading
   const selectedIntakeGuid = currentIntake?.intakeGuid ?? ''
   const intakeLabel = currentIntake ? (currentIntake.description ?? `Intake ${currentIntake.intakeCode}`) : ''
   const { data: semesters, isLoading: semLoading } = useIaCreationSemesters(selectedProgramGuid || null)
@@ -195,7 +197,7 @@ export default function IaCreationPage() {
               value={selectedProgramGuid}
               onChange={val => handleProgramChange(val)}
               disabled={initLoading}
-              options={(initData?.programs ?? []).map(p => ({
+              options={(programs ?? []).map(p => ({
                 value: p.programGuid,
                 label: `${p.programCode} — ${p.programName}`,
               }))}
@@ -375,7 +377,7 @@ export default function IaCreationPage() {
       {viewingRow && (
         <IaStructureViewModal
           row={viewingRow}
-          progName={initData?.programs.find(p => p.programGuid === selectedProgramGuid)?.programName || ''}
+          progName={programs?.find(p => p.programGuid === selectedProgramGuid)?.programName || ''}
           semName={semesters?.find(s => s.semesterGuid === selectedSemesterGuid)?.semName || ''}
           onClose={() => setViewingRow(null)}
           onEditCw={(guid) => setSelectedCwGuid(guid)}

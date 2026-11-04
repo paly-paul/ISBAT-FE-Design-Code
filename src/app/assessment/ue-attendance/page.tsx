@@ -9,8 +9,9 @@ import { TableLoadingState } from '@/components/TableLoadingState'
 import { EmptyState } from '@/components/EmptyState'
 import { ActionMenu } from '@/components/ActionMenu'
 import { Toast } from '@/components/Toast'
+import { useProgramDropdown } from '@/hooks/academic/useProgramMaster'
+import { useIntakesDropdown } from '@/hooks/academic/useIntakes'
 import { 
-  getUeAttendanceInit, 
   getUeAttendanceSemesters, 
   getUeAttendanceUnits, 
   getUeAttendanceSchedule, 
@@ -43,19 +44,18 @@ export default function UeAttendancePage() {
     setTimeout(() => setToast(null), 3500)
   }
 
-  // 1. Init
-  const { data: initData, isLoading: loadingInit } = useQuery({
-    queryKey: ['ueAttendanceInit'],
-    queryFn: getUeAttendanceInit
-  })
+  // 1. Dropdowns (Programme & Intake)
+  const { data: programs, isLoading: loadingPrograms } = useProgramDropdown()
+  const { data: intakes, isLoading: loadingIntakes } = useIntakesDropdown()
+  const loadingInit = loadingPrograms || loadingIntakes
 
   // Auto-select current intake
   useEffect(() => {
-    if (initData?.intakes && !intakeGuid) {
-      const curr = initData.intakes.find(i => i.currentIntake)
+    if (intakes && !intakeGuid) {
+      const curr = intakes.find(i => i.currentIntake)
       if (curr) setIntakeGuid(curr.intakeGuid)
     }
-  }, [initData, intakeGuid])
+  }, [intakes, intakeGuid])
 
   // 2. Semesters
   const { data: semesters, isLoading: loadingSemesters } = useQuery({
@@ -206,7 +206,7 @@ export default function UeAttendancePage() {
             <div>
               <label className="form-label text-[11px] font-semibold text-slate-500 uppercase">Programme</label>
               <SearchSelect
-                options={initData?.programs.map(p => ({ value: p.programGuid, label: p.programName })) || []}
+                options={programs?.map(p => ({ value: p.programGuid, label: p.programName })) || []}
                 value={programGuid}
                 onChange={setProgramGuid}
                 isLoading={loadingInit}
@@ -216,7 +216,7 @@ export default function UeAttendancePage() {
             <div>
               <label className="form-label text-[11px] font-semibold text-slate-500 uppercase">Intake</label>
               <SearchSelect
-                options={initData?.intakes.map(i => ({ value: i.intakeGuid, label: i.description })) || []}
+                options={intakes?.map(i => ({ value: i.intakeGuid, label: i.description })) || []}
                 value={intakeGuid}
                 onChange={setIntakeGuid}
                 isLoading={loadingInit}

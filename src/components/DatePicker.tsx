@@ -91,19 +91,10 @@ export default function DatePicker({ value, onChange, placeholder = 'dd/mm/yyyy'
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => setViewDate(ymdToDate(value) ?? defaultViewDate()), [value])
 
-  // Clear or set error when props change
+  // Clear error when value changes (e.g. form reset or parent update)
   useEffect(() => {
-    if (value) {
-      const err = outOfRange(value)
-      if (err) {
-        setError(err)
-      } else {
-        setError('')
-      }
-    } else {
-      setError('')
-    }
-  }, [value, minYmd, maxYmd, rangeMessage])
+    setError('')
+  }, [value])
 
   useEffect(() => {
     function onDoc(e: MouseEvent) {

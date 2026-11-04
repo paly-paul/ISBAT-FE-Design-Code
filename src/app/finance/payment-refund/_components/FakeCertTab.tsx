@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
 import { useFakeCertificateTerminationsSearch } from '@/hooks/academic/useRefundSearch'
-import { RefundLedgerPicker, initialsFor } from './shared'
+import { RefundLedgerPicker, RefundStudentCard } from './shared'
 import { mockSearchFakeCert } from './mockData'
 
 // Category 3 — students terminated mid-program with reason "Fake
@@ -31,7 +31,7 @@ export function FakeCertTab({ showToast, permissionsCreate, onRefunded, useMock 
   const [committedSearch, setCommittedSearch] = useState('')
   const [searchFocused, setSearchFocused] = useState(false)
   const searchBoxRef = useRef<HTMLDivElement>(null)
-  const [selected, setSelected] = useState<{ studentGuid: string; applicationGuid: string | null; name: string; regNo: string; remarks: string | null } | null>(null)
+  const [selected, setSelected] = useState<{ studentGuid: string; applicationGuid: string | null; name: string; regNo: string; programName: string | null; remarks: string | null } | null>(null)
 
   useEffect(() => {
     const t = setTimeout(() => setCommittedSearch(search.trim()), 400)
@@ -56,8 +56,8 @@ export function FakeCertTab({ showToast, permissionsCreate, onRefunded, useMock 
 
   const applicationGuid = selected?.applicationGuid ?? null
 
-  function selectCandidate(s: { studentGuid: string; applicationGuid: string | null; studentName: string; studentRegNo: string; terminationRemarks: string | null }) {
-    setSelected({ studentGuid: s.studentGuid, applicationGuid: s.applicationGuid, name: s.studentName, regNo: s.studentRegNo, remarks: s.terminationRemarks })
+  function selectCandidate(s: { studentGuid: string; applicationGuid: string | null; studentName: string; studentRegNo: string; programName?: string | null; terminationRemarks: string | null }) {
+    setSelected({ studentGuid: s.studentGuid, applicationGuid: s.applicationGuid, name: s.studentName, regNo: s.studentRegNo, programName: s.programName ?? null, remarks: s.terminationRemarks })
     setSearch(s.studentName)
     setCommittedSearch('')
     setSearchFocused(false)
@@ -129,24 +129,13 @@ export function FakeCertTab({ showToast, permissionsCreate, onRefunded, useMock 
 
       {selected && (
         <>
-          {/* Full-width hero card, promoted out of a 2-column split
-              (2026-09-15) — same move as Payment Console's Semester Payment
-              tab. */}
-          <div className="card p-0 overflow-hidden">
-            <div className="pc-hero">
-              <div className="pc-hero-top">
-                <div className="pc-hero-avatar">{initialsFor(selected.name)}</div>
-                <div className="flex-1 min-w-0">
-                  <div className="pc-hero-name truncate">{selected.name}</div>
-                  <div className="pc-hero-sub truncate">Terminated — Fake Certificate</div>
-                  <span className="pc-hero-badge"><i className="lni lni-bookmark"></i> {selected.regNo}</span>
-                </div>
-              </div>
-              <div className="pc-hero-facts">
-                <div className="pc-hero-fact pc-hero-fact-span2"><span className="pc-hero-fact-lbl">Termination Remarks</span><span className="pc-hero-fact-val" title={selected.remarks ?? '—'}>{selected.remarks ?? '—'}</span></div>
-              </div>
-            </div>
-          </div>
+          <RefundStudentCard
+            name={selected.name}
+            status="Terminated — Fake Certificate"
+            subtitle={selected.programName}
+            chips={[{ label: 'Reg. No', value: selected.regNo }]}
+            facts={[{ label: 'Termination Remarks', value: selected.remarks }]}
+          />
 
           {!applicationGuid ? (
             // Same centered-icon/title/subtitle empty-state treatment as
