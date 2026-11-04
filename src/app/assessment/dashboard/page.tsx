@@ -3,6 +3,7 @@ import { useRouter } from 'next/navigation'
 import { useState, useMemo } from 'react'
 import { Pagination } from '@/components/Pagination'
 import { Toast } from '@/components/Toast'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import {
   useAssessmentOverview,
   useHallTicketDashboard,
@@ -126,6 +127,7 @@ interface PendingActionItem {
 }
 
 export default function AssessmentDashboard() {
+  const permissions = usePagePermissions()
   const router = useRouter()
   const [examPage, setExamPage] = useState(1)
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)

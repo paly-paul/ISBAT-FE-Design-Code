@@ -7,6 +7,7 @@ import { ScrollTable } from '@/components/ScrollTable'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { ActionMenu } from '@/components/ActionMenu'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { Toast } from '@/components/Toast'
 import { ProjectReviewFormModal } from '@/components/modals/assessment/ProjectReviewFormModal'
 import {
@@ -17,6 +18,7 @@ import {
 } from '@/hooks/assessment/useProjectReviews'
 
 export default function ProjectReviewsPage() {
+  const permissions = usePagePermissions()
   const router = useRouter()
 
   const [toastMessage, setToastMessage] = useState<{ msg: string, type: 'success' | 'error' | 'warn' | 'info' | 'danger' } | null>(null)
@@ -149,7 +151,7 @@ export default function ProjectReviewsPage() {
           <div className="font-semibold text-lg flex items-center gap-2">
             <span className="ctitle-icon"><i className="lni lni-list"></i></span> Review History
           </div>
-          {proposalGuid && (
+          {proposalGuid && permissions.add && (
             <button className="btn btn-primary btn-sm" onClick={() => { setEditingGuid(null); setIsFormOpen(true) }}>
               <i className="lni lni-plus"></i> Add New Review
             </button>
@@ -178,12 +180,16 @@ export default function ProjectReviewsPage() {
                   <tr key={row.reviewGuid} className="hover:bg-slate-50/70 transition-colors">
                     <td className="text-center">
                       <ActionMenu>
-                        <button className="btn btn-neu btn-sm w-full text-left" onClick={() => handleEdit(row.reviewGuid)}>
-                          <i className="lni lni-pencil mr-2 text-slate-400"></i>Edit Review
-                        </button>
-                        <button className="btn btn-neu btn-sm w-full text-left text-rose-600" onClick={() => handleDeleteClick(row.reviewGuid)}>
-                          <i className="lni lni-trash-can mr-2 text-rose-400"></i>Delete
-                        </button>
+                        {permissions.edit && (
+                          <button className="btn btn-neu btn-sm w-full text-left" onClick={() => handleEdit(row.reviewGuid)}>
+                            <i className="lni lni-pencil mr-2 text-slate-400"></i>Edit Review
+                          </button>
+                        )}
+                        {permissions.delete && (
+                          <button className="btn btn-neu btn-sm w-full text-left text-rose-600" onClick={() => handleDeleteClick(row.reviewGuid)}>
+                            <i className="lni lni-trash-can mr-2 text-rose-400"></i>Delete
+                          </button>
+                        )}
                       </ActionMenu>
                     </td>
                     <td className="text-center font-semibold text-slate-700">

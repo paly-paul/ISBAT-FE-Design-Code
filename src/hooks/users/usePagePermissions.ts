@@ -60,9 +60,14 @@ function normalizePermissions(raw: MenuPermissions | null | undefined): MenuPerm
   if (!raw) return FULL_ACCESS
   const canAdd = Boolean(raw.add || raw.create)
   const canEdit = Boolean(raw.edit || raw.update)
-  const canDelete = Boolean(raw.delete)
+  const canDelete = raw.delete !== undefined ? Boolean(raw.delete) : canEdit
   const canGet = Boolean(raw.get || raw.view)
   const canApprove = raw.approve !== undefined ? Boolean(raw.approve) : canEdit
+  const canPrint = raw.print !== undefined ? Boolean(raw.print) : canGet
+  const canImport = raw.import !== undefined ? Boolean(raw.import) : canAdd
+  const canExport = raw.export !== undefined ? Boolean(raw.export) : canGet
+  const canCancel = raw.cancel !== undefined ? Boolean(raw.cancel) : canEdit
+
   return {
     ...raw,
     add: canAdd,
@@ -73,6 +78,10 @@ function normalizePermissions(raw: MenuPermissions | null | undefined): MenuPerm
     get: canGet,
     view: canGet,
     approve: canApprove,
+    print: canPrint,
+    import: canImport,
+    export: canExport,
+    cancel: canCancel,
   }
 }
 
@@ -92,8 +101,9 @@ function findNode(nodes: MenuNode[], railId: string, pathname: string): MenuNode
 // is actually allowed to do rather than always rendering every action.
 // Returns FULL_ACCESS (see above) while permission data is loading or the
 // route isn't found in the tree, and NO_ACCESS if the menu call failed.
-export function usePagePermissions(): MenuPermissions {
-  const pathname = usePathname()
+export function usePagePermissions(overridePath?: string): MenuPermissions {
+  const routerPathname = usePathname()
+  const pathname = overridePath || routerPathname
   const { data, isLoading, isError } = useMenu()
 
   return useMemo(() => {

@@ -3,6 +3,7 @@
 import React, { useState, useMemo, useEffect } from 'react'
 import { SearchSelect } from '@/components/SearchSelect'
 import { Toast } from '@/components/Toast'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { DocumentPreviewModal } from '@/components/modals/shared/DocumentPreviewModal'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { EmptyState } from '@/components/EmptyState'
@@ -34,6 +35,7 @@ type NavigationStep = 'dashboard' | 'roster' | 'detail'
 type RosterStatusTab = 'All' | 'Pending' | 'Evaluated'
 
 export default function IaEvaluationPage() {
+  const permissions = usePagePermissions()
   // ── Navigation Flow: Step 1 (Dashboard) -> Step 2 (Roster) -> Step 3 (Detail) ──
   const [currentStep, setCurrentStep] = useState<NavigationStep>('dashboard')
 
@@ -1156,11 +1158,11 @@ export default function IaEvaluationPage() {
                               type="button"
                               onClick={() => handleOpenStudentDetail(std)}
                               className={`btn btn-sm text-[11px] font-semibold flex items-center justify-center gap-1 mx-auto ${
-                                isEvaluated ? 'btn-neu' : 'btn-primary'
+                                isEvaluated || !permissions.edit ? 'btn-neu' : 'btn-primary'
                               }`}
                             >
-                              <i className={`lni ${isEvaluated ? 'lni-eye' : 'lni-pencil'}`}></i>
-                              <span>{isEvaluated ? 'View Marks' : 'Evaluate'}</span>
+                              <i className={`lni ${isEvaluated || !permissions.edit ? 'lni-eye' : 'lni-pencil'}`}></i>
+                              <span>{isEvaluated || !permissions.edit ? 'View Marks' : 'Evaluate'}</span>
                             </button>
                           </td>
                         </tr>
@@ -1678,6 +1680,7 @@ export default function IaEvaluationPage() {
                 </div>
 
                 <div className="flex items-center gap-2 self-end sm:self-center">
+                  {permissions.edit && (
                   <button
                     type="button"
                     onClick={handleFinalize}
@@ -1692,6 +1695,7 @@ export default function IaEvaluationPage() {
                     ></i>
                     <span>{finalizeStudentMutation.isPending ? 'Finalizing…' : 'Finalize Student'}</span>
                   </button>
+                  )}
                 </div>
               </div>
             </div>

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { Toast } from '@/components/Toast'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { SearchSelect } from '@/components/SearchSelect'
 import DatePicker from '@/components/DatePicker'
 import TimePicker from '@/components/TimePicker'
@@ -25,6 +26,7 @@ function getTodayYmd(): string {
 }
 
 export function CwScheduleModal({ isOpen, onClose, courseworkGuid }: CwScheduleModalProps) {
+  const permissions = usePagePermissions('/assessment/ia-creation')
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const toastTimerRef = useRef<NodeJS.Timeout | null>(null)
   const [saved, setSaved] = useState(false)
@@ -345,6 +347,7 @@ export function CwScheduleModal({ isOpen, onClose, courseworkGuid }: CwScheduleM
               <button className="btn btn-neu" onClick={onClose} disabled={updateMut.isPending}>
                 Cancel
               </button>
+              {(permissions.add || permissions.edit) && (
               <button
                 className="btn btn-primary"
                 onClick={handleSave}
@@ -352,6 +355,7 @@ export function CwScheduleModal({ isOpen, onClose, courseworkGuid }: CwScheduleM
               >
                 {updateMut.isPending ? 'Saving...' : 'Save Schedule'}
               </button>
+              )}
             </div>
           </div>
         </div>

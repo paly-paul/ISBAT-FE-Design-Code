@@ -5,6 +5,7 @@ import { ScrollTable } from '@/components/ScrollTable'
 import { SearchSelect } from '@/components/SearchSelect'
 import { Pagination } from '@/components/Pagination'
 import { Toast } from '@/components/Toast'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { useIntakesDropdown } from '@/hooks/academic/useIntakes'
 import { useProgramDropdown } from '@/hooks/academic/useProgramMaster'
@@ -41,6 +42,7 @@ const STATUS_OPTIONS = [
 ]
 
 export default function HallTicketIssuancePage() {
+  const permissions = usePagePermissions()
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 
@@ -96,7 +98,9 @@ export default function HallTicketIssuancePage() {
       <div className="page active">
         <div className="pg-hdr">
           <div><div className="pg-title">Hall Ticket Issuance</div><div className="pg-sub">Check a student&apos;s exam clearances and issue their University Exam hall ticket</div></div>
-          <button className="btn btn-neu" onClick={() => setBulkOpen(true)} disabled={!intakeGuid}><i className="lni lni-ticket"></i> Bulk Issue &amp; Status</button>
+          {(permissions.add || permissions.edit) && (
+            <button className="btn btn-neu" onClick={() => setBulkOpen(true)} disabled={!intakeGuid}><i className="lni lni-ticket"></i> Bulk Issue &amp; Status</button>
+          )}
         </div>
 
         <div className="card">
@@ -222,9 +226,11 @@ export default function HallTicketIssuancePage() {
                       <i className="lni lni-checkmark-circle" aria-hidden="true"></i>
                       <div><div className="ht-verdict-title">Eligible for a Term {term} hall ticket</div><div className="ht-verdict-sub">Every clearance is in place.</div></div>
                     </div>
+                    {(permissions.add || permissions.edit) && (
                     <button type="button" className="btn btn-primary" onClick={handleIssue} disabled={issue.isPending}>
                       <i className="lni lni-ticket"></i> {issue.isPending ? 'Issuing…' : 'Issue Hall Ticket'}
                     </button>
+                    )}
                   </footer>
                 ) : (
                   <footer className="ht-verdict bad">
@@ -326,6 +332,7 @@ function BulkIssueModal({ isOpen, onClose, intakeGuid, intakeLabel, term, showTo
   term: HallTicketTerm
   showToast: (msg: string, type?: string) => void
 }) {
+  const permissions = usePagePermissions('/assessment/hall-ticket')
   const [programGuid, setProgramGuid] = useState('')
   const [semesterGuid, setSemesterGuid] = useState('')
   const [status, setStatus] = useState<HallTicketIssueStatus | ''>('NotIssued')
@@ -441,9 +448,11 @@ function BulkIssueModal({ isOpen, onClose, intakeGuid, intakeLabel, term, showTo
         </div>
         <div className="modal-footer">
           <button className="btn btn-neu" onClick={onClose} disabled={bulk.isPending}>Close</button>
+          {(permissions.add || permissions.edit) && (
           <button className="btn btn-primary" onClick={handleBulkIssue} disabled={bulk.isPending || scopeIncomplete || !intakeGuid}>
             <i className="lni lni-ticket"></i> {bulk.isPending ? 'Issuing…' : 'Bulk Issue'}
           </button>
+          )}
         </div>
       </div>
 

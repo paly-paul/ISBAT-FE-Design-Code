@@ -3,6 +3,7 @@
 import React, { useState, useMemo, useEffect } from 'react'
 import { SearchSelect } from '@/components/SearchSelect'
 import { Toast } from '@/components/Toast'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import {
   useCwIntakes,
   useCwCourseUnits,
@@ -69,6 +70,7 @@ const STATUS_CONFIG: Record<
 }
 
 export default function CwRectificationPage() {
+  const permissions = usePagePermissions()
   // ── Toast State ─────────────────────────────────────────────────────────────
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const showToast = (msg: string, type: string = 'success') => {
@@ -321,28 +323,28 @@ export default function CwRectificationPage() {
         id: 'delete',
         title: 'Delete submission',
         desc: 'Clears saved answers so the student can restart fresh. Legal only before final submission.',
-        isEnabled: Boolean(summary?.canDelete),
+        isEnabled: Boolean(summary?.canDelete) && Boolean(permissions.delete),
         ctaLabel: 'Delete',
       },
       {
         id: 'reopen',
         title: 'Reopen for resubmission',
         desc: 'Student regains access to resubmit — use for wrong-file upload or submission error.',
-        isEnabled: Boolean(summary?.canReopen),
+        isEnabled: Boolean(summary?.canReopen) && Boolean(permissions.edit),
         ctaLabel: 'Reopen',
       },
       {
         id: 'reevaluate',
         title: 'Send back for re-evaluation',
         desc: 'Clears awarded marks and returns script to the lecturer for re-marking.',
-        isEnabled: Boolean(summary?.canReevaluate),
+        isEnabled: Boolean(summary?.canReevaluate) && Boolean(permissions.edit),
         ctaLabel: 'Re-evaluate',
       },
       {
         id: 'recheck',
         title: 'View answers & marks',
         desc: 'Read-only walkthrough of every question, the student’s answer and awarded marks.',
-        isEnabled: Boolean(summary?.canRecheck),
+        isEnabled: Boolean(summary?.canRecheck) && Boolean(permissions.get || permissions.view),
         ctaLabel: isViewerOpen ? 'Close' : 'Open',
       },
     ]
@@ -351,6 +353,10 @@ export default function CwRectificationPage() {
     summary?.canReopen,
     summary?.canReevaluate,
     summary?.canRecheck,
+    permissions.delete,
+    permissions.edit,
+    permissions.get,
+    permissions.view,
     isViewerOpen,
   ])
 

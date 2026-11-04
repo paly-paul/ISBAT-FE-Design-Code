@@ -7,6 +7,7 @@ import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { SearchSelect } from '@/components/SearchSelect'
 import { ActionMenu } from '@/components/ActionMenu'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { IaStructureViewModal } from './_components/IaStructureViewModal'
 import { CwScheduleModal } from './_components/CwScheduleModal'
 import { CbtScheduleModal } from './_components/CbtScheduleModal'
@@ -44,6 +45,7 @@ function formatDate(dateString: string | null) {
 }
 
 export default function IaCreationPage() {
+  const permissions = usePagePermissions()
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const toastTimerRef = useRef<NodeJS.Timeout | null>(null)
 
@@ -153,14 +155,16 @@ export default function IaCreationPage() {
             <i className="lni lni-reload" />
             {structureLoading ? 'Loading…' : 'Refresh'}
           </button>
-          <button
-            className="btn btn-primary flex-1 sm:flex-none justify-center whitespace-nowrap"
-            onClick={handleCreate}
-            disabled={!canRefresh || createMut.isPending}
-          >
-            <i className="lni lni-plus" />
-            {createMut.isPending ? 'Creating…' : 'Create Structure'}
-          </button>
+          {permissions.add && (
+            <button
+              className="btn btn-primary flex-1 sm:flex-none justify-center whitespace-nowrap"
+              onClick={handleCreate}
+              disabled={!canRefresh || createMut.isPending}
+            >
+              <i className="lni lni-plus" />
+              {createMut.isPending ? 'Creating…' : 'Create Structure'}
+            </button>
+          )}
         </div>
       </div>
 
@@ -299,20 +303,28 @@ export default function IaCreationPage() {
                         {row.classTestGuid ? (
                           <div className="flex flex-wrap items-center gap-2">
                             {row.classTestStartDateTime ? (
-                              <span
-                                className="text-g900 font-medium text-[11px] leading-tight"
-                                style={{ cursor: 'pointer', borderBottom: '1px dashed #9ca3af' }}
-                                onClick={() => setSelectedCbtData({ testGuid: row.classTestGuid!, unitCode: row.unitCode ?? '', unitName: row.unitName ?? '' })}
-                              >
-                                {formatDateRange(row.classTestStartDateTime, row.classTestEndDateTime)}
-                              </span>
-                            ) : (
+                              permissions.edit ? (
+                                <span
+                                  className="text-g900 font-medium text-[11px] leading-tight"
+                                  style={{ cursor: 'pointer', borderBottom: '1px dashed #9ca3af' }}
+                                  onClick={() => setSelectedCbtData({ testGuid: row.classTestGuid!, unitCode: row.unitCode ?? '', unitName: row.unitName ?? '' })}
+                                >
+                                  {formatDateRange(row.classTestStartDateTime, row.classTestEndDateTime)}
+                                </span>
+                              ) : (
+                                <span className="text-g900 font-medium text-[11px] leading-tight">
+                                  {formatDateRange(row.classTestStartDateTime, row.classTestEndDateTime)}
+                                </span>
+                              )
+                            ) : permissions.add ? (
                               <button
                                 onClick={() => setSelectedCbtData({ testGuid: row.classTestGuid!, unitCode: row.unitCode ?? '', unitName: row.unitName ?? '' })}
                                 className="text-[#3a6bc9] hover:underline"
                               >
                                 Add Class Test
                               </button>
+                            ) : (
+                              <span className="text-g400 text-xs">—</span>
                             )}
                           </div>
                         ) : (
@@ -325,20 +337,28 @@ export default function IaCreationPage() {
                         {row.courseworkGuid ? (
                           <div className="flex flex-wrap items-center gap-2">
                             {row.courseworkStartDateTime ? (
-                              <span
-                                className="text-g900 font-medium text-[11px] leading-tight"
-                                style={{ cursor: 'pointer', borderBottom: '1px dashed #9ca3af' }}
-                                onClick={() => setSelectedCwGuid(row.courseworkGuid)}
-                              >
-                                {formatDateRange(row.courseworkStartDateTime, row.courseworkEndDateTime)}
-                              </span>
-                            ) : (
+                              permissions.edit ? (
+                                <span
+                                  className="text-g900 font-medium text-[11px] leading-tight"
+                                  style={{ cursor: 'pointer', borderBottom: '1px dashed #9ca3af' }}
+                                  onClick={() => setSelectedCwGuid(row.courseworkGuid)}
+                                >
+                                  {formatDateRange(row.courseworkStartDateTime, row.courseworkEndDateTime)}
+                                </span>
+                              ) : (
+                                <span className="text-g900 font-medium text-[11px] leading-tight">
+                                  {formatDateRange(row.courseworkStartDateTime, row.courseworkEndDateTime)}
+                                </span>
+                              )
+                            ) : permissions.add ? (
                               <button
                                 onClick={() => setSelectedCwGuid(row.courseworkGuid)}
                                 className="text-[#3a6bc9] hover:underline"
                               >
                                 Add Course work
                               </button>
+                            ) : (
+                              <span className="text-g400 text-xs">—</span>
                             )}
                           </div>
                         ) : (
@@ -352,11 +372,19 @@ export default function IaCreationPage() {
                           <div className="flex flex-wrap items-center gap-2">
                             {/* Max mark removed as requested */}
                             {row.examDate && row.examStartTime ? (
-                              <span className="text-g900 font-medium text-[11px] leading-tight" style={{ cursor: 'pointer', borderBottom: '1px dashed #9ca3af' }} onClick={() => setSelectedUeData({ examGuid: row.universityExamGuid!, unitCode: row.unitCode ?? '', unitName: row.unitName ?? '' })}>
-                                {formatDateRange(`${row.examDate.split('T')[0]}T${row.examStartTime}`, row.examEndTime ? `${row.examDate.split('T')[0]}T${row.examEndTime}` : null)}
-                              </span>
-                            ) : (
+                              permissions.edit ? (
+                                <span className="text-g900 font-medium text-[11px] leading-tight" style={{ cursor: 'pointer', borderBottom: '1px dashed #9ca3af' }} onClick={() => setSelectedUeData({ examGuid: row.universityExamGuid!, unitCode: row.unitCode ?? '', unitName: row.unitName ?? '' })}>
+                                  {formatDateRange(`${row.examDate.split('T')[0]}T${row.examStartTime}`, row.examEndTime ? `${row.examDate.split('T')[0]}T${row.examEndTime}` : null)}
+                                </span>
+                              ) : (
+                                <span className="text-g900 font-medium text-[11px] leading-tight">
+                                  {formatDateRange(`${row.examDate.split('T')[0]}T${row.examStartTime}`, row.examEndTime ? `${row.examDate.split('T')[0]}T${row.examEndTime}` : null)}
+                                </span>
+                              )
+                            ) : permissions.add ? (
                               <button onClick={() => setSelectedUeData({ examGuid: row.universityExamGuid!, unitCode: row.unitCode ?? '', unitName: row.unitName ?? '' })} className="text-[#3a6bc9] hover:underline">Add University Exam</button>
+                            ) : (
+                              <span className="text-g400 text-xs">—</span>
                             )}
                           </div>
                         ) : (

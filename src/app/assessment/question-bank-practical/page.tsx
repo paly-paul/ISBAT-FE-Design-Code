@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react'
 import { SearchSelect } from '@/components/SearchSelect'
 import { Toast } from '@/components/Toast'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { ScrollTable } from '@/components/ScrollTable'
 import { Pagination } from '@/components/Pagination'
 import { useCurrentAcademicIntake } from '@/hooks/academic/useIntakes'
@@ -32,6 +33,7 @@ function fmtSize(bytes: number) {
 }
 
 export default function QuestionBankPracticalPage() {
+  const permissions = usePagePermissions()
   const [courseUnitGuid, setCourseUnitGuid] = useState<string>('')
   const [file, setFile] = useState<File | null>(null)
   const [sheetName, setSheetName] = useState<string>('')
@@ -268,11 +270,13 @@ export default function QuestionBankPracticalPage() {
                   disabled={!availableSheets.length || !!busy}
                 />
               </div>
+              {permissions.add && (
               <button className="btn btn-primary" onClick={handlePreview} disabled={!canPreview}>
                 {busy === 'preview'
                   ? <><i className="lni lni-spinner-solid animate-spin"></i> Checking…</>
                   : <><i className="lni lni-eye"></i> Import &amp; preview</>}
               </button>
+              )}
             </div>
           </StepRow>
 
@@ -286,9 +290,11 @@ export default function QuestionBankPracticalPage() {
               ? <>Remove every practical question already saved for <strong className="text-g800">{courseUnitLabel}</strong>{intakeLabel ? <> in {intakeLabel}</> : null}.</>
               : 'Select a course unit to remove its saved practical questions.'}
           </span>
+          {permissions.delete && (
           <button className="btn btn-danger btn-sm" onClick={() => setConfirmDelete(true)} disabled={!courseUnitGuid || !currentIntake || !!busy}>
             {busy === 'delete' ? <><i className="lni lni-spinner-solid animate-spin"></i> Deleting…</> : <><i className="lni lni-trash-can"></i> Delete questions</>}
           </button>
+          )}
         </div>
       </div>
 
@@ -358,11 +364,13 @@ export default function QuestionBankPracticalPage() {
             </span>
             <div className="flex gap-2">
               <button className="btn btn-neu" onClick={handleCancel} disabled={busy === 'upload'}>Cancel</button>
+              {permissions.add && (
               <button className="btn btn-primary" onClick={handleUpload} disabled={!!busy || previewData.length === 0}>
                 {busy === 'upload'
                   ? <><i className="lni lni-spinner-solid animate-spin"></i> Uploading…</>
                   : <><i className="lni lni-save"></i> Upload {previewData.length.toLocaleString()} questions</>}
               </button>
+              )}
             </div>
           </div>
         </div>

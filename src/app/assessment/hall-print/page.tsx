@@ -5,6 +5,7 @@ import { ScrollTable } from '@/components/ScrollTable'
 import { SearchSelect } from '@/components/SearchSelect'
 import { Pagination } from '@/components/Pagination'
 import { Toast } from '@/components/Toast'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { useIntakesDropdown } from '@/hooks/academic/useIntakes'
 import { useProgramDropdown } from '@/hooks/academic/useProgramMaster'
@@ -34,6 +35,7 @@ const STATUS_OPTIONS = [
 ]
 
 export default function HallTicketPrintPage() {
+  const permissions = usePagePermissions()
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 
@@ -180,6 +182,7 @@ export default function HallTicketPrintPage() {
                   return (
                     <tr key={r.studentGuid}>
                       <td>
+                        {permissions.print !== false && (
                         <button
                           className="btn btn-neu btn-sm"
                           onClick={() => handlePrint(r.studentGuid, r.studentName)}
@@ -188,6 +191,7 @@ export default function HallTicketPrintPage() {
                         >
                           <i className="lni lni-printer"></i> {printingGuid === r.studentGuid ? 'Generating…' : 'Print'}
                         </button>
+                        )}
                       </td>
                       <td className="font-mono">{r.studentRegNo ?? '—'}</td>
                       <td className="font-semibold">{r.studentName ?? '—'}</td>

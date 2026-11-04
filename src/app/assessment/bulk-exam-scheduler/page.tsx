@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { useQueryClient } from '@tanstack/react-query'
 import { ScrollTable } from '@/components/ScrollTable'
 import { EmptyState } from '@/components/EmptyState'
@@ -28,6 +29,7 @@ import {
 const PAGE_SIZE = 15
 
 export default function BulkExamSchedulerPage() {
+  const permissions = usePagePermissions()
   const queryClient = useQueryClient()
 
   // ── Toast State ─────────────────────────────────────────────────────────────
@@ -430,7 +432,7 @@ export default function BulkExamSchedulerPage() {
                       <th className="py-2.5 px-2.5 min-w-[140px] text-center border-r border-blue-400/30">
                         <button
                           type="button"
-                          onClick={() => handleOpenHeaderBulkSchedule('CW')}
+                          onClick={() => { if (permissions.add || permissions.edit) handleOpenHeaderBulkSchedule('CW') }} disabled={!permissions.add && !permissions.edit}
                           className="w-full text-xs font-bold hover:underline hover:text-blue-100 flex items-center justify-center gap-1 focus:outline-hidden"
                           title="Click to schedule Coursework (CW1) for all programmes in this session"
                         >
@@ -442,7 +444,7 @@ export default function BulkExamSchedulerPage() {
                       <th className="py-2.5 px-2.5 min-w-[160px] text-center border-r border-blue-400/30">
                         <button
                           type="button"
-                          onClick={() => handleOpenHeaderBulkSchedule('CLASS_TEST')}
+                          onClick={() => { if (permissions.add || permissions.edit) handleOpenHeaderBulkSchedule('CLASS_TEST') }} disabled={!permissions.add && !permissions.edit}
                           className="w-full text-xs font-bold hover:underline hover:text-blue-100 flex items-center justify-center gap-1 focus:outline-hidden"
                           title="Click to schedule Class Test for all programmes in this session"
                         >
@@ -454,7 +456,7 @@ export default function BulkExamSchedulerPage() {
                       <th className="py-2.5 px-2.5 min-w-[140px] text-center border-r border-blue-400/30">
                         <button
                           type="button"
-                          onClick={() => handleOpenHeaderBulkSchedule('CA')}
+                          onClick={() => { if (permissions.add || permissions.edit) handleOpenHeaderBulkSchedule('CA') }} disabled={!permissions.add && !permissions.edit}
                           className="w-full text-xs font-bold hover:underline hover:text-blue-100 flex items-center justify-center gap-1 focus:outline-hidden"
                           title="Click to schedule Continuous Assessment (CA) for all programmes in this session"
                         >
@@ -478,7 +480,7 @@ export default function BulkExamSchedulerPage() {
                       <th className="py-2.5 px-2.5 min-w-[140px] text-center">
                         <button
                           type="button"
-                          onClick={() => handleOpenHeaderBulkSchedule('MOCK')}
+                          onClick={() => { if (permissions.add || permissions.edit) handleOpenHeaderBulkSchedule('MOCK') }} disabled={!permissions.add && !permissions.edit}
                           className="w-full text-xs font-bold hover:underline hover:text-blue-100 flex items-center justify-center gap-1 focus:outline-hidden"
                           title="Click to schedule Mock Exam (CBT) for all programmes in this session"
                         >
@@ -535,11 +537,15 @@ export default function BulkExamSchedulerPage() {
                             <td className="py-2 px-2.5 text-center border-r border-slate-100">
                               <button
                                 type="button"
-                                onClick={() => handleOpenRowSchedule(row, 'CW')}
-                                className={`w-full py-1 px-2.5 rounded text-[11px] font-semibold transition-all focus:outline-hidden shadow-xs ${cwScheduled
+                                onClick={() => { if (cwScheduled ? permissions.edit : permissions.add) handleOpenRowSchedule(row, 'CW') }}
+                                disabled={cwScheduled ? !permissions.edit : !permissions.add}
+                                className={`w-full py-1 px-2.5 rounded text-[11px] font-semibold transition-all focus:outline-hidden shadow-xs ${
+                                  (cwScheduled ? !permissions.edit : !permissions.add)
+                                    ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                                    : cwScheduled
                                     ? 'bg-[#0284c7] hover:bg-[#0369a1] text-white'
                                     : 'bg-[#0a2540] hover:bg-[#1e3a8a] text-white'
-                                  }`}
+                                }`}
                               >
                                 {cwScheduled ? 'Scheduled' : 'Schedule'}
                               </button>
@@ -549,11 +555,15 @@ export default function BulkExamSchedulerPage() {
                             <td className="py-2 px-2.5 text-center border-r border-slate-100">
                               <button
                                 type="button"
-                                onClick={() => handleOpenRowSchedule(row, 'CLASS_TEST')}
-                                className={`w-full py-1 px-2.5 rounded text-[11px] font-semibold transition-all focus:outline-hidden shadow-xs ${testScheduled
+                                onClick={() => { if (testScheduled ? permissions.edit : permissions.add) handleOpenRowSchedule(row, 'CLASS_TEST') }}
+                                disabled={testScheduled ? !permissions.edit : !permissions.add}
+                                className={`w-full py-1 px-2.5 rounded text-[11px] font-semibold transition-all focus:outline-hidden shadow-xs ${
+                                  (testScheduled ? !permissions.edit : !permissions.add)
+                                    ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                                    : testScheduled
                                     ? 'bg-[#0284c7] hover:bg-[#0369a1] text-white'
                                     : 'bg-[#0a2540] hover:bg-[#1e3a8a] text-white'
-                                  }`}
+                                }`}
                               >
                                 {testScheduled ? 'Scheduled' : 'Schedule'}
                               </button>
@@ -563,11 +573,15 @@ export default function BulkExamSchedulerPage() {
                             <td className="py-2 px-2.5 text-center border-r border-slate-100">
                               <button
                                 type="button"
-                                onClick={() => handleOpenRowSchedule(row, 'CA')}
-                                className={`w-full py-1 px-2.5 rounded text-[11px] font-semibold transition-all focus:outline-hidden shadow-xs ${caScheduled
+                                onClick={() => { if (caScheduled ? permissions.edit : permissions.add) handleOpenRowSchedule(row, 'CA') }}
+                                disabled={caScheduled ? !permissions.edit : !permissions.add}
+                                className={`w-full py-1 px-2.5 rounded text-[11px] font-semibold transition-all focus:outline-hidden shadow-xs ${
+                                  (caScheduled ? !permissions.edit : !permissions.add)
+                                    ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                                    : caScheduled
                                     ? 'bg-[#0284c7] hover:bg-[#0369a1] text-white'
                                     : 'bg-[#0a2540] hover:bg-[#1e3a8a] text-white'
-                                  }`}
+                                }`}
                               >
                                 {caScheduled ? 'Scheduled' : 'Schedule'}
                               </button>
@@ -591,11 +605,15 @@ export default function BulkExamSchedulerPage() {
                             <td className="py-2 px-2.5 text-center">
                               <button
                                 type="button"
-                                onClick={() => handleOpenRowSchedule(row, 'MOCK')}
-                                className={`w-full py-1 px-2.5 rounded text-[11px] font-semibold transition-all focus:outline-hidden shadow-xs ${mockScheduled
+                                onClick={() => { if (mockScheduled ? permissions.edit : permissions.add) handleOpenRowSchedule(row, 'MOCK') }}
+                                disabled={mockScheduled ? !permissions.edit : !permissions.add}
+                                className={`w-full py-1 px-2.5 rounded text-[11px] font-semibold transition-all focus:outline-hidden shadow-xs ${
+                                  (mockScheduled ? !permissions.edit : !permissions.add)
+                                    ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                                    : mockScheduled
                                     ? 'bg-[#0284c7] hover:bg-[#0369a1] text-white'
                                     : 'bg-[#0a2540] hover:bg-[#1e3a8a] text-white'
-                                  }`}
+                                }`}
                               >
                                 {mockScheduled ? 'Scheduled' : 'Schedule'}
                               </button>
