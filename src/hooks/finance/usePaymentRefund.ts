@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { REFUND_SEARCH_KEY } from '@/hooks/academic/useRefundSearch'
 import {
   bulkRefundPassoutLibraryDeposit,
   createRefund,
@@ -107,6 +108,8 @@ export function useBulkRefundPassoutLibraryDeposit() {
       })
       queryClient.invalidateQueries({ queryKey: PAYMENT_REFUND_KEY })
       queryClient.invalidateQueries({ queryKey: OTHER_LEDGER_DETAILS_BATCH_KEY })
+      // A refunded line must drop off the candidate lists, or it can be picked again.
+      queryClient.invalidateQueries({ queryKey: REFUND_SEARCH_KEY })
     },
   })
 }
@@ -122,6 +125,7 @@ export function useCreateRefund() {
       queryClient.invalidateQueries({ queryKey: [...REFUNDS_BY_APPLICATION_KEY, applicationGuid] })
       queryClient.invalidateQueries({ queryKey: [...LEDGER_OPTIONS_KEY, applicationGuid] })
       queryClient.invalidateQueries({ queryKey: PAYMENT_REFUND_KEY })
+      queryClient.invalidateQueries({ queryKey: REFUND_SEARCH_KEY })
     },
   })
 }

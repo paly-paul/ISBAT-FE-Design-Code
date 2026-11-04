@@ -31,6 +31,44 @@ export function initialsFor(name: string) {
   return ((parts[0]?.[0] ?? '') + (parts[1]?.[0] ?? '')).toUpperCase() || '—'
 }
 
+// The selected student's card — the same .pcx-student card as Payment Console,
+// minus its fee figures, which don't apply to a refund.
+export function RefundStudentCard({ name, status, subtitle, chips, facts }: {
+  name: string
+  status?: string
+  subtitle?: string | null
+  chips: { label: string; value: string }[]
+  facts: { label: string; value: string | null | undefined }[]
+}) {
+  return (
+    <section className="card pcx-student" aria-label="Student">
+      <div className="pcx-student-top">
+        <div className="pcx-student-id">
+          <div className="pcx-avatar" aria-hidden="true">{initialsFor(name)}</div>
+          <div className="min-w-0">
+            <div className="pcx-name-row">
+              <h2 className="pcx-name">{name}</h2>
+              {status && <span className="pcx-pill pcx-pill-amber"><span className="pcx-dot" aria-hidden="true"></span>{status}</span>}
+            </div>
+            {subtitle && <p className="pcx-sub">{subtitle}</p>}
+            <div className="pcx-meta">
+              {chips.map(c => <span key={c.label} className="pcx-meta-chip">{c.label} <b className="tabular-nums">{c.value}</b></span>)}
+            </div>
+          </div>
+        </div>
+      </div>
+      <dl className="pcx-facts pcx-facts-few">
+        {facts.map(f => (
+          <div key={f.label}>
+            <dt>{f.label}</dt>
+            <dd>{f.value || '—'}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  )
+}
+
 export function todayYmd() {
   const now = new Date()
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
@@ -210,7 +248,7 @@ export function RefundLedgerPicker({ applicationGuid, studentGuid, showToast, on
               <div className="text-g400 mt-1" style={{ fontSize: 12.5 }}>No unrefunded ledger payments found for this application.</div>
             </div>
           ) : (
-            <div className="recgrid" style={{ gridTemplateColumns: '1.8fr 1fr 1fr 1.2fr' }}>
+            <div className="recgrid recgrid-scroll" style={{ gridTemplateColumns: '1.8fr 1fr 1fr 1.2fr' }}>
               <div className="recgrid-row recgrid-hdr">
                 <span>Ledger</span>
                 <span>Amount</span>
@@ -234,9 +272,9 @@ export function RefundLedgerPicker({ applicationGuid, studentGuid, showToast, on
                       {l.ledgerName}
                       {isSelected && <span className="text-blue" style={{ fontSize: 11, fontWeight: 600, marginLeft: 6 }}>Selected</span>}
                     </span>
-                    <span className="font-bold">{l.currencyCode} {fmtAmt(l.amount)}</span>
-                    <span>{formatDate(l.payDate)}</span>
-                    <span>{l.receipt}{l.receiptBookCode ? ` (${l.receiptBookCode})` : ''}</span>
+                    <span data-label="Amount" className="font-bold">{l.currencyCode} {fmtAmt(l.amount)}</span>
+                    <span data-label="Pay Date">{formatDate(l.payDate)}</span>
+                    <span data-label="Receipt">{l.receipt}{l.receiptBookCode ? ` (${l.receiptBookCode})` : ''}</span>
                   </div>
                 )
               })}

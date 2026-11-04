@@ -14,11 +14,11 @@ import {
 } from '@/hooks/finance/usePaymentRefund'
 import { useSearchCampusesInfinite } from '@/hooks/config/useCampuses'
 import { useSearchProgramMastersInfinite, useSearchProgramMastersByCampusInfinite } from '@/hooks/academic/useProgramMaster'
-import { useBatches } from '@/hooks/academic/useBatches'
+import { useFilteredBatches } from '@/hooks/academic/useBatches'
 import { useSearchIntakesInfinite } from '@/hooks/academic/useIntakes'
 import { flattenUniquePages } from '@/lib/pagination'
 import { AuthError } from '@/lib/api/client'
-import { fmtAmt, initialsFor, todayYmd } from './shared'
+import { fmtAmt, RefundStudentCard, todayYmd } from './shared'
 import { mockBulkRefund, mockCreateRefund, mockGetPassoutStudentByGuid, mockSearchPassout } from './mockData'
 
 // Category 2 — students with RegStatus = Passout, refunding a Library
@@ -36,14 +36,15 @@ import { mockBulkRefund, mockCreateRefund, mockGetPassoutStudentByGuid, mockSear
 // - Bulk: filter + table + multi-select across possibly several students,
 //   submitted in one POST /refund/passout-library-deposit/bulk call.
 // - Single: search-and-select exactly one student — same typeahead +
-//   pc-hero card pattern Rejected-by-Registrar (Category 1) uses — backed by
+//   student card pattern Rejected-by-Registrar (Category 1) uses — backed by
 //   the dedicated single-student detail endpoint, then refunded one line at
 //   a time through the generic POST /refund/applications/{applicationGuid}
 //   (there is no single-student bulk endpoint for this category; the guide
 //   is explicit that this flow reuses the same endpoint every other tab
 //   uses).
-// "Select all" in bulk mode only checks what's currently on screen — it is
-// a frontend-only affordance, not a server-side filter re-derive.
+// "Select all" in bulk mode only checks what's currently on screen, but a
+// selection carries across pages: each picked line is kept whole, so it can
+// still be submitted once its page is no longer the one showing.
 
 const PAGE_SIZE = 20
 
@@ -101,6 +102,16 @@ function linesFor(s: PassoutLibraryDepositRefundCandidateDto): SelectableLine[] 
   return [...(s.mainLedgerLines ?? []).map(toRow('main')), ...(s.otherLedgerLines ?? []).map(toRow('other'))]
 }
 
+// Per-currency totals, for display only: "USD 50 + UGX 100,000". Each line
+// still refunds its own amount.
+function currencyTotals(lines: SelectableLine[]) {
+  const totals = new Map<string, number>()
+  lines.forEach(l => totals.set(l.currencyCode, (totals.get(l.currencyCode) ?? 0) + l.amount))
+  return Array.from(totals, ([code, sum]) => `${code} ${fmtAmt(sum)}`).join(' + ')
+}
+
+type RefundResultLine = BulkRefundLineResultDto & { row?: SelectableLine }
+
 interface PassoutLibraryDepositTabProps {
   showToast: (msg: string, type?: string) => void
   permissionsCreate: boolean
@@ -113,7 +124,7 @@ export function PassoutLibraryDepositTab({ showToast, permissionsCreate, useMock
   function switchMode(next: 'bulk' | 'single') {
     if (next === mode) return
     setMode(next)
-    setSelectedKeys(new Set())
+    setSelectedLines(new Map())
     setResults(null)
   }
 
@@ -166,7 +177,7 @@ export function PassoutLibraryDepositTab({ showToast, permissionsCreate, useMock
     setSingleSearch(s.studentName)
     setSingleCommittedSearch('')
     setSingleSearchFocused(false)
-    setSelectedKeys(new Set())
+    setSelectedLines(new Map())
     setResults(null)
   }
 
@@ -174,7 +185,7 @@ export function PassoutLibraryDepositTab({ showToast, permissionsCreate, useMock
     setSelectedStudentGuid(null)
     setSingleSearch('')
     setSingleCommittedSearch('')
-    setSelectedKeys(new Set())
+    setSelectedLines(new Map())
     setResults(null)
   }
 
@@ -212,16 +223,15 @@ export function PassoutLibraryDepositTab({ showToast, permissionsCreate, useMock
   const campuses = useMemo(() => flattenUniquePages(campusQuery.data?.pages ?? [], c => c.campusGuid), [campusQuery.data])
   // GET /batches lists one intake at a time and defaults to the current
   // admission intake, so the picked intake/campus is passed through — passout
-  // students are mostly in older intakes' batches.
-  const { data: batchesData } = useBatches(1, 20, batchSearch, true, { intakeGuid: intakeGuid || null, campusGuid: campusGuid || null })
-  // Batch is scoped to whichever Programme is currently picked — filtered
-  // client-side (Batch has no server-side by-program search endpoint in
-  // this app), same pattern Filing/Payment's own programGuid+semesterGuid+
-  // batchTimeGuid batch lookups already use.
-  const batches = useMemo(() => {
-    const items = batchesData?.items ?? []
-    return programGuid ? items.filter(b => b.programGuid === programGuid) : items
-  }, [batchesData, programGuid])
+  // students are mostly in older intakes' batches. The server narrows to the
+  // picked Programme; filtering 20 rows here left most programmes with none.
+  const { data: batchesData } = useFilteredBatches(
+    1, 100, batchSearch,
+    { intakeGuid: intakeGuid || null, campusGuid: campusGuid || null },
+    { programGuids: [programGuid] },
+    mode === 'bulk' && !!programGuid,
+  )
+  const batches = useMemo(() => batchesData?.items ?? [], [batchesData])
 
   const { data, isLoading: isLoadingReal, isError } = usePassoutLibraryDepositSearch(
     { page, pageSize: PAGE_SIZE, intakeGuid: intakeGuid || undefined, programGuid: programGuid || undefined, batchGuid: batchGuid || undefined, campusGuid: campusGuid || undefined },
@@ -244,29 +254,30 @@ export function PassoutLibraryDepositTab({ showToast, permissionsCreate, useMock
   // correct request field; the two sources are never summed or merged.
   const rows: SelectableLine[] = useMemo(() => items.flatMap(linesFor), [items])
 
-  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set())
+  const [selectedLines, setSelectedLines] = useState<Map<string, SelectableLine>>(new Map())
   // A row with no linked application can't be refunded on either ledger
   // (the refund endpoint requires applicationGuid even for otherLedgerLines)
   // — excluded from selection entirely, not just visually disabled.
   const selectableRows = useMemo(() => rows.filter(r => !!r.applicationGuid), [rows])
-  const selectedRows = selectableRows.filter(r => selectedKeys.has(r.key))
-  const allVisibleSelected = selectableRows.length > 0 && selectableRows.every(r => selectedKeys.has(r.key))
+  const selectedRows = Array.from(selectedLines.values())
+  const allVisibleSelected = selectableRows.length > 0 && selectableRows.every(r => selectedLines.has(r.key))
+  const someVisibleSelected = selectableRows.some(r => selectedLines.has(r.key))
 
   function toggleRow(row: SelectableLine) {
     if (!row.applicationGuid) return
-    setSelectedKeys(prev => {
-      const next = new Set(prev)
+    setSelectedLines(prev => {
+      const next = new Map(prev)
       if (next.has(row.key)) next.delete(row.key)
-      else next.add(row.key)
+      else next.set(row.key, row)
       return next
     })
   }
 
   function toggleSelectAllVisible() {
-    setSelectedKeys(prev => {
-      const next = new Set(prev)
+    setSelectedLines(prev => {
+      const next = new Map(prev)
       if (allVisibleSelected) selectableRows.forEach(r => next.delete(r.key))
-      else selectableRows.forEach(r => next.add(r.key))
+      else selectableRows.forEach(r => next.set(r.key, r))
       return next
     })
   }
@@ -274,7 +285,15 @@ export function PassoutLibraryDepositTab({ showToast, permissionsCreate, useMock
   function updateFilters(fn: () => void) {
     fn()
     setPage(1)
-    setSelectedKeys(new Set())
+    setSelectedLines(new Map())
+  }
+
+  const hasFilters = !!(intakeGuid || campusGuid || programGuid || batchGuid)
+  function clearFilters() {
+    updateFilters(() => {
+      setIntakeGuid(''); setCampusGuid(''); setProgramGuid(''); setBatchGuid('')
+      setSelectedLabels({ intake: '', program: '', batch: '', campus: '' })
+    })
   }
 
   const intakeOptions = pinSelected(intakes.map(i => ({ value: i.intakeGuid, label: `${i.month} ${i.financialYear}` })), intakeGuid, selectedLabels.intake)
@@ -289,19 +308,27 @@ export function PassoutLibraryDepositTab({ showToast, permissionsCreate, useMock
 
   const [refundDate, setRefundDate] = useState(todayYmd)
   const [remarks, setRemarks] = useState('')
-  const [results, setResults] = useState<BulkRefundLineResultDto[] | null>(null)
+  const [results, setResults] = useState<RefundResultLine[] | null>(null)
   const [isSingleSubmitting, setIsSingleSubmitting] = useState(false)
 
   const bulkRefund = useBulkRefundPassoutLibraryDeposit()
   const createRefund = useCreateRefund()
 
-  function onSubmitDone(res: BulkRefundLineResultDto[]) {
-    setResults(res)
+  // Results name the student and ledger from the lines just sent (the response
+  // only has guids). Failed lines stay selected, remarks included, so they can
+  // be fixed and submitted again.
+  function onSubmitDone(res: BulkRefundLineResultDto[], sent: SelectableLine[]) {
+    const withRows: RefundResultLine[] = res.map(r => ({
+      ...r,
+      row: sent.find(l => l.applicationGuid === r.applicationGuid
+        && (l.source === 'main' ? l.ledgerGuid === r.ledgerGuid : l.ledgerGuid === r.ledgerOthersGuid)),
+    }))
+    setResults(withRows)
     const failCount = res.filter(r => !r.success).length
     if (failCount === 0) showToast(`Refunded ${res.length} line(s) successfully.`, 'success')
-    else showToast(`${res.length - failCount} of ${res.length} line(s) refunded — ${failCount} failed. See results below.`, 'warn')
-    setSelectedKeys(new Set())
-    setRemarks('')
+    else showToast(`${res.length - failCount} of ${res.length} line(s) refunded — ${failCount} failed. Failed lines are still selected.`, 'warn')
+    setSelectedLines(new Map(withRows.flatMap(r => (!r.success && r.row ? [[r.row.key, r.row] as const] : []))))
+    if (failCount === 0) setRemarks('')
   }
 
   function handleBulkSubmit() {
@@ -321,12 +348,12 @@ export function PassoutLibraryDepositTab({ showToast, permissionsCreate, useMock
     }))
 
     if (useMock) {
-      mockBulkRefund(lines).then(res => { forceMockRefresh(n => n + 1); onSubmitDone(res) })
+      mockBulkRefund(lines).then(res => { forceMockRefresh(n => n + 1); onSubmitDone(res, selectedRows) })
       return
     }
 
     bulkRefund.mutate(lines, {
-      onSuccess: onSubmitDone,
+      onSuccess: res => onSubmitDone(res, selectedRows),
       onError: () => showToast('Bulk refund request failed. Please try again.', 'error'),
     })
   }
@@ -366,7 +393,7 @@ export function PassoutLibraryDepositTab({ showToast, permissionsCreate, useMock
           ledgerGuid: submissions[i].input.ledgerGuid,
           ledgerOthersGuid: submissions[i].input.ledgerOthersGuid,
           success: true, refundGuid: r.refundGuid, error: null,
-        })))
+        })), selectedRows)
       })
       return
     }
@@ -388,39 +415,89 @@ export function PassoutLibraryDepositTab({ showToast, permissionsCreate, useMock
           error: err instanceof AuthError ? err.message : (err?.message || 'Failed to refund.'),
         }
       })
-      onSubmitDone(res)
+      onSubmitDone(res, selectedRows)
     })
   }
 
   const isSubmitPending = mode === 'bulk' ? bulkRefund.isPending : isSingleSubmitting
+  const selectedStudentCount = new Set(selectedRows.map(r => r.studentGuid)).size
+
+  const selectAllCheckbox = (
+    <input
+      type="checkbox"
+      ref={el => { if (el) el.indeterminate = someVisibleSelected && !allVisibleSelected }}
+      checked={allVisibleSelected}
+      disabled={selectableRows.length === 0}
+      onChange={toggleSelectAllVisible}
+      aria-label={mode === 'bulk' ? 'Select all refundable lines on this page' : 'Select all refundable lines'}
+      title={mode === 'bulk' ? 'Select all refundable lines on this page' : 'Select all refundable lines'}
+    />
+  )
+  const rowStyle = (r: SelectableLine): React.CSSProperties | undefined =>
+    !r.applicationGuid ? { opacity: 0.55 } : selectedLines.has(r.key) ? { background: 'var(--b50)' } : undefined
+
+  // Beside the lines in both modes, always there so the page doesn't jump on
+  // the first tick, and in view while a long list scrolls.
+  const refundPanel = (
+    <div className="card pc-split-sticky">
+      <div className="card-hdr">
+        <div className="card-title"><span className="ctitle-icon"><i className="lni lni-reload"></i></span> {mode === 'single' ? 'Refund Detail' : 'Bulk Refund'}</div>
+      </div>
+
+      <div className="info-box mb-[14px]" style={{ borderRadius: 'var(--rxs)', alignItems: 'center' }} aria-live="polite">
+        {selectedRows.length === 0 ? (
+          <div style={{ fontSize: 12.5, color: 'var(--g700)' }}>Select a line to refund it.</div>
+        ) : (
+          <div style={{ fontSize: 12.5, color: 'var(--g700)' }}>
+            <div className="text-g900 tabular-nums" style={{ fontWeight: 700, fontSize: 'var(--fs-md)' }}>{currencyTotals(selectedRows)}</div>
+            {selectedRows.length} line{selectedRows.length === 1 ? '' : 's'} selected
+            {mode === 'bulk' && ` · ${selectedStudentCount} student${selectedStudentCount === 1 ? '' : 's'}`}
+          </div>
+        )}
+      </div>
+
+      {/* Each selected line keeps its own amount — this date/remarks
+          pair applies to every refund submitted in this batch, it is
+          never combined into one editable total across lines/sources
+          (see the tab's own comment on the refund cap model). */}
+      <div className="mb-[14px]">
+        <div className="fg">
+          <div className="lbl">Refund Date <span className="req">*</span></div>
+          <DatePicker value={refundDate} onChange={setRefundDate} />
+        </div>
+        <div className="fg">
+          <div className="lbl">Remarks</div>
+          <textarea className="ctrl" rows={3} placeholder={selectedRows.length > 1 ? 'Applied to every selected line' : 'Reason for this refund'} value={remarks} onChange={e => setRemarks(e.target.value)} />
+        </div>
+      </div>
+
+      {!permissionsCreate && <p className="text-g500 mb-2" style={{ fontSize: 12 }}>You don&apos;t have permission to create refunds.</p>}
+      <div className="flex gap-[10px] justify-end flex-wrap">
+        {selectedRows.length > 0 && (
+          <button className="btn btn-neu" onClick={() => setSelectedLines(new Map())}><i className="lni lni-close"></i> Clear Selection</button>
+        )}
+        <button
+          className="btn btn-primary btn-lg"
+          disabled={isSubmitPending || !permissionsCreate || selectedRows.length === 0}
+          onClick={mode === 'bulk' ? handleBulkSubmit : handleSingleSubmit}
+        >
+          <i className="lni lni-checkmark"></i> {isSubmitPending ? 'Submitting…' : selectedRows.length === 0 ? 'Refund' : `Refund ${selectedRows.length} Line${selectedRows.length === 1 ? '' : 's'}`}
+        </button>
+      </div>
+    </div>
+  )
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex justify-end">
-        {/* Same role="switch" pill toggle Payment Refund's own page header
-            uses for its Mock Data/Live API flip — an on/off flip reads more
-            correctly here than the .pc-tabs pill switcher (that's for
-            picking one of several sibling tabs; this is a two-state mode
-            within one tab). */}
-        <label className="flex items-center gap-2 cursor-pointer" style={{ fontSize: 12.5, color: 'var(--g600)' }}>
-          <span className={mode === 'single' ? 'font-bold text-g700' : undefined}><i className="lni lni-user"></i> Single Student</span>
-          <span
-            role="switch"
-            aria-checked={mode === 'bulk'}
-            aria-label="Toggle between Single Student and Bulk mode"
-            onClick={() => switchMode(mode === 'single' ? 'bulk' : 'single')}
-            style={{
-              position: 'relative', width: 36, height: 20, borderRadius: 999, cursor: 'pointer', flexShrink: 0,
-              background: mode === 'bulk' ? 'var(--b500)' : 'var(--g300)', transition: 'background .15s',
-            }}
-          >
-            <span style={{
-              position: 'absolute', top: 2, left: mode === 'bulk' ? 18 : 2, width: 16, height: 16, borderRadius: '50%',
-              background: 'var(--white)', transition: 'left .15s', boxShadow: 'var(--neu-sm)',
-            }} />
-          </span>
-          <span className={mode === 'bulk' ? 'font-bold text-g700' : undefined}><i className="lni lni-layers"></i> Bulk</span>
-        </label>
+      <div>
+        <div className="ss-seg" role="group" aria-label="Refund mode">
+          <button type="button" className={`ss-seg-btn${mode === 'single' ? ' active' : ''}`} aria-pressed={mode === 'single'} onClick={() => switchMode('single')}>
+            <i className="lni lni-user" aria-hidden="true"></i> Single Student
+          </button>
+          <button type="button" className={`ss-seg-btn${mode === 'bulk' ? ' active' : ''}`} aria-pressed={mode === 'bulk'} onClick={() => switchMode('bulk')}>
+            <i className="lni lni-layers" aria-hidden="true"></i> Bulk
+          </button>
+        </div>
       </div>
 
       {mode === 'single' && (
@@ -445,7 +522,7 @@ export function PassoutLibraryDepositTab({ showToast, permissionsCreate, useMock
                   />
                 </div>
                 {selectedStudentGuid && (
-                  <button className="btn btn-neu" onClick={clearSingleSelection}><i className="lni lni-close"></i> New Search</button>
+                  <button className="btn btn-neu" onClick={clearSingleSelection}><i className="lni lni-close"></i> Clear</button>
                 )}
               </div>
 
@@ -488,22 +565,12 @@ export function PassoutLibraryDepositTab({ showToast, permissionsCreate, useMock
               <div className="card text-clr-red text-center" style={{ padding: 24, fontSize: 12.5 }}><i className="lni lni-warning"></i> Couldn&apos;t load this student, or they&apos;re no longer marked Passout.</div>
             ) : (
               <>
-                <div className="card p-0 overflow-hidden">
-                  <div className="pc-hero">
-                    <div className="pc-hero-top">
-                      <div className="pc-hero-avatar">{initialsFor(selectedStudent.studentName)}</div>
-                      <div className="flex-1 min-w-0">
-                        <div className="pc-hero-name truncate">{selectedStudent.studentName}</div>
-                        <div className="pc-hero-sub truncate">{selectedStudent.programName ?? '—'}</div>
-                        <span className="pc-hero-badge"><i className="lni lni-bookmark"></i> {selectedStudent.studentRegNo}</span>
-                      </div>
-                    </div>
-                    <div className="pc-hero-facts">
-                      <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Batch</span><span className="pc-hero-fact-val" title={selectedStudent.batchCode ?? '—'}>{selectedStudent.batchCode ?? '—'}</span></div>
-                      <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Campus</span><span className="pc-hero-fact-val" title={selectedStudent.campusName ?? '—'}>{selectedStudent.campusName ?? '—'}</span></div>
-                    </div>
-                  </div>
-                </div>
+                <RefundStudentCard
+                  name={selectedStudent.studentName}
+                  subtitle={selectedStudent.programName ?? '—'}
+                  chips={[{ label: 'Reg. No', value: selectedStudent.studentRegNo }]}
+                  facts={[{ label: 'Batch', value: selectedStudent.batchCode }, { label: 'Campus', value: selectedStudent.campusName }]}
+                />
 
                 {!selectedStudent.applicationGuid && (
                   <div className="warn-box">
@@ -522,6 +589,7 @@ export function PassoutLibraryDepositTab({ showToast, permissionsCreate, useMock
       <div className="card">
         <div className="card-hdr">
           <div className="card-title"><span className="ctitle-icon"><i className="lni lni-search-alt"></i></span> Search Passout / Library Deposit</div>
+          {hasFilters && <button type="button" className="btn btn-neu btn-sm" onClick={clearFilters}><i className="lni lni-close"></i> Clear Filters</button>}
         </div>
         <div className="g4">
           <div className="fg" style={{ marginBottom: 0 }}>
@@ -609,22 +677,27 @@ export function PassoutLibraryDepositTab({ showToast, permissionsCreate, useMock
         </div>
       </div>
 
-      <div className="card">
+      <div className="pc-tuition-split">
+      <div className="card min-w-0">
+        <div className="card-hdr">
+          <div className="card-title"><span className="ctitle-icon"><i className="lni lni-wallet"></i></span> Library Deposit Lines</div>
+        </div>
         {isLoading ? (
           <div className="text-g400 text-center" style={{ padding: 24, fontSize: 12.5 }}>Searching…</div>
         ) : isError ? (
           <div className="text-clr-red text-center" style={{ padding: 24, fontSize: 12.5 }}><i className="lni lni-warning"></i> Search failed. Please try again.</div>
         ) : rows.length === 0 ? (
-          <div className="text-g400 text-center" style={{ padding: 24, fontSize: 12.5 }}>No unrefunded Library Deposit lines found.</div>
+          <div className="text-g400 text-center" style={{ padding: 24, fontSize: 12.5 }}>
+            {hasFilters ? 'No unrefunded Library Deposit lines match these filters. Try clearing one.' : 'No unrefunded Library Deposit lines found.'}
+          </div>
         ) : (
           <>
             <ScrollTable className="no-sticky-col">
               <table>
                 <thead>
                   <tr>
-                    <th><input type="checkbox" checked={allVisibleSelected} onChange={toggleSelectAllVisible} title="Select all refundable lines on this page" /></th>
+                    <th>{selectAllCheckbox}</th>
                     <th>Student</th>
-                    <th>Reg No</th>
                     <th>Source</th>
                     <th>Ledger</th>
                     <th>Amount</th>
@@ -634,19 +707,21 @@ export function PassoutLibraryDepositTab({ showToast, permissionsCreate, useMock
                   {rows.map(r => {
                     const disabled = !r.applicationGuid
                     return (
-                      <tr key={r.key} className={disabled ? '' : 'cursor-pointer'} style={disabled ? { opacity: 0.55 } : undefined} onClick={() => toggleRow(r)}>
+                      <tr key={r.key} className={disabled ? '' : 'cursor-pointer'} style={rowStyle(r)} onClick={() => toggleRow(r)}>
                         <td>
                           <input
                             type="checkbox"
-                            checked={selectedKeys.has(r.key)}
+                            checked={selectedLines.has(r.key)}
                             disabled={disabled}
                             onChange={() => toggleRow(r)}
                             onClick={e => e.stopPropagation()}
                             title={disabled ? 'No linked application — cannot refund' : undefined}
                           />
                         </td>
-                        <td className="font-bold">{r.studentName}</td>
-                        <td>{r.studentRegNo}</td>
+                        <td>
+                          <div className="font-bold">{r.studentName}</div>
+                          <div className="text-g500" style={{ fontSize: 11 }}>{r.studentRegNo}</div>
+                        </td>
                         <td><span className={`badge ${r.source === 'main' ? 'badge-cyan' : 'badge-purple'}`}>{r.source === 'main' ? 'Main Ledger' : 'Other Ledger'}</span></td>
                         <td>{r.ledgerName}{disabled && <span className="text-clr-red" style={{ fontSize: 10.5, marginLeft: 6 }}>No application</span>}</td>
                         <td className="font-bold">{r.currencyCode} {fmtAmt(r.amount)}</td>
@@ -660,19 +735,30 @@ export function PassoutLibraryDepositTab({ showToast, permissionsCreate, useMock
           </>
         )}
       </div>
+      {refundPanel}
+      </div>
       </>
       )}
 
-      {mode === 'single' && selectedStudent && (
-        <div className="card">
-          {rows.length === 0 ? (
-            <div className="text-g400 text-center" style={{ padding: 24, fontSize: 12.5 }}>No unrefunded Library Deposit lines found for this student.</div>
-          ) : (
+      {mode === 'single' && selectedStudent && rows.length === 0 && (
+        <div className="card text-center" style={{ padding: 24 }}>
+          <div className="pc-receipt-check" style={{ fontSize: 22 }}><i className="lni lni-checkmark-circle"></i></div>
+          <div className="font-bold text-g700" style={{ fontSize: 13.5 }}>Nothing to refund</div>
+          <div className="text-g400 mt-1" style={{ fontSize: 12.5 }}>No unrefunded Library Deposit lines found for this student.</div>
+        </div>
+      )}
+
+      {mode === 'single' && selectedStudent && rows.length > 0 && (
+        <div className="pc-tuition-split">
+          <div className="card min-w-0">
+            <div className="card-hdr">
+              <div className="card-title"><span className="ctitle-icon"><i className="lni lni-wallet"></i></span> Library Deposit Lines</div>
+            </div>
             <ScrollTable className="no-sticky-col">
               <table>
                 <thead>
                   <tr>
-                    <th><input type="checkbox" checked={allVisibleSelected} onChange={toggleSelectAllVisible} title="Select all refundable lines" /></th>
+                    <th>{selectAllCheckbox}</th>
                     <th>Source</th>
                     <th>Ledger</th>
                     <th>Amount</th>
@@ -682,11 +768,11 @@ export function PassoutLibraryDepositTab({ showToast, permissionsCreate, useMock
                   {rows.map(r => {
                     const disabled = !r.applicationGuid
                     return (
-                      <tr key={r.key} className={disabled ? '' : 'cursor-pointer'} style={disabled ? { opacity: 0.55 } : undefined} onClick={() => toggleRow(r)}>
+                      <tr key={r.key} className={disabled ? '' : 'cursor-pointer'} style={rowStyle(r)} onClick={() => toggleRow(r)}>
                         <td>
                           <input
                             type="checkbox"
-                            checked={selectedKeys.has(r.key)}
+                            checked={selectedLines.has(r.key)}
                             disabled={disabled}
                             onChange={() => toggleRow(r)}
                             onClick={e => e.stopPropagation()}
@@ -702,41 +788,8 @@ export function PassoutLibraryDepositTab({ showToast, permissionsCreate, useMock
                 </tbody>
               </table>
             </ScrollTable>
-          )}
-        </div>
-      )}
-
-      {selectedRows.length > 0 && (
-        <div className="card">
-          <div className="card-hdr">
-            <div className="card-title"><span className="ctitle-icon"><i className="lni lni-reload"></i></span> {mode === 'single' ? 'Refund' : 'Bulk Refund'} — {selectedRows.length} line{selectedRows.length === 1 ? '' : 's'} selected</div>
           </div>
-
-          {/* Each selected line keeps its own amount — this date/remarks
-              pair applies to every refund submitted in this batch, it is
-              never combined into one editable total across lines/sources
-              (see the tab's own comment on the refund cap model). */}
-          <div className="g2 mb-[14px]">
-            <div className="fg">
-              <div className="lbl">Refund Date <span className="req">*</span></div>
-              <DatePicker value={refundDate} onChange={setRefundDate} />
-            </div>
-            <div className="fg">
-              <div className="lbl">Remarks</div>
-              <textarea className="ctrl" rows={1} placeholder="Applied to every selected line" value={remarks} onChange={e => setRemarks(e.target.value)} />
-            </div>
-          </div>
-
-          <div className="flex gap-[10px] justify-end flex-wrap">
-            <button className="btn btn-neu" onClick={() => setSelectedKeys(new Set())}><i className="lni lni-close"></i> Clear Selection</button>
-            <button
-              className="btn btn-primary btn-lg"
-              disabled={isSubmitPending || !permissionsCreate}
-              onClick={mode === 'bulk' ? handleBulkSubmit : handleSingleSubmit}
-            >
-              <i className="lni lni-checkmark"></i> {isSubmitPending ? 'Submitting…' : `Refund ${selectedRows.length} Line${selectedRows.length === 1 ? '' : 's'}`}
-            </button>
-          </div>
+          {refundPanel}
         </div>
       )}
 
@@ -748,14 +801,16 @@ export function PassoutLibraryDepositTab({ showToast, permissionsCreate, useMock
           </div>
           <ScrollTable className="no-sticky-col">
             <table>
-              <thead><tr><th>Application</th><th>Source</th><th>Status</th><th>Detail</th></tr></thead>
+              <thead><tr><th>Student</th><th>Source</th><th>Ledger</th><th>Amount</th><th>Status</th><th>Detail</th></tr></thead>
               <tbody>
                 {results.map((r, i) => (
                   <tr key={`${r.applicationGuid}-${r.ledgerGuid ?? r.ledgerOthersGuid}-${i}`}>
-                    <td className="font-mono">{r.applicationGuid}</td>
+                    <td className="font-bold">{r.row ? `${r.row.studentName} (${r.row.studentRegNo})` : r.applicationGuid}</td>
                     <td><span className={`badge ${r.ledgerGuid ? 'badge-cyan' : 'badge-purple'}`}>{r.ledgerGuid ? 'Main Ledger' : 'Other Ledger'}</span></td>
+                    <td>{r.row?.ledgerName ?? '—'}</td>
+                    <td className="font-bold">{r.row ? `${r.row.currencyCode} ${fmtAmt(r.row.amount)}` : '—'}</td>
                     <td>{r.success ? <span className="badge badge-green">Refunded</span> : <span className="badge badge-red">Failed</span>}</td>
-                    <td>{r.success ? (r.refundGuid ?? '—') : (r.error ?? 'Unknown error')}</td>
+                    <td>{r.success ? '—' : (r.error ?? 'Unknown error')}</td>
                   </tr>
                 ))}
               </tbody>

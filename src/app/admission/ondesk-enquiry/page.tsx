@@ -75,6 +75,7 @@ export default function OnDeskEnquiryPage() {
   // dial code is never joined into `mobile`, which stays digits only.
   // Defaults to Uganda once the full country list loads (effect below).
   const [mobileCountryGuid, setMobileCountryGuid] = useState('')
+  const [phoneCodeTouched, setPhoneCodeTouched] = useState(false)
   const [phone, setPhone]         = useState('')
   const [email, setEmail]         = useState('')
   const [dob, setDob]             = useState('')
@@ -170,7 +171,7 @@ export default function OnDeskEnquiryPage() {
   function selectCountry(guid: string) {
     setCountryGuid(guid)
     clearError('countryGuid')
-    if (guid) setMobileCountryGuid(guid)
+    if (guid && !phoneCodeTouched) setMobileCountryGuid(guid)
   }
 
   function clearError(field: string) {
@@ -218,6 +219,7 @@ export default function OnDeskEnquiryPage() {
     setIntakeGuid(''); setCampusGuid(''); setProgramGuid(''); setCountryGuid(homeCountry?.countryGuid ?? ''); setNotes('')
     setIsbatSourceGuid(''); setSourceName('')
     setSponsor(EMPTY_SPONSOR)
+    setPhoneCodeTouched(false)
     setErrors({})
   }
 
@@ -332,7 +334,7 @@ export default function OnDeskEnquiryPage() {
           <div className="fg">
             <label className="lbl">Phone <span className="text-clr-red">*</span></label>
             <div className="flex gap-2">
-              <SearchSelect options={phoneCodeOptions} value={mobileCountryGuid} onChange={v => { setMobileCountryGuid(v); clearError('phone') }} onSearch={setCountrySearch} onOpenChange={setPhoneCodePickerOpen} isLoading={countryQuery.isLoading} hasNextPage={countryQuery.hasNextPage} isFetchingNextPage={countryQuery.isFetchingNextPage} onLoadMore={() => countryQuery.fetchNextPage()} style={{ width: 108, flexShrink: 0 }} />
+              <SearchSelect options={phoneCodeOptions} value={mobileCountryGuid} onChange={v => { setMobileCountryGuid(v); setPhoneCodeTouched(true); clearError('phone') }} onSearch={setCountrySearch} onOpenChange={setPhoneCodePickerOpen} isLoading={countryQuery.isLoading} hasNextPage={countryQuery.hasNextPage} isFetchingNextPage={countryQuery.isFetchingNextPage} onLoadMore={() => countryQuery.fetchNextPage()} style={{ width: 108, flexShrink: 0 }} />
               <input className="ctrl flex-1" type="tel" inputMode="numeric" placeholder="e.g. 772123456" maxLength={PHONE_MAX} value={phone} onChange={e => { setPhone(e.target.value.replace(/\D/g, '').slice(0, PHONE_MAX)); clearError('phone') }} style={errors.phone ? { borderColor: 'var(--red)' } : undefined} />
             </div>
             {errors.phone && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.phone}</p>}

@@ -187,7 +187,7 @@ export function UeScheduleModal({ isOpen, onClose, examGuid, unitCode, unitName 
 
   return (
     <div className="modal-overlay open">
-      <div className="modal modal-md modal-flex" style={{ maxWidth: '700px', borderRadius: '12px' }} onClick={e => e.stopPropagation()}>
+      <div className="modal modal-md" style={{ maxWidth: '700px', borderRadius: '12px', height: 'auto', maxHeight: '90vh', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
         {/* Header */}
         <div className="modal-hdr modal-hdr-blue" style={{ display: 'flex', alignItems: 'center', padding: '16px 20px' }}>
           <div className="modal-title text-white font-medium text-base" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -199,7 +199,7 @@ export function UeScheduleModal({ isOpen, onClose, examGuid, unitCode, unitName 
         </div>
 
         {/* Content */}
-        <div className="modal-scroll p-6 pb-40 bg-white flex-1 overflow-y-auto">
+        <div className="p-6 bg-white overflow-y-auto" style={{ maxHeight: 'calc(90vh - 60px)' }}>
           <div className={`transition-opacity duration-300 ${isLoading ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
             
             <div className="mb-6 border-b border-slate-200 pb-4">

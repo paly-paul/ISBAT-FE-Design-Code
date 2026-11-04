@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
 import { useRejectedApplicationsSearch } from '@/hooks/academic/useRefundSearch'
-import { RefundLedgerPicker, initialsFor } from './shared'
+import { RefundLedgerPicker, RefundStudentCard } from './shared'
 import { mockSearchRejected } from './mockData'
 
 // Category 1 — applications rejected by the registrar
@@ -125,25 +125,12 @@ export function RejectedTab({ showToast, permissionsCreate, onRefunded, useMock 
 
       {selected && (
         <>
-          {/* Full-width hero card, promoted out of a 2-column split
-              (2026-09-15) — same move as Payment Console's Semester Payment
-              tab. */}
-          <div className="card p-0 overflow-hidden">
-            <div className="pc-hero">
-              <div className="pc-hero-top">
-                <div className="pc-hero-avatar">{initialsFor(selected.name)}</div>
-                <div className="flex-1 min-w-0">
-                  <div className="pc-hero-name truncate">{selected.name}</div>
-                  <div className="pc-hero-sub truncate">Rejected by Registrar</div>
-                  <span className="pc-hero-badge"><i className="lni lni-bookmark"></i> {selected.appRefNo}</span>
-                </div>
-              </div>
-              <div className="pc-hero-facts">
-                <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Email</span><span className="pc-hero-fact-val" title={selected.email ?? '—'}>{selected.email ?? '—'}</span></div>
-                <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Phone</span><span className="pc-hero-fact-val" title={selected.phone ?? '—'}>{selected.phone ?? '—'}</span></div>
-              </div>
-            </div>
-          </div>
+          <RefundStudentCard
+            name={selected.name}
+            status="Rejected by Registrar"
+            chips={[{ label: 'Application', value: selected.appRefNo }]}
+            facts={[{ label: 'Email', value: selected.email }, { label: 'Phone', value: selected.phone }]}
+          />
 
           <RefundLedgerPicker
             key={selected.applicationGuid}

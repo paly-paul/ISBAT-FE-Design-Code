@@ -2855,6 +2855,15 @@ input[type="number"] {
   }
 }
 
+/* The side panel stays in view beside a long list. Two columns only: stacked,
+   it would cover the list. */
+@media(min-width:1201px) {
+  .pc-split-sticky {
+    position: sticky;
+    top: calc(var(--hdr-h) + 16px);
+  }
+}
+
 /* ═══════════════════════════════════════
    PAYMENT CONSOLE — hero profile card, pill tabs,
    ledger item rows, live payment-summary strip.
@@ -4673,6 +4682,20 @@ th:hover .th-fi {
   display: grid;
   grid-template-columns: subgrid;
   grid-column: 1 / -1;
+}
+
+/* Long lists scroll inside the table, with the header kept in view, instead
+   of stretching the page. */
+.recgrid.recgrid-scroll {
+  max-height: min(60vh, 480px);
+  overflow-y: auto;
+  align-content: start;
+}
+
+.recgrid-scroll .recgrid-hdr {
+  position: sticky;
+  top: 0;
+  z-index: 1;
 }
 
 /* Compact 4-column variant — Ledger/Scheduled Amt/Paid/Outstanding, no
@@ -16614,6 +16637,9 @@ body:has(.drawer-overlay) {
    card's own width; below a 768px viewport it's 2, below 420px 1. A value
    longer than its column (a long email) wraps rather than being cut. */
 .pcx-student { container-type: inline-size }
+/* One or two facts (Payment Refund's card): sit together from the left instead
+   of spreading across the column grid below. */
+.pcx-facts.pcx-facts-few { display: flex; flex-wrap: wrap; gap: 14px clamp(24px, 6cqi, 56px) }
 .pcx-facts {
   margin: 0; padding: 16px clamp(16px, 5cqi, 28px) 18px; background: var(--white);
   display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px clamp(16px, 5cqi, 28px);
