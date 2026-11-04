@@ -32,7 +32,7 @@ const RAIL_DEFS: RailDef[] = [
   { id: 'student', name: 'Student', fallbackIcon: 'lni lni-user', footer: 'S10 · Student Service' },
   { id: 'attendance', name: 'Attendance', fallbackIcon: 'lni lni-alarm-clock', footer: 'S6 · Attendance Service' },
   { id: 'employee', name: 'Employee', fallbackIcon: 'lni lni-briefcase', footer: 'S4 · Employee Service' },
-  { id: 'assessment', name: 'Assessment', fallbackIcon: 'lni lni-pencil-alt', footer: 'S4 · Evaluation Lifecycle' },
+  { id: 'assessment', name: 'Assessment', fallbackIcon: 'lni lni-pencil-alt', footer: '' },
   { id: 'config', name: 'Config', fallbackIcon: 'lni lni-cog', footer: 'S0 · Core Config' },
   { id: 'activity-log', name: 'Activity Log', fallbackIcon: 'lni lni-list', footer: 'S0 · Audit & Activity' },
 ]
@@ -127,14 +127,14 @@ function getItemDisplayName(item: MenuNode): string {
   return item.name === 'IA Creation' || id === 'ia-creation'
     ? 'Assessment Scheduler'
     : id === 'mark-ue'
-    ? 'Mark Entry UE'
-    : id === 'mark-ue-verify'
-    ? 'Mark Verify UE'
-    : id === 'mark-cw'
-    ? 'Mark Entry CW'
-    : id === 'mark-cbt'
-    ? 'Mark Entry CBT'
-    : item.name
+      ? 'Mark Entry UE'
+      : id === 'mark-ue-verify'
+        ? 'Mark Verify UE'
+        : id === 'mark-cw'
+          ? 'Mark Entry CW'
+          : id === 'mark-cbt'
+            ? 'Mark Entry CBT'
+            : item.name
 }
 
 export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSections, toggleCollapse, activeRail, setActiveRail }: SidebarProps) {

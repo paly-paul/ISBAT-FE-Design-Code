@@ -81,10 +81,7 @@ export default function ProjectReviewsPage() {
 
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
         <div>
-          <div className="pg-title flex items-center gap-2">
-            <span>Project Reviews</span>
-            <span className="badge badge-purple text-[11px] font-semibold">Assessment Ops</span>
-          </div>
+          <div className="pg-title">Project Reviews</div>
           <div className="pg-sub text-xs text-slate-500">
             Manage reviews and track progress of student project proposals
           </div>
