@@ -5,8 +5,8 @@ import { ModalProps } from '../types'
 import DatePicker from '@/components/DatePicker'
 import { SearchSelect } from '@/components/SearchSelect'
 import { useFinanceCurrencies } from '@/hooks/finance/useFinanceCurrencies'
-import { useReceiptBooks } from '@/hooks/finance/useReceiptBooks'
-import { useProcBanks } from '@/hooks/finance/useProcBanks'
+import { useReceiptBookDropdown } from '@/hooks/finance/useReceiptBooks'
+import { ProcBankSearchSelect } from '@/components/ProcBankSearchSelect'
 import {
   useUpdatePayment,
   PAY_TYPE_LABELS,
@@ -74,11 +74,8 @@ export function EditPaymentModal({ isOpen, onClose, showToast, target, applicati
   const [procBankGuid, setProcBankGuid] = useState('')
 
   const { data: currencies = [] } = useFinanceCurrencies(isOpen)
-  const { data: allReceiptBooks = [] } = useReceiptBooks(isOpen)
-  const activeReceiptBooks = allReceiptBooks.filter(r => r.status === 1)
+  const { data: activeReceiptBooks = [] } = useReceiptBookDropdown(isOpen)
   const receiptBooks = activeReceiptBooks.filter(r => r.category === PAY_TYPE_TO_RECEIPT_CATEGORY[Number(payType)])
-  const { data: allProcBanks = [] } = useProcBanks(isOpen)
-  const banks = allProcBanks.filter(b => b.status === 2)
   const showBankField = Number(payType) > 1
 
   useEffect(() => {
@@ -230,9 +227,9 @@ export function EditPaymentModal({ isOpen, onClose, showToast, target, applicati
                 {showBankField && (
                   <div className="fg span2">
                     <div className="lbl">Bank <span className="req">*</span></div>
-                    <SearchSelect
+                    <ProcBankSearchSelect
                       placeholder="— Select Bank —"
-                      options={banks.map(b => ({ value: b.procBankGuid, label: `${b.bankName} — ${b.accountCode}` }))}
+                      showAccountCode
                       value={procBankGuid}
                       onChange={setProcBankGuid}
                     />

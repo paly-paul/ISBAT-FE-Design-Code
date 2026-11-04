@@ -1,8 +1,6 @@
 import { useMutation, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { getProgramApprovals, updateProgramApproval, ProgramMasterListDto, PaginatedProgramApprovals } from '@/lib/api/academic/programApproval'
-import { PROGRAM_MASTERS_KEY } from './useProgramMaster'
-
-const PROGRAM_APPROVALS_KEY = ['programApprovals']
+import { PROGRAM_APPROVALS_KEY, PROGRAM_MASTERS_KEY } from './useProgramMaster'
 
 // enabled defaults to true so every existing call site keeps eagerly
 // fetching exactly as before — only a caller that shouldn't hit the network

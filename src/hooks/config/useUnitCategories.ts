@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createUnitCategory, deleteUnitCategory, getUnitCategories, getUnitCategoryById, updateUnitCategory, UnitCategory, UnitCategoryInput } from '@/lib/api/academic/unitCategory'
+import { createUnitCategory, deleteUnitCategory, getUnitCategories, getUnitCategoriesDropdown, getUnitCategoryById, updateUnitCategory, UnitCategory, UnitCategoryInput } from '@/lib/api/academic/unitCategory'
 
 const UNIT_CATEGORIES_KEY = ['unit-categories']
 
@@ -11,6 +11,16 @@ export function useUnitCategories(enabled = true) {
     queryKey: UNIT_CATEGORIES_KEY,
     queryFn: () => getUnitCategories(),
     // Keep the cached list until a mutation explicitly refreshes it.
+    staleTime: Infinity,
+    gcTime: Infinity,
+    enabled,
+  })
+}
+
+export function useUnitCategoriesDropdown(enabled = true) {
+  return useQuery({
+    queryKey: [...UNIT_CATEGORIES_KEY, 'dropdown'],
+    queryFn: () => getUnitCategoriesDropdown(),
     staleTime: Infinity,
     gcTime: Infinity,
     enabled,

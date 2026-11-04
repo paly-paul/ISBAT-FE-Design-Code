@@ -1,5 +1,6 @@
 'use client'
 
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { useEffect, useState } from 'react'
 import { SearchSelect } from '@/components/SearchSelect'
 import { ScrollTable } from '@/components/ScrollTable'
@@ -42,6 +43,7 @@ interface Props {
 }
 
 export function TranscriptGenerator({ title, subtitle, intakeOptions, intakesLoading, programOptions, programsLoading, programLabel = 'Programme', defaultIntakeGuid, notice }: Props) {
+  const permissions = usePagePermissions()
   const [intakeGuid, setIntakeGuid] = useState('')
   const [programGuid, setProgramGuid] = useState('')
   const [examMonth, setExamMonth] = useState('')
@@ -88,9 +90,11 @@ export function TranscriptGenerator({ title, subtitle, intakeOptions, intakesLoa
           <div className="pg-sub">{subtitle}</div>
         </div>
         <div className="pg-actions">
+          {permissions.generate && (
           <button className="btn btn-primary" onClick={handleGenerate} disabled={!effectiveIntake || selected.size === 0 || generateMut.isPending}>
             {generateMut.isPending ? <i className="lni lni-spinner-solid animate-spin"></i> : <i className="lni lni-certificate"></i>} Generate selected ({selected.size})
           </button>
+          )}
         </div>
       </div>
 

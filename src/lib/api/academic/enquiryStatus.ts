@@ -26,6 +26,19 @@ export function getEnquiryStatuses(): Promise<EnquiryStatus[]> {
   return apiGet<EnquiryStatus[] | null>('/api/v1/admissions/enquiry-statuses').then((data: any) => Array.isArray(data) ? data : (data && typeof data === 'object' ? (data.items || Object.values(data).find(Array.isArray) || []) : []))
 }
 
+// GET /enquiry-statuses/dropdown (get-enquiry-status-dropdown.md). Soft-deleted rows
+// are excluded.
+export interface EnquiryStatusDropdownItem {
+  enquiryStatusGuid: string
+  enquiryStatusName: string
+  enquiryStatusCode: string
+}
+
+export function getEnquiryStatusesDropdown(): Promise<EnquiryStatusDropdownItem[]> {
+  if (MOCK_AUTH) return Promise.resolve(mockEnquiryStatuses)
+  return apiGet<EnquiryStatusDropdownItem[] | null>('/api/v1/admissions/enquiry-statuses/dropdown').then(data => data ?? [])
+}
+
 // Create a new enquiry status and return the saved record.
 export function createEnquiryStatus(input: EnquiryStatusInput): Promise<EnquiryStatus> {
   if (MOCK_AUTH) {

@@ -25,6 +25,20 @@ export function getFollowUpStatuses(): Promise<FollowUpStatus[]> {
   return apiGet<FollowUpStatus[] | null>('/api/v1/admissions/follow-up-statuses').then((data: any) => Array.isArray(data) ? data : (data && typeof data === 'object' ? (data.items || Object.values(data).find(Array.isArray) || []) : []))
 }
 
+// GET /follow-up-statuses/dropdown (get-follow-up-status-dropdown.md). Soft-deleted rows
+// are excluded.
+export interface FollowUpStatusDropdownItem {
+  followUpStatusGuid: string
+  followUpStatusName: string
+  followUpStatusCode: string
+  isClose: number
+}
+
+export function getFollowUpStatusesDropdown(): Promise<FollowUpStatusDropdownItem[]> {
+  if (MOCK_AUTH) return Promise.resolve(mockFollowUpStatuses)
+  return apiGet<FollowUpStatusDropdownItem[] | null>('/api/v1/admissions/follow-up-statuses/dropdown').then(data => data ?? [])
+}
+
 // Create a new follow-up status and return the saved record.
 export function createFollowUpStatus(input: FollowUpStatusInput): Promise<FollowUpStatus> {
   if (MOCK_AUTH) {

@@ -23,6 +23,7 @@ import {
   BulkMovementStatusDto,
 } from '@/hooks/academic/useSessionManagement'
 import { AuthError } from '@/lib/api/client'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 // Redesigned per the legacy ISMS "Session Management" screen (2026-09-05),
 // then wired to the real session-management/*.md endpoints (repo root,
@@ -68,6 +69,7 @@ function toTarget(row: SessionListItemDto): MovementTarget {
 }
 
 export default function SessionMovementPage() {
+  const permissions = usePagePermissions()
   const router = useRouter()
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
@@ -251,9 +253,11 @@ export default function SessionMovementPage() {
             <div className="card-title"><span className="ctitle-icon"><i className="lni lni-reload"></i></span> Session Movement</div>
             {/* Bulk action — intake-scoped, no per-row selection: the server
                 decides which sessions are eligible when the run executes. */}
-            <button className="btn btn-primary btn-sm" disabled={!intakeGuid} onClick={openBulkConfirm}>
-              <i className="lni lni-reload"></i> Bulk Session Movement
-            </button>
+            {permissions.execute && (
+              <button className="btn btn-primary btn-sm" disabled={!intakeGuid} onClick={openBulkConfirm}>
+                <i className="lni lni-reload"></i> Bulk Session Movement
+              </button>
+            )}
           </div>
 
           {!intakeGuid ? (
@@ -294,7 +298,7 @@ export default function SessionMovementPage() {
                               >
                                 {RESULT_LABELS[blocked]}
                               </span>
-                            ) : (
+                            ) : permissions.execute && (
                               <button
                                 className="btn btn-primary btn-sm"
                                 style={{ width: '100%', justifyContent: 'center', borderRadius: 999 }}

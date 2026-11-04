@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Bank, BankInput, createBank, deleteBank, getBankById, getBanks, updateBank } from '@/lib/api/finance/bank'
+import { Bank, BankInput, createBank, deleteBank, getBankById, getBanks, getBanksDropdown, updateBank } from '@/lib/api/finance/bank'
 
 const BANKS_KEY = ['banks']
 
@@ -12,6 +12,16 @@ export function useBanks() {
     // instead of on every remount/window focus.
     staleTime: Infinity,
     gcTime: Infinity,
+  })
+}
+
+export function useBanksDropdown(enabled = true) {
+  return useQuery({
+    queryKey: [...BANKS_KEY, 'dropdown'],
+    queryFn: () => getBanksDropdown(),
+    staleTime: Infinity,
+    gcTime: Infinity,
+    enabled,
   })
 }
 

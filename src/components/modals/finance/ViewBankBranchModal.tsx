@@ -1,7 +1,7 @@
 'use client'
 import { ModalProps } from '../types'
 import { useBankBranch } from '@/hooks/finance/useBankBranches'
-import { useBanks } from '@/hooks/finance/useBanks'
+import { useBanksDropdown } from '@/hooks/finance/useBanks'
 import { STATUS_LABELS } from '@/lib/api/finance/procBank'
 import { AuthError } from '@/lib/api/client'
 import { FailurePopup } from '../shared/FailurePopup'
@@ -23,7 +23,7 @@ function Field({ label, value, mono, wide }: { label: string; value: React.React
 
 export function ViewBankBranchModal({ isOpen, onClose, bankBranchGuid, onEdit, canEdit }: ViewBankBranchModalProps) {
   const { data: branch, isLoading, isError, error } = useBankBranch(bankBranchGuid, isOpen)
-  const { data: banks = [] } = useBanks()
+  const { data: banks = [] } = useBanksDropdown()
 
   if (!isOpen) return null
 

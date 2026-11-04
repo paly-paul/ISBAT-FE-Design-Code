@@ -1,5 +1,6 @@
 'use client'
 
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { useState, useEffect } from 'react'
 import { TableSearch } from '@/components/TableSearch'
 import { ActionMenu } from '@/components/ActionMenu'
@@ -15,6 +16,7 @@ import {
 import { GraduateTranscriptCollectionRow } from '@/lib/api/assessment/graduateTranscript'
 
 export default function GraduateTranscriptCollectionPage() {
+  const permissions = usePagePermissions()
   const [searchInput, setSearchInput] = useState('')
   const [appliedSearch, setAppliedSearch] = useState('')
   const [toastMessage, setToastMessage] = useState<{ msg: string, type: 'success' | 'error' | 'warn' | 'info' | 'danger' } | null>(null)
@@ -94,7 +96,7 @@ export default function GraduateTranscriptCollectionPage() {
                   <tr key={row.transcriptGuid}>
                     <td className="text-center">
                       <ActionMenu>
-                        {!row.collectionDate && (
+                        {!row.collectionDate && permissions.add && (
                           <button
                             className="btn btn-sm btn-outline-primary w-full text-left"
                             onClick={() => setRecordingRow(row)}

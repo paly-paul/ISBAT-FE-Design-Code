@@ -85,18 +85,25 @@ export default function CourseAllocationPage() {
   }, [facultyDropdownItems, editingRow, schoolGuid])
 
   const [search, setSearch] = useState('')
-  const searchTrimmed = search.trim().toLowerCase()
+  const [committedSearch, setCommittedSearch] = useState('')
+  const [lecturerFilter, setLecturerFilter] = useState('')
   const [page, setPage] = useState(1)
-  // Full list (the endpoint has no paging/search — see useProgramPlannings);
-  // search, sort and page all happen here.
-  const { data, isLoading } = useProgramPlannings()
-  const allRows = useMemo(() => data?.items ?? [], [data])
+  useEffect(() => {
+    const t = setTimeout(() => setCommittedSearch(search.trim()), 300)
+    return () => clearTimeout(t)
+  }, [search])
+  // One server page, newest intake first. The API's search doesn't cover the
+  // lecturer's name, so that has its own filter.
+  const { data, isLoading } = useProgramPlannings(page, PAGE_SIZE, { search: committedSearch, lecturerGuid: lecturerFilter || null })
+  const rows = useMemo(() => data?.items ?? [], [data])
+  const lecturerFilterOptions = useMemo(() => employeeDropdownItems.map(e => ({ value: e.employeeGuid, label: e.displayName })), [employeeDropdownItems])
+  const hasListFilters = !!search.trim() || !!lecturerFilter
   const createPlanning = useCreateProgramPlanning()
   const updatePlanning = useUpdateProgramPlanning()
   const deletePlanning = useDeleteProgramPlanning()
   const [viewRow, setViewRow] = useState<ProgramPlanningDto | null>(null)
   const formRef = useRef<HTMLDivElement>(null)
-  const [deleteTarget, setDeleteTarget] = useState<(typeof allRows)[number] | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<ProgramPlanningDto | null>(null)
 
   // Same "swap to SuccessPopup on save" pattern used across the rest of the
   // academic module (CourseUnitFormModal, EditIntakeModal, bulk-intake-edit,
@@ -105,29 +112,9 @@ export default function CourseAllocationPage() {
   // module treat deletes vs. saves differently too.
   const [saved, setSaved] = useState<{ title: string; subtitle: string } | null>(null)
 
-  // ProgramPlanningDto has no createdDate/timestamp of its own (see
-  // get-program-plannings.md's field table) — the closest real notion of
-  // "newest" this data has is intake recency, which is exactly what the
-  // endpoint's own documented default order already uses ("Ordered by
-  // IntIntake descending — newest intake first"). Re-affirmed client-side
-  // here (by intakeCode, which the doc confirms is that same surrogate
-  // key's business-facing counterpart) rather than trusted blindly, so the
-  // table stays newest-to-oldest even across a client-side filter/refetch
-  // that might not preserve the server's original row order.
-  // Search (lecturer, course unit code/name, school, session) then sort the
-  // WHOLE list newest session first, then page — sorting only the visible
-  // page (as before) couldn't put the newest rows on page 1.
-  const filteredRows = useMemo(() => {
-    const matches = searchTrimmed
-      ? allRows.filter(r => [r.employeeName, r.courseUnitCode, r.courseUnitName, r.facultyCode, r.facultyName, r.description, r.intakeCode != null ? String(r.intakeCode) : null]
-          .some(v => v?.toLowerCase().includes(searchTrimmed)))
-      : allRows
-    return [...matches].sort((a, b) => (b.intakeCode ?? 0) - (a.intakeCode ?? 0))
-  }, [allRows, searchTrimmed])
-  const totalCount = filteredRows.length
+  const totalCount = data?.totalCount ?? 0
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
   const safePage = Math.min(page, totalPages)
-  const sortedRows = filteredRows.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
 
   // Clamp only against loaded data, so a pending fetch can't snap the
   // page back to 1 (same fix as Room Management / Batch Summary).
@@ -137,12 +124,13 @@ export default function CourseAllocationPage() {
 
   useEffect(() => {
     setPage(1)
-  }, [searchTrimmed])
+  }, [committedSearch, lecturerFilter])
 
   // post-program-planning.md: lecturer / unit / school / intake required;
-  // (lecturer, unit, intake) must be unique. load and term are optional ints
-  // with no API rule — a 0 teaching load is meaningless, so the form
-  // requires at least 1 when one is entered.
+  // (lecturer, unit, intake) must be unique, which the API enforces (see
+  // serverFieldError) since only one page is loaded here. load and term are
+  // optional ints with no API rule — a 0 teaching load is meaningless, so the
+  // form requires at least 1 when one is entered.
   const DUPLICATE_MESSAGE = 'This lecturer is already allocated to this course unit for this academic session.'
   function validate() {
     const e: Record<string, string> = {}
@@ -151,11 +139,6 @@ export default function CourseAllocationPage() {
     if (!schoolGuid) e.schoolGuid = 'School / Faculty is required'
     if (!courseUnit) e.courseUnit = 'Course Unit is required'
     if (load.trim() && !(Number.isInteger(+load) && +load >= 1)) e.load = 'Teaching Load must be at least 1'
-    // Catch the duplicate before the round trip — the full list is loaded.
-    if (!e.courseUnit && intakeGuid && lecturerGuid && courseUnit
-      && allRows.some(r => r.programPlanGuid !== editingRow?.programPlanGuid && r.lecturerGuid === lecturerGuid && r.unitGuid === courseUnit.value && r.intakeGuid === intakeGuid)) {
-      e.courseUnit = DUPLICATE_MESSAGE
-    }
     setErrors(e)
     scrollToFirstError(e)
     return Object.keys(e).length === 0
@@ -419,9 +402,19 @@ export default function CourseAllocationPage() {
       <div className="card">
         <div className="card-hdr">
           <div className="card-title"><span className="ctitle-icon"><i className="lni lni-graduation"></i></span> Allocated List</div>
-          <div className="inp-wrap" style={{ maxWidth: 260, width: '100%' }}>
-            <span className="inp-icon"><i className="lni lni-search-alt"></i></span>
-            <input className="ctrl" placeholder="Search…" value={search} onChange={e => setSearch(e.target.value)} />
+          <div className="flex gap-2 flex-wrap" style={{ flex: '1 1 auto', justifyContent: 'flex-end', minWidth: 0 }}>
+            <SearchSelect
+              placeholder="All lecturers"
+              options={lecturerFilterOptions}
+              value={lecturerFilter}
+              onChange={setLecturerFilter}
+              isLoading={isLecturersLoading}
+              style={{ flex: '0 1 240px', minWidth: 180 }}
+            />
+            <div className="inp-wrap" style={{ flex: '0 1 260px', minWidth: 180 }}>
+              <span className="inp-icon"><i className="lni lni-search-alt"></i></span>
+              <input className="ctrl" placeholder="Course unit, school or session…" aria-label="Search allocations" value={search} onChange={e => setSearch(e.target.value)} />
+            </div>
           </div>
         </div>
         <ScrollTable>
@@ -440,10 +433,10 @@ export default function CourseAllocationPage() {
             <tbody>
               {isLoading
                 ? <TableLoadingState colSpan={999} />
-                : sortedRows.length === 0
-                  ? <EmptyState colSpan={999} hasFilters={!!search.trim()} onClearFilters={() => setSearch('')} />
+                : rows.length === 0
+                  ? <EmptyState colSpan={999} hasFilters={hasListFilters} onClearFilters={() => { setSearch(''); setLecturerFilter('') }} />
                   : null}
-              {!isLoading && sortedRows.map(r => (
+              {!isLoading && rows.map(r => (
                 <tr key={r.programPlanGuid} style={editingRow?.programPlanGuid === r.programPlanGuid ? { background: 'var(--b50)' } : undefined}>
                   <td>
                     <ActionMenu>

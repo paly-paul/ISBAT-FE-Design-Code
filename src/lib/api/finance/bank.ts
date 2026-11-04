@@ -38,6 +38,19 @@ export function getBanks(): Promise<Bank[]> {
   return apiGet<BankListResponse | null>(`/api/v1/finance/banks?page=1&pageSize=${BANKS_LOAD_SIZE}`).then(data => data?.items ?? [])
 }
 
+// GET /banks/dropdown (get-bank-dropdown.md). Soft-deleted banks are excluded;
+// inactive ones are still returned.
+export interface BankDropdownItem {
+  bankGuid: string
+  shortCode: string
+  bankName: string
+}
+
+export function getBanksDropdown(): Promise<BankDropdownItem[]> {
+  if (MOCK_AUTH) return Promise.resolve(mockBanks)
+  return apiGet<BankDropdownItem[] | null>('/api/v1/finance/banks/dropdown').then(data => data ?? [])
+}
+
 export function createBank(input: BankInput): Promise<Bank> {
   if (MOCK_AUTH) {
     const bank: Bank = { bankGuid: crypto.randomUUID(), ...input }

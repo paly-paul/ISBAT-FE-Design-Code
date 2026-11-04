@@ -1,5 +1,6 @@
 'use client'
 
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { useEffect, useMemo, useState } from 'react'
 import { SearchSelect } from '@/components/SearchSelect'
 import { ScrollTable } from '@/components/ScrollTable'
@@ -50,6 +51,7 @@ function PercentBar({ mark, max }: { mark: number | null | undefined; max: numbe
 }
 
 export default function ResitIaResultsPage() {
+  const permissions = usePagePermissions()
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 
@@ -181,9 +183,11 @@ export default function ResitIaResultsPage() {
                 <i className="lni lni-search-alt inp-icon"></i>
                 <input className="ctrl" placeholder="Student no., name, programme or unit…" maxLength={100} value={searchInput} onChange={e => setSearchInput(e.target.value)} />
               </div>
-              <button className="btn btn-neu btn-sm" onClick={handleExport} disabled={exporting || !totalCount}>
-                <i className="lni lni-download"></i> {exporting ? 'Exporting…' : 'Export to Excel'}
-              </button>
+              {permissions.export && (
+                <button className="btn btn-neu btn-sm" onClick={handleExport} disabled={exporting || !totalCount}>
+                  <i className="lni lni-download"></i> {exporting ? 'Exporting…' : 'Export to Excel'}
+                </button>
+              )}
             </div>
           </div>
 

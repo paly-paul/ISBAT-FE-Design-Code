@@ -3,8 +3,7 @@ import { useEffect, useState } from 'react'
 import { stripLeadingZeros } from '@/lib/errorMessages'
 import { ModalProps } from '../types'
 import DatePicker from '@/components/DatePicker'
-import { SearchSelect } from '@/components/SearchSelect'
-import { useProcBanks } from '@/hooks/finance/useProcBanks'
+import { ProcBankSearchSelect } from '@/components/ProcBankSearchSelect'
 import { useUpdatePaymentOther } from '@/hooks/finance/usePaymentConsole'
 import { AuthError } from '@/lib/api/client'
 
@@ -45,8 +44,6 @@ export function EditPaymentOtherModal({ isOpen, onClose, showToast, target }: Ed
   const [bankGuid, setBankGuid] = useState('')
   const [remarks, setRemarks] = useState('')
 
-  const { data: allProcBanks = [] } = useProcBanks()
-  const banks = allProcBanks.filter(b => b.status === 2)
 
   useEffect(() => {
     if (isOpen && target) {
@@ -119,9 +116,9 @@ export function EditPaymentOtherModal({ isOpen, onClose, showToast, target }: Ed
 
           <div className="fg mb-[14px]">
             <div className="lbl">Bank <span className="text-g400" style={{ fontWeight: 500 }}>(optional)</span></div>
-            <SearchSelect
+            <ProcBankSearchSelect
               placeholder="— Select Bank —"
-              options={banks.map(b => ({ value: b.procBankGuid, label: `${b.bankName} — ${b.accountCode}` }))}
+              showAccountCode
               value={bankGuid}
               onChange={setBankGuid}
             />

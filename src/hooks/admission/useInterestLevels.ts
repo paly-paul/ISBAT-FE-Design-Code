@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createInterestLevel, deleteInterestLevel, getInterestLevelById, getInterestLevels, InterestLevel, InterestLevelInput, updateInterestLevel } from '@/lib/api/admission/interestLevel'
+import { createInterestLevel, deleteInterestLevel, getInterestLevelsDropdown, getInterestLevelById, getInterestLevels, InterestLevel, InterestLevelInput, updateInterestLevel } from '@/lib/api/admission/interestLevel'
 
 const INTEREST_LEVELS_KEY = ['interest-levels']
 
@@ -10,6 +10,16 @@ export function useInterestLevels(enabled = true) {
     // Never treat the cached list as stale on its own — only refetch when a
     // mutation (create/update/delete) explicitly invalidates this key below,
     // instead of on every remount/window focus.
+    staleTime: Infinity,
+    gcTime: Infinity,
+    enabled,
+  })
+}
+
+export function useInterestLevelsDropdown(enabled = true) {
+  return useQuery({
+    queryKey: [...INTEREST_LEVELS_KEY, 'dropdown'],
+    queryFn: () => getInterestLevelsDropdown(),
     staleTime: Infinity,
     gcTime: Infinity,
     enabled,

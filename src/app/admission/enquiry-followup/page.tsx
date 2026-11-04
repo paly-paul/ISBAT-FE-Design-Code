@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Toast } from '@/components/Toast'
 import { ScrollTable } from '@/components/ScrollTable'
@@ -11,14 +11,9 @@ import { EnquiryAssignModal } from '@/components/modals/admission/EnquiryAssignM
 import { NewFollowUpLogModal, InitialFollowUpData } from '@/components/modals/admission/NewFollowUpLogModal'
 import { useEnquiryFollowUpsByAdvisor, useCreateEnquiryFollowUp } from '@/hooks/admission/useEnquiryFollowUps'
 import { useUpdateEnquiry } from '@/hooks/admission/useEnquiries'
-import { usePagination } from '@/hooks/usePagination'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
-// Fetched once at a size large enough to cover the whole advisor-scoped
-// list client-side, same pattern as enquiry-followup-master/page.tsx (this
-// endpoint is the advisor-filtered slice of the same data, so it's smaller).
-const FETCH_ALL_PAGE_SIZE = 1000
 // Don't narrow the table (or open the search dropdown) until the user's
 // typed at least this many characters — same convention as the other
 // master pages' search boxes.
@@ -37,9 +32,18 @@ export default function EnquiryFollowupPage() {
   const [viewingGuid, setViewingGuid] = useState<string | null>(null)
   const [selectedFollowUp, setSelectedFollowUp] = useState<InitialFollowUpData | null>(null)
   const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
+  const [debouncedSearch, setDebouncedSearch] = useState('')
 
-  const { data, isLoading } = useEnquiryFollowUpsByAdvisor(1, FETCH_ALL_PAGE_SIZE)
-  const allRows = data?.items ?? []
+  useEffect(() => {
+    const trimmed = search.trim()
+    if (trimmed.length < MIN_SEARCH_CHARS) { setDebouncedSearch(''); return }
+    const t = setTimeout(() => setDebouncedSearch(trimmed), 400)
+    return () => clearTimeout(t)
+  }, [search])
+
+  const { data, isLoading, isFetching } = useEnquiryFollowUpsByAdvisor(page, PAGE_SIZE, debouncedSearch)
+  const rows = data?.items ?? []
   const updateEnquiry = useUpdateEnquiry()
   const createFollowUp = useCreateEnquiryFollowUp()
 
@@ -47,18 +51,21 @@ export default function EnquiryFollowupPage() {
     return row.programName ?? row.programCode ?? '—'
   }
 
-  function matchesSearch(r: typeof allRows[number], term: string) {
-    return `${r.enquiryCode} ${r.studentName} ${resolveProgramName(r)} ${r.enquiryStatusName ?? ''} ${r.followUpStatusName ?? ''} ${r.enquirySourceName ?? ''}`
-      .toLowerCase()
-      .includes(term)
-  }
-
   const searchTrimmed = search.trim()
-  const filteredRows = allRows.filter(r => searchTrimmed.length < MIN_SEARCH_CHARS || matchesSearch(r, searchTrimmed.toLowerCase()))
-  const searchMatches = searchTrimmed.length >= MIN_SEARCH_CHARS
-    ? allRows.filter(r => matchesSearch(r, searchTrimmed.toLowerCase())).slice(0, 8)
-    : []
-  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
+  const searchPending = searchTrimmed.length >= MIN_SEARCH_CHARS && (debouncedSearch !== searchTrimmed || isFetching)
+  // The server does the matching, so the dropdown just shows its first results.
+  const searchMatches = searchTrimmed.length >= MIN_SEARCH_CHARS ? rows.slice(0, 8) : []
+  const totalCount = data?.totalCount ?? 0
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
+
+  useEffect(() => {
+    setPage(1)
+  }, [debouncedSearch])
+
+  // Logging a follow-up can take the only row on the last page off this list.
+  useEffect(() => {
+    if (data && page > totalPages) setPage(totalPages)
+  }, [data, page, totalPages])
 
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
   function openModal(id: string) { setOpenModals(prev => new Set(prev).add(id)) }
@@ -70,7 +77,7 @@ export default function EnquiryFollowupPage() {
     setSearch('')
   }
 
-  function handleCreateFollowUp(r: typeof allRows[number]) {
+  function handleCreateFollowUp(r: typeof rows[number]) {
     setSelectedFollowUp({
       enquiryGuid: r.enquiryGuid,
       enquiryCode: r.enquiryCode,
@@ -97,10 +104,11 @@ export default function EnquiryFollowupPage() {
           <h2 className="text-base font-semibold text-g800">Allocated Follow-ups</h2>
           <TableSearch
             className="w-56"
-            placeholder="Search by name, ref, status…"
+            placeholder="Search by name, ref, mobile, email…"
             value={search}
             onChange={setSearch}
             results={searchMatches.map(r => ({ id: r.enquiryGuid, primary: r.enquiryCode, secondary: r.studentName }))}
+            loading={searchPending}
             minChars={MIN_SEARCH_CHARS}
             onSelect={(r) => openViewModal(r.id)}
           />
@@ -109,12 +117,12 @@ export default function EnquiryFollowupPage() {
           <table>
             <thead><tr><th style={{ width: 48 }}></th><th>Enq. Ref</th><th>Student Name</th><th>Programme Interest</th><th>Enquiry Status</th><th>Follow-up Status</th><th>Source</th><th>Next Follow-up</th></tr></thead>
             <tbody>
-              {isLoading
+              {(isLoading || searchPending)
                 ? <TableLoadingState colSpan={999} />
-                : filteredRows.length === 0
+                : rows.length === 0
                   ? <EmptyState colSpan={999} hasFilters={!!search.trim()} onClearFilters={() => setSearch('')} />
                   : null}
-              {pageItems.map(r => (
+              {!(isLoading || searchPending) && rows.map(r => (
                 <tr key={r.enquiryGuid}>
                   <td>
                     <ActionMenu>

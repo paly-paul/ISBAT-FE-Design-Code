@@ -22,6 +22,18 @@ export function getFollowUpModes(): Promise<FollowUpMode[]> {
   return apiGet<FollowUpMode[] | null>('/api/v1/admissions/followup-modes').then((data: any) => Array.isArray(data) ? data : (data && typeof data === 'object' ? (data.items || Object.values(data).find(Array.isArray) || []) : []))
 }
 
+// GET /followup-modes/dropdown (get-followup-mode-dropdown.md). Soft-deleted rows
+// are excluded.
+export interface FollowUpModeDropdownItem {
+  followUpModeGuid: string
+  followUpModeName: string
+}
+
+export function getFollowUpModesDropdown(): Promise<FollowUpModeDropdownItem[]> {
+  if (MOCK_AUTH) return Promise.resolve(mockFollowUpModes)
+  return apiGet<FollowUpModeDropdownItem[] | null>('/api/v1/admissions/followup-modes/dropdown').then(data => data ?? [])
+}
+
 // Create a new followup mode and return the saved record.
 export function createFollowUpMode(input: FollowUpModeInput): Promise<FollowUpMode> {
   if (MOCK_AUTH) {

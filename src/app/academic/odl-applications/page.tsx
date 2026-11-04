@@ -10,10 +10,12 @@ import { EmptyState } from '@/components/EmptyState'
 import { SearchSelect } from '@/components/SearchSelect'
 import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
 
 export default function Page() {
+  const permissions = usePagePermissions()
   const router = useRouter()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
@@ -117,7 +119,7 @@ export default function Page() {
                 results={searchMatches.map(r => ({ id: r.ref, primary: r.ref, secondary: r.name }))}
               />
               <SearchSelect className="w-auto text-[var(--fs-sm)]" options={['All Statuses', 'Awaiting Payment', 'Paid — Pending Recon.', 'Reconciled']} />
-              <button className="btn btn-neu btn-sm"><i className="lni lni-upload"></i> Export</button>
+              {permissions.export && <button className="btn btn-neu btn-sm"><i className="lni lni-upload"></i> Export</button>}
             </div>
           </div>
           <ScrollTable filters={filters} onResetFilters={() => setFilters({})}>

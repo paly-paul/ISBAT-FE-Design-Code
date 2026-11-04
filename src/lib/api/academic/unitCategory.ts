@@ -18,6 +18,19 @@ const mockUnitCategories: UnitCategory[] = [
   { unitCatGuid: '3', unitCatName: 'Elective' },
 ]
 
+// GET /unit-categories/dropdown (get-unit-category-dropdown.md). Soft-deleted
+// rows are excluded.
+export interface UnitCategoryDropdownItem {
+  guid: string
+  id: number
+  name: string
+}
+
+export function getUnitCategoriesDropdown(): Promise<UnitCategoryDropdownItem[]> {
+  if (MOCK_AUTH) return Promise.resolve(mockUnitCategories.map((c, i) => ({ guid: c.unitCatGuid, id: i + 1, name: c.unitCatName })))
+  return apiGet<UnitCategoryDropdownItem[] | null>('/api/v1/academic/unit-categories/dropdown').then(data => data ?? [])
+}
+
 // Fetch all unit categories.
 export function getUnitCategories(): Promise<UnitCategory[]> {
   if (MOCK_AUTH) return Promise.resolve(mockUnitCategories)

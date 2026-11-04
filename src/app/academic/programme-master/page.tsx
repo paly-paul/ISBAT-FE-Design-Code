@@ -179,7 +179,7 @@ export default function Page() {
                 value={levelFilter}
                 onChange={v => { setLevelFilter(v); setPage(1) }}
               />
-              <button className="btn btn-neu btn-sm"><i className="lni lni-upload"></i> Export</button>
+              {permissions.export && <button className="btn btn-neu btn-sm"><i className="lni lni-upload"></i> Export</button>}
             </div>
           </div>
           <ScrollTable>

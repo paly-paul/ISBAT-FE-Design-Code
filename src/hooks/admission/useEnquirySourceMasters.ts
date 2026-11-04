@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createEnquirySourceMaster, deleteEnquirySourceMaster, EnquirySourceMaster, EnquirySourceMasterInput, getEnquirySourceMasterById, getEnquirySourceMasters, updateEnquirySourceMaster } from '@/lib/api/admission/enquirySourceMaster'
+import { createEnquirySourceMaster, deleteEnquirySourceMaster, EnquirySourceMaster, EnquirySourceMasterInput, getEnquirySourceMastersDropdown, getEnquirySourceMasterById, getEnquirySourceMasters, updateEnquirySourceMaster } from '@/lib/api/admission/enquirySourceMaster'
 
 const ENQUIRY_SOURCE_MASTERS_KEY = ['enquiry-source-masters']
 
@@ -12,6 +12,16 @@ export function useEnquirySourceMasters() {
     // instead of on every remount/window focus.
     staleTime: Infinity,
     gcTime: Infinity,
+  })
+}
+
+export function useEnquirySourceMastersDropdown(enabled = true) {
+  return useQuery({
+    queryKey: [...ENQUIRY_SOURCE_MASTERS_KEY, 'dropdown'],
+    queryFn: () => getEnquirySourceMastersDropdown(),
+    staleTime: Infinity,
+    gcTime: Infinity,
+    enabled,
   })
 }
 

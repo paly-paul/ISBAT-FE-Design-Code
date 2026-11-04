@@ -2,12 +2,14 @@
 import { useEffect, useState } from 'react'
 import { SearchSelect } from '@/components/SearchSelect'
 import { useIntakesDropdown } from '@/hooks/academic/useIntakes'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { useTimetableIntakes, useTimetableLecturers, useTimetableByLecturer, useTimeSlots } from '@/hooks/academic/useTimetable'
 import { TERM_OPTIONS, useTeachingDays, intakeOptionLabel, entryUnits, entryBatches, isOverCapacity, TimetableMatrix, TtCard } from '@/components/timetable/ttShared'
 
 // Lecturer View (timetable-page.md §2) — one lecturer's week across every
 // shift, from GET /timetables/by-lecturer. Any intake can be viewed.
 export default function LecturerViewPage() {
+  const permissions = usePagePermissions()
   const { data: ttIntakes } = useTimetableIntakes()
   const { data: intakes = [] } = useIntakesDropdown()
   const [intakeGuid, setIntakeGuid] = useState('')
@@ -38,9 +40,11 @@ export default function LecturerViewPage() {
           <div className="pg-title">Lecturer Timetable View</div>
           <div className="pg-sub">A lecturer&apos;s weekly schedule across every shift, with their workload</div>
         </div>
-        <button type="button" className="btn btn-primary btn-sm tt-no-print" disabled={!data} onClick={() => window.print()}>
-          <i className="lni lni-download"></i> Export PDF
-        </button>
+        {permissions.export && (
+          <button type="button" className="btn btn-primary btn-sm tt-no-print" disabled={!data} onClick={() => window.print()}>
+            <i className="lni lni-download"></i> Export PDF
+          </button>
+        )}
       </div>
 
       <div className="tt-filter-bar tt-no-print">

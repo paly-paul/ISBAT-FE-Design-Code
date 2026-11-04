@@ -7,7 +7,7 @@ import { useProgramLevel } from '@/hooks/academic/useProgramLevels'
 import { useFacultiesByGuids } from '@/hooks/config/useFaculties'
 import { useIntakesByGuids } from '@/hooks/academic/useIntakes'
 import { useLedgers } from '@/hooks/finance/useLedgers'
-import { useFinanceCurrencies } from '@/hooks/finance/useFinanceCurrencies'
+import { useCurrenciesDropdown } from '@/hooks/finance/useCurrencies'
 import { AuthError } from '@/lib/api/client'
 import { FailurePopup } from '../shared/FailurePopup'
 import { formatDate } from '@/lib/date'
@@ -118,7 +118,7 @@ export function ViewProgrammeModal({ isOpen, onClose, programGuid, onEdit }: Vie
   const facultiesByGuid = useFacultiesByGuids(program?.facultyGuid ? [program.facultyGuid] : [])
   const intakesByGuid = useIntakesByGuids(program?.intakeGuid ? [program.intakeGuid] : [])
   const { data: ledgers = [] } = useLedgers(isOpen)
-  const { data: financeCurrencies = [] } = useFinanceCurrencies(isOpen)
+  const { data: financeCurrencies = [] } = useCurrenciesDropdown(isOpen)
 
   if (!isOpen) return null
 

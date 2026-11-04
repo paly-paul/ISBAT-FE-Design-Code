@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createProcGlAccount, deleteProcGlAccount, getProcGlAccountById, getProcGlAccounts, ProcGlAccount, ProcGlAccountInput, updateProcGlAccount } from '@/lib/api/finance/procGlAccount'
+import { createProcGlAccount, deleteProcGlAccount, getProcGlAccountById, getProcGlAccounts, getProcGlAccountsDropdown, ProcGlAccount, ProcGlAccountInput, updateProcGlAccount } from '@/lib/api/finance/procGlAccount'
 
 const PROC_GL_ACCOUNTS_KEY = ['proc-gl-accounts']
 
@@ -12,6 +12,16 @@ export function useProcGlAccounts() {
     // instead of on every remount/window focus.
     staleTime: Infinity,
     gcTime: Infinity,
+  })
+}
+
+export function useProcGlAccountsDropdown(enabled = true) {
+  return useQuery({
+    queryKey: [...PROC_GL_ACCOUNTS_KEY, 'dropdown'],
+    queryFn: () => getProcGlAccountsDropdown(),
+    staleTime: Infinity,
+    gcTime: Infinity,
+    enabled,
   })
 }
 

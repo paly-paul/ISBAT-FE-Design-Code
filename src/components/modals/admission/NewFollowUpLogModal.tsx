@@ -1,16 +1,16 @@
 'use client'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ModalProps } from '../types'
 import { SuccessPopup } from '../shared/SuccessPopup'
 import { FailurePopup } from '../shared/FailurePopup'
 import { SearchSelect } from '@/components/SearchSelect'
 import DatePicker from '@/components/DatePicker'
 import { EnquiryFollowUpInput } from '@/lib/api/admission/enquiryFollowUp'
-import { useEmployees } from '@/hooks/employee/useEmployees'
-import { useFollowUpStatuses } from '@/hooks/config/useFollowUpStatuses'
-import { useFollowUpModes } from '@/hooks/admission/useFollowUpModes'
-import { useEnquiryStatuses } from '@/hooks/config/useEnquiryStatuses'
-import { useInterestLevels } from '@/hooks/admission/useInterestLevels'
+import { useSearchEmployeesInfinite } from '@/hooks/employee/useEmployees'
+import { useFollowUpStatusesDropdown } from '@/hooks/config/useFollowUpStatuses'
+import { useFollowUpModesDropdown } from '@/hooks/admission/useFollowUpModes'
+import { useEnquiryStatusesDropdown } from '@/hooks/config/useEnquiryStatuses'
+import { useInterestLevelsDropdown } from '@/hooks/admission/useInterestLevels'
 import { scrollToFirstError } from '@/lib/scrollToFirstError'
 import { AuthError } from '@/lib/api/client'
 import { getSessionIdentity, getLoggedInUserGuid } from '@/lib/session'
@@ -44,11 +44,33 @@ function todayUtcYmd() {
 const REMARKS_MAX = 300
 
 export function NewFollowUpLogModal({ isOpen, onClose, showToast, createFollowUp, initialData }: NewFollowUpLogModalProps) {
-  const { data: followUpStatuses = [] } = useFollowUpStatuses(isOpen)
-  const { data: followUpModes = [] }   = useFollowUpModes(isOpen)
-  const { data: enquiryStatuses = [] } = useEnquiryStatuses(isOpen)
-  const { data: interestLevels = [] }  = useInterestLevels(isOpen)
-  const { data: employees = [] }      = useEmployees(isOpen)
+  const { data: followUpStatuses = [] } = useFollowUpStatusesDropdown(isOpen)
+  const { data: followUpModes = [] }   = useFollowUpModesDropdown(isOpen)
+  const { data: enquiryStatuses = [] } = useEnquiryStatusesDropdown(isOpen)
+  const { data: interestLevels = [] }  = useInterestLevelsDropdown(isOpen)
+
+  // The advisor is the logged-in user. The session normally carries their
+  // guid; only when it doesn't is their name looked up in the employee list.
+  const { sessionAdvisorGuid, sessionName } = useMemo(() => {
+    if (!isOpen) return { sessionAdvisorGuid: '', sessionName: '' }
+    const identity = getSessionIdentity()
+    return {
+      sessionAdvisorGuid:
+        getLoggedInUserGuid() ||
+        identity?.employeeGuid ||
+        identity?.userGuid ||
+        identity?.uuid ||
+        identity?.userId ||
+        '',
+      sessionName: identity?.displayName?.trim() || '',
+    }
+  }, [isOpen])
+  const advisorLookup = useSearchEmployeesInfinite(sessionName, 20, isOpen && !sessionAdvisorGuid && !!sessionName)
+  const lookedUpAdvisor = advisorLookup.data?.pages[0]?.items.find(e => {
+    const empName = e.empName?.trim().toLowerCase() ?? ''
+    return empName.includes(sessionName.toLowerCase()) || sessionName.toLowerCase().includes(empName)
+  })
+  const advisorGuid = sessionAdvisorGuid || lookedUpAdvisor?.employeeGuid || ''
 
   const followUpStatusOptions = followUpStatuses.map(s => ({ value: s.followUpStatusGuid, label: s.followUpStatusName }))
   const followUpModeOptions   = followUpModes.map(m => ({ value: m.followUpModeGuid, label: m.followUpModeName }))
@@ -58,8 +80,6 @@ export function NewFollowUpLogModal({ isOpen, onClose, showToast, createFollowUp
   const [saved, setSaved]     = useState(false)
   const [failure, setFailure] = useState<string | null>(null)
   const [enquiryGuid, setEnquiryGuid]               = useState('')
-  const [advisorGuid, setAdvisorGuid]               = useState('')
-  const [advisorName, setAdvisorName]               = useState('')
   const [followUpStatusGuid, setFollowUpStatusGuid] = useState('')
   const [followUpModeGuid, setFollowUpModeGuid]     = useState('')
   const [enquiryStatusGuid, setEnquiryStatusGuid]   = useState('')
@@ -71,46 +91,6 @@ export function NewFollowUpLogModal({ isOpen, onClose, showToast, createFollowUp
   // Follow-up date isn't a choice — the API only accepts today.
   const today = todayUtcYmd()
   const todayLabel = new Date(`${today}T00:00:00`).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
-
-  // Resolve advisor identity & UUID from session and employee list
-  useEffect(() => {
-    if (!isOpen) return
-    const identity = getSessionIdentity()
-    const name = identity?.displayName?.trim() || ''
-
-    let guid =
-      getLoggedInUserGuid() ||
-      identity?.employeeGuid ||
-      identity?.userGuid ||
-      identity?.uuid ||
-      identity?.userId ||
-      ''
-
-    if (employees.length > 0) {
-      if (name) {
-        const matched = employees.find(e =>
-          e.empName?.trim().toLowerCase() === name.toLowerCase() ||
-          e.empName?.trim().toLowerCase().includes(name.toLowerCase()) ||
-          name.toLowerCase().includes(e.empName?.trim().toLowerCase())
-        )
-        if (matched) {
-          if (!guid) guid = matched.employeeGuid
-          setAdvisorName(matched.empName)
-        } else {
-          setAdvisorName(name)
-        }
-      } else if (!guid) {
-        guid = employees[0].employeeGuid
-        setAdvisorName(employees[0].empName)
-      }
-    } else if (name) {
-      setAdvisorName(name)
-    }
-
-    if (guid) {
-      setAdvisorGuid(guid)
-    }
-  }, [isOpen, employees])
 
   // Handle initial data prefilling when opened from a row
   useEffect(() => {
@@ -164,8 +144,7 @@ export function NewFollowUpLogModal({ isOpen, onClose, showToast, createFollowUp
     if (!enquiryGuid || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(enquiryGuid)) {
       e.enquiryIdx = 'Please select a valid Enquiry'
     }
-    const finalAdvisorGuid = advisorGuid || (employees.length > 0 ? employees[0].employeeGuid : '')
-    if (!finalAdvisorGuid) {
+    if (!advisorGuid) {
       setFailure('Advisor identity could not be resolved from your account.')
       return false
     }
@@ -182,11 +161,10 @@ export function NewFollowUpLogModal({ isOpen, onClose, showToast, createFollowUp
 
   function handleSubmit() {
     if (!validate()) return
-    const finalAdvisorGuid = advisorGuid || (employees.length > 0 ? employees[0].employeeGuid : '')
     createFollowUp.mutate(
       {
         enquiryGuid,
-        advisorGuid: finalAdvisorGuid,
+        advisorGuid,
         followUpDate: `${today}T00:00:00`,
         followUpStatusGuid,
         followUpModeGuid,

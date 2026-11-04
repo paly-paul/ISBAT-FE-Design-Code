@@ -26,6 +26,17 @@ const FULL_ACCESS: MenuPermissions = {
   print: true,
   export: true,
   cancel: true,
+  download: true,
+  verify: true,
+  generate: true,
+  publish: true,
+  moderate: true,
+  push: true,
+  save: true,
+  preview: true,
+  record: true,
+  search: true,
+  execute: true,
 }
 
 // When the menu call failed, nothing is granted (RouteGuard also blocks the

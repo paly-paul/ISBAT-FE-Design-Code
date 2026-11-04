@@ -2,7 +2,6 @@
 import { useState } from 'react'
 import { ModalProps } from '../types'
 import { useRepetitionTag } from '@/hooks/academic/useRepetitionTags'
-import { useProgramLevels } from '@/hooks/academic/useProgramLevels'
 import { AuthError } from '@/lib/api/client'
 import { FailurePopup } from '../shared/FailurePopup'
 
@@ -23,7 +22,6 @@ function Field({ label, value, mono, wide }: { label: string; value: React.React
 
 export function ViewRepTagModal({ isOpen, onClose, courseUnitRepetitionGuid, onEdit, canEdit }: ViewRepTagModalProps) {
   const { data: tag, isLoading, isError, error } = useRepetitionTag(courseUnitRepetitionGuid, isOpen)
-  const { data: programLevels = [] } = useProgramLevels(isOpen)
 
   if (!isOpen) return null
 
@@ -57,7 +55,7 @@ export function ViewRepTagModal({ isOpen, onClose, courseUnitRepetitionGuid, onE
     )
   }
 
-  const levelName = programLevels.find(p => p.levelCode === tag.levelCode)?.levelName || '—'
+  const levelName = tag.levelName || '—'
 
   return (
     <div className="modal-overlay open">

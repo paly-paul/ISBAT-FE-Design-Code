@@ -1,4 +1,5 @@
 'use client'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { useState, useEffect } from 'react'
 import {
   useResitEligibleStudents,
@@ -20,6 +21,7 @@ import { ActionMenu } from '@/components/ActionMenu'
 import { SearchSelect } from '@/components/SearchSelect'
 
 export default function ResitApplyPage() {
+  const permissions = usePagePermissions()
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   // Toast doesn't dismiss itself; clear each one after 3.5s.
   useEffect(() => {
@@ -231,12 +233,14 @@ export default function ResitApplyPage() {
                             >
                               <i className="lni lni-eye"></i> View
                             </button>
-                            <button 
-                              className="btn btn-neu btn-sm"
-                              onClick={() => setSelectedStudent(s)}
-                            >
-                              <i className="lni lni-circle-plus"></i> Apply Resit
-                            </button>
+                            {permissions.add && (
+                              <button
+                                className="btn btn-neu btn-sm"
+                                onClick={() => setSelectedStudent(s)}
+                              >
+                                <i className="lni lni-circle-plus"></i> Apply Resit
+                              </button>
+                            )}
                           </ActionMenu>
                         </td>
                         <td className="text-blue font-bold font-mono">{s.studentRegNo || '—'}</td>
@@ -310,6 +314,7 @@ export default function ResitApplyPage() {
               </div>
 
               {/* Apply / Edit form */}
+              {(editingGuid ? permissions.edit : permissions.add) && (
               <div className="border border-slate-200 rounded-xl p-5 mb-6" style={{ background: editingGuid ? 'var(--b50)' : undefined }}>
                 <div className="flex items-center gap-2 mb-4">
                   <div className="font-semibold text-slate-800">{editingGuid ? 'Edit Resit Application' : 'Apply for Resit'}</div>
@@ -415,6 +420,7 @@ export default function ResitApplyPage() {
                   </>
                 )}
               </div>
+              )}
 
               {/* Applied units */}
               <div className="flex items-center gap-2 mb-3">
@@ -443,23 +449,27 @@ export default function ResitApplyPage() {
                         <tr key={app.resitApplicationGuid} style={editingGuid === app.resitApplicationGuid ? { background: 'var(--b50)' } : undefined}>
                           <td>
                             <ActionMenu>
-                              <button
-                                className="btn btn-neu btn-sm"
-                                disabled={app.feePaid}
-                                title={app.feePaid ? 'Paid applications cannot be edited.' : ''}
-                                onClick={() => setEditingGuid(app.resitApplicationGuid)}
-                              >
-                                <i className="lni lni-pencil-alt"></i> Edit
-                              </button>
-                              <button
-                                className="btn btn-neu btn-sm"
-                                style={{ color: 'var(--red)' }}
-                                disabled={app.feePaid || deleteMutation.isPending}
-                                title={app.feePaid ? 'Paid applications cannot be deleted.' : ''}
-                                onClick={() => handleDelete(app)}
-                              >
-                                <i className="lni lni-trash-can"></i> Delete
-                              </button>
+                              {permissions.edit && (
+                                <button
+                                  className="btn btn-neu btn-sm"
+                                  disabled={app.feePaid}
+                                  title={app.feePaid ? 'Paid applications cannot be edited.' : ''}
+                                  onClick={() => setEditingGuid(app.resitApplicationGuid)}
+                                >
+                                  <i className="lni lni-pencil-alt"></i> Edit
+                                </button>
+                              )}
+                              {permissions.delete && (
+                                <button
+                                  className="btn btn-neu btn-sm"
+                                  style={{ color: 'var(--red)' }}
+                                  disabled={app.feePaid || deleteMutation.isPending}
+                                  title={app.feePaid ? 'Paid applications cannot be deleted.' : ''}
+                                  onClick={() => handleDelete(app)}
+                                >
+                                  <i className="lni lni-trash-can"></i> Delete
+                                </button>
+                              )}
                             </ActionMenu>
                           </td>
                           <td className="text-blue font-bold font-mono">{app.unitCode}</td>

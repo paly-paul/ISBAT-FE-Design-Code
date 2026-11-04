@@ -9,9 +9,9 @@ import { DocumentPreviewModal } from '@/components/modals/shared/DocumentPreview
 import { useSearchCampusesInfinite } from '@/hooks/config/useCampuses'
 import { useProgramMaster, useProgramMasterByGuid, useSearchProgramMastersInfinite } from '@/hooks/academic/useProgramMaster'
 import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
-import { useBatchTimes } from '@/hooks/config/useBatchTimes'
+import { useBatchTimesDropdown } from '@/hooks/config/useBatchTimes'
 import { useBatch, useFilteredBatches } from '@/hooks/academic/useBatches'
-import { useCountries, useCountryLookup, useKnownCountries, useSearchCountriesInfinite } from '@/hooks/config/useCountries'
+import { useCountriesByGuids, useKnownCountries, useSearchCountriesInfinite } from '@/hooks/config/useCountries'
 import { useProgramFeeStructures } from '@/hooks/academic/useProgramFeeStructure'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { sanitizePhoneInput, sanitizeNameInput } from '@/lib/errorMessages'
@@ -465,7 +465,7 @@ export default function FilingPage() {
     !!programGuid && !programs.some(p => p.programGuid === programGuid)
   )
   const { data: semesters = [] }  = useSemestersForProgram(programGuid, !!programGuid)
-  const { data: batchTimes = [] } = useBatchTimes(!!selectedApplication)
+  const { data: batchTimes = [] } = useBatchTimesDropdown(!!selectedApplication)
   // Same payment-scoped Dropdowns/Batches.bru endpoint that turned out
   // unreliable on the Payment page (200 with an empty array for
   // combinations that do have a matching batch) — use the generic,
@@ -600,23 +600,16 @@ export default function FilingPage() {
   )
 
   // Country pickers: the home country, whatever the picker has loaded, and a
-  // small search for any country name the application came with. There's no
-  // lookup by guid, and by-payment usually 400s, so a saved country with no
-  // name (e.g. one taken from the enquiry) can only get its label from the full
-  // list. That's fetched only then, or the field would look blank while set.
-  const savedCountryLookup = useCountryLookup([
-    applicationDetail?.countryName ?? '',
-    applicationDetail?.spCountryName ?? '',
-  ])
-  const needsFullCountryList = applicationDetailFetched && !savedCountryLookup.isLoading && [countryGuid, spCountryGuid].some(
-    guid => !!guid && ![...knownCountries, ...savedCountryLookup.countries].some(c => c.countryGuid === guid),
+  // lookup for a saved country that's neither of those, so the field never
+  // looks blank while set.
+  const { countries: savedCountries } = useCountriesByGuids(
+    [countryGuid, spCountryGuid].filter(guid => !knownCountries.some(c => c.countryGuid === guid)),
   )
-  const { data: fullCountryList = [] } = useCountries(needsFullCountryList)
   const countryOptions = useMemo(() => {
     const map = new Map<string, string>()
-    for (const c of [...knownCountries, ...savedCountryLookup.countries, ...fullCountryList]) map.set(c.countryGuid, c.countryName)
+    for (const c of [...knownCountries, ...savedCountries]) map.set(c.countryGuid, c.countryName)
     return Array.from(map.entries()).map(([value, label]) => ({ value, label }))
-  }, [knownCountries, savedCountryLookup.countries, fullCountryList])
+  }, [knownCountries, savedCountries])
 
   // Sponsor details can now come pre-filled from the enquiry (sponsor
   // fallback, 2026-10-15). by-payment sends spCountryName alongside the

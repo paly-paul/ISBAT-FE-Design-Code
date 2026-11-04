@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createEnquirySource, deleteEnquirySource, EnquirySource, EnquirySourceInput, getEnquirySourceById, getEnquirySources, updateEnquirySource } from '@/lib/api/admission/enquirySource'
+import { createEnquirySource, deleteEnquirySource, EnquirySource, EnquirySourceInput, getEnquirySourcesDropdown, getEnquirySourceById, getEnquirySources, updateEnquirySource } from '@/lib/api/admission/enquirySource'
 
 const ENQUIRY_SOURCES_KEY = ['enquiry-sources']
 
@@ -12,6 +12,16 @@ export function useEnquirySources() {
     // instead of on every remount/window focus.
     staleTime: Infinity,
     gcTime: Infinity,
+  })
+}
+
+export function useEnquirySourcesDropdown(enabled = true) {
+  return useQuery({
+    queryKey: [...ENQUIRY_SOURCES_KEY, 'dropdown'],
+    queryFn: () => getEnquirySourcesDropdown(),
+    staleTime: Infinity,
+    gcTime: Infinity,
+    enabled,
   })
 }
 

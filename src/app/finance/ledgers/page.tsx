@@ -12,7 +12,7 @@ import { usePagination } from '@/hooks/usePagination'
 import { LedgerFormModal } from '@/components/modals/finance/LedgerFormModal'
 import { ViewLedgerModal } from '@/components/modals/finance/ViewLedgerModal'
 import { useLedgers, useCreateLedger, useUpdateLedger, useDeleteLedger, Ledger } from '@/hooks/finance/useLedgers'
-import { useProcGlAccounts } from '@/hooks/finance/useProcGlAccounts'
+import { useProcGlAccountsDropdown } from '@/hooks/finance/useProcGlAccounts'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
@@ -32,7 +32,7 @@ export default function Page() {
   const [search, setSearch] = useState('')
 
   const { data: rows = [], isLoading } = useLedgers()
-  const { data: glAccounts = [] } = useProcGlAccounts()
+  const { data: glAccounts = [] } = useProcGlAccountsDropdown()
   const createLedger = useCreateLedger()
   const updateLedger = useUpdateLedger()
   const deleteLedger = useDeleteLedger()

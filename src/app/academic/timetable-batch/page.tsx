@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { SearchSelect } from '@/components/SearchSelect'
 import { useIntakesDropdown } from '@/hooks/academic/useIntakes'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { useTimetableIntakes, useTimetableByBatch, useTimeSlots } from '@/hooks/academic/useTimetable'
 import { getBatchDropdown } from '@/lib/api/academic/batch'
 import {
@@ -14,6 +15,7 @@ import {
 // GET /timetables/by-batch. Columns are the time slots of the batch time(s)
 // its entries use. Any intake can be viewed.
 export default function BatchViewPage() {
+  const permissions = usePagePermissions()
   const { data: ttIntakes } = useTimetableIntakes()
   const { data: intakes = [] } = useIntakesDropdown()
   const [intakeGuid, setIntakeGuid] = useState('')
@@ -54,9 +56,11 @@ export default function BatchViewPage() {
           <div className="pg-title">Batch-wise Timetable View</div>
           <div className="pg-sub">Weekly class distribution per cohort — check for gaps and overlaps</div>
         </div>
-        <button type="button" className="btn btn-primary btn-sm tt-no-print" disabled={!data} onClick={() => window.print()}>
-          <i className="lni lni-download"></i> Export PDF
-        </button>
+        {permissions.export && (
+          <button type="button" className="btn btn-primary btn-sm tt-no-print" disabled={!data} onClick={() => window.print()}>
+            <i className="lni lni-download"></i> Export PDF
+          </button>
+        )}
       </div>
 
       <div className="tt-filter-bar tt-no-print">

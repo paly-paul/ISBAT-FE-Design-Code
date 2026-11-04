@@ -4,7 +4,8 @@ import { SearchSelect } from '@/components/SearchSelect'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { useIntakesDropdown } from '@/hooks/academic/useIntakes'
-import { useBatchTimes } from '@/hooks/config/useBatchTimes'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
+import { useBatchTimesDropdown } from '@/hooks/config/useBatchTimes'
 import { useTimetableIntakes, useTimetableBySlot, useTimeSlots, SlotAuditParams } from '@/hooks/academic/useTimetable'
 import {
   TERM_OPTIONS, useTeachingDays, intakeOptionLabel, allowedDayCodes, capacityState, entryUnits, entryBatches,
@@ -20,9 +21,10 @@ const STATUS = {
 } as const
 
 export default function SlotAuditPage() {
+  const permissions = usePagePermissions()
   const { data: ttIntakes } = useTimetableIntakes()
   const { data: intakes = [] } = useIntakesDropdown()
-  const { data: batchTimes = [] } = useBatchTimes()
+  const { data: batchTimes = [] } = useBatchTimesDropdown()
   const { days } = useTeachingDays()
 
   const [intakeGuid, setIntakeGuid] = useState('')
@@ -77,8 +79,8 @@ export default function SlotAuditPage() {
           <div className="pg-sub">Campus-wide room occupancy at any given hour</div>
         </div>
         <div className="flex gap-2 tt-no-print">
-          <button type="button" className="btn btn-neu btn-sm" disabled={!data} onClick={() => window.print()}><i className="lni lni-files"></i> PDF</button>
-          <button type="button" className="btn btn-success btn-sm" disabled={!data || rows.length === 0} onClick={exportExcel}><i className="lni lni-download"></i> Excel</button>
+          {permissions.export && <button type="button" className="btn btn-neu btn-sm" disabled={!data} onClick={() => window.print()}><i className="lni lni-files"></i> PDF</button>}
+          {permissions.export && <button type="button" className="btn btn-success btn-sm" disabled={!data || rows.length === 0} onClick={exportExcel}><i className="lni lni-download"></i> Excel</button>}
         </div>
       </div>
 

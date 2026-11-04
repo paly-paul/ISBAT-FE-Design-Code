@@ -150,6 +150,13 @@ export function getCountriesPaged(page = 1, pageSize = 20, search = ''): Promise
     .then(data => data ?? { items: [], totalCount: 0, pageNumber: page, pageSize })
 }
 
+// POST /users/countries/by-guids (get-countries-by-guids.md): a raw array of
+// guids; unknown ones are dropped, and the order isn't guaranteed.
+export function getCountriesByGuids(guids: string[]): Promise<Country[]> {
+  if (MOCK_AUTH) return Promise.resolve(mockCountries.filter(c => guids.includes(c.countryGuid)))
+  return apiPost<Country[] | null>('/api/v1/users/countries/by-guids', guids).then(data => data ?? [])
+}
+
 export function createCountry(input: CountryInput): Promise<Country> {
   if (MOCK_AUTH) {
     const country: Country = { countryGuid: crypto.randomUUID(), ...input }

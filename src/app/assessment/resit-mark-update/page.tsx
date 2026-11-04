@@ -1,5 +1,6 @@
 'use client'
 
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { useState, useEffect } from 'react'
 import { TableSearch } from '@/components/TableSearch'
 import { SearchSelect } from '@/components/SearchSelect'
@@ -28,6 +29,7 @@ function isNotHigher(part: ResitMarkUpdatePart) {
 }
 
 export default function ResitMarkUpdatePage() {
+  const permissions = usePagePermissions()
   const queryClient = useQueryClient()
   const [intakeGuid, setIntakeGuid] = useState<string>('')
   const [resitConfigGuid, setResitConfigGuid] = useState<string>('')
@@ -79,7 +81,7 @@ export default function ResitMarkUpdatePage() {
   }, [searchInput, search])
 
   // Push only exists on the Ready tab (resit-mark-update-page.md, Columns).
-  const showAction = statusTab === 0
+  const showAction = statusTab === 0 && permissions.push
   const colCount = showAction ? 5 : 4
   const firstColStyle = showAction ? undefined : { textAlign: 'left' as const }
 

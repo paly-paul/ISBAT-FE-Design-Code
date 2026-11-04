@@ -22,6 +22,18 @@ export function getEnquirySources(): Promise<EnquirySource[]> {
   return apiGet<EnquirySource[] | null>('/api/v1/admissions/isbat-enquiry-sources').then((data: any) => Array.isArray(data) ? data : (data && typeof data === 'object' ? (data.items || Object.values(data).find(Array.isArray) || []) : []))
 }
 
+// GET /isbat-enquiry-sources/dropdown (get-isbat-enquiry-source-dropdown.md). Soft-deleted rows
+// are excluded.
+export interface EnquirySourceDropdownItem {
+  isbatSourceGuid: string
+  sourceName: string
+}
+
+export function getEnquirySourcesDropdown(): Promise<EnquirySourceDropdownItem[]> {
+  if (MOCK_AUTH) return Promise.resolve(mockEnquirySources)
+  return apiGet<EnquirySourceDropdownItem[] | null>('/api/v1/admissions/isbat-enquiry-sources/dropdown').then(data => data ?? [])
+}
+
 // Create a new enquiry source and return the saved record.
 export function createEnquirySource(input: EnquirySourceInput): Promise<EnquirySource> {
   if (MOCK_AUTH) {

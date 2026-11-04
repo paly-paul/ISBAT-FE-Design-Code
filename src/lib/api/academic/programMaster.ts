@@ -1,4 +1,4 @@
-import { apiDelete, apiGet, apiPostForm, apiPutForm } from '../client'
+import { apiDelete, apiGet, apiPost, apiPostForm, apiPutForm } from '../client'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
@@ -422,6 +422,13 @@ export interface ProgramDropdownItem {
   programGuid: string
   programCode: string
   programName: string
+}
+
+// POST /api/v1/academic/program-master/by-guids (post-programs-by-guids.md):
+// a bare array of guids; unknown ones are dropped, so match on programGuid.
+export function getProgramsByGuids(guids: string[]): Promise<ProgramDropdownItem[]> {
+  if (MOCK_AUTH) return Promise.resolve(mockProgramMasters.filter(p => guids.includes(p.programGuid)).map(p => ({ programGuid: p.programGuid, programCode: p.programCode, programName: p.programName })))
+  return apiPost<ProgramDropdownItem[] | null>('/api/v1/academic/program-master/by-guids', guids).then(data => data ?? [])
 }
 
 // GET /api/v1/academic/program-master/dropdown — per get-program-dropdown.md.

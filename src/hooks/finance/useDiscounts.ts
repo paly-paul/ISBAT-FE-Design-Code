@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createDiscount, deleteDiscount, Discount, DiscountInput, getDiscountById, getDiscounts, updateDiscount } from '@/lib/api/finance/discount'
+import { createDiscount, deleteDiscount, Discount, DiscountInput, getDiscountById, getDiscounts, getDiscountsDropdown, updateDiscount } from '@/lib/api/finance/discount'
 
 const DISCOUNTS_KEY = ['discounts']
 
@@ -10,6 +10,16 @@ export function useDiscounts(enabled = true) {
     // Never treat the cached list as stale on its own — only refetch when a
     // mutation (create/update/delete) explicitly invalidates this key below,
     // instead of on every remount/window focus.
+    staleTime: Infinity,
+    gcTime: Infinity,
+    enabled,
+  })
+}
+
+export function useDiscountsDropdown(enabled = true) {
+  return useQuery({
+    queryKey: [...DISCOUNTS_KEY, 'dropdown'],
+    queryFn: () => getDiscountsDropdown(),
     staleTime: Infinity,
     gcTime: Infinity,
     enabled,

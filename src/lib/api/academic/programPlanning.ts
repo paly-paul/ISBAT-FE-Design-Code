@@ -35,8 +35,8 @@ export interface ProgramPlanningListParams {
   intakeGuid?: string | null
   // Documented filter (get-program-plannings.md); combines with the others (AND).
   lecturerGuid?: string | null
-  // NOT supported by the endpoint — it's ignored server-side. Kept only so
-  // mock mode / older callers type-check; search on screen instead.
+  // Matches course unit code/name, faculty code/name and intake description —
+  // not the lecturer's name, which is what lecturerGuid is for.
   search?: string | null
 }
 
@@ -82,7 +82,6 @@ export function getProgramPlannings(params: ProgramPlanningListParams = {}, page
 
   const qs = new URLSearchParams({
     page: String(pageNumber),
-    pageNumber: String(pageNumber),
     pageSize: String(pageSize),
   })
   if (params.unitGuid) qs.set('unitGuid', params.unitGuid)

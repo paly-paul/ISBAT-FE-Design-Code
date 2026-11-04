@@ -43,7 +43,11 @@ function errMessage(err: unknown, fallback: string): string {
 
 export function UeMarkSheet({ mode }: { mode: UeMarkSheetMode }) {
   const permissions = usePagePermissions()
-  const canSave = permissions.edit
+  // Entry: Save covers a first entry; changing marks already there also needs
+  // Update. The API has one insert-or-update call behind assessment.uedetailedmarks.save,
+  // so it can't tell the two apart. Verify's menu only offers edit.
+  const canEnterMarks = mode === 'entry' ? permissions.save : permissions.edit
+  const canChangeMarks = mode === 'entry' ? permissions.save && permissions.edit : permissions.edit
 
   const [intakeGuid, setIntakeGuid] = useState('')
   const [programGuid, setProgramGuid] = useState('')
@@ -148,9 +152,7 @@ export function UeMarkSheet({ mode }: { mode: UeMarkSheetMode }) {
     } catch (err) {
       if (seq !== lookupSeq.current) return
       clearExam()
-      const msg = errMessage(err, EXAM_NOT_FOUND)
-      setExamError(msg)
-      showToast(msg, 'error')
+      setExamError(errMessage(err, EXAM_NOT_FOUND))
     } finally {
       if (seq === lookupSeq.current) {
         setExamLoading(false)
@@ -173,8 +175,12 @@ export function UeMarkSheet({ mode }: { mode: UeMarkSheetMode }) {
     sheet ? !hasTheoryMarks(sheet.maxMarks) : (exam ? !hasTheoryMarks(exam.maxMarks) : false)
   ))
 
+  function hasMarks(row: UeDetailedMarkRowDto) {
+    return columns.some(c => row[c.field] != null)
+  }
+
   function canEdit(row: UeDetailedMarkRowDto) {
-    return canSave && !row.isAbsent && !isVerified
+    return (hasMarks(row) ? canChangeMarks : canEnterMarks) && !row.isAbsent && !isVerified
   }
 
   function startEdit(row: UeDetailedMarkRowDto) {
@@ -252,7 +258,7 @@ export function UeMarkSheet({ mode }: { mode: UeMarkSheetMode }) {
 
   const unitLabel = selectedUnit ? `${selectedUnit.courseUnitCode} — ${selectedUnit.courseUnitName}` : ''
   const canShowSheet = Boolean(programGuid && intakeGuid && semesterGuid && unitGuid)
-  const showEditColumn = canSave && !isVerified
+  const showEditColumn = (canEnterMarks || canChangeMarks) && !isVerified
   const colCount = 3 + columns.length + (showEditColumn ? 1 : 0)
 
   // No view permission: show the app-wide 404 rather than revealing the page exists.
@@ -269,7 +275,7 @@ export function UeMarkSheet({ mode }: { mode: UeMarkSheetMode }) {
               : 'Review the entered UE marks and verify the exam · verifying locks it for mark entry'}
           </div>
         </div>
-        {mode === 'verify' && (
+        {mode === 'verify' && permissions.verify && (
           <div className="pg-actions">
             <button
               className="btn btn-primary"
@@ -497,7 +503,7 @@ export function UeMarkSheet({ mode }: { mode: UeMarkSheetMode }) {
                               </div>
                             ) : canEdit(row) && (
                               <button className="btn btn-neu btn-sm" onClick={() => startEdit(row)} disabled={saveMark.isPending}>
-                                <i className="lni lni-pencil"></i> Edit
+                                <i className="lni lni-pencil"></i> {hasMarks(row) ? 'Edit' : 'Enter'}
                               </button>
                             )}
                           </td>

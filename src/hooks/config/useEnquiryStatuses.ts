@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createEnquiryStatus, deleteEnquiryStatus, EnquiryStatus, EnquiryStatusInput, getEnquiryStatusById, getEnquiryStatuses, updateEnquiryStatus } from '@/lib/api/academic/enquiryStatus'
+import { createEnquiryStatus, deleteEnquiryStatus, EnquiryStatus, EnquiryStatusInput, getEnquiryStatusesDropdown, getEnquiryStatusById, getEnquiryStatuses, updateEnquiryStatus } from '@/lib/api/academic/enquiryStatus'
 
 const ENQUIRY_STATUSES_KEY = ['enquiry-statuses']
 
@@ -10,6 +10,16 @@ export function useEnquiryStatuses(enabled = true) {
     // Never treat the cached list as stale on its own — only refetch when a
     // mutation (create/update/delete) explicitly invalidates this key below,
     // instead of on every remount/window focus.
+    staleTime: Infinity,
+    gcTime: Infinity,
+    enabled,
+  })
+}
+
+export function useEnquiryStatusesDropdown(enabled = true) {
+  return useQuery({
+    queryKey: [...ENQUIRY_STATUSES_KEY, 'dropdown'],
+    queryFn: () => getEnquiryStatusesDropdown(),
     staleTime: Infinity,
     gcTime: Infinity,
     enabled,

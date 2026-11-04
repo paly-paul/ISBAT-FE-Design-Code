@@ -14,15 +14,15 @@ import { useStreamsByGuids } from '@/hooks/config/useStreams'
 import { ProgramMasterInput } from '@/lib/api/academic/programMaster'
 import { useProgramLevelsDropdown, useProgramLevel } from '@/hooks/academic/useProgramLevels'
 import { useSearchProgramGroupsInfinite } from '@/hooks/academic/useProgramGroups'
-import { useFinanceCurrencies } from '@/hooks/finance/useFinanceCurrencies'
+import { useCurrenciesDropdown } from '@/hooks/finance/useCurrencies'
 import { useCourseUnit, useCourseUnitsByGuids } from '@/hooks/academic/useCourseUnits'
 import { CourseUnitSearchPicker, CourseUnitPickOption } from '@/components/CourseUnitSearchPicker'
 import { useIntakesByGuids, useCurrentAcademicIntake } from '@/hooks/academic/useIntakes'
 import { IntakeSearchPicker } from '@/components/IntakeSearchPicker'
 import { FacultySearchPicker } from '@/components/FacultySearchPicker'
 import { useFacultiesByGuids } from '@/hooks/config/useFaculties'
-import { useUnitTypes } from '@/hooks/config/useUnitTypes'
-import { useUnitCategories } from '@/hooks/config/useUnitCategories'
+import { useUnitTypesDropdown } from '@/hooks/config/useUnitTypes'
+import { useUnitCategoriesDropdown } from '@/hooks/config/useUnitCategories'
 import { LedgerSearchSelect } from '@/components/LedgerSearchSelect'
 import {
   ProgramUnitUpdateInput, FeeStructureUpdateInput, ProgramMasterUpdateInput,
@@ -450,19 +450,15 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   // Only true once the faculty has loaded, so a slow lookup isn't an error.
   const facultyHasNoCampus = !campusDisplay && !!facultyLookup.get(facultyGuid)
 
-  // Update wants a real currencyGuid, confirmed via the "three currency guid
-  // spaces" gotcha elsewhere in this app — useFinanceCurrencies() carries the
-  // real one, unlike useCurrencies() (Currency Master) above. Create was
-  // confirmed to want the same real currencyGuid too (see the
-  // ProgramMasterInput.currencyGuid note), so this now backs the top-level
-  // Currency picker in both modes.
-  const { data: financeCurrencies = [] } = useFinanceCurrencies(isOpen)
+  // Both Create and Update require the real currencyGuid, so use the Finance
+  // currency dropdown endpoint rather than loading the full paginated list.
+  const { data: financeCurrencies = [] } = useCurrenciesDropdown(isOpen)
   // Merged with a fallback for any currencyGuid already on a loaded fee item
   // that's missing from the Finance Currency master list — see
   // withFallbackOptions below (a hoisted function declaration, safe to call
   // here despite being textually defined further down next to ledgerOptions).
   const financeCurrencyOptions = withFallbackOptions(
-    financeCurrencies.map(c => ({ value: c.currencyGuid, label: `${c.currencyCode} — ${c.currencyName}` })),
+    financeCurrencies.flatMap(c => c.currencyGuid ? [{ value: c.currencyGuid, label: `${c.currencyCode} — ${c.currencyName}` }] : []),
     item => ({ guid: item.currencyGuid, name: item.currencyName }),
   )
 
@@ -599,17 +595,17 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   // unitType/unitCat send the guid directly (unitTypeGuid/unitCatGuid), the
   // same guid-based convention used elsewhere in this backend (e.g.
   // programLevelGuid, courseUnitRepetitionGuid).
-  const { data: unitTypes = [] } = useUnitTypes(isOpen && step === 2)
-  const unitTypeOptions = unitTypes.map(t => ({ value: t.unitTypeGuid, label: t.unitTypeName }))
+  const { data: unitTypes = [] } = useUnitTypesDropdown(isOpen && step === 2)
+  const unitTypeOptions = unitTypes.map(t => ({ value: t.guid, label: t.name }))
 
-  const { data: unitCategories = [] } = useUnitCategories(isOpen && step === 2)
-  const unitCategoryOptions = unitCategories.map(c => ({ value: c.unitCatGuid, label: c.unitCatName }))
+  const { data: unitCategories = [] } = useUnitCategoriesDropdown(isOpen && step === 2)
+  const unitCategoryOptions = unitCategories.map(c => ({ value: c.guid, label: c.name }))
   // The per-unit specialization picker only makes sense for a unit whose
   // category is literally named "Specialization" in the real master — there's
   // no dedicated flag for this on UnitCategory, so it's a name match.
   function isSpecializationCategory(unitCatGuid: string) {
-    const cat = unitCategories.find(c => c.unitCatGuid === unitCatGuid)
-    return !!cat && cat.unitCatName.trim().toLowerCase() === 'specialization'
+    const cat = unitCategories.find(c => c.guid === unitCatGuid)
+    return !!cat && cat.name.trim().toLowerCase() === 'specialization'
   }
 
   // Base options from a master list, PLUS a synthesized option for any
@@ -992,7 +988,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     setAppFee(selectedProgramLevel.appFee ? String(selectedProgramLevel.appFee) : '')
     setLateFee(selectedProgramLevel.lateFee ? String(selectedProgramLevel.lateFee) : '')
     const fc = financeCurrencies.find(c => c.currencyCode === selectedProgramLevel.currencyCode)
-    if (fc) setCurrencyGuid(fc.currencyGuid)
+    if (fc?.currencyGuid) setCurrencyGuid(fc.currencyGuid)
     if (selectedProgramLevel.semCount > 0) resizeSemesters(selectedProgramLevel.semCount)
   }, [mode, selectedProgramLevel, financeCurrencies])
 

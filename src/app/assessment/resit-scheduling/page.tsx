@@ -1,5 +1,6 @@
 'use client'
 
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
@@ -219,6 +220,7 @@ export default function ResitSchedulingPage() {
 }
 
 function ResitSchedulingContent() {
+  const permissions = usePagePermissions()
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -379,8 +381,8 @@ function ResitSchedulingContent() {
             <div key={activeTab} className="tab-panel-in">
               {activeTab === 'exam' && (
                 <ExamTab
-                  readOnly={noResit || saveForbidden.exam}
-                  readOnlyReason={noResit ? NO_RESIT_MSG : saveForbidden.exam ? 'You do not have permission to save resit exam schedules.' : undefined}
+                  readOnly={noResit || saveForbidden.exam || !permissions.save}
+                  readOnlyReason={noResit ? NO_RESIT_MSG : saveForbidden.exam || !permissions.save ? 'You do not have permission to save resit exam schedules.' : undefined}
                   units={unitsQuery.data}
                   unitsLoading={unitsQuery.isLoading || !unitsQuery.isFetched}
                   showToast={showToast}
@@ -390,8 +392,8 @@ function ResitSchedulingContent() {
               )}
               {activeTab === 'ct' && (
                 <CtTab
-                  readOnly={noResit || saveForbidden.ct}
-                  readOnlyReason={noResit ? NO_RESIT_MSG : saveForbidden.ct ? 'You do not have permission to save the resit class test schedule.' : undefined}
+                  readOnly={noResit || saveForbidden.ct || !permissions.save}
+                  readOnlyReason={noResit ? NO_RESIT_MSG : saveForbidden.ct || !permissions.save ? 'You do not have permission to save the resit class test schedule.' : undefined}
                   showToast={showToast}
                   onForbidden={() => markSaveForbidden('ct')}
                   onDirtyChange={dirtyHandlers.ct}
@@ -399,8 +401,8 @@ function ResitSchedulingContent() {
               )}
               {activeTab === 'cw' && (
                 <CwTab
-                  readOnly={noResit || saveForbidden.cw}
-                  readOnlyReason={noResit ? NO_RESIT_MSG : saveForbidden.cw ? 'You do not have permission to save the resit coursework schedule.' : undefined}
+                  readOnly={noResit || saveForbidden.cw || !permissions.save}
+                  readOnlyReason={noResit ? NO_RESIT_MSG : saveForbidden.cw || !permissions.save ? 'You do not have permission to save the resit coursework schedule.' : undefined}
                   showToast={showToast}
                   onForbidden={() => markSaveForbidden('cw')}
                   onDirtyChange={dirtyHandlers.cw}
@@ -484,6 +486,7 @@ function ExamTab({ readOnly, readOnlyReason, units, unitsLoading, showToast, onF
   units: ResitScheduleCourseUnitDto[] | undefined
   unitsLoading: boolean
 }) {
+  const permissions = usePagePermissions()
   const qc = useQueryClient()
   const [page, setPage] = useState(1)
   const [searchInput, setSearchInput] = useState('')
@@ -515,11 +518,13 @@ function ExamTab({ readOnly, readOnlyReason, units, unitsLoading, showToast, onF
         </div>
         <button className="btn btn-neu" onClick={doSearch}>Search</button>
         <button className="btn btn-neu" onClick={doClear} disabled={!searchInput && !search}>Clear</button>
-        <span className="sm:ml-auto" title={readOnlyReason}>
-          <button className="btn btn-primary" onClick={() => setDrawer({ mode: 'add', guid: null })} disabled={readOnly}>
-            <i className="lni lni-plus"></i> Add
-          </button>
-        </span>
+        {permissions.add && (
+          <span className="sm:ml-auto" title={readOnlyReason}>
+            <button className="btn btn-primary" onClick={() => setDrawer({ mode: 'add', guid: null })} disabled={readOnly}>
+              <i className="lni lni-plus"></i> Add
+            </button>
+          </span>
+        )}
       </div>
 
       <ScrollTable>
@@ -570,10 +575,10 @@ function ExamTab({ readOnly, readOnlyReason, units, unitsLoading, showToast, onF
                     <button
                       className="btn btn-neu btn-sm"
                       onClick={() => setDrawer({ mode: 'edit', guid: s.resitScheduleGuid })}
-                      title={readOnly ? 'View' : 'Edit'}
-                      aria-label={`${readOnly ? 'View' : 'Edit'} ${s.unitCode} ${s.ueType === 1 ? 'Practical' : 'Theory'}`}
+                      title={readOnly || !permissions.edit ? 'View' : 'Edit'}
+                      aria-label={`${readOnly || !permissions.edit ? 'View' : 'Edit'} ${s.unitCode} ${s.ueType === 1 ? 'Practical' : 'Theory'}`}
                     >
-                      <i className={`lni ${readOnly ? 'lni-eye' : 'lni-pencil'}`}></i>
+                      <i className={`lni ${readOnly || !permissions.edit ? 'lni-eye' : 'lni-pencil'}`}></i>
                     </button>
                   </td>
                 </tr>
@@ -593,8 +598,8 @@ function ExamTab({ readOnly, readOnlyReason, units, unitsLoading, showToast, onF
         <ExamScheduleDrawer
           mode={drawer.mode}
           guid={drawer.guid}
-          readOnly={readOnly}
-          readOnlyReason={readOnlyReason}
+          readOnly={readOnly || (drawer.mode === 'edit' && !permissions.edit)}
+          readOnlyReason={readOnlyReason ?? (drawer.mode === 'edit' && !permissions.edit ? 'You do not have permission to edit resit exam schedules.' : undefined)}
           units={units}
           unitsLoading={unitsLoading}
           onClose={closeDrawer}

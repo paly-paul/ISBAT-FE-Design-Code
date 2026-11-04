@@ -12,7 +12,7 @@ import { usePagination } from '@/hooks/usePagination'
 import { LedgerOtherFormModal } from '@/components/modals/finance/LedgerOtherFormModal'
 import { ViewLedgerOtherModal } from '@/components/modals/finance/ViewLedgerOtherModal'
 import { useLedgerOthersList, useCreateLedgerOther, useUpdateLedgerOther, useDeleteLedgerOther, LedgerOther } from '@/hooks/finance/useLedgerOthersMaster'
-import { useProcGlAccounts } from '@/hooks/finance/useProcGlAccounts'
+import { useProcGlAccountsDropdown } from '@/hooks/finance/useProcGlAccounts'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
@@ -46,7 +46,7 @@ export default function Page() {
   // where this app has no real timestamp to sort by. If the backend ever
   // starts sorting some other way, this will need revisiting.
   const sortedRows = useMemo(() => [...rows].reverse(), [rows])
-  const { data: glAccounts = [] } = useProcGlAccounts()
+  const { data: glAccounts = [] } = useProcGlAccountsDropdown()
   const createLedgerOther = useCreateLedgerOther()
   const updateLedgerOther = useUpdateLedgerOther()
   const deleteLedgerOther = useDeleteLedgerOther()

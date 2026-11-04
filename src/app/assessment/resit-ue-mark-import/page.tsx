@@ -1,5 +1,6 @@
 'use client'
 
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import Link from 'next/link'
@@ -68,6 +69,7 @@ const cloneRows = (rows: PreviewRow[]) => rows.map(r => ({ ...r, marks: { ...r.m
 // ── Page ───────────────────────────────────────────────────────────────────
 
 export default function ResitUeMarkImportPage() {
+  const permissions = usePagePermissions()
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const showToast = useCallback((msg: string, type = '') => { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }, [])
 
@@ -186,9 +188,11 @@ export default function ResitUeMarkImportPage() {
                             </td>
                             <td>
                               {e.status === 1 && e.resitScheduleGuid ? (
-                                <button className="btn btn-primary btn-sm" onClick={() => setDrawerExam(e)}>
-                                  <i className="lni lni-upload"></i> {e.importedCount > 0 ? 'Continue' : 'Import'}
-                                </button>
+                                permissions.import && (
+                                  <button className="btn btn-primary btn-sm" onClick={() => setDrawerExam(e)}>
+                                    <i className="lni lni-upload"></i> {e.importedCount > 0 ? 'Continue' : 'Import'}
+                                  </button>
+                                )
                               ) : e.status === 2 ? (
                                 <span className="text-xs font-semibold" style={{ color: 'var(--green)' }}><i className="lni lni-checkmark"></i> Completed</span>
                               ) : e.status === 3 ? (
@@ -236,6 +240,7 @@ interface ModalProps {
 }
 
 function ImportModal({ exam, showToast, onClose, onOpenExam }: ModalProps) {
+  const permissions = usePagePermissions()
   const guid = exam.resitScheduleGuid as string
   const columns = exam.columns
   const studentsQuery = useResitUeStudents(guid)
@@ -674,9 +679,11 @@ function ImportModal({ exam, showToast, onClose, onOpenExam }: ModalProps) {
         {!result && step === 1 && (
           <div className="modal-footer">
             <button className="btn btn-neu" onClick={() => goStep(2)}>I already have the file →</button>
-            <button className="btn btn-primary" onClick={handleDownload} disabled={download.isPending || pending === 0}>
-              <i className="lni lni-download"></i> {download.isPending ? 'Preparing…' : `Download template (${pending} student${pending === 1 ? '' : 's'})`}
-            </button>
+            {permissions.download && (
+              <button className="btn btn-primary" onClick={handleDownload} disabled={download.isPending || pending === 0}>
+                <i className="lni lni-download"></i> {download.isPending ? 'Preparing…' : `Download template (${pending} student${pending === 1 ? '' : 's'})`}
+              </button>
+            )}
           </div>
         )}
 

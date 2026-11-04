@@ -2,8 +2,7 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { ModalProps } from '../types'
 import { useProgramFeeLines, ProgramFeeStructureHeader } from '@/hooks/academic/useProgramFeeStructure'
-import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
-import { useProgramApprovals } from '@/hooks/academic/useProgramApproval'
+import { useProgramsByGuids } from '@/hooks/academic/useProgramMaster'
 import { useIntakesByGuids } from '@/hooks/academic/useIntakes'
 import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
 import { FailurePopup } from '../shared/FailurePopup'
@@ -52,16 +51,7 @@ const PANEL_PADDING = '20px clamp(14px, 4vw, 24px)'
 export function ViewFeeStructureModal({ isOpen, onClose, feeStructure, onEdit }: ViewFeeStructureModalProps) {
   const { data: feeLines = [], isLoading: feeLinesLoading, isError: feeLinesError, error: feeLinesErrorObj } = useProgramFeeLines(feeStructure?.feeHdGuid ?? null, isOpen && !!feeStructure)
 
-  const { data: programs = [] } = useProgramMasters(isOpen)
-  // GET /api/v1/academic/program-master only ever lists approved programmes
-  // (see programme-approval/page.tsx — a programme sits under the separate
-  // not-approved list until someone approves it). A fee structure can
-  // already be attached to a programme that's still pending approval, so a
-  // plain programs.find() against that approved-only list came back empty —
-  // "— (—)" — for one of those. Fall back to the not-approved list before
-  // giving up, same guid shape either way.
-  const { data: notApprovedData } = useProgramApprovals(1, 1000)
-  const notApprovedPrograms = notApprovedData?.items ?? []
+  const programsByGuid = useProgramsByGuids(isOpen && feeStructure ? [feeStructure.programGuid] : [])
   // Resolves just this one record's own intakeGuid (2026-09-10) instead of
   // useIntakes(isOpen)'s full 1000-row snapshot fetched just to look up a
   // single guid — same batched-by-guid convention as ViewProgrammeModal.
@@ -119,8 +109,7 @@ export function ViewFeeStructureModal({ isOpen, onClose, feeStructure, onEdit }:
     )
   }
 
-  const matchedProgram = programs.find(p => p.programGuid === feeStructure.programGuid)
-    ?? notApprovedPrograms.find(p => p.programGuid === feeStructure.programGuid)
+  const matchedProgram = programsByGuid.get(feeStructure.programGuid)
   const programName = matchedProgram?.programName || '—'
   const programCode = matchedProgram?.programCode
   const intakeName = (feeStructure.intakeGuid ? intakesByGuid.get(feeStructure.intakeGuid) : undefined)?.description || '—'

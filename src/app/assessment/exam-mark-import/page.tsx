@@ -1,5 +1,6 @@
 'use client'
 
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { useMemo, useRef, useState } from 'react'
 import { Toast } from '@/components/Toast'
 import { ScrollTable } from '@/components/ScrollTable'
@@ -48,6 +49,7 @@ function fmtSize(bytes: number) {
 }
 
 export default function ExamMarkImportPage() {
+  const permissions = usePagePermissions()
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 
@@ -165,9 +167,11 @@ export default function ExamMarkImportPage() {
           <div className="pg-sub">Load final exam results (IA and UE marks) from Excel. Saved results are published straight away.</div>
         </div>
         <div className="pg-actions">
-          <button className="btn btn-neu" onClick={handleTemplate} disabled={templateMut.isPending}>
-            <i className="lni lni-download"></i> {templateMut.isPending ? 'Preparing…' : 'Template download'}
-          </button>
+          {permissions.download && (
+            <button className="btn btn-neu" onClick={handleTemplate} disabled={templateMut.isPending}>
+              <i className="lni lni-download"></i> {templateMut.isPending ? 'Preparing…' : 'Template download'}
+            </button>
+          )}
         </div>
       </div>
 
@@ -176,9 +180,11 @@ export default function ExamMarkImportPage() {
         <div className="grid grid-cols-1 md:grid-cols-[120px_1fr] gap-x-4 gap-y-4 items-center">
           <label className="lbl mb-0">Select file <span className="text-red-500">*</span></label>
           <div className="flex items-center gap-3 flex-wrap">
-            <button className="btn btn-neu" onClick={() => fileRef.current?.click()} disabled={busy}>
-              <i className="lni lni-upload"></i> {file ? 'Replace' : 'Choose file'}
-            </button>
+            {permissions.import && (
+              <button className="btn btn-neu" onClick={() => fileRef.current?.click()} disabled={busy}>
+                <i className="lni lni-upload"></i> {file ? 'Replace' : 'Choose file'}
+              </button>
+            )}
             <input ref={fileRef} type="file" accept=".xlsx" className="hidden" onClick={e => { e.currentTarget.value = '' }} onChange={e => pickFile(e.target.files?.[0])} />
             {file ? (
               <span className="text-sm text-g800"><strong>{file.name}</strong> <span className="text-g500">· {fmtSize(file.size)}</span></span>
@@ -194,9 +200,11 @@ export default function ExamMarkImportPage() {
               <option value="">{sheetNames.length ? 'Select a sheet…' : 'Choose a file first'}</option>
               {sheetNames.map(n => <option key={n} value={n}>{n}</option>)}
             </select>
-            <button className="btn btn-primary" onClick={handleImport} disabled={!file || !sheet || busy}>
-              {previewMut.isPending ? <><i className="lni lni-spinner-solid animate-spin"></i> Checking…</> : <><i className="lni lni-eye"></i> Import</>}
-            </button>
+            {permissions.preview && (
+              <button className="btn btn-primary" onClick={handleImport} disabled={!file || !sheet || busy}>
+                {previewMut.isPending ? <><i className="lni lni-spinner-solid animate-spin"></i> Checking…</> : <><i className="lni lni-eye"></i> Import</>}
+              </button>
+            )}
           </div>
         </div>
         {fileError && <div className="danger-box mt-4 text-sm"><i className="lni lni-warning"></i> {fileError}</div>}
@@ -287,9 +295,11 @@ export default function ExamMarkImportPage() {
             </span>
             <div className="flex gap-2">
               <button className="btn btn-neu" onClick={clearAll} disabled={importMut.isPending}>Cancel</button>
-              <button className="btn btn-primary" onClick={() => setConfirmSave(true)} disabled={!canSave}>
-                {importMut.isPending ? <><i className="lni lni-spinner-solid animate-spin"></i> Saving…</> : `Save ${rows.length.toLocaleString()} marks`}
-              </button>
+              {permissions.publish && (
+                <button className="btn btn-primary" onClick={() => setConfirmSave(true)} disabled={!canSave}>
+                  {importMut.isPending ? <><i className="lni lni-spinner-solid animate-spin"></i> Saving…</> : `Save ${rows.length.toLocaleString()} marks`}
+                </button>
+              )}
             </div>
           </div>
         </div>

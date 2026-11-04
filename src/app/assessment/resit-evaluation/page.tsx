@@ -1,5 +1,6 @@
 'use client'
 
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { SearchSelect } from '@/components/SearchSelect'
@@ -76,6 +77,7 @@ function ProgressBar({ done, total }: { done: number; total: number }) {
 }
 
 export default function ResitEvaluationPage() {
+  const permissions = usePagePermissions()
   const queryClient = useQueryClient()
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
@@ -500,7 +502,7 @@ export default function ResitEvaluationPage() {
     const minReached = markedCount >= minQuestion
     const q = currentQuestion
     const state = q ? saveStates[q.answerGuid] : undefined
-    const readOnly = isEvaluated || !!q?.isMcq
+    const readOnly = isEvaluated || !!q?.isMcq || !permissions.save
 
     return (
       <div className="card" style={{ padding: 0, marginBottom: 0 }}>
@@ -624,7 +626,7 @@ export default function ResitEvaluationPage() {
               Next <i className="lni lni-chevron-right"></i>
             </button>
           </div>
-          {!isEvaluated && (
+          {!isEvaluated && permissions.submit && (
             <div className="flex justify-end mt-3">
               <span title={markedCount < minQuestion ? `Mark at least ${minQuestion} question(s) first.` : undefined}>
                 <button className="btn btn-primary" disabled={!canSubmit} onClick={handleSubmit}>
