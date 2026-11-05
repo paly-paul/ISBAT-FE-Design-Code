@@ -239,8 +239,8 @@ const ASSESSMENT_SECTIONS: MenuNode[] = [
     leaf('Hall Ticket Print', 'printer', '/assessment/hall-print'),
     // Whole-intake combined PDF (hall-ticket-print-all-page.md, 2026-10-06).
     leaf('Hall Ticket Print All', 'printer', '/assessment/hall-ticket-print-all'),
-    leaf('UE Material Print', 'printer', '/assessment/university-exam-material-print'),
-    leaf('UE Theory QP Print', 'printer', '/assessment/university-exam-qp-booklet-print'),
+    leaf('UE Theory QP Print', 'printer', '/assessment/university-exam-material-print'),
+    leaf('UE Material Print', 'printer', '/assessment/university-exam-qp-booklet-print'),
     leaf('UE Practical QP Print', 'printer', '/assessment/university-exam-practical-qp-print'),
     leaf('UE Project Booklet Print', 'printer', '/assessment/university-exam-project-booklet-print'),
     leaf('Resit Question Print', 'printer', '/assessment/resit-question-print'),
@@ -678,12 +678,14 @@ function renameIaCreation(menu: MenuNode[]): MenuNode[] {
         name: cleanMenuLabel(sec.name),
         children: sec.children.map(leafNode => {
           const slug = leafNode.url?.split('/').filter(Boolean).pop() ?? ''
+          if (slug === 'university-exam-material-print') {
+            return { ...leafNode, name: 'UE Theory QP Print' }
+          }
           if (
-            leafNode.name === 'UE QP/Booklet Print' ||
             slug === 'university-exam-qp-booklet-print' ||
             slug === 'university-exam-qpprint'
           ) {
-            return { ...leafNode, name: 'UE Theory QP Print' }
+            return { ...leafNode, name: 'UE Material Print' }
           }
           if (leafNode.name === 'IA Creation' || slug === 'ia-creation') {
             return { ...leafNode, name: 'Assessment Scheduler' }
