@@ -4718,9 +4718,13 @@ th:hover .th-fi {
   grid-column: 1 / 4;
 }
 
-/* Name + one value — NCHE & Guild's semester status has no amounts. */
+/* Name + one value — NCHE & Guild's semester status, Payment's paid ledgers. */
 .recgrid.recgrid-2col {
   grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.recgrid-2col .recgrid-foot>span:first-child {
+  grid-column: 1 / 2;
 }
 
 .recgrid-hdr {
@@ -14848,6 +14852,32 @@ body:has(.drawer-overlay) {
   transition: transform var(--tr), background var(--tr);
 }
 .mp-avatar:hover .mp-avatar-cam { transform: scale(1.08); background: var(--b700); }
+button.mp-avatar { padding: 0; font-family: inherit; }
+
+/* Change Photo popup: pick a source, then the camera stage. */
+.mp-photo-sources { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.mp-photo-source {
+  position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 32px 16px;
+  border: 1.5px solid var(--g200); border-radius: var(--rsm); background: var(--white); color: var(--g900);
+  font: inherit; font-weight: 600; text-align: center; cursor: pointer; transition: var(--tr);
+}
+.mp-photo-source i { font-size: 24px; color: var(--b700); margin-bottom: 4px; }
+.mp-photo-source small { font-size: var(--fs-sm); font-weight: 400; color: var(--g500); }
+.mp-photo-source:hover { border-color: var(--b300); background: var(--b50); }
+.mp-photo-source:focus-visible, .mp-photo-source:focus-within { outline: 2px solid var(--b600); outline-offset: 2px; }
+.mp-photo-source input, .mp-photo-upload-btn input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.mp-photo-upload-btn { position: relative; cursor: pointer; }
+.mp-photo-upload-btn:focus-within { outline: 2px solid var(--b600); outline-offset: 2px; }
+.mp-photo-stage {
+  position: relative; width: 100%; max-width: min(420px, 55vh); aspect-ratio: 1; margin: 0 auto;
+  border-radius: var(--rsm); overflow: hidden; background: var(--g900);
+}
+.mp-photo-stage video, .mp-photo-stage img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.mp-photo-stage.is-live video { transform: scaleX(-1); }
+.mp-photo-stage-msg { position: absolute; inset: 0; display: grid; place-items: center; color: var(--white); font-size: var(--fs-sm); }
+@media (max-width: 360px) {
+  .mp-photo-sources { grid-template-columns: minmax(0, 1fr); }
+}
 
 .mp-hero-id { min-width: 0; padding-top: 66px; }
 .mp-hero-name {

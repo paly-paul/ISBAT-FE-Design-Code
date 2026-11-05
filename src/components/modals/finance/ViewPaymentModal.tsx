@@ -8,7 +8,7 @@ interface ViewPaymentModalProps extends ModalProps {
 }
 
 function fmtAmount(n: number) {
-  return n.toLocaleString('en-US', { maximumFractionDigits: 2 })
+  return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
 // Read-only detail view for one row of Payment Console's own Tuition
@@ -53,32 +53,34 @@ export function ViewPaymentModal({ isOpen, onClose, entry }: ViewPaymentModalPro
           ) : paidLedgers.length === 0 ? (
             <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>No ledger breakdown found for this payment.</div>
           ) : (
-            // Same typography AND positioning as the Outstanding Balance
-            // table's own Discount/Total Payable footer rows (.recgrid-foot
-            // >span:first-child is right-aligned, not left — the label sits
-            // right next to the value at the row's right end, with nothing
-            // on the left, rather than a conventional label-left/value-right
-            // split). Those classes are grid-subgrid rows scoped to a
-            // .recgrid table this modal doesn't have, so the same look is
-            // reproduced here with plain flex + inline styles instead of
-            // reusing the classes directly.
-            paidLedgers.map((l, i) => (
-              <div
-                className="flex justify-end items-center gap-3"
-                style={{ padding: '10px 0', borderTop: i === 0 ? 'none' : '1px solid var(--g100)' }}
-                key={`${l.ledgerGuid}-${i}`}
-              >
-                <span style={{ color: 'var(--g500)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', fontSize: 'var(--fs-2xs)', textAlign: 'right' }}>
-                  {l.discountGuid ? `${l.ledgerName} (Discount${l.discountName ? `: ${l.discountName}` : ''})` : l.ledgerName}
-                  {l.semName && (
-                    <span style={{ display: 'block', textTransform: 'none', letterSpacing: 0, fontWeight: 500, fontSize: 11 }}>{l.semName}</span>
-                  )}
-                </span>
-                <span style={{ color: l.discountGuid ? 'var(--red)' : 'var(--g900)', fontWeight: 800, fontSize: 'var(--fs-md)' }}>
-                  {l.currencyName} {fmtAmount(l.amount)}
-                </span>
+            // Same ledger grid as Payment Console's Fee Breakdown. The total is
+            // the payment's own amount, not a sum of these rows, so it can't
+            // disagree with what was receipted.
+            <div className="recgrid recgrid-2col pcx-ledgers tabular-nums">
+              <div className="recgrid-row recgrid-hdr">
+                <span>Ledger</span>
+                <span>Amount</span>
               </div>
-            ))
+              {paidLedgers.map((l, i) => (
+                <div className="recgrid-row recgrid-body" key={`${l.ledgerGuid}-${i}`}>
+                  <span className="pcx-ledger-cell">
+                    <span className="pcx-ledger-name">{l.ledgerName}</span>
+                    {l.discountGuid && <span className="pcx-ledger-sub">Discount{l.discountName ? `: ${l.discountName}` : ''}</span>}
+                    {l.semName && <span className="pcx-ledger-sub">{l.semName}</span>}
+                  </span>
+                  <span data-label="Amount">
+                    <span>
+                      <span className={`font-bold${l.discountGuid ? ' text-clr-red' : ''}`}>{fmtAmount(l.amount)}</span>
+                      <span className="text-g400" style={{ display: 'block', fontSize: 11 }}>{l.currencyName}</span>
+                    </span>
+                  </span>
+                </div>
+              ))}
+              <div className="recgrid-foot recgrid-total">
+                <span>Amount Paid ({entry.currencyName})</span>
+                <span>{fmtAmount(entry.amount)}</span>
+              </div>
+            </div>
           )}
         </div>
         <div className="modal-footer">
