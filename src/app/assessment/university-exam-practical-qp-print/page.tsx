@@ -5,6 +5,7 @@ import { Toast } from '@/components/Toast'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { SearchSelect } from '@/components/SearchSelect'
 import { useIntakesDropdown } from '@/hooks/academic/useIntakes'
+import { useUeQuestionPrintCourseUnits } from '@/hooks/assessment/useUeMaterialPrint'
 import {
   useUePracticalPrintPrograms,
   useUePracticalPrintSemesters,
@@ -14,6 +15,33 @@ import {
   useDownloadUeQuestionPracticalWord,
   useDeleteUeQuestionPractical
 } from '@/hooks/assessment/useUePracticalPrint'
+
+const OUTCOME_NAMES = ['Printed', 'Reprinted', 'ExamRuleNotSet', 'QuestionsNotAvailable', 'ConfirmationRequired'] as const
+type QpOutcome = typeof OUTCOME_NAMES[number]
+
+function parseOutcome(result: any): { outcome: QpOutcome | null; message: string } {
+  if (result === null || result === undefined) return { outcome: null, message: '' }
+
+  const raw = result?.outcome ?? result?.Outcome ?? (typeof result === 'object' && 'data' in result ? (result.data?.outcome ?? result.data?.Outcome ?? result.data) : result)
+
+  let outcome: QpOutcome | null = null
+  if (typeof raw === 'number') {
+    outcome = OUTCOME_NAMES[raw] ?? null
+  } else if (typeof raw === 'string') {
+    const trimmed = raw.trim()
+    if (/^\d+$/.test(trimmed)) {
+      outcome = OUTCOME_NAMES[Number(trimmed)] ?? null
+    } else {
+      outcome = OUTCOME_NAMES.find(n => n.toLowerCase() === trimmed.toLowerCase()) ?? null
+    }
+  }
+
+  const message = (typeof result?.message === 'string' && result.message)
+    || (typeof result?.data?.message === 'string' && result.data.message)
+    || ''
+
+  return { outcome, message }
+}
 
 export default function UniversityExamPracticalQpPrintPage() {
   const permissions = usePagePermissions()
@@ -39,21 +67,52 @@ export default function UniversityExamPracticalQpPrintPage() {
   const { data: intakes, isLoading: intakesLoading } = useIntakesDropdown()
   const { data: programs, isLoading: programsLoading } = useUePracticalPrintPrograms()
   const { data: semesters, isLoading: semLoading } = useUePracticalPrintSemesters(selectedProgramGuid || null)
-  const { data: allProgramUnits, isLoading: unitsLoading } = useUePracticalProgramUnits(selectedProgramGuid || null)
+  const { data: allProgramUnits, isLoading: progUnitsLoading } = useUePracticalProgramUnits(selectedProgramGuid || null)
+  const { data: assessmentUnits, isLoading: assessUnitsLoading } = useUeQuestionPrintCourseUnits(
+    selectedProgramGuid,
+    selectedSemesterGuid,
+    Boolean(selectedProgramGuid && selectedSemesterGuid),
+    selectedIntakeGuid,
+    ['Practical']
+  )
+  const unitsLoading = progUnitsLoading || assessUnitsLoading
 
-  // Pre-select current intake
+  // Intake Dropdown Options: Load full list per MD line 19-20, mark current intake with label
+  const intakeOptions = useMemo(() => {
+    return (intakes ?? []).map(i => ({
+      value: i.intakeGuid,
+      label: i.currentIntake ? `${i.description || i.intakeCode} (Current)` : String(i.description || i.intakeCode || ''),
+    }))
+  }, [intakes])
+
+  // Pre-select current intake (user-editable per MD line 19)
   useEffect(() => {
-    if (intakes && !selectedIntakeGuid) {
-      const current = intakes.find(i => i.currentIntake)
+    if (intakes && intakes.length > 0 && !selectedIntakeGuid) {
+      const current = intakes.find(i => i.currentIntake) || intakes[0]
       if (current) setSelectedIntakeGuid(current.intakeGuid)
     }
   }, [intakes, selectedIntakeGuid])
 
-  // Filter Practical units for the selected semester
+  // Filter Practical units for the selected semester (case-insensitive per MD line 23)
+  // Uses academic allProgramUnits if available; safely falls back to assessmentUnits
+  // if user has only assessment permissions (e.g. 403 on academic endpoints).
   const courseUnits = useMemo(() => {
-    if (!allProgramUnits || !selectedSemesterGuid) return []
-    return allProgramUnits.filter((u: any) => u.semesterGuid === selectedSemesterGuid && u.unitTypeName === 'Practical')
-  }, [allProgramUnits, selectedSemesterGuid])
+    if (allProgramUnits && allProgramUnits.length > 0 && selectedSemesterGuid) {
+      const filtered = allProgramUnits.filter((u: any) =>
+        u.semesterGuid?.toLowerCase() === selectedSemesterGuid.toLowerCase() &&
+        (u.unitTypeName || '').trim().toLowerCase() === 'practical'
+      )
+      if (filtered.length > 0) return filtered
+    }
+    return (assessmentUnits ?? []).filter((u: any) =>
+      !u.unitTypeName || u.unitTypeName.trim().toLowerCase() === 'practical'
+    )
+  }, [allProgramUnits, selectedSemesterGuid, assessmentUnits])
+
+  const selectedUnitRow = useMemo(() => {
+    if (!selectedCourseUnitGuid || !courseUnits) return null
+    return courseUnits.find((u: any) => u.courseUnitGuid?.toLowerCase() === selectedCourseUnitGuid.toLowerCase())
+  }, [selectedCourseUnitGuid, courseUnits])
 
   const isFormValid = !!selectedIntakeGuid && !!selectedProgramGuid && !!selectedSemesterGuid && !!selectedCourseUnitGuid
 
@@ -77,6 +136,10 @@ export default function UniversityExamPracticalQpPrintPage() {
     setSelectedProgramGuid('')
     setSelectedSemesterGuid('')
     setSelectedCourseUnitGuid('')
+    if (intakes && intakes.length > 0) {
+      const current = intakes.find(i => i.currentIntake) || intakes[0]
+      if (current) setSelectedIntakeGuid(current.intakeGuid)
+    }
   }
 
   const downloadFile = (blob: Blob, filename: string | null, fallbackName: string) => {
@@ -101,33 +164,47 @@ export default function UniversityExamPracticalQpPrintPage() {
     setShowConfirmModal(false)
   }
 
+  const buildRequest = (confirm = false) => ({
+    programGuid: selectedProgramGuid,
+    semesterGuid: selectedSemesterGuid,
+    courseUnitGuid: selectedCourseUnitGuid,
+    intakeGuid: selectedIntakeGuid,
+    streamGuid: (selectedUnitRow as any)?.streamGuid ?? null,
+    confirm
+  })
+
   // --- Actions ---
 
   // 1. QP Print
   const handlePrintQP = async (confirm = false) => {
     if (!isFormValid) return
-    const req = {
-      programGuid: selectedProgramGuid,
-      semesterGuid: selectedSemesterGuid,
-      courseUnitGuid: selectedCourseUnitGuid,
-      intakeGuid: selectedIntakeGuid,
-      confirm
-    }
+    const req = buildRequest(confirm)
 
     try {
       const res = await printPracticalMut.mutateAsync(req)
+      const { outcome, message } = parseOutcome(res)
 
-      const outcome = String(res.outcome)
-
-      if (outcome === '2' || outcome === 'ExamRuleNotSet') {
-        showToast(res.message || 'University Exam not yet Scheduled!!', 'error')
-      } else if (outcome === '3' || outcome === 'QuestionsNotAvailable') {
-        showToast(res.message || 'Questions are not yet uploaded!!', 'error')
-      } else if (outcome === '4' || outcome === 'ConfirmationRequired') {
-        confirmAndExecute(res.message || 'Questions are already printed. Do you want to reprint the same?', () => handlePrintQP(true))
-      } else if (outcome === '0' || outcome === '1' || outcome === 'Printed' || outcome === 'Reprinted') {
-        showToast(res.message || `Question Paper Generated!`, 'success')
+      if (outcome === 'ConfirmationRequired') {
+        confirmAndExecute(message || 'Questions are already printed. Do you want to reprint the same?', () => handlePrintQP(true))
+        return
       }
+
+      if (outcome === 'ExamRuleNotSet') {
+        showToast(message || 'University Exam not yet Scheduled!!', 'error')
+        return
+      }
+
+      if (outcome === 'QuestionsNotAvailable') {
+        showToast(message || 'Questions are not yet uploaded!!', 'error')
+        return
+      }
+
+      if (outcome === 'Printed' || outcome === 'Reprinted') {
+        showToast(message || (outcome === 'Reprinted' ? 'Question Paper Reprinted!' : 'Question Paper Generated!'), 'success')
+        return
+      }
+
+      showToast(message || 'Question Paper Generated!', 'success')
     } catch (err: any) {
       showToast(err.message || 'Failed to print practical QP', 'error')
     }
@@ -136,35 +213,31 @@ export default function UniversityExamPracticalQpPrintPage() {
   // 2. QP Delete
   const handleDeleteQP = async (confirm = false) => {
     if (!isFormValid) return
-    const req = {
-      programGuid: selectedProgramGuid,
-      semesterGuid: selectedSemesterGuid,
-      courseUnitGuid: selectedCourseUnitGuid,
-      intakeGuid: selectedIntakeGuid,
-      confirm
-    }
+    const req = buildRequest(confirm)
 
     try {
       const res = await delPracticalMut.mutateAsync(req)
       if (res.data === false && !confirm) {
         confirmAndExecute(res.message || 'You are about to delete the QP set. Do you want to continue?', () => handleDeleteQP(true))
-      } else if (res.data === true) {
+        return
+      }
+      if (res.data === true || confirm) {
         showToast(res.message || 'Deleted successfully!', 'success')
       }
     } catch (err: any) {
-      showToast(err.message || 'Could not delete QP.', 'error')
+      const msg = err?.message || ''
+      if (msg.toLowerCase().includes('not found') || msg.toLowerCase().includes('could not delete')) {
+        showToast('No printed question paper found to delete.', 'info')
+      } else {
+        showToast(msg || 'Could not delete QP.', 'error')
+      }
     }
   }
 
   // Download Handlers
-  const handleDownload = async (type: 'QPPDF' | 'QPWord') => {
+  const handleDownload = async (type: 'QPPDF' | 'QPWord', confirm = false) => {
     if (!isFormValid) return
-    const req = {
-      programGuid: selectedProgramGuid,
-      semesterGuid: selectedSemesterGuid,
-      courseUnitGuid: selectedCourseUnitGuid,
-      intakeGuid: selectedIntakeGuid,
-    }
+    const req = buildRequest(confirm)
 
     try {
       if (type === 'QPPDF') {
@@ -175,12 +248,36 @@ export default function UniversityExamPracticalQpPrintPage() {
         downloadFile(blob, filename, 'Practical_QuestionPaper.doc')
       }
     } catch (err: any) {
-      showToast(err.message || 'Failed to download document', 'error')
+      // If questions haven't been printed yet (returns 404), seamlessly generate and download per MD flow
+      try {
+        const res = await printPracticalMut.mutateAsync(req)
+        const { outcome, message } = parseOutcome(res)
+
+        if (outcome === 'ConfirmationRequired') {
+          confirmAndExecute(message || 'Questions are already printed. Do you want to reprint the same?', () => handleDownload(type, true))
+          return
+        }
+
+        if (outcome === 'ExamRuleNotSet' || outcome === 'QuestionsNotAvailable') {
+          showToast(message || 'Questions are not yet available for this unit.', 'error')
+          return
+        }
+
+        if (type === 'QPPDF') {
+          const { blob, filename } = await dlPracticalPdfMut.mutateAsync(req)
+          downloadFile(blob, filename, 'Practical_QuestionPaper.pdf')
+        } else if (type === 'QPWord') {
+          const { blob, filename } = await dlPracticalWordMut.mutateAsync(req)
+          downloadFile(blob, filename, 'Practical_QuestionPaper.doc')
+        }
+      } catch (innerErr: any) {
+        showToast(innerErr.message || 'Failed to download document', 'error')
+      }
     }
   }
 
   const isWorking = printPracticalMut.isPending || dlPracticalPdfMut.isPending || dlPracticalWordMut.isPending || delPracticalMut.isPending
-  
+
   return (
     <div className="page active">
       <div className="pg-hdr flex justify-between items-end">
@@ -188,7 +285,7 @@ export default function UniversityExamPracticalQpPrintPage() {
           <h1 className="pg-title">University Exam Practical QP Print</h1>
           <p className="pg-sub">Generate and print exam materials for Practical course units</p>
         </div>
-        <button className="btn btn-neu" onClick={handleRefresh}>
+        <button className="btn btn-neu" onClick={handleRefresh} disabled={isWorking}>
           <i className="lni lni-reload"></i> Refresh
         </button>
       </div>
@@ -202,14 +299,7 @@ export default function UniversityExamPracticalQpPrintPage() {
               value={selectedIntakeGuid}
               onChange={setSelectedIntakeGuid}
               disabled={intakesLoading}
-              options={(() => {
-                const current = (intakes ?? []).filter(i => i.currentIntake)
-                const list = current.length > 0 ? current : (intakes && intakes.length > 0 ? [intakes[0]] : [])
-                return list.map(i => ({
-                  value: i.intakeGuid,
-                  label: `${i.description || i.intakeCode} (Current)`,
-                }))
-              })()}
+              options={intakeOptions}
             />
           </div>
           <div className="fg mb-0">
@@ -293,15 +383,15 @@ export default function UniversityExamPracticalQpPrintPage() {
                 Word Format
               </button>
 
-              {permissions.delete && (
-              <button 
-                className="flex flex-col items-center justify-center p-4 border rounded-xl gap-2 text-sm font-medium transition-all hover:border-red-500 hover:text-red-600 hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-gray-200 disabled:hover:shadow-none disabled:hover:text-gray-700 bg-red-50 border-red-100"
-                onClick={() => handleDeleteQP()}
-                disabled={!isFormValid || isWorking}
-              >
-                <i className="lni lni-trash-can text-3xl text-red-600"></i>
-                Delete QP
-              </button>
+              {permissions.delete !== false && (
+                <button 
+                  className="flex flex-col items-center justify-center p-4 border rounded-xl gap-2 text-sm font-medium transition-all hover:border-red-500 hover:text-red-600 hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-gray-200 disabled:hover:shadow-none disabled:hover:text-gray-700 bg-red-50 border-red-100"
+                  onClick={() => handleDeleteQP()}
+                  disabled={!isFormValid || isWorking}
+                >
+                  <i className="lni lni-trash-can text-3xl text-red-600"></i>
+                  Delete QP
+                </button>
               )}
             </div>
           </div>

@@ -6,11 +6,27 @@ import { Toast } from '@/components/Toast'
 import { useCurrentAcademicIntake, useIntakesDropdown } from '@/hooks/academic/useIntakes'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import {
-  useDownloadUeBookletPdf, useDownloadUeQuestionTheoryWord, usePrintUeBooklet,
-  usePrintUeQuestionTheory, useUeMaterialPrintPrograms, useUeMaterialPrintProgramUnits,
-  useUeMaterialPrintSemesters, useUeQuestionPrintCourseUnits,
+  useDownloadUeBookletPdf,
+  useDownloadUeQuestionTheoryWord,
+  usePrintUeBooklet,
+  usePrintUeQuestionTheory,
+  useUeMaterialPrintPrograms,
+  useUeMaterialPrintProgramUnits,
+  useUeMaterialPrintSemesters,
+  useUeQuestionPrintCourseUnits,
+  useDownloadUeQuestionTheoryPdf,
+  useDeleteUeQuestionTheory,
+  useDownloadUeQuestionTheoryAnswerKey,
+  useDownloadUeBookletAttendance,
+  useDownloadUeBookletCover,
+  useDownloadUeConsolidatedMarkSheet,
 } from '@/hooks/assessment/useUeMaterialPrint'
-import { useDownloadUeQuestionPracticalWord, usePrintUeQuestionPractical } from '@/hooks/assessment/useUePracticalPrint'
+import {
+  useDownloadUeQuestionPracticalWord,
+  usePrintUeQuestionPractical,
+  useDownloadUeQuestionPracticalPdf,
+  useDeleteUeQuestionPractical,
+} from '@/hooks/assessment/useUePracticalPrint'
 
 type EffectiveType = 'Theory' | 'Practical' | 'Project'
 
@@ -60,6 +76,7 @@ export default function UniversityExamMaterialPrintPage() {
   const [courseUnitGuid, setCourseUnitGuid] = useState('')
   const [combinedType, setCombinedType] = useState<'Theory' | 'Practical'>('Theory')
   const [confirmation, setConfirmation] = useState<{ message: string; action: () => void } | null>(null)
+  const [activeAction, setActiveAction] = useState<string | null>(null)
 
   const showToast = (msg: string, type = '') => {
     setToast({ msg, type })
@@ -103,7 +120,7 @@ export default function UniversityExamMaterialPrintPage() {
   const { data: programs, isLoading: programsLoading } = useUeMaterialPrintPrograms()
   const { data: semesters, isLoading: semestersLoading } = useUeMaterialPrintSemesters(programGuid || null)
   const { data: courseUnits, isLoading: unitsLoading } = useUeQuestionPrintCourseUnits(
-    programGuid, semesterGuid, Boolean(programGuid && semesterGuid),
+    programGuid, semesterGuid, Boolean(programGuid && semesterGuid), selectedIntakeGuid || currentIntake?.intakeGuid, ['Theory', 'Combined']
   )
   const { data: programUnits } = useUeMaterialPrintProgramUnits(programGuid || null)
 
@@ -139,23 +156,61 @@ export default function UniversityExamMaterialPrintPage() {
   const effectiveType: EffectiveType = selectedUnitType === 'Combined' ? combinedType : selectedUnitType
   const intakeGuid = selectedIntakeGuid || currentIntake?.intakeGuid || ''
   const formComplete = Boolean(intakeGuid && programGuid && semesterGuid && courseUnitGuid)
+
+  // Permissions mapping
   const canPrint = permissions.print !== false && Boolean(
     permissions.print || permissions.generate || permissions.add || permissions.view || permissions.get
   )
+  const canDelete = permissions.delete !== false && Boolean(
+    permissions.delete || permissions.edit || permissions.add
+  )
+  const canGetAnswerKeyPermission = (permissions as any).getanswerkey !== false && Boolean(
+    (permissions as any).getanswerkey || permissions.get || permissions.view || permissions.print
+  )
+  const canGetAttendancePermission = (permissions as any).getattendancesheet !== false && Boolean(
+    (permissions as any).getattendancesheet || permissions.get || permissions.view || permissions.print
+  )
+  const canGetCoverLetterPermission = (permissions as any).getcoverletter !== false && Boolean(
+    (permissions as any).getcoverletter || permissions.get || permissions.view || permissions.print
+  )
+  const canGetConsolidatedPermission = permissions.get !== false && Boolean(
+    permissions.get || permissions.view || permissions.print
+  )
 
-  // Both actions are enabled when form inputs are complete and user has print permissions.
-  // Validation is driven by the real backend API responses when printing is attempted.
   const canPrintBooklet = formComplete && canPrint
-  const canPrintQuestionPaper = formComplete && canPrint
+  const canPrintQuestionPaperWord = formComplete && canPrint
+  const canPrintQuestionPaperPdf = formComplete && canPrint
+  const canDeleteQuestionPaper = formComplete && canDelete
+  const canGetAnswerKey = formComplete && canGetAnswerKeyPermission && effectiveType !== 'Practical'
+  const canGetAttendance = formComplete && canGetAttendancePermission
+  const canGetCoverLetter = formComplete && canGetCoverLetterPermission
+  const canGetConsolidated = formComplete && canGetConsolidatedPermission
 
+  // Hook instances
   const printBooklet = usePrintUeBooklet()
   const downloadBooklet = useDownloadUeBookletPdf()
+  const downloadAttendance = useDownloadUeBookletAttendance()
+  const downloadCover = useDownloadUeBookletCover()
+  const downloadConsolidated = useDownloadUeConsolidatedMarkSheet()
+
   const printTheory = usePrintUeQuestionTheory()
   const downloadTheoryWord = useDownloadUeQuestionTheoryWord()
+  const downloadTheoryPdf = useDownloadUeQuestionTheoryPdf()
+  const deleteTheory = useDeleteUeQuestionTheory()
+  const downloadTheoryAnswerKey = useDownloadUeQuestionTheoryAnswerKey()
+
   const printPractical = usePrintUeQuestionPractical()
   const downloadPracticalWord = useDownloadUeQuestionPracticalWord()
-  const isWorking = printBooklet.isPending || downloadBooklet.isPending || printTheory.isPending ||
-    downloadTheoryWord.isPending || printPractical.isPending || downloadPracticalWord.isPending
+  const downloadPracticalPdf = useDownloadUeQuestionPracticalPdf()
+  const deletePractical = useDeleteUeQuestionPractical()
+
+  const isWorking = activeAction !== null ||
+    printBooklet.isPending || downloadBooklet.isPending ||
+    downloadAttendance.isPending || downloadCover.isPending || downloadConsolidated.isPending ||
+    printTheory.isPending || downloadTheoryWord.isPending || downloadTheoryPdf.isPending ||
+    deleteTheory.isPending || downloadTheoryAnswerKey.isPending ||
+    printPractical.isPending || downloadPracticalWord.isPending || downloadPracticalPdf.isPending ||
+    deletePractical.isPending
 
   const request = (confirm = false) => ({
     programGuid,
@@ -172,6 +227,7 @@ export default function UniversityExamMaterialPrintPage() {
     setCourseUnitGuid('')
     setCombinedType('Theory')
     setValidationError(null)
+    setActiveAction(null)
     if (intakeOptions.length > 0) {
       setSelectedIntakeGuid(intakeOptions[0].value)
     }
@@ -188,12 +244,15 @@ export default function UniversityExamMaterialPrintPage() {
     window.URL.revokeObjectURL(url)
   }
 
+  // 1. Booklet Print
   const handleBookletPrint = async (confirm = false) => {
     if (!canPrintBooklet || isWorking) return
     setValidationError(null)
+    setActiveAction('booklet')
     try {
       const result = await printBooklet.mutateAsync(request(confirm))
       if (result.confirmationRequired && !confirm) {
+        setActiveAction(null)
         setConfirmation({
           message: result.message || 'Booklets are already printed. Do you want to reprint the same?',
           action: () => handleBookletPrint(true),
@@ -207,12 +266,17 @@ export default function UniversityExamMaterialPrintPage() {
       const errMsg = error?.message || 'Failed to print booklet. Please verify enrollment and exam schedules.'
       setValidationError(errMsg)
       showToast(errMsg, 'error')
+    } finally {
+      setActiveAction(null)
     }
   }
 
-  const handleQuestionPaperPrint = async (confirm = false) => {
-    if (!canPrintQuestionPaper || isWorking) return
+  // 2. Question Paper Print (Word or PDF)
+  const handleQuestionPaperPrint = async (format: 'word' | 'pdf', confirm = false) => {
+    const allowed = format === 'word' ? canPrintQuestionPaperWord : canPrintQuestionPaperPdf
+    if (!allowed || isWorking) return
     setValidationError(null)
+    setActiveAction(format === 'word' ? 'qp-word' : 'qp-pdf')
     try {
       const result = effectiveType === 'Practical'
         ? await printPractical.mutateAsync(request(confirm))
@@ -221,9 +285,10 @@ export default function UniversityExamMaterialPrintPage() {
       const { outcome, message } = parseOutcome(result)
 
       if (outcome === 'ConfirmationRequired') {
+        setActiveAction(null)
         setConfirmation({
           message: message || 'Questions are already printed. Do you want to reprint the same?',
-          action: () => handleQuestionPaperPrint(true),
+          action: () => handleQuestionPaperPrint(format, true),
         })
         return
       }
@@ -241,20 +306,34 @@ export default function UniversityExamMaterialPrintPage() {
       }
       if (outcome === 'Printed' || outcome === 'Reprinted') {
         setValidationError(null)
-        const file = effectiveType === 'Practical'
-          ? await downloadPracticalWord.mutateAsync(request())
-          : await downloadTheoryWord.mutateAsync(request())
-        download(file.blob, file.filename, 'QuestionPaper.doc')
+        if (format === 'pdf') {
+          const file = effectiveType === 'Practical'
+            ? await downloadPracticalPdf.mutateAsync(request())
+            : await downloadTheoryPdf.mutateAsync(request())
+          download(file.blob, file.filename, 'QuestionPaper.pdf')
+        } else {
+          const file = effectiveType === 'Practical'
+            ? await downloadPracticalWord.mutateAsync(request())
+            : await downloadTheoryWord.mutateAsync(request())
+          download(file.blob, file.filename, 'QuestionPaper.doc')
+        }
         showToast(message || (outcome === 'Reprinted' ? 'Question paper reprinted successfully.' : 'Question paper downloaded successfully.'), 'success')
         return
       }
 
-      // Fallback: If print completed without a blocking outcome, proceed to download Word doc
+      // Fallback: If print completed without a blocking outcome, proceed to download requested format
       try {
-        const file = effectiveType === 'Practical'
-          ? await downloadPracticalWord.mutateAsync(request())
-          : await downloadTheoryWord.mutateAsync(request())
-        download(file.blob, file.filename, 'QuestionPaper.doc')
+        if (format === 'pdf') {
+          const file = effectiveType === 'Practical'
+            ? await downloadPracticalPdf.mutateAsync(request())
+            : await downloadTheoryPdf.mutateAsync(request())
+          download(file.blob, file.filename, 'QuestionPaper.pdf')
+        } else {
+          const file = effectiveType === 'Practical'
+            ? await downloadPracticalWord.mutateAsync(request())
+            : await downloadTheoryWord.mutateAsync(request())
+          download(file.blob, file.filename, 'QuestionPaper.doc')
+        }
         showToast(message || 'Question paper downloaded successfully.', 'success')
         return
       } catch (downloadErr: any) {
@@ -266,26 +345,129 @@ export default function UniversityExamMaterialPrintPage() {
       const errMsg = error?.message || 'Failed to print question paper.'
       setValidationError(errMsg)
       showToast(errMsg, 'error')
+    } finally {
+      setActiveAction(null)
     }
   }
 
-  const bookletHint = !formComplete
-    ? 'Select Academic Intake, Programme, Semester and Course Unit first.'
-    : !canPrint
-      ? 'You do not have permission to print booklets.'
-      : ''
+  // 3. Delete Question Paper
+  const handleQuestionPaperDelete = async (confirm = false) => {
+    if (!canDeleteQuestionPaper || isWorking) return
+    setValidationError(null)
+    setActiveAction('qp-delete')
+    try {
+      const res = effectiveType === 'Practical'
+        ? await deletePractical.mutateAsync(request(confirm))
+        : await deleteTheory.mutateAsync(request(confirm))
 
-  const qpHint = !formComplete
-    ? 'Select Academic Intake, Programme, Semester and Course Unit first.'
-    : !canPrint
-      ? 'You do not have permission to print question papers.'
-      : ''
+      if (res.data === false && !confirm) {
+        setActiveAction(null)
+        setConfirmation({
+          message: res.message || 'You are about to delete the QP set. Do you want to continue?',
+          action: () => handleQuestionPaperDelete(true),
+        })
+        return
+      }
+      if (res.data === true || confirm) {
+        showToast(res.message || 'Deleted successfully......!', 'success')
+      }
+    } catch (error: any) {
+      const errMsg = error?.message || 'Could not delete question paper. Please verify if questions have been printed.'
+      setValidationError(errMsg)
+      showToast(errMsg, 'error')
+    } finally {
+      setActiveAction(null)
+    }
+  }
+
+  // 4. Download Answer Key
+  const handleAnswerKeyDownload = async () => {
+    if (!canGetAnswerKey || isWorking) return
+    setValidationError(null)
+    setActiveAction('answer-key')
+    try {
+      const file = await downloadTheoryAnswerKey.mutateAsync(request())
+      download(file.blob, file.filename, 'AnswerKey.pdf')
+      showToast('Answer key downloaded successfully.', 'success')
+    } catch (error: any) {
+      const errMsg = error?.message || 'Failed to download answer key. Ensure questions have been printed.'
+      setValidationError(errMsg)
+      showToast(errMsg, 'error')
+    } finally {
+      setActiveAction(null)
+    }
+  }
+
+  // 5. Download Attendance Sheet
+  const handleAttendanceDownload = async () => {
+    if (!canGetAttendance || isWorking) return
+    setValidationError(null)
+    setActiveAction('attendance')
+    try {
+      const file = await downloadAttendance.mutateAsync(request())
+      download(file.blob, file.filename, 'AttendanceSheet.pdf')
+      showToast('Attendance sheet downloaded successfully.', 'success')
+    } catch (error: any) {
+      const errMsg = error?.message || 'Failed to download attendance sheet. Ensure booklet has been printed.'
+      setValidationError(errMsg)
+      showToast(errMsg, 'error')
+    } finally {
+      setActiveAction(null)
+    }
+  }
+
+  // 6. Download Cover Letter
+  const handleCoverLetterDownload = async () => {
+    if (!canGetCoverLetter || isWorking) return
+    setValidationError(null)
+    setActiveAction('cover')
+    try {
+      const file = await downloadCover.mutateAsync(request())
+      download(file.blob, file.filename, 'CoverLetter.pdf')
+      showToast('Cover letter downloaded successfully.', 'success')
+    } catch (error: any) {
+      const errMsg = error?.message || 'Failed to download cover letter. Ensure booklet has been printed.'
+      setValidationError(errMsg)
+      showToast(errMsg, 'error')
+    } finally {
+      setActiveAction(null)
+    }
+  }
+
+  // 7. Download Consolidated Mark Sheet
+  const handleConsolidatedMarkSheetDownload = async () => {
+    if (!canGetConsolidated || isWorking) return
+    setValidationError(null)
+    setActiveAction('consolidated')
+    try {
+      const file = await downloadConsolidated.mutateAsync(request())
+      download(file.blob, file.filename, 'ConsolidatedMarkSheet.pdf')
+      showToast('Consolidated mark sheet downloaded successfully.', 'success')
+    } catch (error: any) {
+      const errMsg = error?.message || 'Failed to download consolidated mark sheet. Ensure booklet has been printed.'
+      setValidationError(errMsg)
+      showToast(errMsg, 'error')
+    } finally {
+      setActiveAction(null)
+    }
+  }
+
+  // Tooltips & Hints
+  const formHint = !formComplete ? 'Select Academic Intake, Programme, Semester and Course Unit first.' : ''
+  const bookletHint = formHint || (!canPrint ? 'You do not have permission to print booklets.' : '')
+  const qpPdfHint = formHint || (!canPrint ? 'You do not have permission to print question papers.' : '')
+  const qpWordHint = formHint || (!canPrint ? 'You do not have permission to download question papers in Word.' : '')
+  const qpDeleteHint = formHint || (!canDelete ? 'You do not have permission to delete question papers.' : '')
+  const answerKeyHint = formHint || (effectiveType === 'Practical' ? 'Answer Key is only applicable for Theory components.' : (!canGetAnswerKeyPermission ? 'You do not have permission to download answer key.' : ''))
+  const attendanceHint = formHint || (!canGetAttendancePermission ? 'You do not have permission to download attendance sheet.' : '')
+  const coverLetterHint = formHint || (!canGetCoverLetterPermission ? 'You do not have permission to download cover letter.' : '')
+  const consolidatedHint = formHint || (!canGetConsolidatedPermission ? 'You do not have permission to download consolidated mark sheet.' : '')
 
   return (
     <div className="page active">
       <div className="pg-hdr">
         <h1 className="pg-title">University Exam Material Print</h1>
-        <p className="pg-sub">Print the exam booklet or question paper for the current intake.</p>
+        <p className="pg-sub">Generate and download university exam booklets, question papers, answer keys, attendance sheets, and cover letters.</p>
       </div>
 
       <div className="card mb-5">
@@ -296,7 +478,7 @@ export default function UniversityExamMaterialPrintPage() {
               placeholder="— Select Intake —"
               value={selectedIntakeGuid}
               onChange={setSelectedIntakeGuid}
-              disabled={intakeLoading}
+              disabled={true}
               options={intakeOptions}
             />
           </div>
@@ -390,28 +572,110 @@ export default function UniversityExamMaterialPrintPage() {
           </div>
         )}
 
-        <div className="p-5 pt-0 flex flex-wrap gap-3">
-          <button
-            className="btn btn-primary"
-            onClick={() => handleBookletPrint()}
-            disabled={!canPrintBooklet || isWorking}
-            title={bookletHint}
-          >
-            <i className={`lni ${printBooklet.isPending || downloadBooklet.isPending ? 'lni-spinner lni-is-spinning' : 'lni-printer'}`} />
-            {printBooklet.isPending || downloadBooklet.isPending ? ' Printing...' : ' Print'}
-          </button>
-          <button
-            className="btn btn-neu"
-            onClick={() => handleQuestionPaperPrint()}
-            disabled={!canPrintQuestionPaper || isWorking}
-            title={qpHint}
-          >
-            <i className={`lni ${printTheory.isPending || downloadTheoryWord.isPending || printPractical.isPending || downloadPracticalWord.isPending ? 'lni-spinner lni-is-spinning' : 'lni-download'}`} />
-            {printTheory.isPending || downloadTheoryWord.isPending || printPractical.isPending || downloadPracticalWord.isPending ? ' Downloading...' : ' QP Print in MS Word'}
-          </button>
-          <button className="btn btn-neu" onClick={reset} disabled={isWorking}>
-            <i className="lni lni-reload" /> Refresh
-          </button>
+        {/* Actions Toolbar */}
+        <div className="p-5 pt-0 flex flex-col gap-4">
+          <div className="border-t border-gray-100 pt-4">
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-2.5">
+              Booklet & Exam Materials
+            </span>
+            <div className="flex flex-wrap gap-2.5">
+              <button
+                className="btn btn-primary"
+                onClick={() => handleBookletPrint()}
+                disabled={!canPrintBooklet || isWorking}
+                title={bookletHint}
+              >
+                <i className={`lni ${activeAction === 'booklet' ? 'lni-spinner lni-is-spinning' : 'lni-printer'}`} />
+                {activeAction === 'booklet' ? ' Printing...' : ' Print Booklet'}
+              </button>
+
+              <button
+                className="btn btn-neu"
+                onClick={handleAttendanceDownload}
+                disabled={!canGetAttendance || isWorking}
+                title={attendanceHint}
+              >
+                <i className={`lni ${activeAction === 'attendance' ? 'lni-spinner lni-is-spinning' : 'lni-users'}`} />
+                {activeAction === 'attendance' ? ' Downloading...' : ' Attendance Sheet'}
+              </button>
+
+              <button
+                className="btn btn-neu"
+                onClick={handleCoverLetterDownload}
+                disabled={!canGetCoverLetter || isWorking}
+                title={coverLetterHint}
+              >
+                <i className={`lni ${activeAction === 'cover' ? 'lni-spinner lni-is-spinning' : 'lni-envelope'}`} />
+                {activeAction === 'cover' ? ' Downloading...' : ' Cover Letter'}
+              </button>
+
+              <button
+                className="btn btn-neu"
+                onClick={handleConsolidatedMarkSheetDownload}
+                disabled={!canGetConsolidated || isWorking}
+                title={consolidatedHint}
+              >
+                <i className={`lni ${activeAction === 'consolidated' ? 'lni-spinner lni-is-spinning' : 'lni-files'}`} />
+                {activeAction === 'consolidated' ? ' Downloading...' : ' Consolidated Mark Sheet'}
+              </button>
+            </div>
+          </div>
+
+          <div className="border-t border-gray-100 pt-4">
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-2.5">
+              Question Paper Materials
+            </span>
+            <div className="flex flex-wrap gap-2.5">
+              <button
+                className="btn btn-neu"
+                onClick={() => handleQuestionPaperPrint('pdf')}
+                disabled={!canPrintQuestionPaperPdf || isWorking}
+                title={qpPdfHint}
+              >
+                <i className={`lni ${activeAction === 'qp-pdf' ? 'lni-spinner lni-is-spinning' : 'lni-printer'}`} />
+                {activeAction === 'qp-pdf' ? ' Printing...' : ' QP Print (PDF)'}
+              </button>
+
+              <button
+                className="btn btn-neu"
+                onClick={() => handleQuestionPaperPrint('word')}
+                disabled={!canPrintQuestionPaperWord || isWorking}
+                title={qpWordHint}
+              >
+                <i className={`lni ${activeAction === 'qp-word' ? 'lni-spinner lni-is-spinning' : 'lni-download'}`} />
+                {activeAction === 'qp-word' ? ' Downloading...' : ' QP Print in MS Word'}
+              </button>
+
+              <button
+                className="btn btn-neu"
+                onClick={handleAnswerKeyDownload}
+                disabled={!canGetAnswerKey || isWorking}
+                title={answerKeyHint}
+              >
+                <i className={`lni ${activeAction === 'answer-key' ? 'lni-spinner lni-is-spinning' : 'lni-key'}`} />
+                {activeAction === 'answer-key' ? ' Downloading...' : ' Answer Key'}
+              </button>
+
+              <button
+                className="btn btn-danger"
+                onClick={() => handleQuestionPaperDelete()}
+                disabled={!canDeleteQuestionPaper || isWorking}
+                title={qpDeleteHint}
+              >
+                <i className={`lni ${activeAction === 'qp-delete' ? 'lni-spinner lni-is-spinning' : 'lni-trash-can'}`} />
+                {activeAction === 'qp-delete' ? ' Deleting...' : ' Delete QP'}
+              </button>
+            </div>
+          </div>
+
+          <div className="border-t border-gray-100 pt-4 flex justify-between items-center">
+            <span className="text-xs text-gray-400">
+              Select all mandatory fields above to enable materials generation.
+            </span>
+            <button className="btn btn-neu" onClick={reset} disabled={isWorking}>
+              <i className="lni lni-reload" /> Refresh
+            </button>
+          </div>
         </div>
       </div>
 

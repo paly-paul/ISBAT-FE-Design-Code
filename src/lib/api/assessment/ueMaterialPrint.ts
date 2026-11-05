@@ -25,7 +25,12 @@ export interface UeBookletResponse {
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
 // -- Dropdowns --
-export function getUeQuestionPrintCourseUnits(programGuid: string, semesterGuid: string) {
+export function getUeQuestionPrintCourseUnits(
+  programGuid: string,
+  semesterGuid: string,
+  intakeGuid?: string,
+  unitTypes?: string[]
+) {
   if (MOCK_AUTH) return Promise.resolve([
     { courseUnitGuid: 'cu-1', courseUnitCode: 'CS101', courseUnitName: 'Introduction to CS', unitTypeName: 'Theory' },
     { courseUnitGuid: 'cu-2', courseUnitCode: 'CS103', courseUnitName: 'Advanced CS', unitTypeName: 'Theory' }
@@ -34,7 +39,13 @@ export function getUeQuestionPrintCourseUnits(programGuid: string, semesterGuid:
     programGuid: programGuid?.toUpperCase() || '',
     semesterGuid: semesterGuid?.toUpperCase() || ''
   })
-  return apiGet<{ courseUnitGuid: string; courseUnitCode: string; courseUnitName: string }[]>(`/api/v1/assessment/ue-question-print/course-units?${params.toString()}`)
+  if (intakeGuid) {
+    params.append('intakeGuid', intakeGuid.toUpperCase())
+  }
+  if (unitTypes && unitTypes.length > 0) {
+    unitTypes.forEach(ut => params.append('unitTypes', ut))
+  }
+  return apiGet<{ courseUnitGuid: string; courseUnitCode: string; courseUnitName: string; unitTypeName?: string }[]>(`/api/v1/assessment/ue-question-print/course-units?${params.toString()}`)
 }
 
 // -- Theory Actions --

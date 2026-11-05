@@ -124,6 +124,13 @@ function visibleChildren(children: MenuNode[], railId: RailId): MenuNode[] {
 function getItemDisplayName(item: MenuNode): string {
   if (!item.url) return item.name
   const id = idFromUrl(item.url)
+  if (
+    item.name === 'UE QP/Booklet Print' ||
+    id === 'university-exam-qp-booklet-print' ||
+    id === 'university-exam-qpprint'
+  ) {
+    return 'UE Theory QP Print'
+  }
   return item.name === 'IA Creation' || id === 'ia-creation'
     ? 'Assessment Scheduler'
     : id === 'mark-ue'
