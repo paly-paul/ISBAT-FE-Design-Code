@@ -466,7 +466,7 @@ export default function UniversityExamMaterialPrintPage() {
   return (
     <div className="page active">
       <div className="pg-hdr">
-        <h1 className="pg-title">University Exam Material Print</h1>
+        <h1 className="pg-title">University Exam Theory QP Print</h1>
         <p className="pg-sub">Generate and download university exam booklets, question papers, answer keys, attendance sheets, and cover letters.</p>
       </div>
 

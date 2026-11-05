@@ -313,7 +313,7 @@ export default function UniversityExamQpBookletPrintPage() {
     <div className="page active">
       <div className="pg-hdr">
         <div>
-          <h1 className="pg-title">University Exam Theory QP Print</h1>
+          <h1 className="pg-title">University Exam Material Print</h1>
           <p className="pg-sub">A leaner, unit-type-agnostic print console for Theory, Practical, Combined, and Project units.</p>
         </div>
       </div>
