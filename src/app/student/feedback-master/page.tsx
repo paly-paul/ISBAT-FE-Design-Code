@@ -56,8 +56,6 @@ type Confirm =
   | { kind: 'question'; q: FeedbackQuestion }
 
 export default function FeedbackMasterPage() {
-  // Permission checks disabled for now — every action is allowed. Restore the
-  // line below (and the import above) to gate actions by the menu permissions again.
   const permissions = usePagePermissions()
   const queryClient = useQueryClient()
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)

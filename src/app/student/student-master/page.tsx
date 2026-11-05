@@ -15,7 +15,7 @@ import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { useStudentsFilter, useStudentsFilterMulti, getStudentsFilterCombinations, useStudentsInfinite } from '@/hooks/student/useStudents'
-import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
+import { useProgramDropdown } from '@/hooks/academic/useProgramMaster'
 import { useBatchesForIntakes } from '@/hooks/academic/useBatches'
 import { useSemesterCodeGroups } from '@/hooks/academic/useSemesters'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
@@ -205,7 +205,7 @@ function StudentMasterContent() {
   function updateColFilters(patch: Partial<ColumnFilterState>) { setColFilters(prev => ({ ...prev, ...patch })); setPage(1); setOpenColFilter(null) }
   function clearColFilters() { setColFilters(EMPTY_COLUMN_FILTERS); setPage(1); setOpenColFilter(null) }
 
-  const { data: programs = [] } = useProgramMasters()
+  const { data: programs = [] } = useProgramDropdown()
   // Semester options come from GET /academic/semesters/filter/by-semcode —
   // one option per semCode ("Year One - Semester One", …), usable without a
   // Programme picked. /students/filter only filters by semesterGuid, so a
@@ -220,13 +220,16 @@ function StudentMasterContent() {
 
   // Batch filter options: the batches of whichever intakes the list is
   // filtered to (Academic Intake codes mapped to guids, plus any joined
-  // intake). GET /batches lists one intake at a time and has no 'all
-  // intakes', so with no intake filter it shows the current admission
-  // intake's batches. Fetched only once the Batch filter is opened or used.
-  const batchIntakeGuids = [
+  // intake). With no intake filter it shows the current admission intake's
+  // batches. Fetched only once the Batch filter is opened or used.
+  const filteredIntakeGuids = [
     ...intakes.filter(i => colFilters.academicIntake.includes(String(i.intakeCode))).map(i => i.intakeGuid),
     ...colFilters.intakeGuid,
   ]
+  const currentAdmissionIntakeGuid = intakes.find(i => i.currentAdmissionIntake)?.intakeGuid
+  const batchIntakeGuids = filteredIntakeGuids.length
+    ? filteredIntakeGuids
+    : currentAdmissionIntakeGuid ? [currentAdmissionIntakeGuid] : []
   const needBatches = openColFilter === 'batchGuid' || colFilters.batchGuid.length > 0
   const { batches, isLoading: batchesLoading } = useBatchesForIntakes(batchIntakeGuids, needBatches)
 

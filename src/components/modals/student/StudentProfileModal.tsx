@@ -1,7 +1,7 @@
 'use client'
 import { ModalProps } from '../types'
 import { useStudent } from '@/hooks/student/useStudents'
-import { useCountries } from '@/hooks/config/useCountries'
+import { useCountriesByGuids } from '@/hooks/config/useCountries'
 
 interface Props extends ModalProps {
   studentGuid: string | null
@@ -27,7 +27,8 @@ export function StudentProfileModal({ isOpen, onClose, studentGuid }: Props) {
   // applicationSummary.countryGuid matched any row here, so this app has no
   // catalogue that actually resolves that guid — see the comment on
   // `nationality` below for what that means for the fallback chain.
-  const { data: countries } = useCountries()
+  const needsCountryLookup = isOpen && student?.nationality == null && student?.nationalityCode == null
+  const { countries } = useCountriesByGuids(needsCountryLookup ? [student?.nationalityGuid ?? student?.applicationSummary?.countryGuid ?? ''] : [])
 
   if (!isOpen || !studentGuid) return null
 
@@ -49,7 +50,7 @@ export function StudentProfileModal({ isOpen, onClose, studentGuid }: Props) {
   const nationalityGuidCandidate = student?.nationalityGuid ?? student?.applicationSummary?.countryGuid ?? null
   const nationality = student?.nationality
     ?? student?.nationalityCode
-    ?? countries?.find(c => c.countryGuid === nationalityGuidCandidate)?.nationality
+    ?? countries.find(c => c.countryGuid === nationalityGuidCandidate)?.nationality
     ?? '—'
 
   return (

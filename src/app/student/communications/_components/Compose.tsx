@@ -84,9 +84,10 @@ interface Props {
   onCancel: () => void
   onSent: (selectedRecipients: number) => void
   showToast: (msg: string, type?: string) => void
+  allowSend: boolean
 }
 
-export function Compose({ onCancel, onSent, showToast }: Props) {
+export function Compose({ onCancel, onSent, showToast, allowSend }: Props) {
   // ── Filters (left) ──
   const [form, setForm] = useState<FilterForm>(EMPTY_FORM)
   const [applied, setApplied] = useState<StudentSearchFilters>({})
@@ -467,7 +468,7 @@ export function Compose({ onCancel, onSent, showToast }: Props) {
 
       <div className="cm-compose-ftr">
         <button className="btn btn-neu" onClick={requestCancel}>Cancel</button>
-        {showRight && (
+        {showRight && allowSend && (
           <button className="btn btn-primary" disabled={!canSend} onClick={() => setConfirmOpen(true)}>
             <i className="lni lni-telegram-original"></i> Send to {recipientCount.toLocaleString()} Student{recipientCount === 1 ? '' : 's'}
           </button>

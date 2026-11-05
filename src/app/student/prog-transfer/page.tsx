@@ -10,7 +10,7 @@ import { BaselinePanel } from '@/components/student/BaselinePanel'
 import { StudentDto, StudentDetailDto, normalizeStudentDetail } from '@/lib/api/student/student'
 import { oneSemesterDiscountInForce } from '@/lib/api/student/studentDiscount'
 import { useStudent } from '@/hooks/student/useStudents'
-import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
+import { useProgramDropdown } from '@/hooks/academic/useProgramMaster'
 import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
 import {
   useProgramTransferDetail,
@@ -78,8 +78,6 @@ function ProgTransferContent() {
   // deep-link convention Student Master's own "View" action uses to reach
   // Profile itself.
   const studentGuidParam = searchParams.get('studentGuid')
-  // Permission checks disabled for now — every action is allowed. Restore the
-  // line below (and the import above) to gate actions by the menu permissions again.
   const permissions = usePagePermissions()
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [student, setStudent] = useState<StudentDto | null>(null)
@@ -98,7 +96,7 @@ function ProgTransferContent() {
   const { data: history = [] } = useProgramTransferHistory(student?.studentGuid ?? null)
   const postProgramTransfer = usePostProgramTransfer()
 
-  const { data: programmes = [] } = useProgramMasters(!!student)
+  const { data: programmes = [] } = useProgramDropdown(undefined, !!student)
   const programOptions = programmes.length > 0
     ? programmes.map(p => ({ value: p.programGuid, label: p.programName }))
     : TARGET_PROGRAMMES_FALLBACK
@@ -134,7 +132,7 @@ function ProgTransferContent() {
   const targetBatchLabel = batches.find(b => b.batchGuid === targetBatch)?.batchCode ?? ''
 
   function executeTransfer() {
-    if (!permissions.edit || !student || !targetProg || !targetBatch || !targetSemester || !targetFeeStructure) return
+    if (!permissions.execute || !student || !targetProg || !targetBatch || !targetSemester || !targetFeeStructure) return
     postProgramTransfer.mutate(
       { studentGuid: student.studentGuid, input: { newProgramGuid: targetProg, newBatchGuid: targetBatch, newSemesterGuid: targetSemester, newFeeGuid: targetFeeStructure, remarks: remarks.trim() || null } },
       {
@@ -213,7 +211,7 @@ function ProgTransferContent() {
                 <div className="fg"><label className="lbl">Remarks</label><textarea className="ctrl" rows={3} maxLength={100} placeholder="Reason for programme transfer… (max 100 chars)" value={remarks} onChange={e => setRemarks(e.target.value)} /></div>
                 <div className="flex gap-2" style={{ justifyContent: 'flex-end' }}>
                   <button className="btn btn-neu" onClick={handleClear}>Cancel</button>
-                  <button className="btn btn-primary" disabled={!targetProg || !targetSemester || !targetBatch || !targetFeeStructure || !permissions.edit} onClick={() => setConfirmOpen(true)}><i className="lni lni-checkmark"></i> Execute Transfer</button>
+                  <button className="btn btn-primary" disabled={!targetProg || !targetSemester || !targetBatch || !targetFeeStructure || !permissions.execute} onClick={() => setConfirmOpen(true)}><i className="lni lni-checkmark"></i> Execute Transfer</button>
                 </div>
               </div>
               <div className="card">
@@ -265,7 +263,7 @@ function ProgTransferContent() {
             </div>
             <div className="modal-footer">
               <button className="btn btn-neu" onClick={() => setConfirmOpen(false)}>Cancel</button>
-              <button className="btn btn-primary" onClick={executeTransfer} disabled={postProgramTransfer.isPending || !permissions.edit}>
+              <button className="btn btn-primary" onClick={executeTransfer} disabled={postProgramTransfer.isPending || !permissions.execute}>
                 <i className="lni lni-checkmark"></i> {postProgramTransfer.isPending ? 'Executing…' : 'Confirm & Execute'}
               </button>
             </div>

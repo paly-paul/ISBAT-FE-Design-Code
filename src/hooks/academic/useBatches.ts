@@ -1,5 +1,5 @@
 import { useMutation, useQueries, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
-import { createBatch, deleteBatch, getBatchById, getBatchDropdown, getBatchFilterOptions, getBatches, getStudentCountsByBatch, updateBatch, Batch, BatchColumnFilters, BatchCreateInput, BatchDetail, BatchScope, BatchUpdateInput } from '@/lib/api/academic/batch'
+import { BatchDropdownItem, createBatch, deleteBatch, getBatchById, getBatchDropdown, getBatchFilterOptions, getBatches, getStudentCountsByBatch, updateBatch, Batch, BatchColumnFilters, BatchCreateInput, BatchDetail, BatchScope, BatchUpdateInput } from '@/lib/api/academic/batch'
 
 const BATCHES_KEY = ['batches']
 
@@ -38,22 +38,20 @@ export function useBatches(pageNumber: number, pageSize: number, search = '', en
 }
 
 // Every batch in the given intakes, merged and sorted by code — one
-// GET /batches call per intake, since the endpoint takes a single intakeGuid.
-// An empty list means the endpoint's default, the current admission intake.
-const INTAKE_BATCHES_PAGE_SIZE = 1000
+// GET /batches/dropdown call per intake, since it takes a single intakeGuid.
 export function useBatchesForIntakes(intakeGuids: string[], enabled = true) {
-  const scopes = intakeGuids.length ? [...new Set(intakeGuids)].sort() : ['']
+  const scopes = [...new Set(intakeGuids)].sort()
   const results = useQueries({
     queries: scopes.map(intakeGuid => ({
-      queryKey: [...BATCHES_KEY, 1, INTAKE_BATCHES_PAGE_SIZE, '', intakeGuid, ''],
-      queryFn: () => getBatches(1, INTAKE_BATCHES_PAGE_SIZE, '', { intakeGuid: intakeGuid || null }),
+      queryKey: [...BATCHES_KEY, 'dropdown-by-intake', intakeGuid],
+      queryFn: () => getBatchDropdown(undefined, undefined, intakeGuid),
       enabled,
       staleTime: Infinity,
       gcTime: Infinity,
     })),
   })
-  const byGuid = new Map<string, Batch>()
-  results.forEach(r => r.data?.items.forEach(b => byGuid.set(b.batchGuid, b)))
+  const byGuid = new Map<string, BatchDropdownItem>()
+  results.forEach(r => r.data?.forEach(b => byGuid.set(b.batchGuid, b)))
   return {
     batches: [...byGuid.values()].sort((a, b) => a.batchCode.localeCompare(b.batchCode)),
     isLoading: results.some(r => r.isLoading),

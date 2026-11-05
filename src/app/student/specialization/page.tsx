@@ -5,7 +5,7 @@ import { SearchSelect } from '@/components/SearchSelect'
 import { Toast } from '@/components/Toast'
 import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
-import { useIntakes } from '@/hooks/academic/useIntakes'
+import { useIntakesDropdown } from '@/hooks/academic/useIntakes'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { useSpecializationBatchesByIntake, useSpecializationBatchContext, useSpecializationStudentsInBatch, useAssignSpecialization } from '@/hooks/student/useSpecialization'
 
@@ -29,13 +29,11 @@ const PAGE_SIZE = 10
 // it duplicated Finance > Discounts (the catalogue CRUD) and Finance >
 // Discount Allocation (the per-student assignment) both already cover.
 export default function Page() {
-  // Permission checks disabled for now — every action is allowed. Restore the
-  // line below (and the import above) to gate actions by the menu permissions again.
   const permissions = usePagePermissions()
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 
-  const { data: intakes = [] } = useIntakes()
+  const { data: intakes = [] } = useIntakesDropdown()
   const [intakeGuid, setIntakeGuid] = useState('')
   const [batchGuid, setBatchGuid] = useState('')
   const [streamGuid, setStreamGuid] = useState('')
@@ -61,7 +59,7 @@ export default function Page() {
   }
 
   function handleAssign() {
-    if (!permissions.edit) return
+    if (!permissions.assign) return
     if (!batchGuid || !streamGuid) { showToast('Select a batch and a stream first', 'warn'); return }
     if (checked.size === 0) { showToast('Select at least one student', 'warn'); return }
     assignSpecialization.mutate({ batchGuid, streamGuid, studentGuids: [...checked] }, {
@@ -137,7 +135,7 @@ export default function Page() {
           )}
 
           <div className="flex justify-end mt-4">
-            <button className="btn btn-primary" onClick={handleAssign} disabled={assignSpecialization.isPending || !permissions.edit}>
+            <button className="btn btn-primary" onClick={handleAssign} disabled={assignSpecialization.isPending || !permissions.assign}>
               <i className="lni lni-checkmark-circle"></i> {assignSpecialization.isPending ? 'Assigning…' : `Assign Specialization${checked.size ? ` (${checked.size})` : ''}`}
             </button>
           </div>
