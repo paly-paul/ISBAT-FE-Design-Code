@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Toast } from '@/components/Toast'
+import { ChangePhotoModal } from '@/components/modals/shared/ChangePhotoModal'
 import { validatePassword } from '@/lib/errorMessages'
 import { AuthError } from '@/lib/api/client'
 import { useMyProfile } from '@/hooks/users/useMyProfile'
@@ -277,6 +278,7 @@ export default function ProfilePage() {
   const [tab, setTab] = useState<TabId>('info')
 
   const [photo, setPhoto] = useState<string | null>(null)
+  const [photoModalOpen, setPhotoModalOpen] = useState(false)
 
   const [currentPw, setCurrentPw] = useState('')
   const [newPw, setNewPw] = useState('')
@@ -292,14 +294,9 @@ export default function ProfilePage() {
 
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 
-  function handlePhoto(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    e.target.value = ''
-    if (!file) return
-    if (file.size > 2 * 1024 * 1024) return showToast('Photo must be under 2 MB.', 'err')
-    const reader = new FileReader()
-    reader.onload = ev => { setPhoto(ev.target?.result as string); showToast('Photo updated', 'ok') }
-    reader.readAsDataURL(file)
+  function handlePhoto(dataUrl: string) {
+    setPhoto(dataUrl)
+    showToast('Photo updated', 'ok')
   }
 
   function handleChangePassword() {
@@ -347,13 +344,12 @@ export default function ProfilePage() {
             {/* Identity banner */}
             <section className="mp-hero" aria-label="Account summary">
               <div className="mp-hero-top">
-                <label className="mp-avatar" title="Change photo">
-                  <input type="file" accept="image/*" onChange={handlePhoto} aria-label="Change profile photo" />
+                <button type="button" className="mp-avatar" title="Change photo" aria-label="Change profile photo" onClick={() => setPhotoModalOpen(true)}>
                   {photo
-                    ? <img src={photo} alt="Profile" />
+                    ? <img src={photo} alt="" />
                     : <span>{initials(name) || <i className="lni lni-user"></i>}</span>}
                   <span className="mp-avatar-cam" aria-hidden="true"><i className="lni lni-camera"></i></span>
-                </label>
+                </button>
                 <div className="mp-hero-id">
                   <h1 className="mp-hero-name">{name || 'Your profile'}</h1>
                   <div className="mp-hero-sub">
@@ -488,6 +484,7 @@ export default function ProfilePage() {
           </>
         )}
       </div>
+      <ChangePhotoModal isOpen={photoModalOpen} onClose={() => setPhotoModalOpen(false)} showToast={showToast} onPhoto={handlePhoto} />
       <Toast toast={toast} />
     </>
   )

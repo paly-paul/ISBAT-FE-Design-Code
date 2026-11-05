@@ -1659,6 +1659,7 @@ export default function PaymentConsolePage() {
               { label: 'Semester', value: semesterLabel(semName) },
               { label: 'Intake', value: intake },
               { label: 'Batch · Year', value: [batchCode, profile.yearCode].filter(Boolean).join(' · ') || null },
+              { label: 'Fee Structure', value: profile.feeCode },
               { label: 'Phone', value: profile.phone },
               { label: 'Email', value: email },
               { label: 'Refugee', value: refugeeLabel(profile.refugee) },
@@ -1773,7 +1774,7 @@ export default function PaymentConsolePage() {
                       <>
                       <ScrollTable className="no-sticky-col">
                         <table>
-                          <thead><tr><th style={{ width: 40 }}></th><th>Date</th><th>Category</th><th>Amount</th><th>Cur.</th><th>Method</th></tr></thead>
+                          <thead><tr><th style={{ width: 40 }}></th><th>Payment Code</th><th>Date</th><th>Category</th><th>Amount</th><th>Cur.</th><th>Method</th></tr></thead>
                           <tbody>
                             {pagedPaymentHistory.map(h => {
                               // put-payment.md rejects editing an advance-funded
@@ -1807,6 +1808,7 @@ export default function PaymentConsolePage() {
                                     )}
                                   </ActionMenu>
                                 </td>
+                                <td className="font-mono whitespace-nowrap">{h.paymentCode ?? '—'}</td>
                                 <td>{h.payDate.slice(0, 10)}</td>
                                 <td>{PAYMENT_CATEGORY_LABELS[h.category] ?? `Category ${h.category}`}</td>
                                 <td className="text-green font-bold">{h.amount.toLocaleString()}</td>
@@ -1837,7 +1839,7 @@ export default function PaymentConsolePage() {
                       <>
                       <ScrollTable className="no-sticky-col">
                         <table>
-                          <thead><tr><th style={{ width: 40 }}></th><th>Date</th><th>Ledger</th><th>Amount</th><th>Cur.</th><th>Method</th></tr></thead>
+                          <thead><tr><th style={{ width: 40 }}></th><th>Payment Code</th><th>Date</th><th>Ledger</th><th>Amount</th><th>Cur.</th><th>Method</th></tr></thead>
                           <tbody>
                             {otherHistoryItems.map(h => (
                               <tr key={h.paymentOtherGuid}>
@@ -1853,6 +1855,7 @@ export default function PaymentConsolePage() {
                                     </button>
                                   </ActionMenu>
                                 </td>
+                                <td className="font-mono whitespace-nowrap">{h.paymentCode ?? '—'}</td>
                                 <td>{h.payDate.slice(0, 10)}</td>
                                 <td>
                                   {/* One line per ledger — a payment can cover several
@@ -2397,6 +2400,11 @@ export default function PaymentConsolePage() {
                                   {isPaid && <span className="badge badge-green" style={{ marginLeft: 6 }}>Paid</span>}
                                 </span>
                                 {l.ledgerNum && <span className="pcx-ledger-sub">Ledger {l.ledgerNum}</span>}
+                                {l.discountName && (
+                                  <span className="pcx-ledger-sub text-green">
+                                    <i className="lni lni-tag" aria-hidden="true"></i> {l.discountName}
+                                  </span>
+                                )}
                               </span>
                               {/* Native — the raw fee-line amount, not run
                                   through convertAmount, with the ledger's
