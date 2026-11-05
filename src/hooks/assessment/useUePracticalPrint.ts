@@ -29,8 +29,9 @@ export function useUePracticalPrintSemesters(programGuid: string | null) {
 export function useUePracticalProgramUnits(programGuid: string | null) {
   return useQuery({
     queryKey: ['ue-practical-program-course-units', programGuid],
-    queryFn: () => getProgramCourseUnits(programGuid!),
+    queryFn: () => getProgramCourseUnits(programGuid!).catch(() => []),
     enabled: !!programGuid,
+    retry: false,
   })
 }
 

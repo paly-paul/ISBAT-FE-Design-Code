@@ -42,6 +42,10 @@ export interface StudentForEvaluationDto {
   maxMark: number | null // null when Pending
   comment: string | null // null when Pending
   evaluatedDate: string | null // null when Pending
+
+
+  cbtMark?: number | null
+  cbtMaxMark?: number | null
 }
 
 /**
@@ -191,6 +195,18 @@ export function normalizeStudent(raw: any): StudentForEvaluationDto {
       ? Number(rawMax)
       : null
 
+  const rawCbtMark = raw.cbtMark ?? raw.CbtMark ?? raw.cbt_mark
+  const cbtMark =
+    rawCbtMark !== undefined && rawCbtMark !== null && rawCbtMark !== '' && !isNaN(Number(rawCbtMark))
+      ? Number(rawCbtMark)
+      : null
+
+  const rawCbtMaxMark = raw.cbtMaxMark ?? raw.CbtMaxMark ?? raw.cbt_max_mark
+  const cbtMaxMark =
+    rawCbtMaxMark !== undefined && rawCbtMaxMark !== null && rawCbtMaxMark !== '' && !isNaN(Number(rawCbtMaxMark))
+      ? Number(rawCbtMaxMark)
+      : null
+
   const evaluatedDate = raw.evaluatedDate ?? raw.EvaluatedDate ?? raw.evaluated_date ?? null
   const comment = raw.comment ?? raw.Comment ?? null
 
@@ -222,6 +238,8 @@ export function normalizeStudent(raw: any): StudentForEvaluationDto {
     maxMark,
     comment,
     evaluatedDate,
+    cbtMark,
+    cbtMaxMark,
   }
 }
 

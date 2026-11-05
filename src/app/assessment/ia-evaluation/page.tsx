@@ -1065,6 +1065,7 @@ export default function IaEvaluationPage() {
                     <th className="p-3 text-left">Student Name</th>
                     <th className="p-3 text-center w-28">Min Qs</th>
                     <th className="p-3 text-center w-32">Status</th>
+                    <th className="p-3 text-center w-32">CBT Mark</th>
                     <th className="p-3 text-center w-36">Total Mark</th>
                     <th className="p-3 text-left w-44">Evaluated Date</th>
                     <th className="p-3 text-left">Remarks</th>
@@ -1074,13 +1075,13 @@ export default function IaEvaluationPage() {
                 <tbody className="divide-y divide-slate-100 bg-white">
                   {isStudentsLoading || isStudentsFetching ? (
                     <TableLoadingState
-                      colSpan={9}
+                      colSpan={10}
                       title="Loading student roster…"
                       subtitle="Fetching submitted student records from live endpoint..."
                     />
                   ) : displayedStudents.length === 0 ? (
                     <EmptyState
-                      colSpan={9}
+                      colSpan={10}
                       title="No students found"
                       subtitle={
                         studentSearch
@@ -1133,6 +1134,18 @@ export default function IaEvaluationPage() {
                             >
                               {isEvaluated ? '✓ Evaluated' : '⌛ Pending'}
                             </span>
+                          </td>
+                          <td className="p-3 text-center">
+                            {std.cbtMark !== null && std.cbtMark !== undefined ? (
+                              <span className="font-bold text-slate-800 text-[12px] bg-indigo-50/80 px-2.5 py-0.5 rounded border border-indigo-200/80 inline-flex items-center gap-1">
+                                <span className="text-indigo-700">{std.cbtMark}</span>
+                                <span className="text-slate-400 text-xs font-normal">
+                                  / {std.cbtMaxMark ?? 50}
+                                </span>
+                              </span>
+                            ) : (
+                              <span className="text-slate-400 italic">—</span>
+                            )}
                           </td>
                           <td className="p-3 text-center">
                             {isEvaluated && std.mark !== null ? (
@@ -1207,6 +1220,18 @@ export default function IaEvaluationPage() {
 
                 {/* Final Score & Evaluated Date Badges */}
                 <div className="flex items-center gap-4 shrink-0">
+                  {selectedStudent.cbtMark !== null && selectedStudent.cbtMark !== undefined && (
+                    <div className="px-4 py-2 bg-white border border-indigo-200 rounded-xl shadow-xs text-center">
+                      <div className="text-[10.5px] uppercase font-bold text-indigo-800">CBT Score</div>
+                      <div className="text-xl font-extrabold text-indigo-700">
+                        {selectedStudent.cbtMark}{' '}
+                        <span className="text-xs text-slate-400 font-normal">
+                          / {selectedStudent.cbtMaxMark ?? 50}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="px-4 py-2 bg-white border border-emerald-200 rounded-xl shadow-xs text-center">
                     <div className="text-[10.5px] uppercase font-bold text-emerald-800">Final Awarded Score</div>
                     <div className="text-xl font-extrabold text-emerald-700">
@@ -1262,6 +1287,18 @@ export default function IaEvaluationPage() {
 
                 {/* Progress Indicators & Scorecard Toggle */}
                 <div className="flex items-center gap-3 shrink-0">
+                  {selectedStudent.cbtMark !== null && selectedStudent.cbtMark !== undefined && (
+                    <div className="px-3.5 py-1.5 bg-white border border-indigo-200 rounded-lg text-center shadow-2xs">
+                      <div className="text-[10px] uppercase font-bold text-indigo-700">CBT Score</div>
+                      <div className="text-sm font-extrabold text-indigo-800">
+                        {selectedStudent.cbtMark}{' '}
+                        <span className="text-[10px] font-normal text-slate-500">
+                          / {selectedStudent.cbtMaxMark ?? 50}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="px-3.5 py-1.5 bg-white border border-slate-200 rounded-lg text-center shadow-2xs">
                     <div className="text-[10px] uppercase font-bold text-slate-400">Questions Graded</div>
                     <div className="text-sm font-extrabold text-slate-800">

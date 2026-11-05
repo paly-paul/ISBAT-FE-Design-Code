@@ -33,10 +33,16 @@ export function useUeMaterialPrintSemesters(programGuid: string | null) {
   })
 }
 
-export function useUeQuestionPrintCourseUnits(programGuid: string, semesterGuid: string, enabled: boolean) {
+export function useUeQuestionPrintCourseUnits(
+  programGuid: string,
+  semesterGuid: string,
+  enabled: boolean,
+  intakeGuid?: string,
+  unitTypes?: string[]
+) {
   return useQuery({
-    queryKey: ['ue-question-print-course-units', programGuid, semesterGuid],
-    queryFn: () => getUeQuestionPrintCourseUnits(programGuid, semesterGuid),
+    queryKey: ['ue-question-print-course-units', programGuid, semesterGuid, intakeGuid, unitTypes],
+    queryFn: () => getUeQuestionPrintCourseUnits(programGuid, semesterGuid, intakeGuid, unitTypes),
     enabled,
   })
 }
@@ -44,11 +50,14 @@ export function useUeQuestionPrintCourseUnits(programGuid: string, semesterGuid:
 // The current-intake course-unit endpoint owns the dropdown population. Its
 // response does not reliably include unit type, so this lookup is used only
 // to decide how the selected unit should be printed.
+// retry: false and .catch prevent 403 authorization errors from blocking the UI
+// when an assessment user does not have academic module permissions.
 export function useUeMaterialPrintProgramUnits(programGuid: string | null) {
   return useQuery({
     queryKey: ['ue-material-print-program-course-units', programGuid],
-    queryFn: () => getProgramCourseUnits(programGuid!),
+    queryFn: () => getProgramCourseUnits(programGuid!).catch(() => []),
     enabled: !!programGuid,
+    retry: false,
   })
 }
 
