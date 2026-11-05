@@ -13,6 +13,7 @@ import {
   useUeMaterialPrintPrograms,
   useUeMaterialPrintProgramUnits,
   useUeMaterialPrintSemesters,
+  useUeQuestionPrintCourseUnits,
 } from '@/hooks/assessment/useUeMaterialPrint'
 import {
   useDeleteUeQuestionPractical,
@@ -89,28 +90,48 @@ export default function UniversityExamQpBookletPrintPage() {
   // Dropdown Queries
   const { data: programs, isLoading: programsLoading } = useUeMaterialPrintPrograms()
   const { data: semesters, isLoading: semestersLoading } = useUeMaterialPrintSemesters(programGuid || null)
-  const { data: programUnits, isLoading: unitsLoading } = useUeMaterialPrintProgramUnits(programGuid || null)
-
-  // Filter Course Units client-side by semesterGuid from program-course-units
-  const courseUnits = useMemo(() => {
-    if (!programUnits || !semesterGuid) return []
-    return programUnits.filter(u => u.semesterGuid === semesterGuid)
-  }, [programUnits, semesterGuid])
+  const { data: courseUnits = [], isLoading: unitsLoading } = useUeQuestionPrintCourseUnits(
+    programGuid,
+    semesterGuid,
+    Boolean(programGuid && semesterGuid),
+    intakeGuid
+  )
+  const { data: programUnits } = useUeMaterialPrintProgramUnits(programGuid || null)
 
   const selectedUnitRow = useMemo(() => {
-    if (!courseUnitGuid || !courseUnits) return null
-    return courseUnits.find(u => u.courseUnitGuid?.toLowerCase() === courseUnitGuid?.toLowerCase())
-  }, [courseUnits, courseUnitGuid])
+    if (!courseUnitGuid) return null
+    // 1. Try finding in programUnits if available (for unitTypeName)
+    const exact = (programUnits ?? []).find(unit =>
+      unit.courseUnitGuid?.toLowerCase() === courseUnitGuid.toLowerCase() &&
+      unit.semesterGuid?.toLowerCase() === semesterGuid?.toLowerCase()
+    )
+    if (exact) return exact
+
+    const byUnit = (programUnits ?? []).find(unit =>
+      unit.courseUnitGuid?.toLowerCase() === courseUnitGuid.toLowerCase()
+    )
+    if (byUnit) return byUnit
+
+    // 2. Fallback to courseUnits from ue-question-print
+    const fromCourseUnits = (courseUnits ?? []).find((unit: any) =>
+      unit.courseUnitGuid?.toLowerCase() === courseUnitGuid.toLowerCase()
+    )
+    return fromCourseUnits ?? null
+  }, [courseUnitGuid, courseUnits, programUnits, semesterGuid])
 
   const selectedUnitType = useMemo(() => {
-    return getUnitType(selectedUnitRow?.unitTypeName)
+    const rawType = (selectedUnitRow as any)?.unitTypeName
+      || (selectedUnitRow as any)?.unitType
+      || (selectedUnitRow as any)?.courseUnitType
+    return getUnitType(rawType)
   }, [selectedUnitRow])
 
   const effectiveType: EffectiveType = selectedUnitType === 'Combined' ? combinedType : selectedUnitType
 
   const formComplete = Boolean(programGuid && semesterGuid && courseUnitGuid)
   // Both actions enabled when formComplete && Boolean(intakeGuid) && canPrint
-  const canPrintBooklet = formComplete && Boolean(intakeGuid) && canPrint
+  // Per MD line 13: disable booklet print for Practical units until practical booklet backend is built
+  const canPrintBooklet = formComplete && Boolean(intakeGuid) && canPrint && effectiveType !== 'Practical'
   const canPrintQuestionPaper = formComplete && Boolean(intakeGuid) && canPrint
   const canDeletePracticalQp = formComplete && Boolean(intakeGuid) && effectiveType === 'Practical' && permissions.delete
 
@@ -276,7 +297,9 @@ export default function UniversityExamQpBookletPrintPage() {
       ? 'Academic intake could not be determined. Please refresh.'
       : !canPrint
         ? 'You do not have permission to print booklets.'
-        : ''
+        : effectiveType === 'Practical'
+          ? 'Booklet print is not supported for practical units yet.'
+          : ''
 
   const qpHint = !formComplete
     ? 'Select Programme, Semester and Course Unit first.'
@@ -290,7 +313,7 @@ export default function UniversityExamQpBookletPrintPage() {
     <div className="page active">
       <div className="pg-hdr">
         <div>
-          <h1 className="pg-title">University Exam QP/Booklet Print</h1>
+          <h1 className="pg-title">University Exam Theory QP Print</h1>
           <p className="pg-sub">A leaner, unit-type-agnostic print console for Theory, Practical, Combined, and Project units.</p>
         </div>
       </div>
@@ -345,7 +368,7 @@ export default function UniversityExamQpBookletPrintPage() {
                 setValidationError(null)
               }}
               disabled={!semesterGuid || unitsLoading}
-              options={courseUnits.map(unit => ({
+              options={(courseUnits ?? []).map(unit => ({
                 value: unit.courseUnitGuid,
                 label: `${unit.courseUnitCode} - ${unit.courseUnitName}${unit.unitTypeName ? ` (${unit.unitTypeName})` : ''}`,
               }))}
@@ -407,15 +430,17 @@ export default function UniversityExamQpBookletPrintPage() {
             {printBooklet.isPending || downloadBooklet.isPending ? ' Printing...' : ' Print (Booklet)'}
           </button>
 
-          <button
-            className="btn btn-neu"
-            onClick={() => handleQuestionPaperPrint()}
-            disabled={!canPrintQuestionPaper || isWorking}
-            title={qpHint}
-          >
-            <i className={`lni ${printTheory.isPending || downloadTheoryWord.isPending || printPractical.isPending || downloadPracticalWord.isPending ? 'lni-spinner lni-is-spinning' : 'lni-download'}`} />
-            {printTheory.isPending || downloadTheoryWord.isPending || printPractical.isPending || downloadPracticalWord.isPending ? ' Downloading...' : ' QP Print in MS Word'}
-          </button>
+          {effectiveType !== 'Project' && (
+            <button
+              className="btn btn-neu"
+              onClick={() => handleQuestionPaperPrint()}
+              disabled={!canPrintQuestionPaper || isWorking}
+              title={qpHint}
+            >
+              <i className={`lni ${printTheory.isPending || downloadTheoryWord.isPending || printPractical.isPending || downloadPracticalWord.isPending ? 'lni-spinner lni-is-spinning' : 'lni-download'}`} />
+              {printTheory.isPending || downloadTheoryWord.isPending || printPractical.isPending || downloadPracticalWord.isPending ? ' Downloading...' : ' QP Print in MS Word'}
+            </button>
+          )}
 
           {effectiveType === 'Practical' && (
             <button
