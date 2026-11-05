@@ -67,8 +67,15 @@ export function UpcomingSemestersModal({ isOpen, onClose, upcomingSemesters, tot
                       return (
                         <div className="recgrid-row recgrid-body" key={`${l.ledgerGuid ?? 'none'}-${i}`}>
                           <span>
-                            {l.ledgerName}{l.ledgerNum ? ` (${l.ledgerNum})` : ''}
-                            {isPaid && <span className="text-green" style={{ fontSize: 11, fontWeight: 600, marginLeft: 6 }}>Paid</span>}
+                            <span>
+                              {l.ledgerName}{l.ledgerNum ? ` (${l.ledgerNum})` : ''}
+                              {isPaid && <span className="text-green" style={{ fontSize: 11, fontWeight: 600, marginLeft: 6 }}>Paid</span>}
+                              {l.discountName && (
+                                <span className="text-green" style={{ display: 'block', fontSize: 11, fontWeight: 600 }}>
+                                  <i className="lni lni-tag" aria-hidden="true"></i> {l.discountName}
+                                </span>
+                              )}
+                            </span>
                           </span>
                           <span data-label="Scheduled Amt">
                             <span>
