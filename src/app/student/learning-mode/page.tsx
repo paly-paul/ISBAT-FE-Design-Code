@@ -33,8 +33,6 @@ const REMARKS_MAX = 500
 // Router) — see the wrapping default export at the bottom of this file,
 // same split Student Profile uses for the same reason.
 function LearningModeContent() {
-  // Permission checks disabled for now — every action is allowed. Restore the
-  // line below (and the import above) to gate actions by the menu permissions again.
   const permissions = usePagePermissions()
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -96,7 +94,7 @@ function LearningModeContent() {
   }
 
   function handleSubmit() {
-    if (!permissions.edit || !student) return
+    if (!permissions.submit || !student) return
     if (!selectedMode) { showToast('Please select a learning mode.', 'warn'); return }
     if (detail?.learningMode != null && String(detail.learningMode) === selectedMode) { showToast('The student is already in this learning mode.', 'warn'); return }
     // Optional on the API, required here so every request carries a reason.
@@ -181,7 +179,7 @@ function LearningModeContent() {
               </div>
               <div className="flex gap-2" style={{ justifyContent: 'flex-end' }}>
                 <button className="btn btn-neu" onClick={handleClear}>Cancel</button>
-                <button className="btn btn-primary" disabled={isPending || applyChange.isPending || !permissions.edit} onClick={handleSubmit}>
+                <button className="btn btn-primary" disabled={isPending || applyChange.isPending || !permissions.submit} onClick={handleSubmit}>
                   <i className="lni lni-telegram-original"></i> {applyChange.isPending ? 'Submitting…' : 'Submit for Approval'}
                 </button>
               </div>

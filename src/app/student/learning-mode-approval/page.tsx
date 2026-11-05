@@ -12,6 +12,7 @@ import {
 import { downloadDocument } from '@/lib/documentViewer'
 import { DocumentPreviewModal } from '@/components/modals/shared/DocumentPreviewModal'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
+import { useActionGuard } from '@/hooks/users/useActionGuard'
 
 // Approval queue for learning-mode change requests raised on
 // /student/learning-mode or from Student Master's row menu. Same list → review shape as Dropout Rejoin:
@@ -31,9 +32,8 @@ function initials(name: string | null) {
 // useSearchParams() requires a Suspense boundary above it — see the default
 // export at the bottom of this file.
 function LearningModeApprovalContent() {
-  // Permission checks disabled for now — every action is allowed. Restore the
-  // line below (and the import above) to gate actions by the menu permissions again.
   const permissions = usePagePermissions()
+  const guard = useActionGuard(showToast)
   const router = useRouter()
   const searchParams = useSearchParams()
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
@@ -80,7 +80,7 @@ function LearningModeApprovalContent() {
   }
 
   function handleApprove() {
-    if (!permissions.edit || !selectedGuid || !detail) return
+    if (!permissions.approve || !selectedGuid || !detail) return
     approve.mutate(selectedGuid, {
       onSuccess: result => { showToast(`Approved — ${result.studentName ?? 'student'} is now in ${result.learningModeLabel ?? 'the requested mode'}.`, 'ok'); backToList() },
       onError: (error: Error) => showToast(error.message || 'Could not approve the request.', 'error'),
@@ -210,7 +210,7 @@ function LearningModeApprovalContent() {
                     {docUrl ? (
                       <div className="flex gap-2">
                         <button className="btn btn-neu" onClick={() => setDocPreviewOpen(true)}><i className="lni lni-eye"></i> View Document</button>
-                        <button className="btn btn-neu" onClick={() => downloadDocument(docUrl)}><i className="lni lni-download"></i> Download</button>
+                        <button className="btn btn-neu" onClick={() => guard('download', () => downloadDocument(docUrl), 'this document')}><i className="lni lni-download"></i> Download</button>
                       </div>
                     ) : (
                       <input className="ctrl" readOnly value="No document found" />
@@ -225,7 +225,7 @@ function LearningModeApprovalContent() {
                   </div>
                   <div className="flex gap-2" style={{ justifyContent: 'flex-end' }}>
                     <button className="btn btn-neu" onClick={backToList} disabled={approve.isPending}>Cancel</button>
-                    <button className="btn btn-primary" onClick={handleApprove} disabled={approve.isPending || !permissions.edit}>
+                    <button className="btn btn-primary" onClick={handleApprove} disabled={approve.isPending || !permissions.approve}>
                       <i className="lni lni-checkmark"></i> {approve.isPending ? 'Approving…' : 'Approve'}
                     </button>
                   </div>

@@ -6,7 +6,7 @@ import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { useCampusDropdown } from '@/hooks/config/useCampuses'
-import { useIntakes } from '@/hooks/academic/useIntakes'
+import { useIntakesDropdown } from '@/hooks/academic/useIntakes'
 import { useLearningModeOptions, useLearningModeReport, LearningModeReportFilters } from '@/hooks/student/useLearningMode'
 
 // Campus-wide learning-mode roster (GET /students/learning-mode/report).
@@ -20,7 +20,7 @@ const PAGE_SIZE = 10
 export default function Page() {
   const { data: options = [] } = useLearningModeOptions()
   const { data: campuses = [] } = useCampusDropdown()
-  const { data: intakes = [] } = useIntakes()
+  const { data: intakes = [] } = useIntakesDropdown()
   const [campusGuid, setCampusGuid] = useState('')
   const [mode, setMode] = useState('')
   const [intakeGuid, setIntakeGuid] = useState('')

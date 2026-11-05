@@ -11,10 +11,11 @@ import { useIdCard, useIssueOrRenewIdCard, useUpdateIdCardDates, getIdCardQrImag
 import { useSponsorDetails } from '@/hooks/student/useSponsor'
 import { useStudentRefugeeDetails } from '@/hooks/student/useRefugee'
 import { useDropoutStudents } from '@/hooks/student/useDropoutRejoin'
-import { useCountries } from '@/hooks/config/useCountries'
+import { useCountriesByGuids } from '@/hooks/config/useCountries'
 import { useIntakesDropdown } from '@/hooks/academic/useIntakes'
 import { formatDate } from '@/lib/date'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
+import { useActionGuard } from '@/hooks/users/useActionGuard'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
@@ -83,9 +84,8 @@ function formatDiscount(detail: Pick<StudentDetailDto, 'discountStatus' | 'calcT
 }
 
 function StudentProfileContent() {
-  // Permission checks disabled for now — every action is allowed. Restore the
-  // line below (and the import above) to gate actions by the menu permissions again.
   const permissions = usePagePermissions()
+  const guard = useActionGuard(showToast)
   const router = useRouter()
   const searchParams = useSearchParams()
   // Student Master's "View" row action links here as
@@ -179,7 +179,7 @@ function StudentProfileContent() {
   // match any catalogue row, in which case it stays '—'.
   const nationalityGuid = detail?.nationalityGuid ?? detail?.applicationSummary?.countryGuid ?? null
   const needsCountryLookup = !detail?.nationality && !detail?.nationalityCode && !!nationalityGuid
-  const { data: countries = [] } = useCountries(needsCountryLookup)
+  const { countries } = useCountriesByGuids(needsCountryLookup && nationalityGuid ? [nationalityGuid] : [])
   const nationality = detail?.nationality
     || detail?.nationalityCode
     || countries.find(c => c.countryGuid === nationalityGuid)?.nationality
@@ -611,14 +611,16 @@ function StudentProfileContent() {
                       <div className="fg"><label className="lbl">Remarks</label><textarea className="ctrl" rows={2} value={cardRemarks} onChange={e => setCardRemarks(e.target.value)} placeholder="Optional — only recorded on first issue" /></div>
                     )}
                     <div className="flex gap-2" style={{ marginTop: 8 }}>
-                      <button
-                        className="btn btn-primary btn-sm"
-                        onClick={handleIssueCard}
-                        disabled={issueOrRenewIdCard.isPending}
-                      >
-                        <i className="lni lni-credit-cards"></i> {issueOrRenewIdCard.isPending ? 'Issuing…' : 'Issue Card'}
-                      </button>
-                      {currentCard && (
+                      {permissions.edit && (
+                        <button
+                          className="btn btn-primary btn-sm"
+                          onClick={handleIssueCard}
+                          disabled={issueOrRenewIdCard.isPending}
+                        >
+                          <i className="lni lni-credit-cards"></i> {issueOrRenewIdCard.isPending ? 'Issuing…' : 'Issue Card'}
+                        </button>
+                      )}
+                      {permissions.edit && currentCard && (
                         <>
                           <button className="btn btn-neu btn-sm" onClick={handleRenewCard} disabled={issueOrRenewIdCard.isPending}>
                             <i className="lni lni-reload"></i> Renew
@@ -700,7 +702,7 @@ function StudentProfileContent() {
                     </div>
                     <div className="flex gap-2" style={{ justifyContent: 'center', marginTop: 12 }}>
                       {/* <button className="btn btn-neu btn-sm" onClick={handleDownloadCard}><i className="lni lni-download"></i> Download</button> */}
-                      <button className="btn btn-primary btn-sm" onClick={handlePrintCard}><i className="lni lni-printer"></i> Print</button>
+                      <button className="btn btn-primary btn-sm" onClick={() => guard('print', handlePrintCard, 'ID cards')}><i className="lni lni-printer"></i> Print</button>
                     </div>
                   </div>
                 </div>
@@ -728,9 +730,9 @@ function StudentProfileContent() {
                       </div>
                     </div>
                     <div className="dcard-actions">
-                      <button className="btn btn-primary btn-sm" onClick={() => dispatch('student', 'email')}><i className="lni lni-envelope"></i> Send Credentials via Email</button>
-                      <button className="btn btn-success btn-sm" onClick={() => dispatch('student', 'whatsapp')}><i className="lni lni-whatsapp"></i> Send via WhatsApp</button>
-                      <button className="btn btn-neu btn-sm ml-auto" onClick={() => showToast('Student contact saved', 'ok')}><i className="lni lni-save"></i> Save</button>
+                      {permissions.send && <button className="btn btn-primary btn-sm" onClick={() => dispatch('student', 'email')}><i className="lni lni-envelope"></i> Send Credentials via Email</button>}
+                      {permissions.send && <button className="btn btn-success btn-sm" onClick={() => dispatch('student', 'whatsapp')}><i className="lni lni-whatsapp"></i> Send via WhatsApp</button>}
+                      {permissions.edit && <button className="btn btn-neu btn-sm ml-auto" onClick={() => showToast('Student contact saved', 'ok')}><i className="lni lni-save"></i> Save</button>}
                     </div>
                   </div>
                 </div>
@@ -757,9 +759,9 @@ function StudentProfileContent() {
                       </div>
                     </div>
                     <div className="dcard-actions">
-                      <button className="btn btn-primary btn-sm" onClick={() => dispatch('parent', 'email')}><i className="lni lni-envelope"></i> Send Parent Credentials via Email</button>
-                      <button className="btn btn-success btn-sm" onClick={() => dispatch('parent', 'whatsapp')}><i className="lni lni-whatsapp"></i> Send Parent via WhatsApp</button>
-                      <button className="btn btn-neu btn-sm ml-auto" onClick={() => showToast('Parent contact saved', 'ok')}><i className="lni lni-save"></i> Save</button>
+                      {permissions.send && <button className="btn btn-primary btn-sm" onClick={() => dispatch('parent', 'email')}><i className="lni lni-envelope"></i> Send Parent Credentials via Email</button>}
+                      {permissions.send && <button className="btn btn-success btn-sm" onClick={() => dispatch('parent', 'whatsapp')}><i className="lni lni-whatsapp"></i> Send Parent via WhatsApp</button>}
+                      {permissions.edit && <button className="btn btn-neu btn-sm ml-auto" onClick={() => showToast('Parent contact saved', 'ok')}><i className="lni lni-save"></i> Save</button>}
                     </div>
                   </div>
                 </div>

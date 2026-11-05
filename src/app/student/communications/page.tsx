@@ -40,8 +40,6 @@ function listQuery(f: ListFilters): URLSearchParams {
 function CommunicationsContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  // Permission checks disabled for now — every action is allowed. Restore the
-  // line below (and the import above) to gate actions by the menu permissions again.
   const permissions = usePagePermissions()
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
 
@@ -79,7 +77,7 @@ function CommunicationsContent() {
         </div>
 
         {composing && canCompose ? (
-          <Compose onCancel={backToList} onSent={handleSent} showToast={showToast} />
+          <Compose onCancel={backToList} onSent={handleSent} showToast={showToast} allowSend={!!permissions.send} />
         ) : jobGuid ? (
           <MailDetail jobGuid={jobGuid} onBack={backToList} />
         ) : (

@@ -35,8 +35,6 @@ const REASONS = ['Dropout Rejoin', 'Deferment', 'Job / Relocation', 'Medical', '
 // Router) — see the wrapping default export at the bottom of this file,
 // same split Student Profile uses for the same reason.
 function BatchTransferContent() {
-  // Permission checks disabled for now — every action is allowed. Restore the
-  // line below (and the import above) to gate actions by the menu permissions again.
   const permissions = usePagePermissions()
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -256,7 +254,7 @@ function BatchTransferContent() {
                   */}
                   <div className="flex gap-2" style={{ justifyContent: 'flex-end' }}>
                     <button className="btn btn-neu" onClick={handleClear}>Cancel</button>
-                    <button className="btn btn-primary" disabled={!canExecute || !permissions.edit} onClick={openConfirm}>
+                    <button className="btn btn-primary" disabled={!canExecute || !permissions.execute} onClick={openConfirm}>
                       <i className="lni lni-checkmark"></i> Execute Transfer
                     </button>
                   </div>
