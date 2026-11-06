@@ -232,3 +232,36 @@ export function getStudentByGuid(guid: string): Promise<StudentDetailDto> {
   }
   return apiGet<StudentDetailDto>(`/api/v1/students/${guid}`)
 }
+
+// GET /api/v1/students/{guid}/timeline (get-student-timeline.md). Names are
+// already resolved server-side; events arrive oldest first.
+export interface StudentTimelineEventDto {
+  eventDate: string | null
+  remarks: string | null
+  isActive: boolean
+  programme: string | null
+  batch: string | null
+  semester: string | null
+  feeStructure: string | null
+  academicIntake: string | null
+}
+
+export interface StudentTimelineDto {
+  joinedDate: string | null
+  joinedIntake: string | null
+  events: StudentTimelineEventDto[]
+}
+
+export function getStudentTimeline(guid: string): Promise<StudentTimelineDto> {
+  if (MOCK_AUTH) {
+    return Promise.resolve({
+      joinedDate: '2023-09-01T00:00:00',
+      joinedIntake: 'September 2023',
+      events: [
+        { eventDate: '2023-09-01T00:00:00', remarks: null, isActive: false, programme: 'Bachelor of Science in Computer Science', batch: '2023/2024', semester: 'Semester 1', feeStructure: 'Standard Fee', academicIntake: 'September 2023' },
+        { eventDate: '2024-02-01T00:00:00', remarks: 'Promoted to Semester 2', isActive: true, programme: 'Bachelor of Science in Computer Science', batch: '2023/2024', semester: 'Semester 2', feeStructure: 'Standard Fee', academicIntake: 'February 2024' },
+      ],
+    })
+  }
+  return apiGet<StudentTimelineDto>(`/api/v1/students/${guid}/timeline`)
+}

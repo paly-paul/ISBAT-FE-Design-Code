@@ -25,6 +25,7 @@ relevant below rather than re-listing every unchanged page.
 |---|---|---|---|
 | `GET /api/v1/students` | `students.students.list` | Student Master, Student Statement, and every "Operations" page via the shared student-lookup search bar (Profile, Batch Transfer, Programme Transfer, Learning Mode, Intake Transfer) | Confirmed live, 200 |
 | `GET /api/v1/students/{guid}` | `students.students.get` | Student Profile (identity fields; the Discount display also reads off this response's `discountStatus`/`calcType`/`amtPer` fields rather than calling a separate endpoint) | Confirmed live, 200 |
+| `GET /api/v1/students/{guid}/timeline` | `students.students.get-timeline` | Student Profile → Timeline tab | Wired from get-student-timeline.md; not yet confirmed live |
 | `GET /api/v1/students/id-cards/{guid}` | `id-cards.details` | Profile → ID Card tab | **Response shape did not match the docs** — see §3 |
 | `POST /api/v1/students/id-cards` | `id-cards.issue-or-renew` | Profile → ID Card tab (issue/renew) | Confirmed live, 200/201 |
 | `PUT /api/v1/students/id-cards/{cardIssueId}` | `id-cards.update-dates` | Profile → ID Card tab (edit dates) | Confirmed live, 200. Note: the path param is `cardIssueId` on the real wire (see §3), not `cardIssueGuid` as the docs name it |
