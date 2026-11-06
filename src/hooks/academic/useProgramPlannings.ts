@@ -1,10 +1,12 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  createProgramPlanning,
+  createProgramPlannings,
   deleteProgramPlanning,
   getProgramPlanningById,
   getProgramPlannings,
+  getUnallocatedCourseUnits,
   updateProgramPlanning,
+  ProgramPlanningCreateInput,
   ProgramPlanningDto,
   ProgramPlanningInput,
   ProgramPlanningListParams,
@@ -34,10 +36,25 @@ export function useProgramPlanning(guid: string | null, enabled: boolean) {
   })
 }
 
-export function useCreateProgramPlanning() {
+// Under PROGRAM_PLANNINGS_KEY so every create, update and delete refreshes it:
+// allocated units drop out of the list, removed ones come back.
+export function useUnallocatedCourseUnits(lecturerGuid: string, intakeGuid: string, search: string) {
+  return useInfiniteQuery({
+    queryKey: [...PROGRAM_PLANNINGS_KEY, 'course-unit-dropdown', lecturerGuid, intakeGuid, search],
+    queryFn: ({ pageParam }) => getUnallocatedCourseUnits(lecturerGuid, intakeGuid, pageParam, 20, search),
+    initialPageParam: 1,
+    getNextPageParam: (last, all) => {
+      const loaded = all.reduce((n, p) => n + p.items.length, 0)
+      return loaded < last.totalCount && last.items.length > 0 ? all.length + 1 : undefined
+    },
+    enabled: !!lecturerGuid && !!intakeGuid,
+  })
+}
+
+export function useCreateProgramPlannings() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (input: ProgramPlanningInput) => createProgramPlanning(input),
+    mutationFn: (input: ProgramPlanningCreateInput) => createProgramPlannings(input),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: PROGRAM_PLANNINGS_KEY }),
   })
 }

@@ -17649,3 +17649,22 @@ button.sp-link:hover .sp-link-go { color: var(--b700); transform: translateX(3px
 @media (prefers-reduced-motion: reduce) {
   .er-spin, .er-row-skel { animation: none }
 }
+
+/* Course Allocation: one row per picked unit, with its own term and load. */
+.cau-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.cau-hdr, .cau-row { display: grid; grid-template-columns: minmax(0, 1fr) 170px 110px 32px; gap: 10px; align-items: center; }
+.cau-hdr { padding: 0 12px; font-size: var(--fs-xs); font-weight: 600; color: var(--g500); }
+.cau-row { padding: 8px 12px; border: 1px solid var(--g100); border-radius: var(--rsm); background: var(--white); }
+.cau-name { min-width: 0; font-size: var(--fs-base); font-weight: 600; color: var(--g900); overflow-wrap: anywhere; }
+.cau-remove {
+  display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: var(--rxs);
+  background: none; color: var(--g500); cursor: pointer; transition: var(--tr);
+}
+.cau-remove:hover { background: var(--red-bg); color: var(--red); }
+.cau-remove:focus-visible { outline: 2px solid var(--b600); outline-offset: 1px; }
+@media (max-width: 640px) {
+  .cau-hdr { display: none; }
+  .cau-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 32px; }
+  .cau-name { grid-column: 1 / 3; }
+  .cau-remove { grid-column: 3; grid-row: 1; }
+}
