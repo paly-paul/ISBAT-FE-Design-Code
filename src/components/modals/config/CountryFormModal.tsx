@@ -81,7 +81,12 @@ export function CountryFormModal({ isOpen, onClose, showToast, mode, country, cr
     const onSuccess = () => { setSaved(true); showToast(isEdit ? 'Country updated successfully' : 'Country added successfully') }
 
     if (isEdit && country) {
-      updateCountry.mutate({ id: country.countryGuid, input }, { onSuccess, onError: handleMutateError })
+      const idToPass = (country as any).intCountryCode != null
+        ? String((country as any).intCountryCode)
+        : (country as any).id != null
+        ? String((country as any).id)
+        : country.countryGuid
+      updateCountry.mutate({ id: idToPass, input }, { onSuccess, onError: handleMutateError })
     } else {
       createCountry.mutate(input, { onSuccess, onError: handleMutateError })
     }

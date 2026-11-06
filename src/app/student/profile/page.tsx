@@ -12,7 +12,7 @@ import { useIdCard, useIssueOrRenewIdCard, useUpdateIdCardDates, getIdCardQrImag
 import { useSponsorDetails } from '@/hooks/student/useSponsor'
 import { useStudentRefugeeDetails } from '@/hooks/student/useRefugee'
 import { useDropoutStudents } from '@/hooks/student/useDropoutRejoin'
-import { useCountriesByGuids } from '@/hooks/config/useCountries'
+import { useCountryDropdown } from '@/hooks/config/useCountries'
 import { useIntakesDropdown } from '@/hooks/academic/useIntakes'
 import { formatDate } from '@/lib/date'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
@@ -205,7 +205,7 @@ function StudentProfileContent() {
   // match any catalogue row, in which case it stays '—'.
   const nationalityGuid = detail?.nationalityGuid ?? detail?.applicationSummary?.countryGuid ?? null
   const needsCountryLookup = !detail?.nationality && !detail?.nationalityCode && !!nationalityGuid
-  const { countries } = useCountriesByGuids(needsCountryLookup && nationalityGuid ? [nationalityGuid] : [])
+  const { data: countries = [] } = useCountryDropdown(needsCountryLookup)
   const nationality = detail?.nationality
     || detail?.nationalityCode
     || countries.find(c => c.countryGuid === nationalityGuid)?.nationality

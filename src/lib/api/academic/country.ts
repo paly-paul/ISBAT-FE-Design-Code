@@ -35,7 +35,7 @@ const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 //   return Promise.resolve(country)
 // }
 //
-// export function updateCountry(id: string, input: CountryInput): Promise<Country> {
+// export async function updateCountry(id: string, input: CountryInput): Promise<Country> {
 //   const existing = mockCountries.find(c => c.id === id)
 //   if (!existing) return Promise.reject(new Error('Country not found'))
 //   Object.assign(existing, input)
@@ -196,14 +196,22 @@ export function createCountry(input: CountryInput): Promise<Country> {
   return apiPost<Country>('/api/v1/users/countries', input)
 }
 
-export function updateCountry(id: string, input: CountryInput): Promise<Country> {
+export async function updateCountry(id: string, input: CountryInput): Promise<Country> {
   if (MOCK_AUTH) {
     const existing = mockCountries.find(c => c.countryGuid === id)
     if (!existing) return Promise.reject(new Error('Country not found'))
     Object.assign(existing, input)
     return Promise.resolve(existing)
   }
-  return apiPut<Country>(`/api/v1/users/countries/${id}`, input)
+  const payload = { countryGuid: id, ...input }
+  try {
+    return await apiPut<Country>(`/api/v1/users/countries/${id}`, payload)
+  } catch (err: any) {
+    if (err?.code === 'not_found' || String(err?.message ?? '').includes('404')) {
+      return await apiPut<Country>('/api/v1/users/countries', payload)
+    }
+    throw err
+  }
 }
 
 // DELETE /api/v1/users/countries/{id} — soft-delete (data: true on success).

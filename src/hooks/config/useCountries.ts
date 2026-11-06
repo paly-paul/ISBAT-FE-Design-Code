@@ -1,30 +1,37 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Country, CountryInput, CountryDropdownItemDto, createCountry, deleteCountry, findDefaultCountry, getCountries, getCountriesByGuids, getCountriesDropdown, getCountriesPaged, updateCountry } from '@/lib/api/academic/country'
+import {
+  Country,
+  CountryInput,
+  CountryDropdownItemDto,
+  createCountry,
+  deleteCountry,
+  findDefaultCountry,
+  getCountries,
+  getCountriesByGuids,
+  getCountriesDropdown,
+  getCountriesPaged,
+  updateCountry,
+} from '@/lib/api/academic/country'
 import { getNextPageParam } from '@/lib/pagination'
 
 const COUNTRIES_KEY = ['countries']
 
-// Load enough rows to cover the full country list in one request.
+// Load enough rows to cover the full country list in one request for Country Master.
 const COUNTRIES_PAGE_SIZE = 1000
 // One search page, for looking up specific countries by name.
 const COUNTRY_LOOKUP_PAGE_SIZE = 20
 const HOME_COUNTRY_NAME = 'Uganda'
 
+/**
+ * Full countries list for Country Master (/config/country-master).
+ * Calls GET /api/v1/users/countries?page=1&pageSize=1000 to preserve
+ * countryCode, countryPrefix, defaultCountry, and nationality.
+ */
 export function useCountries(enabled = true) {
   return useQuery({
     queryKey: COUNTRIES_KEY,
-    queryFn: async () => {
-      const dropdownItems = await getCountriesDropdown()
-      return dropdownItems.map(d => ({
-        countryGuid: d.countryGuid,
-        countryName: d.countryName,
-        countryCode: d.countryPrefix ? d.countryPrefix.replace(/^\+/, '') : '',
-        countryPrefix: d.countryPrefix ?? '',
-        nationality: d.nationality ?? '',
-        defaultCountry: d.isDefault ? 1 : 0,
-      })) as Country[]
-    },
+    queryFn: () => getCountries(1, COUNTRIES_PAGE_SIZE),
     // Keep the list cached until a mutation invalidates it.
     staleTime: Infinity,
     gcTime: Infinity,
@@ -32,7 +39,27 @@ export function useCountries(enabled = true) {
   })
 }
 
-export function useCountryDropdown(search = '', enabled = true) {
+/**
+ * Lightweight dropdown list specifically for form pickers (Employee form, Refugee, Student profile, ODeL).
+ * Calls GET /api/v1/users/countries/dropdown without the heavy 1000-page payload.
+ */
+export function useCountryDropdown(
+  searchOrEnabled?: string | boolean | { search?: string; enabled?: boolean },
+  enabledParam = true
+) {
+  let search = ''
+  let enabled = true
+
+  if (typeof searchOrEnabled === 'string') {
+    search = searchOrEnabled
+    enabled = enabledParam
+  } else if (typeof searchOrEnabled === 'boolean') {
+    enabled = searchOrEnabled
+  } else if (typeof searchOrEnabled === 'object' && searchOrEnabled !== null) {
+    search = searchOrEnabled.search ?? ''
+    enabled = searchOrEnabled.enabled ?? true
+  }
+
   const q = search.trim()
   return useQuery({
     queryKey: [...COUNTRIES_KEY, 'dropdown', q],
@@ -121,4 +148,4 @@ export function useDeleteCountry() {
   })
 }
 
-export type { Country, CountryInput }
+export type { Country, CountryInput, CountryDropdownItemDto }

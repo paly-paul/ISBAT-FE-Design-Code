@@ -4,8 +4,7 @@ import { useRouter } from 'next/navigation'
 import { ModalProps } from '../types'
 import { SearchSelect } from '@/components/SearchSelect'
 import { useStudentRefugeeDetails, useAssignRefugeeStatus, useUpdateRefugeeStatus, useRemoveRefugeeStatus } from '@/hooks/student/useRefugee'
-import { useSearchCountriesInfinite } from '@/hooks/config/useCountries'
-import { flattenUniquePages } from '@/lib/pagination'
+import { useCountryDropdown } from '@/hooks/config/useCountries'
 
 interface Props extends ModalProps {
   studentGuid: string | null
@@ -31,16 +30,8 @@ export function StudentRefugeeModal({ isOpen, onClose, showToast, studentGuid, s
   // CountryGuid — confirmed (post-assign-refugee-status.md) as a real guid
   // field on the student entity, not a legacy numeric code, so the option's
   // own countryGuid is sent as-is; no index/position workaround needed.
-  const [countrySearch, setCountrySearch] = useState('')
-  const [committedCountrySearch, setCommittedCountrySearch] = useState('')
-  const [countryPickerOpen, setCountryPickerOpen] = useState(false)
-  useEffect(() => {
-    const timer = setTimeout(() => setCommittedCountrySearch(countrySearch.trim()), 300)
-    return () => clearTimeout(timer)
-  }, [countrySearch])
-  const countryQuery = useSearchCountriesInfinite(committedCountrySearch, 20, isOpen && countryPickerOpen)
-  const countryOptions = flattenUniquePages(countryQuery.data?.pages ?? [], c => c.countryGuid)
-    .map(c => ({ value: c.countryGuid, label: c.countryName }))
+  const { data: countries = [] } = useCountryDropdown(isOpen)
+  const countryOptions = countries.map(c => ({ value: c.countryGuid, label: c.countryName }))
 
   const [countryGuid, setCountryGuid] = useState('')
   const [refugeeId, setRefugeeId] = useState('')

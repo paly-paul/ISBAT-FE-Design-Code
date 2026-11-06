@@ -6,7 +6,7 @@ import { SearchSelect } from '@/components/SearchSelect'
 import { StudentLookup } from '@/components/student/StudentLookup'
 import { BaselinePanel } from '@/components/student/BaselinePanel'
 import { useStudentRefugeeDetails, useAssignRefugeeStatus, useUpdateRefugeeStatus, useRemoveRefugeeStatus } from '@/hooks/student/useRefugee'
-import { useCountries } from '@/hooks/config/useCountries'
+import { useCountryDropdown } from '@/hooks/config/useCountries'
 import { StudentDto } from '@/lib/api/student/student'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
@@ -33,7 +33,7 @@ export default function FinanceRefugeeStatusPage() {
   // Existing refugees open read-only; Edit swaps in the same form as assign
   // (PUT takes the same fields, document included).
   const [editing, setEditing] = useState(false)
-  const { data: countries = [] } = useCountries(!!studentGuid)
+  const { data: countries = [] } = useCountryDropdown(!!studentGuid)
   const countryOptions = countries.map(c => ({ value: c.countryGuid, label: c.countryName }))
   const [countryGuid, setCountryGuid] = useState('')
   const [refugeeId, setRefugeeId] = useState('')
