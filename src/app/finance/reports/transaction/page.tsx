@@ -8,16 +8,17 @@ import DatePicker from '@/components/DatePicker'
 import { ReportExportControls } from '@/components/finance/ReportExportControls'
 import { ReportCurrencySummary } from '@/components/finance/ReportCurrencySummary'
 import { useIntakesDropdown } from '@/hooks/academic/useIntakes'
+import { REPORT_MAX_BATCHES, REPORT_MAX_SEMESTERS, useReportScopeOptions } from '@/hooks/finance/useReportScopeOptions'
 import { scrollToFirstError } from '@/lib/scrollToFirstError'
 import { getReceiptBookDropdown } from '@/lib/api/finance/receiptBook'
 import { useLedgers } from '@/hooks/finance/useLedgers'
 import { searchVettedRegisteredApplications } from '@/lib/api/admission/applicationFiling'
 import {
   DISCOUNT_LEDGER_CODE, TRANSACTION_REPORT_MAX_LEDGERS, TRANSACTION_REPORT_MAX_RECEIPT_BOOKS,
-  TransactionReportFilters, TransactionReportRow, exportTransactionReport, getTransactionReportPreview,
+  TransactionReportFilters, TransactionReportRow, exportTransactionReport, getFinancePaymentTypes, getTransactionReportPreview,
 } from '@/lib/api/finance/transactionReport'
 import {
-  REPORT_PAYMODE_LABEL, REPORT_SOURCE_LABEL, fmtReportAmount, fmtReportCount, fmtReportDate, reportErrorMessage,
+  REPORT_PAYMODE_LABEL, REPORT_SOURCE_LABEL, fmtReportAmount, fmtReportCount, fmtReportDate, reportChipValue, reportErrorMessage,
 } from '@/lib/reportFormat'
 
 // Transaction Report — erp-docs/pages/finance/transaction-report-page.md.
@@ -32,8 +33,17 @@ interface FormState {
   applicationGuid: string
   receiptBookGuids: string[]
   ledgerGuids: string[]
+  campusGuid: string
+  programGuid: string
+  semesterGuids: string[]
+  batchGuids: string[]
+  sponsorCategoryGuid: string
+  payTypes: string[]         // MultiSelect values; sent as numbers
 }
-const EMPTY_FORM: FormState = { fromDate: '', toDate: '', intakeGuid: '', applicationGuid: '', receiptBookGuids: [], ledgerGuids: [] }
+const EMPTY_FORM: FormState = {
+  fromDate: '', toDate: '', intakeGuid: '', applicationGuid: '', receiptBookGuids: [], ledgerGuids: [],
+  campusGuid: '', programGuid: '', semesterGuids: [], batchGuids: [], sponsorCategoryGuid: '', payTypes: [],
+}
 
 // The student picker's search runs from 2 characters (vetted-registered-search
 // rejects 1), debounced.
@@ -47,6 +57,12 @@ function toFilters(f: FormState): TransactionReportFilters {
     applicationGuid: f.applicationGuid || undefined,
     receiptBookGuids: f.receiptBookGuids.length ? f.receiptBookGuids : undefined,
     ledgerGuids: f.ledgerGuids.length ? f.ledgerGuids : undefined,
+    campusGuid: f.campusGuid || undefined,
+    programGuid: f.programGuid || undefined,
+    semesterGuids: f.semesterGuids.length ? f.semesterGuids : undefined,
+    batchGuids: f.batchGuids.length ? f.batchGuids : undefined,
+    sponsorCategoryGuid: f.sponsorCategoryGuid || undefined,
+    payTypes: f.payTypes.length ? f.payTypes.map(Number).sort() : undefined,
   }
 }
 
@@ -72,6 +88,11 @@ export default function TransactionReportPage() {
   const intakesQuery = useIntakesDropdown()
   const booksQuery = useQuery({ queryKey: ['finance', 'receipt-books', 'dropdown', 'all'], queryFn: () => getReceiptBookDropdown(true) })
   const ledgersQuery = useLedgers()
+  const payTypesQuery = useQuery({ queryKey: ['finance', 'enums', 'payment-types'], queryFn: getFinancePaymentTypes })
+  const {
+    campusesQuery, sponsorsQuery, programsQuery, semestersQuery, batchesQuery,
+    campusOptions, programOptions, semesterOptions, batchOptions, sponsorOptions,
+  } = useReportScopeOptions(form.campusGuid, form.programGuid, form.semesterGuids)
 
   const intakeOptions = useMemo(() => (intakesQuery.data ?? []).map(i => ({ value: i.intakeGuid, label: `${i.intakeCode} — ${i.description}` })), [intakesQuery.data])
   // Used-up books are kept (most past receipts came from them), labelled.
@@ -80,6 +101,28 @@ export default function TransactionReportPage() {
   const ledgerOptions = useMemo(() => (ledgersQuery.data ?? [])
     .filter(l => l.ledgerCode.trim().toUpperCase() !== DISCOUNT_LEDGER_CODE)
     .map(l => ({ value: l.ledgerGuid, label: `${l.ledgerCode} - ${l.ledgerName}` })), [ledgersQuery.data])
+
+  const payTypeOptions = useMemo(() => (payTypesQuery.data ?? []).map(t => ({ value: String(t.value), label: REPORT_PAYMODE_LABEL[t.value] ?? t.name })), [payTypesQuery.data])
+
+  // Changing a level clears what depends on it. Batches stay when the semesters
+  // change, until the refreshed list shows which ones no longer apply.
+  function pickCampus(v: string) {
+    setForm(prev => ({ ...prev, campusGuid: v, programGuid: '', semesterGuids: [], batchGuids: [] }))
+    setErrors(prev => ({ ...prev, semesterGuids: '', batchGuids: '' }))
+  }
+  function pickProgram(v: string) {
+    setForm(prev => ({ ...prev, programGuid: v, semesterGuids: [], batchGuids: [] }))
+    setErrors(prev => ({ ...prev, semesterGuids: '', batchGuids: '' }))
+  }
+  function pickSemesters(v: string[]) {
+    setForm(prev => ({ ...prev, semesterGuids: v, batchGuids: v.length ? prev.batchGuids : [] }))
+    setErrors(prev => ({ ...prev, semesterGuids: '', batchGuids: v.length ? prev.batchGuids : '' }))
+  }
+  useEffect(() => {
+    if (!batchesQuery.data) return
+    const listed = new Set(batchesQuery.data.map(b => b.batchGuid))
+    setForm(prev => (prev.batchGuids.every(g => listed.has(g)) ? prev : { ...prev, batchGuids: prev.batchGuids.filter(g => listed.has(g)) }))
+  }, [batchesQuery.data])
 
   // Student typeahead (one student; clearing it means all students). The
   // chosen option is kept so its label survives a new search.
@@ -116,6 +159,8 @@ export default function TransactionReportPage() {
     if (form.fromDate && form.toDate && form.fromDate > form.toDate) e.toDate = 'To date can’t be before the from date'
     if (form.receiptBookGuids.length > TRANSACTION_REPORT_MAX_RECEIPT_BOOKS) e.receiptBookGuids = `Select at most ${TRANSACTION_REPORT_MAX_RECEIPT_BOOKS} receipt books (now ${form.receiptBookGuids.length})`
     if (form.ledgerGuids.length > TRANSACTION_REPORT_MAX_LEDGERS) e.ledgerGuids = `Select at most ${TRANSACTION_REPORT_MAX_LEDGERS} ledgers (now ${form.ledgerGuids.length})`
+    if (form.semesterGuids.length > REPORT_MAX_SEMESTERS) e.semesterGuids = `Select at most ${REPORT_MAX_SEMESTERS} semesters (now ${form.semesterGuids.length})`
+    if (form.batchGuids.length > REPORT_MAX_BATCHES) e.batchGuids = `Select at most ${REPORT_MAX_BATCHES} batches (now ${form.batchGuids.length})`
     setErrors(e)
     if (Object.keys(e).length) { scrollToFirstError(e); return false }
     return true
@@ -185,8 +230,14 @@ export default function TransactionReportPage() {
     if (saved.ledgerGuids?.length) {
       chips.push({ label: 'Ledgers', value: saved.ledgerGuids.length === 1 ? (ledgerOptions.find(o => o.value === saved.ledgerGuids![0])?.label ?? '1 selected') : `${saved.ledgerGuids.length} selected` })
     }
+    if (saved.campusGuid) chips.push({ label: 'Campus', value: reportChipValue(campusOptions, [saved.campusGuid], 'campuses') })
+    if (saved.programGuid) chips.push({ label: 'Programme', value: reportChipValue(programOptions, [saved.programGuid], 'programmes') })
+    if (saved.semesterGuids?.length) chips.push({ label: 'Semesters', value: reportChipValue(semesterOptions, saved.semesterGuids, 'semesters') })
+    if (saved.batchGuids?.length) chips.push({ label: 'Batches', value: reportChipValue(batchOptions, saved.batchGuids, 'batches') })
+    if (saved.sponsorCategoryGuid) chips.push({ label: 'Sponsor', value: reportChipValue(sponsorOptions, [saved.sponsorCategoryGuid], 'sponsors') })
+    if (saved.payTypes?.length) chips.push({ label: 'Payment types', value: saved.payTypes.map(t => payTypeOptions.find(o => o.value === String(t))?.label ?? t).join(', ') })
     return chips
-  }, [saved, savedStudentLabel, intakeOptions, bookOptions, ledgerOptions])
+  }, [saved, savedStudentLabel, intakeOptions, bookOptions, ledgerOptions, campusOptions, programOptions, semesterOptions, batchOptions, sponsorOptions, payTypeOptions])
 
   const COLS = 14
 
@@ -229,21 +280,52 @@ export default function TransactionReportPage() {
                   isLoading={studentsQuery.isFetching}
                 />
               </div>
-              <div className="fg m-0 span2">
+              <div className="fg m-0">
+                <label className="lbl">Campus</label>
+                <SearchSelect placeholder="All campuses" options={campusOptions} value={form.campusGuid} onChange={pickCampus} isLoading={campusesQuery.isLoading} />
+              </div>
+              <div className="fg m-0">
+                <label className="lbl">Programme</label>
+                <SearchSelect placeholder={form.campusGuid ? 'All programmes' : 'Choose a campus first'} options={programOptions} value={form.programGuid} onChange={pickProgram} disabled={!form.campusGuid} isLoading={programsQuery.isFetching} />
+              </div>
+              <div className="fg m-0">
+                <label className="lbl">Semesters <span className="text-g400" style={{ fontWeight: 400 }}>· up to {REPORT_MAX_SEMESTERS}</span></label>
+                <MultiSelect placeholder={form.programGuid ? 'All semesters' : 'Choose a programme first'} options={semesterOptions} value={form.semesterGuids} onChange={pickSemesters} disabled={!form.programGuid} isLoading={semestersQuery.isFetching} />
+                {errors.semesterGuids && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.semesterGuids}</p>}
+                {form.semesterGuids.length > 0 && !errors.semesterGuids && <p className="text-g400" style={{ fontSize: 12, marginTop: 4 }}>Lines paid for these semesters, whatever semester the student is in now.</p>}
+              </div>
+              <div className="fg m-0">
+                <label className="lbl">Batches <span className="text-g400" style={{ fontWeight: 400 }}>· up to {REPORT_MAX_BATCHES}</span></label>
+                <MultiSelect placeholder={form.semesterGuids.length ? 'All batches' : 'Choose a semester first'} options={batchOptions} value={form.batchGuids} onChange={v => setField('batchGuids', v)} disabled={!form.semesterGuids.length} isLoading={batchesQuery.isFetching} />
+                {errors.batchGuids && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.batchGuids}</p>}
+              </div>
+              <div className="fg m-0">
+                <label className="lbl">Sponsor</label>
+                <SearchSelect placeholder="All sponsors" options={sponsorOptions} value={form.sponsorCategoryGuid} onChange={v => setField('sponsorCategoryGuid', v)} isLoading={sponsorsQuery.isLoading} />
+              </div>
+              <div className="fg m-0">
+                <label className="lbl">Payment types</label>
+                <MultiSelect placeholder="All payment types" options={payTypeOptions} value={form.payTypes} onChange={v => setField('payTypes', v)} isLoading={payTypesQuery.isLoading} />
+              </div>
+              <div className="fg m-0">
                 <label className="lbl">Receipt books <span className="text-g400" style={{ fontWeight: 400 }}>· up to {TRANSACTION_REPORT_MAX_RECEIPT_BOOKS}</span></label>
                 <MultiSelect placeholder="All receipt books" options={bookOptions} value={form.receiptBookGuids} onChange={v => setField('receiptBookGuids', v)} isLoading={booksQuery.isLoading} />
                 {errors.receiptBookGuids && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.receiptBookGuids}</p>}
               </div>
-              <div className="fg m-0 span2">
+              <div className="fg m-0">
                 <label className="lbl">Ledgers <span className="text-g400" style={{ fontWeight: 400 }}>· up to {TRANSACTION_REPORT_MAX_LEDGERS}</span></label>
                 <MultiSelect placeholder="All ledgers" options={ledgerOptions} value={form.ledgerGuids} onChange={v => setField('ledgerGuids', v)} isLoading={ledgersQuery.isLoading} />
                 {errors.ledgerGuids && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.ledgerGuids}</p>}
               </div>
             </div>
             <div className="flex items-center justify-end gap-2 mt-4">
-              <span className="text-g400 mr-auto" style={{ fontSize: 'var(--fs-sm)' }}>Every filter is optional. Leave them all empty to report on everything.</span>
+              <span className="text-g400 mr-auto" style={{ fontSize: 'var(--fs-sm)' }}>
+                {form.campusGuid || form.batchGuids.length || form.sponsorCategoryGuid
+                  ? 'Campus, Batches and Sponsor use the student’s current record, so payments by people who aren’t students yet are left out.'
+                  : 'Every filter is optional. Leave them all empty to report on everything.'}
+              </span>
               <button type="button" className="btn btn-neu btn-sm" onClick={handleReset}>Reset</button>
-              <button type="button" className="btn btn-primary btn-sm" onClick={handleProcess} disabled={preview.isFetching && !preview.isFetchingNextPage}>
+              <button type="button" className="btn btn-primary btn-sm" onClick={handleProcess} disabled={(preview.isFetching && !preview.isFetchingNextPage) || batchesQuery.isFetching}>
                 <i className="lni lni-play" aria-hidden="true" /> {preview.isFetching && !preview.isFetchingNextPage ? 'Processing…' : 'Process'}
               </button>
             </div>

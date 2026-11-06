@@ -72,6 +72,8 @@ export interface StudentDetailDto extends StudentDto {
   // Intake code the student joined in (e.g. "20222") — added to
   // GET /students/{guid} 2026-09-29.
   joinedIntake?: string | null
+  joinedDate?: string | null
+  feeStructure?: string | null
   // A third live shape, confirmed against students/students/get-student-by-guid.md
   // (2026-08-17 doc) — that response has no top-level nationalityGuid at all;
   // the actual country identifier lives here instead, nested under the

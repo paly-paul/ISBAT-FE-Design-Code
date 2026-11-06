@@ -15282,9 +15282,19 @@ button.sp-link:hover .sp-link-go { color: var(--b700); transform: translateX(3px
 .sp-born-val { font-size: var(--fs-lg); letter-spacing: -0.01em; }
 /* Same 16px column gap as the .g2 date row below, so the tile and input edges line up. */
 .sp-page .sp-card-facts { gap: 8px 16px; margin-bottom: 14px; flex: none; }
-.sp-note { align-items: flex-start; margin-top: 12px; line-height: 1.5; }
-.sp-note i { margin-top: 3px; }
-.sp-note code { padding: 1px 5px; border-radius: 3px; background: var(--g100); color: var(--g700); }
+/* Info callout: pale panel with a navy icon tile, as on the Programme panel. */
+.sp-note {
+  align-items: center; gap: 12px; margin-top: 12px; padding: 10px 14px; line-height: 1.5;
+  border-radius: var(--rsm); background: var(--b50); border: 1px solid var(--b100); color: var(--g700);
+}
+.sp-note i {
+  flex-shrink: 0; width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center;
+  font-size: 14px; color: var(--white); background: var(--b800); box-shadow: 0 6px 14px -8px rgba(30, 45, 110, .7);
+}
+.sp-note code {
+  padding: 1px 6px; border-radius: 5px; font-family: var(--font-mono), monospace; font-size: .92em; font-weight: 600;
+  color: var(--b700); background: var(--white); border: 1px solid var(--b200);
+}
 .sp-note-top { margin: 0 0 14px; }
 
 /* Credential dispatch: equal-height cards with the actions on one line. */

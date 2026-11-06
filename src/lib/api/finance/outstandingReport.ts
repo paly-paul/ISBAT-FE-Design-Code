@@ -21,13 +21,14 @@ export const REG_STATUS_OPTIONS = [
 export const DEFAULT_REG_STATUSES = [1, 2, 4]
 
 // Every field optional. With no intake and no batch the server checks the
-// current academic intake; a batch overrides the intake.
+// current academic intake; any batch overrides the intake. Semesters are the
+// student's current semester, and semesters and batches combine with AND.
 export interface OutstandingReportFilters {
   campusGuid?: string
   programGuid?: string
-  semesterGuid?: string
-  batchGuid?: string
-  intakeGuid?: string          // only when not the current intake, and never with a batch
+  semesterGuids?: string[]     // max 20
+  batchGuids?: string[]        // max 50
+  intakeGuid?: string          // only when not the current intake, and never with batches
   sponsorCategoryGuid?: string
   regStatuses?: number[]       // each 1–5
   search?: string              // trimmed, max 100
@@ -140,7 +141,8 @@ function mockSummary(rows: OutstandingReportRow[]): OutstandingReportSummary {
 
 // GET /finance/reports/outstanding/preview. Page 1 with the summary; every
 // later page passes includeSummary=false. Slow by design (whole scope is
-// recalculated: ~7 s page 1, ~3 s after). regStatuses is a repeated key.
+// recalculated: ~7 s page 1, ~3 s after). regStatuses, semesterGuids and
+// batchGuids are repeated keys.
 export function getOutstandingReportPreview(filters: OutstandingReportFilters, pageNumber: number, pageSize = OUTSTANDING_REPORT_PAGE_SIZE): Promise<OutstandingReportPreview> {
   const includeSummary = pageNumber === 1
   if (MOCK_AUTH) {
@@ -155,8 +157,8 @@ export function getOutstandingReportPreview(filters: OutstandingReportFilters, p
   if (!includeSummary) params.set('includeSummary', 'false')
   if (filters.campusGuid) params.set('campusGuid', filters.campusGuid)
   if (filters.programGuid) params.set('programGuid', filters.programGuid)
-  if (filters.semesterGuid) params.set('semesterGuid', filters.semesterGuid)
-  if (filters.batchGuid) params.set('batchGuid', filters.batchGuid)
+  filters.semesterGuids?.forEach(g => params.append('semesterGuids', g))
+  filters.batchGuids?.forEach(g => params.append('batchGuids', g))
   if (filters.intakeGuid) params.set('intakeGuid', filters.intakeGuid)
   if (filters.sponsorCategoryGuid) params.set('sponsorCategoryGuid', filters.sponsorCategoryGuid)
   if (filters.search) params.set('search', filters.search)
@@ -165,7 +167,7 @@ export function getOutstandingReportPreview(filters: OutstandingReportFilters, p
 }
 
 // POST /finance/reports/outstanding/export (202). Same filters as the
-// preview, as JSON (regStatuses as an array). An identical export already
+// preview, as JSON (regStatuses, semesterGuids and batchGuids as arrays). An identical export already
 // running comes back as that same job.
 export function exportOutstandingReport(filters: OutstandingReportFilters): Promise<{ job: ReportJob; message: string | null }> {
   if (MOCK_AUTH) {
@@ -174,8 +176,8 @@ export function exportOutstandingReport(filters: OutstandingReportFilters): Prom
   const body = {
     campusGuid: filters.campusGuid ?? null,
     programGuid: filters.programGuid ?? null,
-    semesterGuid: filters.semesterGuid ?? null,
-    batchGuid: filters.batchGuid ?? null,
+    semesterGuids: filters.semesterGuids ?? null,
+    batchGuids: filters.batchGuids ?? null,
     intakeGuid: filters.intakeGuid ?? null,
     sponsorCategoryGuid: filters.sponsorCategoryGuid ?? null,
     // Left out (null) rather than [] for the default 1, 2, 4.
