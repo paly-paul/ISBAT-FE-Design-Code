@@ -1,9 +1,21 @@
 import { useMemo } from 'react'
 import { useInfiniteQuery, useQueries, useQuery } from '@tanstack/react-query'
-import { StudentDto, StudentDetailDto, StudentListFilters, StudentColumnFilters, getStudentByGuid, getStudents, getStudentsFilter } from '@/lib/api/student/student'
+import { StudentDto, StudentDetailDto, StudentListFilters, StudentColumnFilters, getStudentByGuid, getStudents, getStudentTimeline, getStudentsFilter } from '@/lib/api/student/student'
 
 const STUDENTS_LIST_KEY = ['students-list']
 const STUDENT_DETAIL_KEY = ['student-detail']
+
+// staleTime 0, unlike the app default: transfers on other pages add history
+// rows, so each opening of the tab re-reads it. A failed read isn't re-sent
+// on open (retryOnMount: false in providers.tsx); only Try again does that.
+export function useStudentTimeline(studentGuid: string | null) {
+  return useQuery({
+    queryKey: ['student-timeline', studentGuid],
+    queryFn: () => getStudentTimeline(studentGuid as string),
+    enabled: !!studentGuid,
+    staleTime: 0,
+  })
+}
 
 export function useStudents(page: number, pageSize: number, filters?: StudentListFilters) {
   return useQuery({

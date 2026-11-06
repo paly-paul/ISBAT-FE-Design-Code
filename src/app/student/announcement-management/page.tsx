@@ -23,8 +23,6 @@ function programLabel(a: AnnouncementItem): string {
 }
 
 export default function Page() {
-  // Permission checks disabled for now — every action is allowed. Restore the
-  // line below (and the import above) to gate actions by the menu permissions again.
   const permissions = usePagePermissions()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast]       = useState<{ msg: string; type: string } | null>(null)

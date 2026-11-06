@@ -19,6 +19,23 @@ export interface TransactionReportFilters {
   applicationGuid?: string     // one student, from vetted-registered-search
   receiptBookGuids?: string[]  // max 50
   ledgerGuids?: string[]       // max 20; the Discount ledger (DA) is ignored
+  // Follow the student's CURRENT record, and leave out payments by anyone
+  // without a student record.
+  campusGuid?: string
+  batchGuids?: string[]        // max 50
+  sponsorCategoryGuid?: string
+  // Follow the semester the fee was paid for (the Semester column).
+  programGuid?: string
+  semesterGuids?: string[]     // max 20
+  payTypes?: number[]          // 1 Cash, 2 Cheque, 3 Bank, 4 DemandDraft, 5 Online
+}
+
+// GET /finance/enums/payment-types. `name` is the raw enum member.
+export interface PaymentTypeOption { value: number; name: string }
+
+export function getFinancePaymentTypes(): Promise<PaymentTypeOption[]> {
+  if (MOCK_AUTH) return Promise.resolve([{ value: 1, name: 'Cash' }, { value: 2, name: 'Cheque' }, { value: 3, name: 'Bank' }, { value: 4, name: 'DemandDraft' }, { value: 5, name: 'Online' }])
+  return apiGet<PaymentTypeOption[] | null>('/api/v1/finance/enums/payment-types').then(data => data ?? [])
 }
 
 export const TRANSACTION_REPORT_MAX_RECEIPT_BOOKS = 50
@@ -113,7 +130,8 @@ const MOCK_ROWS: TransactionReportRow[] = Array.from({ length: 72 }, (_, i) => {
 function mockFilter(f: TransactionReportFilters): TransactionReportRow[] {
   return MOCK_ROWS.filter(r =>
     (!f.fromDate || r.payDate.slice(0, 10) >= f.fromDate)
-    && (!f.toDate || r.payDate.slice(0, 10) <= f.toDate))
+    && (!f.toDate || r.payDate.slice(0, 10) <= f.toDate)
+    && (!f.payTypes?.length || f.payTypes.includes(r.payMode.value)))
 }
 
 function mockSummary(rows: TransactionReportRow[]): TransactionReportSummary {
@@ -159,6 +177,12 @@ export function getTransactionReportPreview(filters: TransactionReportFilters, p
   if (filters.applicationGuid) params.set('applicationGuid', filters.applicationGuid)
   filters.receiptBookGuids?.forEach(g => params.append('receiptBookGuids', g))
   filters.ledgerGuids?.forEach(g => params.append('ledgerGuids', g))
+  if (filters.campusGuid) params.set('campusGuid', filters.campusGuid)
+  if (filters.programGuid) params.set('programGuid', filters.programGuid)
+  filters.semesterGuids?.forEach(g => params.append('semesterGuids', g))
+  filters.batchGuids?.forEach(g => params.append('batchGuids', g))
+  if (filters.sponsorCategoryGuid) params.set('sponsorCategoryGuid', filters.sponsorCategoryGuid)
+  filters.payTypes?.forEach(t => params.append('payTypes', String(t)))
   return apiGet<TransactionReportPreview>(`/api/v1/finance/reports/transaction/preview?${params.toString()}`)
 }
 
@@ -176,6 +200,12 @@ export function exportTransactionReport(filters: TransactionReportFilters): Prom
     applicationGuid: filters.applicationGuid ?? null,
     receiptBookGuids: filters.receiptBookGuids ?? [],
     ledgerGuids: filters.ledgerGuids ?? [],
+    campusGuid: filters.campusGuid ?? null,
+    programGuid: filters.programGuid ?? null,
+    semesterGuids: filters.semesterGuids ?? null,
+    batchGuids: filters.batchGuids ?? null,
+    sponsorCategoryGuid: filters.sponsorCategoryGuid ?? null,
+    payTypes: filters.payTypes ?? null,
   }
   return apiPostWithMessage<Parameters<typeof normalizeReportJob>[0]>('/api/v1/finance/reports/transaction/export', body)
     .then(({ data, message }) => ({ job: normalizeReportJob(data), message }))

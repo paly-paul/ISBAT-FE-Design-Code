@@ -55,7 +55,9 @@ export default function UniversityExamProjectBookletPrintPage() {
     setSelectedSemesterGuid(guid)
     setSelectedCourseUnitGuid('')
   }
-  const handleRefresh = () => {
+  const handleCancel = () => {
+    // Cleared, not kept: the effect above pre-selects the current intake again.
+    setSelectedIntakeGuid('')
     setSelectedProgramGuid('')
     setSelectedSemesterGuid('')
     setSelectedCourseUnitGuid('')
@@ -68,8 +70,8 @@ export default function UniversityExamProjectBookletPrintPage() {
           <h1 className="pg-title">University Exam Project Booklet Print</h1>
           <p className="pg-sub">Generate and print exam booklets for Project course units</p>
         </div>
-        <button className="btn btn-neu" onClick={handleRefresh}>
-          <i className="lni lni-reload"></i> Refresh
+        <button className="btn btn-neu" onClick={handleCancel}>
+          <i className="lni lni-close"></i> Cancel
         </button>
       </div>
 
@@ -82,14 +84,11 @@ export default function UniversityExamProjectBookletPrintPage() {
               value={selectedIntakeGuid}
               onChange={setSelectedIntakeGuid}
               disabled={intakesLoading}
-              options={(() => {
-                const current = (intakes ?? []).filter(i => i.currentIntake)
-                const list = current.length > 0 ? current : (intakes && intakes.length > 0 ? [intakes[0]] : [])
-                return list.map(i => ({
-                  value: i.intakeGuid,
-                  label: `${i.description || i.intakeCode} (Current)`,
-                }))
-              })()}
+              // Print only accepts the current intake, but the downloads work for any.
+              options={(intakes ?? []).map(i => ({
+                value: i.intakeGuid,
+                label: `${i.description || i.intakeCode}${i.currentIntake ? ' (Current)' : ''}`,
+              }))}
             />
           </div>
           <div className="fg mb-0">

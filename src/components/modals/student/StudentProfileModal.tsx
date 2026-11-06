@@ -49,7 +49,7 @@ export function StudentProfileModal({ isOpen, onClose, studentGuid }: Props) {
   const nationalityGuidCandidate = student?.nationalityGuid ?? student?.applicationSummary?.countryGuid ?? null
   const nationality = student?.nationality
     ?? student?.nationalityCode
-    ?? countries?.find(c => c.countryGuid === nationalityGuidCandidate)?.nationality
+    ?? countries.find(c => c.countryGuid === nationalityGuidCandidate)?.nationality
     ?? '—'
 
   return (

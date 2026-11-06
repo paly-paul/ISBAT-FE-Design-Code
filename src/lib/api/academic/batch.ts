@@ -237,6 +237,14 @@ export interface BatchDropdownItem {
 // combinable (get-batches-dropdown.md). intakeGuid scopes to batches linked
 // to that intake via its session (T_SESSION_MANAGEMENT → T_SESSION_BATCH).
 // Item shape { batchGuid, batchCode } confirmed by the same doc.
+// Batches under ANY of the given semesters: semesterGuids is a repeated key.
+export function getBatchDropdownForSemesters(programGuid: string, semesterGuids: string[]): Promise<BatchDropdownItem[]> {
+  if (MOCK_AUTH) return Promise.resolve(mockBatches.map(b => ({ batchGuid: b.batchGuid, batchCode: b.batchCode })))
+  const params = new URLSearchParams({ programGuid })
+  semesterGuids.forEach(g => params.append('semesterGuids', g))
+  return apiGet<BatchDropdownItem[] | null>(`/api/v1/academic/batches/dropdown?${params.toString()}`).then(data => data ?? [])
+}
+
 export function getBatchDropdown(programGuid?: string, semesterGuid?: string, intakeGuid?: string): Promise<BatchDropdownItem[]> {
   if (MOCK_AUTH) return Promise.resolve(mockBatches.map(b => ({ batchGuid: b.batchGuid, batchCode: b.batchCode })))
   const params = new URLSearchParams()

@@ -33,8 +33,6 @@ const PROGRAM_GROUPS = [
 // Router) — same split intake-transfer/Student Profile use for the same
 // reason.
 function PassoutConfirmationContent() {
-  // Permission checks disabled for now — every action is allowed. Restore the
-  // line below (and the import above) to gate actions by the menu permissions again.
   const permissions = usePagePermissions()
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -77,7 +75,7 @@ function PassoutConfirmationContent() {
   }
 
   function handleConfirmClick() {
-    if (!permissions.edit) { showToast('You do not have permission to confirm Passout.', 'warn'); return }
+    if (!permissions.approve) { showToast('You do not have permission to confirm Passout.', 'warn'); return }
     setConfirmOpen(true)
   }
 
@@ -225,7 +223,7 @@ function PassoutConfirmationContent() {
                     </div>
                     <div className="flex gap-2" style={{ justifyContent: 'flex-end' }}>
                       <button className="btn btn-neu" onClick={handleClear}>Cancel</button>
-                      {permissions.edit && <button className="btn btn-primary" onClick={handleConfirmClick}><i className="lni lni-checkmark"></i> Confirm Passout</button>}
+                      {permissions.approve && <button className="btn btn-primary" onClick={handleConfirmClick}><i className="lni lni-checkmark"></i> Confirm Passout</button>}
                     </div>
                   </div>
                   <div className="card">
@@ -265,7 +263,7 @@ function PassoutConfirmationContent() {
                 </div>
                 <div className="modal-footer">
                   <button className="btn btn-neu" onClick={closeConfirmModal} disabled={confirmPassout.isPending}>Cancel</button>
-                  <button className="btn btn-danger" onClick={executeConfirm} disabled={confirmPassout.isPending || !permissions.edit}>
+                  <button className="btn btn-danger" onClick={executeConfirm} disabled={confirmPassout.isPending || !permissions.approve}>
                     <i className="lni lni-checkmark"></i> {confirmPassout.isPending ? 'Confirming…' : 'Confirm & Passout'}
                   </button>
                 </div>

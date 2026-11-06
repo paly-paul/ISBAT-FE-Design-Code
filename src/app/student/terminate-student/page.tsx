@@ -37,8 +37,6 @@ function initialsFor(name: string) {
 }
 
 export default function TerminateStudentPage() {
-  // Permission checks disabled for now — every action is allowed. Restore the
-  // line below (and the import above) to gate actions by the menu permissions again.
   const permissions = usePagePermissions()
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
@@ -146,7 +144,7 @@ export default function TerminateStudentPage() {
   }
 
   function handleTerminateClick() {
-    // if (!permissions.add) { showToast('You do not have permission to terminate students.', 'warn'); return }
+    if (!permissions.execute) { showToast('You do not have permission to terminate students.', 'warn'); return }
     if (!studentGuid) { showToast('This application has no linked student record — nothing to terminate.', 'warn'); return }
     if (alreadyTerminated) { showToast('This student is already terminated.', 'warn'); return }
     if (!terminationReasonGuid) { showToast('Please select a termination reason.', 'warn'); return }
@@ -336,9 +334,9 @@ export default function TerminateStudentPage() {
 
                 <div className="flex gap-[10px] justify-end flex-wrap">
                   <button className="btn btn-neu" onClick={resetForm}><i className="lni lni-close"></i> Cancel</button>
-                  <button className="btn btn-danger" disabled={!terminationReasonGuid} onClick={handleTerminateClick}>
+                  {permissions.execute && <button className="btn btn-danger" disabled={!terminationReasonGuid} onClick={handleTerminateClick}>
                     <i className="lni lni-shield"></i> Terminate Student
-                  </button>
+                  </button>}
                 </div>
               </div>
             )}

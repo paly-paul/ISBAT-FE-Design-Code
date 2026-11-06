@@ -6,7 +6,6 @@ import { useProgramGroup } from '@/hooks/academic/useProgramGroups'
 import { useProgramLevel } from '@/hooks/academic/useProgramLevels'
 import { useFacultiesByGuids } from '@/hooks/config/useFaculties'
 import { useIntakesByGuids } from '@/hooks/academic/useIntakes'
-import { useLedgers } from '@/hooks/finance/useLedgers'
 import { useCurrenciesDropdown } from '@/hooks/finance/useCurrencies'
 import { AuthError } from '@/lib/api/client'
 import { FailurePopup } from '../shared/FailurePopup'
@@ -117,7 +116,6 @@ export function ViewProgrammeModal({ isOpen, onClose, programGuid, onEdit }: Vie
   const { data: programLevel } = useProgramLevel(program?.programLevelGuid ?? null, isOpen && !!program)
   const facultiesByGuid = useFacultiesByGuids(program?.facultyGuid ? [program.facultyGuid] : [])
   const intakesByGuid = useIntakesByGuids(program?.intakeGuid ? [program.intakeGuid] : [])
-  const { data: ledgers = [] } = useLedgers(isOpen)
   const { data: financeCurrencies = [] } = useCurrenciesDropdown(isOpen)
 
   if (!isOpen) return null
@@ -168,7 +166,6 @@ export function ViewProgrammeModal({ isOpen, onClose, programGuid, onEdit }: Vie
   const activeSem = semesters[activeSemIdx] ?? semesters[0]
   const activeFee = feeStructures[activeFeeIdx] ?? feeStructures[0]
 
-  const ledgerName = (guid: string) => ledgers.find(l => l.ledgerGuid === guid)?.ledgerName || '—'
   const currencyCode = (guid: string | null | undefined) => financeCurrencies.find(c => c.currencyGuid === guid)?.currencyCode ?? ''
 
   return (
@@ -351,7 +348,7 @@ export function ViewProgrammeModal({ isOpen, onClose, programGuid, onEdit }: Vie
                                   {items.map((f, idx) => (
                                     <li key={idx} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 12px', borderBottom: idx < items.length - 1 ? '1px solid var(--g100)' : 'none', fontSize: 13 }}>
                                       <span className="font-mono" style={{ minWidth: 22, textAlign: 'right', color: 'var(--g400)' }} title="Ledger priority">{f.ledgerNum}.</span>
-                                      <span style={{ flex: 1, minWidth: 0, color: 'var(--g800)' }}>{ledgerName(f.ledgerGuid)}</span>
+                                      <span style={{ flex: 1, minWidth: 0, color: 'var(--g800)' }}>{f.ledgerName || '—'}</span>
                                       <span style={{ fontWeight: 600, color: 'var(--g900)', fontVariantNumeric: 'tabular-nums' }}>
                                         {(f.amount || 0).toLocaleString()} <span style={{ color: 'var(--g500)', fontWeight: 500 }}>{currencyCode(f.currencyGuid)}</span>
                                       </span>

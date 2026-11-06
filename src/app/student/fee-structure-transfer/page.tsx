@@ -19,8 +19,6 @@ import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 // useSearchParams() requires a Suspense boundary above it (Next.js App
 // Router) — see the wrapping default export at the bottom of this file.
 function FeeStructureTransferContent() {
-  // Permission checks disabled for now — every action is allowed. Restore the
-  // line below (and the import above) to gate actions by the menu permissions again.
   const permissions = usePagePermissions()
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -91,7 +89,7 @@ function FeeStructureTransferContent() {
   const canExecute = !!(student && targetFeeStructure && remarks.trim() && !executeTransfer.isPending)
 
   function handleSubmit() {
-    if (!permissions.edit || !canExecute || !student) return
+    if (!permissions.execute || !canExecute || !student) return
     executeTransfer.mutate({
       studentGuid: student.studentGuid,
       payload: {
@@ -179,7 +177,7 @@ function FeeStructureTransferContent() {
                 </div>
               </div>
               <div className="flex gap-2" style={{ justifyContent: 'flex-start', marginTop: 8 }}>
-                {permissions.edit && (
+                {permissions.execute && (
                   <button className="btn btn-primary" disabled={!canExecute} onClick={handleSubmit}>
                     {executeTransfer.isPending ? <i className="lni lni-spinner lni-spin"></i> : <i className="lni lni-checkmark"></i>} Submit
                   </button>

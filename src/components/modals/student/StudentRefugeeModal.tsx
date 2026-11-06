@@ -144,7 +144,18 @@ export function StudentRefugeeModal({ isOpen, onClose, showToast, studentGuid, s
             <>
               <div className="fg">
                 <label className="lbl">Country <span className="req">*</span></label>
-                <SearchSelect placeholder="-- Select Country --" options={countryOptions} value={countryGuid} onChange={setCountryGuid} />
+                <SearchSelect
+                  placeholder="-- Select Country --"
+                  options={countryOptions}
+                  value={countryGuid}
+                  onChange={setCountryGuid}
+                  onSearch={setCountrySearch}
+                  onOpenChange={setCountryPickerOpen}
+                  isLoading={countryQuery.isLoading}
+                  hasNextPage={countryQuery.hasNextPage}
+                  isFetchingNextPage={countryQuery.isFetchingNextPage}
+                  onLoadMore={() => countryQuery.fetchNextPage()}
+                />
               </div>
               <div className="fg"><label className="lbl">Refugee ID <span className="req">*</span></label><input className="ctrl" maxLength={20} value={refugeeId} onChange={e => setRefugeeId(e.target.value)} placeholder="Refugee document/registration number" /></div>
               <div className="fg"><label className="lbl">Remarks <span className="req">*</span></label><textarea className="ctrl" rows={2} value={remarks} onChange={e => setRemarks(e.target.value)} placeholder="e.g. UNHCR verified" /></div>

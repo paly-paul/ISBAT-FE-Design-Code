@@ -14,7 +14,7 @@ import { StudentFinancialRecord } from '@/components/student/StudentFinancialRec
 import { StudentAcademicRecord } from '@/components/student/StudentAcademicRecord'
 import { StudentDto } from '@/lib/api/student/student'
 import { useDropoutStudents, useRejoinCandidate, useRejoinBatches, useRejoinStudent } from '@/hooks/student/useDropoutRejoin'
-import { useBatchTimes } from '@/hooks/config/useBatchTimes'
+import { useBatchTimesDropdown } from '@/hooks/config/useBatchTimes'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 // Ported from isbat_student_module.html's Intake Transfer page. Only the
@@ -86,8 +86,6 @@ const REJOIN_TABS: { id: RejoinTab; label: string; icon: string }[] = [
 ]
 
 function DropoutRejoinPanel({ showToast }: { showToast: (msg: string, type?: string) => void }) {
-  // Permission checks disabled for now — every action is allowed. Restore the
-  // line below (and the import above) to gate actions by the menu permissions again.
   const permissions = usePagePermissions()
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -139,7 +137,7 @@ function DropoutRejoinPanel({ showToast }: { showToast: (msg: string, type?: str
   // Admission's own filing form uses, not something the candidate response
   // carries. Sits ahead of Target Batch in the form since get-rejoin-batches.md
   // needs both the semester and this before it can return anything.
-  const { data: batchTimes = [] } = useBatchTimes(!!selectedGuid)
+  const { data: batchTimes = [] } = useBatchTimesDropdown(!!selectedGuid)
   // The real batch dropdown for this form (get-rejoin-batches.md) — replaces
   // candidate.availableBatches entirely rather than falling back to it, since
   // that list isn't scoped to a batch time at all. Only fires once both
@@ -177,7 +175,7 @@ function DropoutRejoinPanel({ showToast }: { showToast: (msg: string, type?: str
   const canExecute = !!(targetSemester && targetBatch && targetFeeHead)
 
   function executeRejoin() {
-    if (!permissions.edit || !candidate || !canExecute) return
+    if (!permissions.execute || !candidate || !canExecute) return
     rejoin.mutate(
       { studentGuid: candidate.studentGuid, payload: { newSemesterGuid: targetSemester, newBatchGuid: targetBatch, newFeeGuid: targetFeeHead } },
       {
@@ -353,7 +351,7 @@ function DropoutRejoinPanel({ showToast }: { showToast: (msg: string, type?: str
               <div className="fg"><label className="lbl">Remarks</label><textarea className="ctrl" rows={3} placeholder="Optional notes (not sent to the server — the endpoint takes no remarks field)." value={remarks} onChange={e => setRemarks(e.target.value)} /></div>
               <div className="flex gap-2" style={{ justifyContent: 'flex-end' }}>
                 <button className="btn btn-neu" onClick={handleClear}>Cancel</button>
-                {permissions.edit && <button className="btn btn-primary" disabled={!canExecute} onClick={() => setConfirmOpen(true)}><i className="lni lni-checkmark"></i> Rejoin Student</button>}
+                {permissions.execute && <button className="btn btn-primary" disabled={!canExecute} onClick={() => setConfirmOpen(true)}><i className="lni lni-checkmark"></i> Rejoin Student</button>}
               </div>
             </div>
             <div className="card">
@@ -384,7 +382,7 @@ function DropoutRejoinPanel({ showToast }: { showToast: (msg: string, type?: str
             </div>
             <div className="modal-footer">
               <button className="btn btn-neu" onClick={() => setConfirmOpen(false)} disabled={rejoin.isPending}>Cancel</button>
-              <button className="btn btn-danger" onClick={executeRejoin} disabled={rejoin.isPending || !permissions.edit}><i className="lni lni-checkmark"></i> {rejoin.isPending ? 'Rejoining…' : 'Confirm & Rejoin'}</button>
+              <button className="btn btn-danger" onClick={executeRejoin} disabled={rejoin.isPending || !permissions.execute}><i className="lni lni-checkmark"></i> {rejoin.isPending ? 'Rejoining…' : 'Confirm & Rejoin'}</button>
             </div>
           </div>
         </div>
@@ -399,8 +397,6 @@ function DropoutRejoinPanel({ showToast }: { showToast: (msg: string, type?: str
 // page-local mock data, same as before this page grew a Dropout Rejoin mode.
 // ---------------------------------------------------------------------------
 function DefermentPanel({ showToast }: { showToast: (msg: string, type?: string) => void }) {
-  // Permission checks disabled for now — every action is allowed. Restore the
-  // line below (and the import above) to gate actions by the menu permissions again.
   const permissions = usePagePermissions()
   const [student, setStudent] = useState<StudentDto | null>(null)
   const [targetIntake, setTargetIntake] = useState(TARGET_INTAKES[0].value)
@@ -477,7 +473,7 @@ function DefermentPanel({ showToast }: { showToast: (msg: string, type?: string)
               <div className="fg"><label className="lbl">Mandatory Remarks <span className="req">*</span></label><textarea className="ctrl" rows={3} placeholder="Detail the circumstances leading to this intake shift…" value={remarks} onChange={e => setRemarks(e.target.value)} /></div>
               <div className="flex gap-2" style={{ justifyContent: 'flex-end' }}>
                 <button className="btn btn-neu" onClick={handleClear}>Cancel</button>
-                {permissions.edit && <button className="btn btn-primary" onClick={() => setConfirmOpen(true)}><i className="lni lni-checkmark"></i> Execute Intake Transfer</button>}
+                {permissions.execute && <button className="btn btn-primary" onClick={() => setConfirmOpen(true)}><i className="lni lni-checkmark"></i> Execute Intake Transfer</button>}
               </div>
             </div>
             <div>
