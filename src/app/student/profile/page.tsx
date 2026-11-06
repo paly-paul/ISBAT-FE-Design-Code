@@ -4,7 +4,8 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { Toast } from '@/components/Toast'
 import { ActionMenu } from '@/components/ActionMenu'
 import { StudentLookup } from '@/components/student/StudentLookup'
-import { useStudent } from '@/hooks/student/useStudents'
+import { StudentTimeline } from '@/components/student/StudentTimeline'
+import { useStudent, useStudentTimeline } from '@/hooks/student/useStudents'
 import { StudentDto, StudentDetailDto, normalizeStudentDetail } from '@/lib/api/student/student'
 import { oneSemesterDiscountInForce } from '@/lib/api/student/studentDiscount'
 import { useIdCard, useIssueOrRenewIdCard, useUpdateIdCardDates, getIdCardQrImageUrl, currentCardIssue } from '@/hooks/student/useIdCards'
@@ -34,8 +35,8 @@ const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 // Sponsor's own dedicated GET endpoint is never fetched from this page (per
 // request, 2026-09-01). Refugee's is fetched on load, since the Refugee
 // Details card's visibility depends on it — see each hook call's comment.
-// Fee structure display and the communication dispatch audit
-// log still have no backend contract — page-local mock state only, same
+// The communication dispatch audit log still has no backend
+// contract — page-local mock state only, same
 // "UI-first prototype" convention as Finance's Payment Collection pages.
 // The old barcode/ESSL-device and photo-upload UI had no backing endpoint at
 // all (id-cards has no such fields) — commented out below rather than
@@ -45,14 +46,29 @@ const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 // Batch Time and Nationality have no field on any student/id-card response
 // yet, shown as placeholders. Card History (the issue/renewal timeline) has
 // been dropped from this tab entirely, per request.
+// Styles: My Profile's .mp-* blocks, plus the .sp-* layer after them in
+// globals.css for what only a student record has.
 const PROFICIENCY_TABS = [
   { id: 'info', label: 'Profile Info', icon: 'lni-user' },
+  { id: 'timeline', label: 'Timeline', icon: 'lni-calendar' },
   { id: 'idcard', label: 'ID Card', icon: 'lni-credit-cards' },
   { id: 'comms', label: 'Communication & Access', icon: 'lni-envelope' },
 ] as const
 type TabId = typeof PROFICIENCY_TABS[number]['id']
 
 interface AuditEntry { id: number; action: string; detail: string; dot: 'email' | 'whatsapp' | 'update' }
+
+const AUDIT_ICON: Record<AuditEntry['dot'], string> = { email: 'lni-envelope', whatsapp: 'lni-whatsapp', update: 'lni-pencil' }
+
+// Live validity line under a Communication tab contact field.
+function ContactHint({ ok, okMsg, badMsg }: { ok: boolean; okMsg: string; badMsg: string }) {
+  return (
+    <div className={`mp-match${ok ? '' : ' is-bad'}`}>
+      <i className={`lni ${ok ? 'lni-checkmark' : 'lni-close'}`} aria-hidden="true"></i>
+      {ok ? okMsg : badMsg}
+    </div>
+  )
+}
 
 function initials(name: string) {
   return name.trim().split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase()
@@ -107,6 +123,12 @@ function StudentProfileContent() {
   const effectiveStudentGuid = student?.studentGuid ?? studentGuidParam
   const { data: detail } = useStudent(effectiveStudentGuid ?? null, !!effectiveStudentGuid)
 
+  // Registration Date and Fee Structure read the student record first, then
+  // the timeline's joinedDate / current history row, which both carry them.
+  const { data: timeline } = useStudentTimeline(effectiveStudentGuid ?? null)
+  const joinedDate = detail?.joinedDate || timeline?.joinedDate
+  const feeStructure = detail?.feeStructure || timeline?.events.findLast(e => e.isActive)?.feeStructure || '—'
+
   // Once the deep-linked guid's detail resolves, seed `student` from it so
   // the rest of the page (which reads off `student`, not `detail`, for name/
   // programme/batch/etc.) renders exactly as if it had been picked from
@@ -121,6 +143,10 @@ function StudentProfileContent() {
   // reliable on every real response seen so far, so it's the fallback
   // everywhere this page used to read studentNum directly.
   const studentNo = student?.studentNum || student?.studentRegNo || '—'
+  const registrationNo = student?.studentRegNo || detail?.regNo || '—'
+  const programme = student?.programName || detail?.programme || '—'
+  const batch = student?.batchCode || detail?.batch || '—'
+  const semester = student?.semesterName || detail?.semester || '—'
 
   // Intakes arrive as bare codes (joinedIntake "20222" on the detail,
   // academicIntake 20241 on Student Master's list rows) — resolved to their
@@ -384,7 +410,7 @@ function StudentProfileContent() {
 
   return (
     <>
-      <div className="page active">
+      <div className="page active mp-page sp-page">
         <div className="pg-hdr">
           <div><div className="pg-title">Student Profile</div><div className="pg-sub">Search a student or navigate from Student Master to view and edit their profile</div></div>
           {cameFromStudentMaster && (
@@ -408,42 +434,36 @@ function StudentProfileContent() {
         )}
 
         {student && (
-          <>
-            <div className="stu-banner">
-              {/* Hero header — reuses Payment Console's/Discount Allocation's
-                  pc-hero layout wholesale (avatar + name/programme/reg-no up
-                  top, an aligned label/value facts grid below) instead of the
-                  old free-flowing pill row, see globals.css. .stu-hero below
-                  overrides just the background back to this page's own blue
-                  rather than pc-hero's own gradient. Same five data points as
-                  before — status, programme, batch, semester, campus — just
-                  laid out consistently with the rest of the app now. */}
-              <div className="pc-hero stu-hero">
-                <div className="pc-hero-top">
-                  <div className="pc-hero-avatar">{initials(student.studentName)}</div>
-                  <div className="flex-1 min-w-0">
-                    <div className="pc-hero-name truncate">{student.studentName}</div>
-                    <div className="pc-hero-sub truncate">{student.programName || detail?.programme || '—'}</div>
-                    {/* studentNo falls back to the reg no. when studentNum is
-                        missing (see studentNo above) — only show the reg no.
-                        separately when it's actually a different value. */}
-                    <span className="pc-hero-badge">
-                      <i className="lni lni-bookmark"></i> {studentNo}
-                      {(() => { const regNo = student.studentRegNo || detail?.regNo; return regNo && regNo !== studentNo ? ` · ${regNo}` : null })()}
-                    </span>
+          <div className="sp-body">
+            {/* Identity banner — the same .mp-hero as My Profile (profile/page.tsx):
+                navy band, avatar straddling its edge, then a facts row. The
+                .sp-links row below it is Student Profile's own: the fields that
+                link out to the page that manages them. */}
+            <section className="mp-hero" aria-label="Student summary">
+              <div className="mp-hero-top">
+                <div className="mp-avatar sp-hero-av" aria-hidden="true"><span>{initials(student.studentName)}</span></div>
+                <div className="mp-hero-id">
+                  <h1 className="mp-hero-name" title={student.studentName}>{student.studentName}</h1>
+                  <div className="mp-hero-sub">
+                    <span className="font-mono">{studentNo}</span> · {programme}
                   </div>
-                  {/* Batch/Programme Transfer, Learning Mode, Intake Transfer — tucked
-                      behind a single three-dot menu instead of four always-visible
-                      buttons, same ActionMenu component the table rows elsewhere in
-                      this app use for their own row actions. A flex sibling here,
-                      not absolutely positioned — pc-hero-top's flex-1 name column
-                      otherwise doesn't reserve room for it and the programme/reg-no
-                      lines end up sitting underneath the button instead of beside it.
-                      Each link carries ?studentGuid= so the destination page
-                      preloads this same student instead of requiring a second
-                      StudentLookup search — same deep-link convention Student
-                      Master's own "View" action uses to reach this page. */}
-                  {permissions.edit && (
+                  {detail?.campus && (
+                    <div className="mp-hero-pills">
+                      <span className="mp-pill"><i className="lni lni-apartment"></i> {detail.campus}</span>
+                    </div>
+                  )}
+                </div>
+                {/* Batch/Programme Transfer, Learning Mode, Intake Transfer — tucked
+                    behind a single three-dot menu instead of four always-visible
+                    buttons, same ActionMenu component the table rows elsewhere in
+                    this app use for their own row actions. Sits on the navy band,
+                    which the name block starts below, so the two never collide.
+                    Each link carries ?studentGuid= so the destination page
+                    preloads this same student instead of requiring a second
+                    StudentLookup search — same deep-link convention Student
+                    Master's own "View" action uses to reach this page. */}
+                {permissions.edit && (
+                  <div className="sp-hero-menu">
                     <ActionMenu tooltip="Student Actions">
                       {/* lni-transfer isn't a real LineIcons 4.0 class (silently renders
                           nothing) — lni-shuffle is what the sidebar leaf uses for this
@@ -453,101 +473,131 @@ function StudentProfileContent() {
                       <button className="btn btn-neu btn-sm" onClick={() => router.push('/student/learning-mode?studentGuid=' + student.studentGuid)}><i className="lni lni-display"></i> Learning Mode</button>
                       {isDropout && <button className="btn btn-neu btn-sm" onClick={() => router.push('/student/intake-transfer?studentGuid=' + student.studentGuid)}><i className="lni lni-calendar"></i> Dropout Rejoin</button>}
                     </ActionMenu>
-                  )}
-                </div>
-                <div className="pc-hero-facts">
-                  <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Batch</span><span className="pc-hero-fact-val" title={student.batchCode || detail?.batch || '—'}>{student.batchCode || detail?.batch || '—'}</span></div>
-                  <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Semester</span><span className="pc-hero-fact-val" title={student.semesterName || detail?.semester || '—'}>{student.semesterName || detail?.semester || '—'}</span></div>
-                  <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Campus</span><span className="pc-hero-fact-val" title={detail?.campus || '—'}>{detail?.campus || '—'}</span></div>
-                  <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Joined Intake</span><span className="pc-hero-fact-val" title={joinedIntake?.label || '—'}>{joinedIntake?.label || '—'}</span></div>
-                </div>
-              </div>
-              <div className="stu-meta-row">
-                {/* Fee Structure still has no field on any student response — left as an
-                    illustrative placeholder. Learning Mode reads detail.learningMode. */}
-                <div className="stu-meta-item"><div className="stu-meta-lbl">Fee Structure</div><div className="stu-meta-val">Local</div></div>
-                <div className="stu-meta-item">
-                  <div className="stu-meta-lbl">Sponsor</div>
-                  <div className="stu-meta-val" style={{ cursor: 'pointer' }} onClick={handleManageSponsor} title="Assign or change sponsor in Student Master">
-                    {sponsorDetail?.category ?? detail?.sponsor ?? 'Unassigned'} <i className="lni lni-arrow-right" style={{ fontSize: 10 }}></i>
                   </div>
-                </div>
-                <div className="stu-meta-item">
-                  <div className="stu-meta-lbl">Discount</div>
-                  <div className="stu-meta-val" style={{ cursor: 'pointer' }} onClick={handleManageDiscount} title="Manage discount in Discount Allocation">
-                    {formatDiscount(detail)}
-                    {' '}<i className="lni lni-arrow-right" style={{ fontSize: 10 }}></i>
-                  </div>
-                </div>
-                <div className="stu-meta-item">
-                  <div className="stu-meta-lbl">Refugee Status</div>
-                  {isRefugeeChecking ? (
-                    <div className="stu-meta-val text-g400">Checking…</div>
-                  ) : (
-                    <div className="stu-meta-val" style={{ cursor: 'pointer' }} onClick={handleManageRefugee} title="Manage refugee status in Student Master">
-                      {refugeeDetail ? `Refugee · ID ${refugeeDetail.refugeeId}` : 'Not a refugee'} <i className="lni lni-arrow-right" style={{ fontSize: 10 }}></i>
-                    </div>
-                  )}
-                </div>
-                <div className="stu-meta-item"><div className="stu-meta-lbl">Learning Mode</div><div className="stu-meta-val">{detail?.learningMode || '—'}</div></div>
-                <div className="stu-meta-item"><div className="stu-meta-lbl">Registration No.</div><div className="stu-meta-val">{student.studentRegNo || detail?.regNo}</div></div>
+                )}
               </div>
-            </div>
+              <dl className="mp-meta">
+                <div className="mp-meta-item"><dt><i className="lni lni-bookmark"></i> Registration No.</dt><dd title={registrationNo}>{registrationNo}</dd></div>
+                <div className="mp-meta-item"><dt><i className="lni lni-users"></i> Batch</dt><dd title={batch}>{batch}</dd></div>
+                <div className="mp-meta-item"><dt><i className="lni lni-graduation"></i> Semester</dt><dd title={semester}>{semester}</dd></div>
+                <div className="mp-meta-item"><dt><i className="lni lni-calendar"></i> Joined Intake</dt><dd title={joinedIntake?.label || '—'}>{joinedIntake?.label || '—'}</dd></div>
+                <div className="mp-meta-item"><dt><i className="lni lni-display"></i> Learning Mode</dt><dd title={detail?.learningMode || '—'}>{detail?.learningMode || '—'}</dd></div>
+              </dl>
+              <div className="sp-links">
+                <div className="sp-link">
+                  <span className="mp-sec-ic" aria-hidden="true"><i className="lni lni-wallet"></i></span>
+                  <span className="sp-link-txt"><span className="sp-link-lbl">Fee Structure</span><span className="sp-link-val" title={feeStructure}>{feeStructure}</span></span>
+                </div>
+                <button type="button" className="sp-link" onClick={handleManageSponsor} title="Assign or change sponsor in Student Master">
+                  <span className="mp-sec-ic" aria-hidden="true"><i className="lni lni-handshake"></i></span>
+                  <span className="sp-link-txt"><span className="sp-link-lbl">Sponsor</span><span className="sp-link-val">{sponsorDetail?.category ?? detail?.sponsor ?? 'Unassigned'}</span></span>
+                  <i className="lni lni-arrow-right sp-link-go" aria-hidden="true"></i>
+                </button>
+                <button type="button" className="sp-link" onClick={handleManageDiscount} title="Manage discount in Discount Allocation">
+                  <span className="mp-sec-ic" aria-hidden="true"><i className="lni lni-tag"></i></span>
+                  <span className="sp-link-txt"><span className="sp-link-lbl">Discount</span><span className="sp-link-val">{formatDiscount(detail)}</span></span>
+                  <i className="lni lni-arrow-right sp-link-go" aria-hidden="true"></i>
+                </button>
+                {isRefugeeChecking ? (
+                  <div className="sp-link">
+                    <span className="mp-sec-ic" aria-hidden="true"><i className="lni lni-shield"></i></span>
+                    <span className="sp-link-txt"><span className="sp-link-lbl">Refugee Status</span><span className="sp-link-val text-g400">Checking…</span></span>
+                  </div>
+                ) : (
+                  <button type="button" className="sp-link" onClick={handleManageRefugee} title="Manage refugee status in Student Master">
+                    <span className="mp-sec-ic" aria-hidden="true"><i className="lni lni-shield"></i></span>
+                    <span className="sp-link-txt"><span className="sp-link-lbl">Refugee Status</span><span className="sp-link-val">{refugeeDetail ? `Refugee · ID ${refugeeDetail.refugeeId}` : 'Not a refugee'}</span></span>
+                    <i className="lni lni-arrow-right sp-link-go" aria-hidden="true"></i>
+                  </button>
+                )}
+              </div>
+            </section>
 
-            <div className="ptabs">
+            <div className="ptabs" role="tablist">
               {PROFICIENCY_TABS.map(t => (
-                <button key={t.id} className={`ptab${tab === t.id ? ' active' : ''}`} onClick={() => setTab(t.id)}>
+                <button key={t.id} role="tab" aria-selected={tab === t.id} className={`ptab${tab === t.id ? ' active' : ''}`} onClick={e => { setTab(t.id); e.currentTarget.scrollIntoView({ block: 'nearest', inline: 'center' }) }}>
                   <i className={`lni ${t.icon}`}></i> {t.label}
                 </button>
               ))}
             </div>
 
             {tab === 'info' && (
-              <div>
+              <div className="mp-panel">
+                {/* Personal + contact facts on the left; identity drawn as an ID
+                    card on the right, as on My Profile's Personal Details. */}
                 <div className="card">
-                  <div className="card-hdr"><div className="card-title"><i className="lni lni-user"></i> Personal Information</div><span className="badge badge-grey">Read-only</span></div>
-                  <div className="g3">
-                    <div className="fg"><label className="lbl">First Name</label><input className="ctrl" readOnly value={firstName} /></div>
-                    <div className="fg"><label className="lbl">Last Name</label><input className="ctrl" readOnly value={lastName} /></div>
-                    <div className="fg"><label className="lbl">Gender</label><input className="ctrl" readOnly value={gender} /></div>
-                  </div>
-                </div>
-                <div className="card">
-                  <div className="card-hdr"><div className="card-title"><i className="lni lni-graduation"></i> Academic Details</div><span className="badge badge-grey">Read-only</span></div>
-                  <div className="g3">
-                    <div className="fg"><label className="lbl">Student No.</label><input className="ctrl" readOnly value={studentNo} /></div>
-                    <div className="fg"><label className="lbl">Registration No.</label><input className="ctrl" readOnly value={student.studentRegNo || detail?.regNo || ''} /></div>
-                    <div className="fg"><label className="lbl">Programme</label><input className="ctrl" readOnly value={student.programName || detail?.programme || '—'} /></div>
-                    <div className="fg"><label className="lbl">Current Batch</label><input className="ctrl" readOnly value={student.batchCode || detail?.batch || '—'} /></div>
-                    <div className="fg"><label className="lbl">Current Semester</label><input className="ctrl" readOnly value={student.semesterName || detail?.semester || '—'} /></div>
-                  </div>
-                </div>
-                <div className="card">
-                  <div className="card-hdr"><div className="card-title"><i className="lni lni-calendar"></i> Intake Details</div><span className="badge badge-grey">Read-only</span></div>
-                  <div className="g3">
-                    <div className="fg">
-                      <label className="lbl">Joined Intake</label>
-                      <input className="ctrl" readOnly value={joinedIntake?.label || '—'} />
-                      <div className="text-g500" style={{ fontSize: 11, marginTop: 4 }}>The intake the student was admitted in.</div>
-                    </div>
-                    <div className="fg">
-                      <label className="lbl">Academic Intake {academicIntake?.isCurrent && <span className="badge badge-green" style={{ marginLeft: 4 }}>Current</span>}</label>
-                      <input className="ctrl" readOnly value={academicIntake?.label || '—'} />
-                      <div className="text-g500" style={{ fontSize: 11, marginTop: 4 }}>The intake the student is currently studying in.</div>
-                    </div>
-                    <div className="fg">
-                      <label className="lbl">Registration Date</label>
-                      <input className="ctrl" readOnly value={detail?.regDate ? formatDate(detail.regDate) : '—'} />
+                  <div className="card-hdr">
+                    <div>
+                      <div className="card-title"><i className="lni lni-user"></i> Personal Information &amp; Contact</div>
+                      <div className="card-sub">Read-only · as held on the student record</div>
                     </div>
                   </div>
-                  <div className="info-box"><i className="lni lni-information" style={{ color: 'var(--b700)', fontSize: 15, flexShrink: 0 }}></i><div style={{ fontSize: 12 }}>To change Batch, Programme, Learning Mode, or Intake — use the quick-action buttons in the banner above or navigate via the Operations section in the sidebar.</div></div>
-                </div>
-                <div className="card">
-                  <div className="card-hdr"><div className="card-title"><i className="lni lni-home"></i> Contact</div><span className="badge badge-grey">Read-only</span></div>
-                  <div className="g3">
-                    <div className="fg"><label className="lbl">Primary Email</label><input className="ctrl" readOnly value={detail?.email || '—'} /></div>
-                    <div className="fg"><label className="lbl">Mobile / WhatsApp</label><input className="ctrl" readOnly value={detail?.phone || '—'} /></div>
+                  <div className="mp-details">
+                    <section className="mp-personal" aria-label="Personal and contact">
+                      <dl className="mp-traits">
+                        <div className="mp-trait"><dt><i className="lni lni-user" aria-hidden="true"></i>First Name</dt><dd title={firstName}>{firstName || '—'}</dd></div>
+                        <div className="mp-trait"><dt><i className="lni lni-user" aria-hidden="true"></i>Last Name</dt><dd title={lastName}>{lastName || '—'}</dd></div>
+                        <div className="mp-trait"><dt><i className="lni lni-users" aria-hidden="true"></i>Gender</dt><dd>{gender || '—'}</dd></div>
+                        <div className="mp-trait"><dt><i className="lni lni-flag" aria-hidden="true"></i>Nationality</dt><dd title={nationality}>{nationality}</dd></div>
+                        <div className="mp-trait"><dt><i className="lni lni-envelope" aria-hidden="true"></i>Primary Email</dt><dd>{detail?.email || '—'}</dd></div>
+                        <div className="mp-trait"><dt><i className="lni lni-phone" aria-hidden="true"></i>Mobile / WhatsApp</dt><dd>{detail?.phone || '—'}</dd></div>
+                      </dl>
+                    </section>
+
+                    <section className="mp-idcard" aria-label="Student identity">
+                      <div className="mp-idcard-top">
+                        <span><i className="lni lni-postcard" aria-hidden="true"></i> Student Identity</span>
+                        <span className="mp-idcard-chip" aria-hidden="true"></span>
+                      </div>
+                      <div className="mp-idcard-id">
+                        <span className="mp-idcard-lbl">Student No.</span>
+                        <span className="mp-idcard-num font-mono">{studentNo}</span>
+                        <span className="mp-idcard-sub">Registration No. <span className="font-mono">{registrationNo}</span></span>
+                      </div>
+                      <dl className="mp-idcard-foot">
+                        <div><dt><i className="lni lni-users" aria-hidden="true"></i> Current Batch</dt><dd>{batch}</dd></div>
+                        <div><dt><i className="lni lni-graduation" aria-hidden="true"></i> Current Semester</dt><dd>{semester}</dd></div>
+                      </dl>
+                    </section>
                   </div>
+                </div>
+
+                <div className="card">
+                  <div className="card-hdr">
+                    <div>
+                      <div className="card-title"><i className="lni lni-graduation"></i> Academic &amp; Intake Details</div>
+                      <div className="card-sub">Read-only · programme and intake history</div>
+                    </div>
+                  </div>
+                  <div className="mp-personal">
+                    <div className="mp-born">
+                      <span className="mp-born-ic" aria-hidden="true"><i className="lni lni-graduation"></i></span>
+                      <div className="mp-born-main">
+                        <span className="mp-born-lbl">Programme</span>
+                        <span className="mp-born-val sp-born-val">{programme}</span>
+                      </div>
+                    </div>
+                    <dl className="mp-traits sp-cols-3">
+                      <div className="mp-trait">
+                        <dt><i className="lni lni-calendar" aria-hidden="true"></i>Joined Intake</dt>
+                        <dd title={joinedIntake?.label || '—'}>{joinedIntake?.label || '—'}</dd>
+                        <dd className="sp-trait-hint">The intake the student was admitted in.</dd>
+                      </div>
+                      <div className="mp-trait">
+                        <dt>
+                          <i className="lni lni-calendar" aria-hidden="true"></i>Academic Intake
+                          {academicIntake?.isCurrent && <span className="badge badge-green sp-trait-badge">Current</span>}
+                        </dt>
+                        <dd title={academicIntake?.label || '—'}>{academicIntake?.label || '—'}</dd>
+                        <dd className="sp-trait-hint">The intake the student is currently studying in.</dd>
+                      </div>
+                      <div className="mp-trait">
+                        <dt><i className="lni lni-calendar" aria-hidden="true"></i>Registration Date</dt>
+                        <dd>{joinedDate ? formatDate(joinedDate) : '—'}</dd>
+                      </div>
+                    </dl>
+                  </div>
+                  <p className="mp-note sp-note"><i className="lni lni-information" aria-hidden="true"></i> To change Batch, Programme, Learning Mode, or Intake — use the quick-action buttons in the banner above or navigate via the Operations section in the sidebar.</p>
                 </div>
                 {/* Only rendered when the student has a refugee record —
                     GET /students/refugee/{guid} resolves to null otherwise.
@@ -555,24 +605,29 @@ function StudentProfileContent() {
                 {refugeeDetail && (
                   <div className="card">
                     <div className="card-hdr">
-                      <div className="card-title"><i className="lni lni-shield"></i> Refugee Details</div>
-                      <span className="badge badge-grey">Read-only</span>
-                    </div>
-                    <div className="g3">
-                      <div className="fg"><label className="lbl">Refugee Status</label><input className="ctrl" readOnly value="Refugee" /></div>
-                      <div className="fg"><label className="lbl">Refugee ID</label><input className="ctrl" readOnly value={refugeeDetail.refugeeId || '—'} /></div>
-                      <div className="fg">
-                        <label className="lbl">Supporting Document</label>
-                        {refugeeDetail.documentUrl
-                          ? <button className="btn btn-neu" onClick={() => setDocPreviewOpen(true)}><i className="lni lni-eye"></i> View Document</button>
-                          : <input className="ctrl" readOnly value="—" />}
+                      <div>
+                        <div className="card-title"><i className="lni lni-shield"></i> Refugee Details</div>
+                        <div className="card-sub">Read-only</div>
                       </div>
                     </div>
-                    <div className="info-box"><i className="lni lni-information" style={{ color: 'var(--b700)', fontSize: 15, flexShrink: 0 }}></i><div style={{ fontSize: 12 }}>To grant or remove refugee status, use the Refugee Status field in the banner above — it opens Student Master.</div></div>
+                    <dl className="mp-traits sp-cols-3">
+                      <div className="mp-trait"><dt><i className="lni lni-shield" aria-hidden="true"></i>Refugee Status</dt><dd>Refugee</dd></div>
+                      <div className="mp-trait"><dt><i className="lni lni-postcard" aria-hidden="true"></i>Refugee ID</dt><dd className="font-mono" title={refugeeDetail.refugeeId || undefined}>{refugeeDetail.refugeeId || '—'}</dd></div>
+                      <div className="mp-trait">
+                        <dt><i className="lni lni-files" aria-hidden="true"></i>Supporting Document</dt>
+                        <dd>
+                          {refugeeDetail.documentUrl
+                            ? <button type="button" className="mp-link" onClick={() => setDocPreviewOpen(true)}><i className="lni lni-eye" aria-hidden="true"></i> View Document</button>
+                            : '—'}
+                        </dd>
+                      </div>
+                    </dl>
+                    <p className="mp-note sp-note"><i className="lni lni-information" aria-hidden="true"></i> To grant or remove refugee status, use the Refugee Status field in the banner above — it opens Student Master.</p>
                   </div>
                 )}
                 {/* Profile Info is display-only for now — no update endpoint wired yet.
-                    Restore these (and the editable inputs above) once editing is supported. */}
+                    Restore these (and editable inputs in place of the tiles above)
+                    once editing is supported. */}
                 {/* <div className="flex gap-2" style={{ justifyContent: 'flex-end', marginBottom: 20 }}>
                   <button className="btn btn-neu">Discard</button>
                   {permissions.edit && <button className="btn btn-primary" onClick={() => showToast('Profile saved', 'ok')}><i className="lni lni-save"></i> Save Profile</button>}
@@ -580,10 +635,12 @@ function StudentProfileContent() {
               </div>
             )}
 
+            {tab === 'timeline' && <StudentTimeline studentGuid={student.studentGuid} />}
+
             {tab === 'idcard' && (
-              <div className="g2">
-                <div>
-                  <div className="card" style={{ marginBottom: 16 }}>
+              <div className="mp-panel">
+                <div className="g2 sp-split">
+                  <div className="card sp-card-form">
                     <div className="card-hdr">
                       <div className="card-title"><i className="lni lni-credit-cards"></i> Card Details</div>
                       <span className={`badge ${currentCard ? 'badge-green' : 'badge-grey'}`}>{currentCard ? 'Issued' : 'Not issued yet'}</span>
@@ -600,17 +657,19 @@ function StudentProfileContent() {
                       </label>
                       <div style={{ fontSize: 10.5, color: 'var(--g500)', marginTop: 6, textAlign: 'center' }}>JPG/PNG · Max 2MB</div>
                     </div> */}
-                    <div className="fg"><label className="lbl">Name on Card</label><input className="ctrl" value={student.studentName} readOnly /></div>
-                    <div className="fg"><label className="lbl">Student ID</label><input className="ctrl" value={studentNo} readOnly /></div>
-                    <div className="fg"><label className="lbl">Programme</label><input className="ctrl" value={student.programName || detail?.programme || '—'} readOnly /></div>
-                    <div className="g2">
-                      <div className="fg"><label className="lbl">Joining Date</label><input className="ctrl" type="date" value={joiningDate} onChange={e => setJoiningDate(e.target.value)} /></div>
-                      <div className="fg"><label className="lbl">Expiry Date</label><input className="ctrl" type="date" value={expiryDate} onChange={e => setExpiryDate(e.target.value)} /></div>
+                    <dl className="mp-traits sp-card-facts">
+                      <div className="mp-trait"><dt><i className="lni lni-user" aria-hidden="true"></i>Name on Card</dt><dd title={student.studentName}>{student.studentName}</dd></div>
+                      <div className="mp-trait"><dt><i className="lni lni-postcard" aria-hidden="true"></i>Student ID</dt><dd className="font-mono" title={studentNo}>{studentNo}</dd></div>
+                      <div className="mp-trait sp-span-2"><dt><i className="lni lni-graduation" aria-hidden="true"></i>Programme</dt><dd>{programme}</dd></div>
+                    </dl>
+                    <div className="g2 sp-pair">
+                      <div className="fg"><label className="lbl" htmlFor="sp-card-joining">Joining Date</label><input id="sp-card-joining" className="ctrl" type="date" value={joiningDate} onChange={e => setJoiningDate(e.target.value)} /></div>
+                      <div className="fg"><label className="lbl" htmlFor="sp-card-expiry">Expiry Date</label><input id="sp-card-expiry" className="ctrl" type="date" value={expiryDate} onChange={e => setExpiryDate(e.target.value)} /></div>
                     </div>
                     {!currentCard && (
-                      <div className="fg"><label className="lbl">Remarks</label><textarea className="ctrl" rows={2} value={cardRemarks} onChange={e => setCardRemarks(e.target.value)} placeholder="Optional — only recorded on first issue" /></div>
+                      <div className="fg"><label className="lbl" htmlFor="sp-card-remarks">Remarks</label><textarea id="sp-card-remarks" className="ctrl" rows={2} value={cardRemarks} onChange={e => setCardRemarks(e.target.value)} placeholder="Optional — only recorded on first issue" /></div>
                     )}
-                    <div className="flex gap-2" style={{ marginTop: 8 }}>
+                    <div className="flex gap-2 sp-card-actions">
                       {permissions.edit && (
                         <button
                           className="btn btn-primary btn-sm"
@@ -632,151 +691,167 @@ function StudentProfileContent() {
                       )}
                     </div>
                   </div>
-                  <div className="card">
-                    <div className="card-hdr"><div className="card-title"><i className="lni lni-qr-code"></i> QR Verification</div></div>
-                    {/* Replaces the old free-text "Physical Barcode" + ESSL device list —
-                        neither had a backing field on the real API. The QR endpoint
-                        (GET /students/id-cards/{studentGuid}/qr-image) just encodes the
-                        bare studentGuid, unsigned — it's not a substitute for the ESSL
-                        device workflow, only for the barcode's own verification role. */}
-                    {MOCK_AUTH ? (
-                      <div className="empty" style={{ padding: 20 }}>
-                        <div className="empty-sub">QR preview needs a live backend — not available in mock mode.</div>
-                      </div>
-                    ) : (
-                      <div style={{ textAlign: 'center' }}>
-                        <img src={getIdCardQrImageUrl(student.studentGuid)} alt="ID card QR code" style={{ width: 160, height: 160 }} />
-                        <div style={{ fontSize: 11, color: 'var(--g500)', marginTop: 6 }}>Scans to this student&apos;s GUID — verify via the scan-result endpoint, not the image alone.</div>
-                      </div>
-                    )}
-                    {/* <div className="fg">
-                      <label className="lbl">ESSL Device Registration</label>
-                      <div className="chklist">
-                        <div className="chk pass"><i className="lni lni-checkmark-circle chk-icon" style={{ color: 'var(--green)' }}></i><span className="chk-text">Device F22-01 · Main Gate</span><span className="chk-status">Enrolled</span></div>
-                        <div className="chk pend"><i className="lni lni-alarm-clock chk-icon" style={{ color: 'var(--amber)' }}></i><span className="chk-text">Device F22-02 · Library</span><span className="chk-status">Pending</span></div>
-                        <div className="chk fail"><i className="lni lni-close chk-icon" style={{ color: 'var(--red)' }}></i><span className="chk-text">Device F22-03 · Lab Block</span><span className="chk-status">Not Enrolled</span></div>
+                  <div className="card sp-preview-card">
+                    <div className="card-hdr">
+                      <div className="card-title"><i className="lni lni-eye"></i> Live Card Preview</div>
+                      <div className="flex gap-2 items-center">
+                        <span className="badge badge-blue">Preview</span>
+                        {/* <button className="btn btn-neu btn-sm" onClick={handleDownloadCard}><i className="lni lni-download"></i> Download</button> */}
+                        <button className="btn btn-primary btn-sm" onClick={() => guard('print', handlePrintCard, 'ID cards')}><i className="lni lni-printer"></i> Print</button>
                       </div>
                     </div>
-                    <div className="flex gap-2" style={{ marginTop: 8 }}>
-                      <button className="btn btn-neu btn-sm"><i className="lni lni-reload"></i> Sync Devices</button>
-                    </div> */}
-                  </div>
-                </div>
-                <div>
-                  <div className="card">
-                    <div className="card-hdr"><div className="card-title"><i className="lni lni-eye"></i> Live Card Preview</div><span className="badge badge-blue">Preview</span></div>
                     <div className="id-preview">
-                      <div className="id-logo">ISBAT UNIVERSITY · KAMPALA</div>
-                      <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                      <div className="sp-id-top">
+                        <div className="id-logo">ISBAT UNIVERSITY · KAMPALA</div>
+                        <span className="mp-idcard-chip" aria-hidden="true"></span>
+                      </div>
+                      <div className="sp-id-main">
                         <div className="id-photo"><i className="lni lni-user"></i></div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
+                        <div className="sp-id-who">
                           <div className="id-name">{student.studentName}</div>
                           <div className="id-prog">{student.programName || '—'} · {student.semesterName || '—'}</div>
                           <div className="id-num">{student.studentRegNo || detail?.regNo}</div>
                         </div>
                         {/* QR box needs a white backing plate — the code itself is dark-on-
                             transparent PNG and won't scan against the card's dark gradient. */}
-                        <div style={{ background: '#fff', borderRadius: 8, padding: 4, flexShrink: 0, width: 56, height: 56, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <div className="sp-id-qr">
                           {MOCK_AUTH ? (
-                            <i className="lni lni-qr-code" style={{ color: '#1e1b4b', fontSize: 26 }}></i>
+                            <i className="lni lni-checkmark-circle"></i>
                           ) : (
-                            <img src={getIdCardQrImageUrl(student.studentGuid)} alt="ID card QR code" style={{ width: '100%', height: '100%', display: 'block' }} />
+                            <img src={getIdCardQrImageUrl(student.studentGuid)} alt="ID card QR code" />
                           )}
                         </div>
                       </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px 10px', marginTop: 12, fontSize: 10.5 }}>
-                        <div><span style={{ color: 'rgba(255,255,255,.55)' }}>Card No.</span> {currentCard?.issueCode || '—'}</div>
-                        <div><span style={{ color: 'rgba(255,255,255,.55)' }}>Batch</span> {student.batchCode || '—'}</div>
+                      <div className="sp-id-facts">
+                        <div><span>Card No.</span> {currentCard?.issueCode || '—'}</div>
+                        <div><span>Batch</span> {student.batchCode || '—'}</div>
                         {/* Batch Time confirmed on the id-cards DTO itself (card.batchTimeInfo.
                             batchTime), 2026-09-07. Nationality isn't on the id-cards DTO —
                             resolved from the student detail record (see `nationality` above). */}
-                        <div><span style={{ color: 'rgba(255,255,255,.55)' }}>Batch Time</span> {card?.batchTimeInfo?.batchTime || '—'}</div>
-                        <div><span style={{ color: 'rgba(255,255,255,.55)' }}>Nationality</span> {nationality}</div>
-                        <div><span style={{ color: 'rgba(255,255,255,.55)' }}>Joining</span> {joiningDate ? formatDate(joiningDate) : '—'}</div>
-                        <div><span style={{ color: 'rgba(255,255,255,.55)' }}>Expiry</span> {expiryDate ? formatDate(expiryDate) : '—'}</div>
+                        <div><span>Batch Time</span> {card?.batchTimeInfo?.batchTime || '—'}</div>
+                        <div><span>Nationality</span> {nationality}</div>
+                        <div><span>Joining</span> {joiningDate ? formatDate(joiningDate) : '—'}</div>
+                        <div><span>Expiry</span> {expiryDate ? formatDate(expiryDate) : '—'}</div>
                       </div>
-                      <div className="id-bar" style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'inherit', letterSpacing: 'normal', textTransform: 'none' }}>
+                      <div className="id-bar sp-id-bar">
                         <span>REG NO {student.studentRegNo || detail?.regNo}</span>
                         <span>PRINTED {currentCard?.issueDate ? formatDate(currentCard.issueDate) : '—'}</span>
                       </div>
                     </div>
-                    <div className="flex gap-2" style={{ justifyContent: 'center', marginTop: 12 }}>
-                      {/* <button className="btn btn-neu btn-sm" onClick={handleDownloadCard}><i className="lni lni-download"></i> Download</button> */}
-                      <button className="btn btn-primary btn-sm" onClick={() => guard('print', handlePrintCard, 'ID cards')}><i className="lni lni-printer"></i> Print</button>
+                  </div>
+                </div>
+                <div className="card">
+                  <div className="card-hdr"><div className="card-title"><i className="lni lni-checkmark-circle"></i> QR Verification</div></div>
+                  {/* Replaces the old free-text "Physical Barcode" + ESSL device list —
+                      neither had a backing field on the real API. The QR endpoint
+                      (GET /students/id-cards/{studentGuid}/qr-image) just encodes the
+                      bare studentGuid, unsigned — it's not a substitute for the ESSL
+                      device workflow, only for the barcode's own verification role. */}
+                  <div className="sp-qr">
+                    {MOCK_AUTH
+                      ? <div className="sp-qr-mock">QR preview needs a live backend — not available in mock mode.</div>
+                      : <img src={getIdCardQrImageUrl(student.studentGuid)} alt="ID card QR code" />}
+                    <div className="sp-qr-body">
+                      <dl className="mp-traits sp-qr-facts">
+                        <div className="mp-trait"><dt><i className="lni lni-checkmark-circle" aria-hidden="true"></i>Card Status</dt><dd>{currentCard ? 'Issued' : 'Not issued yet'}</dd></div>
+                        <div className="mp-trait"><dt><i className="lni lni-credit-cards" aria-hidden="true"></i>Card No.</dt><dd className="font-mono" title={currentCard?.issueCode || undefined}>{currentCard?.issueCode || '—'}</dd></div>
+                        <div className="mp-trait"><dt><i className="lni lni-printer" aria-hidden="true"></i>Printed</dt><dd>{currentCard?.issueDate ? formatDate(currentCard.issueDate) : '—'}</dd></div>
+                        <div className="mp-trait"><dt><i className="lni lni-calendar" aria-hidden="true"></i>Expiry</dt><dd>{expiryDate ? formatDate(expiryDate) : '—'}</dd></div>
+                      </dl>
+                      {!MOCK_AUTH && <div className="sp-qr-note">Scans to this student&apos;s GUID — verify via the scan-result endpoint, not the image alone.</div>}
                     </div>
                   </div>
+                  {/* <div className="fg">
+                    <label className="lbl">ESSL Device Registration</label>
+                    <div className="chklist">
+                      <div className="chk pass"><i className="lni lni-checkmark-circle chk-icon" style={{ color: 'var(--green)' }}></i><span className="chk-text">Device F22-01 · Main Gate</span><span className="chk-status">Enrolled</span></div>
+                      <div className="chk pend"><i className="lni lni-alarm-clock chk-icon" style={{ color: 'var(--amber)' }}></i><span className="chk-text">Device F22-02 · Library</span><span className="chk-status">Pending</span></div>
+                      <div className="chk fail"><i className="lni lni-close chk-icon" style={{ color: 'var(--red)' }}></i><span className="chk-text">Device F22-03 · Lab Block</span><span className="chk-status">Not Enrolled</span></div>
+                    </div>
+                  </div>
+                  <div className="flex gap-2" style={{ marginTop: 8 }}>
+                    <button className="btn btn-neu btn-sm"><i className="lni lni-reload"></i> Sync Devices</button>
+                  </div> */}
                 </div>
               </div>
             )}
 
             {tab === 'comms' && (
-              <div>
-                <div className="dcard">
-                  <div className="dcard-hdr stu">
-                    <div className="dcard-title"><i className="lni lni-user"></i> Student Profile</div>
-                    <div className="flex gap-2" style={{ alignItems: 'center' }}><span style={{ fontSize: 11, color: 'rgba(255,255,255,.7)' }}>Login ID:</span><span className="dcard-id">{studentNo}</span></div>
-                  </div>
-                  <div className="dcard-body">
-                    <div className="dcard-grid">
-                      <div className="fg">
-                        <label className="lbl">Student Email <span className="req">*</span></label>
-                        <input className="ctrl" value={stuEmail} onChange={e => setStuEmail(e.target.value)} />
-                        <div className={`field-hint ${isValidEmail(stuEmail) ? 'ok' : 'err'}`}>{isValidEmail(stuEmail) ? '✓ Valid email format' : '✗ Invalid email format'}</div>
-                      </div>
-                      <div className="fg">
-                        <label className="lbl">WhatsApp / Mobile <span className="req">*</span></label>
-                        <input className="ctrl" value={stuPhone} onChange={e => setStuPhone(e.target.value)} />
-                        <div className={`field-hint ${isValidPhone(stuPhone) ? 'ok' : 'err'}`}>{isValidPhone(stuPhone) ? '✓ Valid international format' : '✗ Use format e.g. +256 701 234 567'}</div>
+              <div className="mp-panel">
+                <div className="g2 sp-split">
+                  <div className="card sp-dispatch">
+                    <div className="card-hdr"><div className="card-title"><i className="lni lni-user"></i> Student Profile</div></div>
+                    <div className="mp-born sp-login">
+                      <span className="mp-born-ic" aria-hidden="true"><i className="lni lni-lock"></i></span>
+                      <div className="mp-born-main">
+                        <span className="mp-born-lbl">Login ID</span>
+                        <span className="mp-born-val font-mono">{studentNo}</span>
                       </div>
                     </div>
-                    <div className="dcard-actions">
+                    <div className="g2 sp-pair">
+                      <div className="fg">
+                        <label className="lbl" htmlFor="sp-stu-email">Student Email <span className="req">*</span></label>
+                        <div className="mp-ic-ctrl"><i className="lni lni-envelope" aria-hidden="true"></i><input id="sp-stu-email" className="ctrl" value={stuEmail} onChange={e => setStuEmail(e.target.value)} /></div>
+                        <ContactHint ok={isValidEmail(stuEmail)} okMsg="Valid email format" badMsg="Invalid email format" />
+                      </div>
+                      <div className="fg">
+                        <label className="lbl" htmlFor="sp-stu-phone">WhatsApp / Mobile <span className="req">*</span></label>
+                        <div className="mp-ic-ctrl"><i className="lni lni-phone" aria-hidden="true"></i><input id="sp-stu-phone" className="ctrl" value={stuPhone} onChange={e => setStuPhone(e.target.value)} /></div>
+                        <ContactHint ok={isValidPhone(stuPhone)} okMsg="Valid international format" badMsg="Use format e.g. +256 701 234 567" />
+                      </div>
+                    </div>
+                    <div className="sp-actions">
                       {permissions.send && <button className="btn btn-primary btn-sm" onClick={() => dispatch('student', 'email')}><i className="lni lni-envelope"></i> Send Credentials via Email</button>}
                       {permissions.send && <button className="btn btn-success btn-sm" onClick={() => dispatch('student', 'whatsapp')}><i className="lni lni-whatsapp"></i> Send via WhatsApp</button>}
                       {permissions.edit && <button className="btn btn-neu btn-sm ml-auto" onClick={() => showToast('Student contact saved', 'ok')}><i className="lni lni-save"></i> Save</button>}
                     </div>
                   </div>
-                </div>
-                <div className="dcard">
-                  <div className="dcard-hdr par">
-                    <div className="dcard-title"><i className="lni lni-users"></i> Parent / Guardian Profile</div>
-                    <div className="flex gap-2" style={{ alignItems: 'center' }}><span style={{ fontSize: 11, color: 'rgba(255,255,255,.7)' }}>Auto-generated Login ID:</span><span className="dcard-id">{studentNo}_P</span></div>
-                  </div>
-                  <div className="dcard-body">
-                    <div className="purple-box" style={{ marginBottom: 14, background: '#f0fdf4', borderColor: 'var(--green-bd)' }}>
-                      <i className="lni lni-information" style={{ color: 'var(--green)', fontSize: 15, flexShrink: 0, marginTop: 1 }}></i>
-                      <div style={{ fontSize: 12 }}>Parent login ID is auto-generated by appending <code style={{ background: 'rgba(0,0,0,.06)', padding: '1px 5px', borderRadius: 3 }}>_P</code> to the Student ID. A separate password token is generated on first credential dispatch.</div>
-                    </div>
-                    <div className="dcard-grid">
-                      <div className="fg">
-                        <label className="lbl">Parent Email <span className="req">*</span></label>
-                        <input className="ctrl" value={parEmail} onChange={e => setParEmail(e.target.value)} />
-                        <div className={`field-hint ${isValidEmail(parEmail) ? 'ok' : 'err'}`}>{isValidEmail(parEmail) ? '✓ Valid email format' : '✗ Invalid email format'}</div>
-                      </div>
-                      <div className="fg">
-                        <label className="lbl">Parent WhatsApp / Mobile <span className="req">*</span></label>
-                        <input className="ctrl" value={parPhone} onChange={e => setParPhone(e.target.value)} />
-                        <div className={`field-hint ${isValidPhone(parPhone) ? 'ok' : 'err'}`}>{isValidPhone(parPhone) ? '✓ Valid international format' : '✗ Use format e.g. +256 701 234 567'}</div>
+                  <div className="card sp-dispatch">
+                    <div className="card-hdr"><div className="card-title"><i className="lni lni-users"></i> Parent / Guardian Profile</div></div>
+                    <div className="mp-born sp-login">
+                      <span className="mp-born-ic" aria-hidden="true"><i className="lni lni-lock"></i></span>
+                      <div className="mp-born-main">
+                        <span className="mp-born-lbl">Auto-generated Login ID</span>
+                        <span className="mp-born-val font-mono">{studentNo}_P</span>
                       </div>
                     </div>
-                    <div className="dcard-actions">
+                    <div className="g2 sp-pair">
+                      <div className="fg">
+                        <label className="lbl" htmlFor="sp-par-email">Parent Email <span className="req">*</span></label>
+                        <div className="mp-ic-ctrl"><i className="lni lni-envelope" aria-hidden="true"></i><input id="sp-par-email" className="ctrl" value={parEmail} onChange={e => setParEmail(e.target.value)} /></div>
+                        <ContactHint ok={isValidEmail(parEmail)} okMsg="Valid email format" badMsg="Invalid email format" />
+                      </div>
+                      <div className="fg">
+                        <label className="lbl" htmlFor="sp-par-phone">Parent WhatsApp / Mobile <span className="req">*</span></label>
+                        <div className="mp-ic-ctrl"><i className="lni lni-phone" aria-hidden="true"></i><input id="sp-par-phone" className="ctrl" value={parPhone} onChange={e => setParPhone(e.target.value)} /></div>
+                        <ContactHint ok={isValidPhone(parPhone)} okMsg="Valid international format" badMsg="Use format e.g. +256 701 234 567" />
+                      </div>
+                    </div>
+                    <div className="sp-actions">
                       {permissions.send && <button className="btn btn-primary btn-sm" onClick={() => dispatch('parent', 'email')}><i className="lni lni-envelope"></i> Send Parent Credentials via Email</button>}
                       {permissions.send && <button className="btn btn-success btn-sm" onClick={() => dispatch('parent', 'whatsapp')}><i className="lni lni-whatsapp"></i> Send Parent via WhatsApp</button>}
                       {permissions.edit && <button className="btn btn-neu btn-sm ml-auto" onClick={() => showToast('Parent contact saved', 'ok')}><i className="lni lni-save"></i> Save</button>}
                     </div>
                   </div>
                 </div>
-                <div className="card">
+                {/* <div className="card">
                   <div className="card-hdr"><div className="card-title"><i className="lni lni-shield"></i> Security &amp; Dispatch Audit Log</div><span className="badge badge-grey">Last {auditLog.length} events</span></div>
-                  {auditLog.map(row => (
-                    <div className="audit-row" key={row.id}>
-                      <div className={`audit-dot ${row.dot}`}></div>
-                      <div><div className="audit-action">{row.action}</div><div className="audit-detail">{row.detail}</div></div>
-                    </div>
-                  ))}
-                </div>
+                  <ul className="mp-signins sp-audit">
+                    {auditLog.map(row => (
+                      <li className="mp-signin" key={row.id}>
+                        <span className={`mp-signin-ic sp-audit-ic ${row.dot}`} aria-hidden="true"><i className={`lni ${AUDIT_ICON[row.dot]}`}></i></span>
+                        <div className="mp-signin-main">
+                          <div className="mp-signin-device">{row.action}</div>
+                          <div className="mp-signin-meta">{row.detail}</div>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div> */}
+                <p className="mp-note sp-note sp-note-top"><i className="lni lni-information" aria-hidden="true"></i> <span>Parent login ID is auto-generated by appending <code>_P</code> to the Student ID. A separate password token is generated on first credential dispatch.</span></p>
               </div>
             )}
-          </>
+          </div>
         )}
       </div>
 

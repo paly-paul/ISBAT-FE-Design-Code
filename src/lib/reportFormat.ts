@@ -21,6 +21,11 @@ export function fmtReportCount(n: number): string {
 export const REPORT_SOURCE_LABEL: Record<number, string> = { 1: 'Direct payment', 2: 'Advance adjustment' }
 export const REPORT_PAYMODE_LABEL: Record<number, string> = { 1: 'Cash', 2: 'Cheque', 3: 'Bank', 4: 'Demand draft', 5: 'Online' }
 
+// A recap chip's value for a multi-select: the name for one, a count for more.
+export function reportChipValue(options: { value: string; label: string }[], values: string[], noun: string): string {
+  return values.length === 1 ? (options.find(o => o.value === values[0])?.label ?? '1 selected') : `${values.length} ${noun}`
+}
+
 export function reportErrorMessage(err: unknown, fallback: string): string {
   return err instanceof Error && err.message ? err.message : fallback
 }

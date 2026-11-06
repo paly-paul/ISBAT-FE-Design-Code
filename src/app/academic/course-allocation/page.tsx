@@ -5,6 +5,7 @@ import { SuccessPopup } from '@/components/modals/shared/SuccessPopup'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
 import { SearchSelect } from '@/components/SearchSelect'
+import { MultiSelect } from '@/components/MultiSelect'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
@@ -12,8 +13,8 @@ import { CourseUnitSearchPicker, CourseUnitPickOption } from '@/components/Cours
 import { useIntakesDropdown } from '@/hooks/academic/useIntakes'
 import { useEmployeeDropdown } from '@/hooks/employee/useEmployees'
 import { useFacultyDropdown } from '@/hooks/config/useFaculties'
-import { useProgramPlannings, useCreateProgramPlanning, useUpdateProgramPlanning, useDeleteProgramPlanning } from '@/hooks/academic/useProgramPlannings'
-import type { ProgramPlanningDto } from '@/lib/api/academic/programPlanning'
+import { useProgramPlannings, useCreateProgramPlannings, useUnallocatedCourseUnits, useUpdateProgramPlanning, useDeleteProgramPlanning } from '@/hooks/academic/useProgramPlannings'
+import { PROGRAM_PLANNING_MAX_UNITS, type ProgramPlanningDto, type UnallocatedCourseUnit } from '@/lib/api/academic/programPlanning'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { AuthError } from '@/lib/api/client'
 import { scrollToFirstError } from '@/lib/scrollToFirstError'
@@ -34,6 +35,14 @@ const TERM_OPTIONS = [
 
 const PAGE_SIZE = 10
 
+// One course unit in the Allocate form, with its own term and load.
+interface PickedUnit { value: string; code: string; name: string; term: string; load: string }
+
+function unitLabel(u: UnallocatedCourseUnit) {
+  const label = `${u.courseUnitCode ?? '—'} — ${u.courseUnitName ?? 'Course unit'}`
+  return u.courseUnitRepetitionName ? `${label} (${u.courseUnitRepetitionName})` : label
+}
+
 export default function CourseAllocationPage() {
   const permissions = usePagePermissions()
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
@@ -43,8 +52,10 @@ export default function CourseAllocationPage() {
   const [term, setTerm] = useState('')
   const [lecturerGuid, setLecturerGuid] = useState('')
   const [schoolGuid, setSchoolGuid] = useState('')
+  // Edit changes one row, so it keeps a single unit and load.
   const [courseUnit, setCourseUnit] = useState<CourseUnitPickOption | null>(null)
   const [load, setLoad] = useState('')
+  const [units, setUnits] = useState<PickedUnit[]>([])
   const [errors, setErrors] = useState<Record<string, string>>({})
   const { data: intakeDropdownItems = [], isLoading: isIntakesLoading } = useIntakesDropdown()
   const { data: facultyDropdownItems = [], isLoading: isFacultiesLoading } = useFacultyDropdown(null)
@@ -98,9 +109,34 @@ export default function CourseAllocationPage() {
   const rows = useMemo(() => data?.items ?? [], [data])
   const lecturerFilterOptions = useMemo(() => employeeDropdownItems.map(e => ({ value: e.employeeGuid, label: e.displayName })), [employeeDropdownItems])
   const hasListFilters = !!search.trim() || !!lecturerFilter
-  const createPlanning = useCreateProgramPlanning()
+  const createPlanning = useCreateProgramPlannings()
   const updatePlanning = useUpdateProgramPlanning()
   const deletePlanning = useDeleteProgramPlanning()
+  // Unit picker: units this lecturer doesn't have yet in this session,
+  // searched and paged on the server.
+  const [unitSearch, setUnitSearch] = useState('')
+  const [debouncedUnitSearch, setDebouncedUnitSearch] = useState('')
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedUnitSearch(unitSearch.trim()), 300)
+    return () => clearTimeout(t)
+  }, [unitSearch])
+  const unitsQuery = useUnallocatedCourseUnits(lecturerGuid, intakeGuid, debouncedUnitSearch)
+  const loadedUnits = useMemo(() => unitsQuery.data?.pages.flatMap(p => p.items) ?? [], [unitsQuery.data])
+  const unitOptions = useMemo(() => loadedUnits.map(u => ({ value: u.courseUnitGuid, label: unitLabel(u) })), [loadedUnits])
+
+  function pickUnits(guids: string[]) {
+    setUnits(prev => guids.flatMap(guid => {
+      const kept = prev.find(u => u.value === guid)
+      if (kept) return [kept]
+      const found = loadedUnits.find(u => u.courseUnitGuid === guid)
+      return found ? [{ value: guid, code: found.courseUnitCode ?? '—', name: found.courseUnitName ?? 'Course unit', term, load: '' }] : []
+    }))
+    setErrors(p => ({ ...p, courseUnit: '' }))
+  }
+  function setUnitField(guid: string, patch: Partial<Pick<PickedUnit, 'term' | 'load'>>) {
+    setUnits(prev => prev.map(u => (u.value === guid ? { ...u, ...patch } : u)))
+  }
+
   const [viewRow, setViewRow] = useState<ProgramPlanningDto | null>(null)
   const formRef = useRef<HTMLDivElement>(null)
   const [deleteTarget, setDeleteTarget] = useState<ProgramPlanningDto | null>(null)
@@ -126,19 +162,26 @@ export default function CourseAllocationPage() {
     setPage(1)
   }, [committedSearch, lecturerFilter])
 
-  // post-program-planning.md: lecturer / unit / school / intake required;
-  // (lecturer, unit, intake) must be unique, which the API enforces (see
-  // serverFieldError) since only one page is loaded here. load and term are
-  // optional ints with no API rule — a 0 teaching load is meaningless, so the
-  // form requires at least 1 when one is entered.
+  // post-program-planning.md: lecturer / school / intake and 1 to 50 units are
+  // required; (lecturer, unit, intake) must be unique, which the API enforces
+  // (see serverFieldError). load and term are optional ints with no API rule —
+  // a 0 teaching load is meaningless, so the form requires at least 1 when one
+  // is entered.
   const DUPLICATE_MESSAGE = 'This lecturer is already allocated to this course unit for this academic session.'
+  const validLoad = (v: string) => !v.trim() || (Number.isInteger(+v) && +v >= 1)
   function validate() {
     const e: Record<string, string> = {}
     if (!intakeGuid) e.intakeGuid = 'Academic Session is required'
     if (!lecturerGuid) e.lecturerGuid = 'Lecturer Name is required'
     if (!schoolGuid) e.schoolGuid = 'School / Faculty is required'
-    if (!courseUnit) e.courseUnit = 'Course Unit is required'
-    if (load.trim() && !(Number.isInteger(+load) && +load >= 1)) e.load = 'Teaching Load must be at least 1'
+    if (editingRow) {
+      if (!courseUnit) e.courseUnit = 'Course Unit is required'
+      if (!validLoad(load)) e.load = 'Teaching Load must be at least 1'
+    } else {
+      if (units.length === 0) e.courseUnit = 'Select at least one course unit'
+      if (units.length > PROGRAM_PLANNING_MAX_UNITS) e.courseUnit = `Select at most ${PROGRAM_PLANNING_MAX_UNITS} course units (now ${units.length})`
+      units.forEach(u => { if (!validLoad(u.load)) e[`load-${u.value}`] = 'Must be at least 1' })
+    }
     setErrors(e)
     scrollToFirstError(e)
     return Object.keys(e).length === 0
@@ -149,8 +192,13 @@ export default function CourseAllocationPage() {
   function serverFieldError(error: Error): Record<string, string> | null {
     const code = error instanceof AuthError ? error.code : undefined
     const msg = error.message || ''
-    if (code === 'conflict' || /already exists for this lecturer/i.test(msg)) return { courseUnit: DUPLICATE_MESSAGE }
-    if (/unit not found/i.test(msg)) return { courseUnit: 'This course unit no longer exists. Pick another one.' }
+    // On Allocate the server's message names the units that clash.
+    if (code === 'conflict' || /already exists for this lecturer/i.test(msg)) return { courseUnit: editingRow ? DUPLICATE_MESSAGE : msg }
+    if (/unit not found/i.test(msg)) {
+      if (editingRow) return { courseUnit: 'This course unit no longer exists. Pick another one.' }
+      const missing = units.filter(u => msg.includes(u.value)).map(u => u.code)
+      return { courseUnit: missing.length ? `These course units no longer exist: ${missing.join(', ')}. Remove them and try again.` : 'One or more course units no longer exist. Remove them and try again.' }
+    }
     if (/school not found/i.test(msg)) return { schoolGuid: 'This school / faculty no longer exists. Pick another one.' }
     if (/intake not found/i.test(msg)) return { intakeGuid: 'This academic session no longer exists. Pick another one.' }
     if (code === 'validation_error') {
@@ -166,6 +214,7 @@ export default function CourseAllocationPage() {
   // the primary button becomes Update; Cancel edit puts it back.
   function startEdit(r: ProgramPlanningDto) {
     setEditingRow(r)
+    setUnits([])
     setIntakeGuid(r.intakeGuid)
     setTerm(r.term != null ? String(r.term) : '')
     setSchoolGuid(r.schoolGuid)
@@ -200,30 +249,27 @@ export default function CourseAllocationPage() {
   }
 
   function handleAllocate() {
-    if (!validate() || !courseUnit) return
+    if (!validate()) return
     // Captured before the onSuccess reset below clears the picks — the
     // popup needs to name who/what was just allocated.
     const lecturerLabel = lecturerOptions.find(o => o.value === lecturerGuid)?.label ?? 'Lecturer'
-    const courseUnitLabel = `${courseUnit.code} — ${courseUnit.name}`
+    const unitsLabel = units.length === 1 ? `${units[0].code} — ${units[0].name}` : `${units.length} course units`
     createPlanning.mutate(
       {
         lecturerGuid,
-        unitGuid: courseUnit.value,
-        load: load.trim() ? +load : null,
         schoolGuid,
         intakeGuid,
-        term: term ? +term : null,
+        units: units.map(u => ({ unitGuid: u.value, load: u.load.trim() ? +u.load : null, term: u.term ? +u.term : null })),
       },
       {
         onSuccess: () => {
-          setSaved({ title: 'Course Unit Allocated!', subtitle: `${lecturerLabel} has been allocated to ${courseUnitLabel}.` })
+          setSaved({ title: units.length === 1 ? 'Course Unit Allocated!' : 'Course Units Allocated!', subtitle: `${lecturerLabel} has been allocated to ${unitsLabel}.` })
           // Academic Session/Term/School stay picked — a support staff
           // member typically allocates several lecturers/course units in a
           // row for the same session/term/school, so only the
           // per-allocation fields reset. Cancel below clears everything.
           setLecturerGuid('')
-          setCourseUnit(null)
-          setLoad('')
+          setUnits([])
           setErrors({})
         },
         onError: (error: Error) => {
@@ -247,6 +293,7 @@ export default function CourseAllocationPage() {
     setSchoolGuid('')
     setCourseUnit(null)
     setLoad('')
+    setUnits([])
     setErrors({})
   }
 
@@ -268,7 +315,7 @@ export default function CourseAllocationPage() {
       <div className="pg-hdr">
         <div>
           <div className="pg-title">Course Allocation</div>
-          <div className="pg-sub">Assign a lecturer to a course unit for a session, school &amp; term</div>
+          <div className="pg-sub">Assign a lecturer to course units for a session, school &amp; term</div>
         </div>
       </div>
 
@@ -292,18 +339,19 @@ export default function CourseAllocationPage() {
               options={intakeOptions}
               value={intakeGuid}
               isLoading={isIntakesLoading}
-              onChange={val => { setIntakeGuid(val); setErrors(p => ({ ...p, intakeGuid: '', courseUnit: p.courseUnit === DUPLICATE_MESSAGE ? '' : p.courseUnit })) }}
+              onChange={val => { setIntakeGuid(val); setErrors(p => ({ ...p, intakeGuid: '', courseUnit: '' })) }}
             />
             {errors.intakeGuid && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.intakeGuid}</p>}
           </div>
           <div className="fg">
-            <div className="lbl">Term</div>
+            <div className="lbl">{editingRow ? 'Term' : 'Default Term'}</div>
             <SearchSelect
               placeholder="— Select Term —"
               options={TERM_OPTIONS}
               value={term}
               onChange={setTerm}
             />
+            {!editingRow && <p className="text-g400" style={{ fontSize: 12, marginTop: 4 }}>Applied to each course unit you add. Change it per unit below.</p>}
           </div>
           <div className="fg">
             <div className="lbl">School / Faculty <span className="req">*</span></div>
@@ -323,10 +371,12 @@ export default function CourseAllocationPage() {
               options={lecturerOptions}
               value={lecturerGuid}
               isLoading={isLecturersLoading}
-              onChange={val => { setPickedLecturer(lecturerOptions.find(o => o.value === val) ?? null); setLecturerGuid(val); setErrors(p => ({ ...p, lecturerGuid: '', courseUnit: p.courseUnit === DUPLICATE_MESSAGE ? '' : p.courseUnit })) }}
+              onChange={val => { setPickedLecturer(lecturerOptions.find(o => o.value === val) ?? null); setLecturerGuid(val); setErrors(p => ({ ...p, lecturerGuid: '', courseUnit: '' })) }}
             />
             {errors.lecturerGuid && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.lecturerGuid}</p>}
           </div>
+          {editingRow && (
+          <>
           <div className="fg">
             <div className="lbl">Course Unit <span className="req">*</span></div>
             {/* CourseUnitSearchPicker is a fire-and-forget search box (built
@@ -380,7 +430,56 @@ export default function CourseAllocationPage() {
             />
             {errors.load && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.load}</p>}
           </div>
+          </>
+          )}
         </div>
+        {!editingRow && (
+          <div className="fg">
+            <div className="lbl">Course Units <span className="req">*</span> <span className="text-g400" style={{ fontWeight: 400 }}>· up to {PROGRAM_PLANNING_MAX_UNITS}</span></div>
+            <MultiSelect
+              placeholder={lecturerGuid && intakeGuid ? 'Search unallocated course units…' : 'Choose a session and lecturer first'}
+              options={unitOptions}
+              value={units.map(u => u.value)}
+              onChange={pickUnits}
+              onSearch={setUnitSearch}
+              disabled={!lecturerGuid || !intakeGuid}
+              isLoading={unitsQuery.isFetching && !unitsQuery.isFetchingNextPage}
+              hasNextPage={unitsQuery.hasNextPage}
+              isFetchingNextPage={unitsQuery.isFetchingNextPage}
+              onLoadMore={() => unitsQuery.fetchNextPage()}
+            />
+            {unitsQuery.isError && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{unitsQuery.error.message || 'Couldn’t load the course units.'}</p>}
+            {errors.courseUnit && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.courseUnit}</p>}
+            {units.length > 0 && (
+              <div className="cau-list">
+                <div className="cau-hdr" aria-hidden="true"><span>Course Unit</span><span>Term</span><span>Teaching Load</span><span></span></div>
+                {units.map(u => (
+                  <div className="cau-row" key={u.value}>
+                    <div className="cau-name"><span className="font-mono text-xs text-b700">{u.code}</span> {u.name}</div>
+                    <SearchSelect placeholder="Term" options={TERM_OPTIONS} value={u.term} onChange={v => setUnitField(u.value, { term: v })} />
+                    <div>
+                      {/* Digits only — type="number" let "-", "e" and decimals through. */}
+                      <input
+                        className="ctrl"
+                        inputMode="numeric"
+                        maxLength={3}
+                        placeholder="Load"
+                        aria-label={`Teaching load for ${u.code}`}
+                        value={u.load}
+                        onChange={e => { setUnitField(u.value, { load: e.target.value.replace(/\D/g, '') }); setErrors(p => ({ ...p, [`load-${u.value}`]: '' })) }}
+                        style={errors[`load-${u.value}`] ? { borderColor: 'var(--red)' } : undefined}
+                      />
+                      {errors[`load-${u.value}`] && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors[`load-${u.value}`]}</p>}
+                    </div>
+                    <button type="button" className="cau-remove" title="Remove" aria-label={`Remove ${u.code}`} onClick={() => pickUnits(units.filter(x => x.value !== u.value).map(x => x.value))}>
+                      <i className="lni lni-close" aria-hidden="true"></i>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
         <div className="flex gap-[10px] justify-end mt-2">
           <button className="btn btn-neu" onClick={handleCancel}><i className="lni lni-close"></i> {editingRow ? 'Cancel Edit' : 'Cancel'}</button>
           {editingRow ? (
@@ -392,7 +491,7 @@ export default function CourseAllocationPage() {
           ) : (
             permissions.add && (
               <button className="btn btn-primary" disabled={isAllocating} onClick={handleAllocate}>
-                <i className="lni lni-checkmark"></i> {createPlanning.isPending ? 'Allocating…' : 'Allocate'}
+                <i className="lni lni-checkmark"></i> {createPlanning.isPending ? 'Allocating…' : units.length > 1 ? `Allocate ${units.length} Units` : 'Allocate'}
               </button>
             )
           )}

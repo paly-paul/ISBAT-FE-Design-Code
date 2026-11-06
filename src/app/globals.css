@@ -15240,6 +15240,298 @@ button.mp-avatar { padding: 0; font-family: inherit; }
 }
 
 /* ═══════════════════════════════════════
+   STUDENT PROFILE (.sp-*) — student/profile/page.tsx is built from the .mp-*
+   blocks above so it reads as a sibling of My Profile. This layer only adds
+   what a student record has and a staff one doesn't: the banner's link-out
+   row, the credential dispatch cards, and the printable ID card preview.
+═══════════════════════════════════════ */
+/* No photo on a student record, so the avatar isn't a control here. */
+.sp-hero-av { cursor: default; }
+
+/* Pinned to the navy band; the name block starts below it. */
+.sp-hero-menu { position: absolute; top: 14px; right: 18px; }
+
+/* Soft fill rather than a box: the active tab already carries its underline. */
+.mp-page .ptab:focus-visible { outline: none; color: var(--b700); background: var(--b50); border-radius: var(--rxs) var(--rxs) 0 0; }
+
+/* Banner link-out row: fields owned by another page, which open it. */
+.sp-links {
+  position: relative; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px;
+  border-top: 1px solid var(--g100); background: var(--g100);
+}
+.sp-link {
+  display: flex; align-items: center; gap: 12px; width: 100%; min-width: 0; padding: 11px 20px;
+  border: 0; background: var(--white); font: inherit; color: inherit; text-align: left;
+}
+button.sp-link { cursor: pointer; transition: background var(--tr); }
+@media (hover: hover) { button.sp-link:hover { background: var(--b50); } }
+button.sp-link:active { background: var(--b50); }
+button.sp-link:focus-visible { outline: 2px solid var(--b600); outline-offset: -2px; }
+.sp-link-txt { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.sp-link-lbl { font-size: var(--fs-2xs); font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--g400); }
+.sp-link-val { margin-top: 3px; font-size: var(--fs-base); font-weight: 600; color: var(--g900); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sp-link-go { flex-shrink: 0; font-size: 12px; color: var(--g400); transition: transform var(--tr), color var(--tr); }
+button.sp-link:hover .sp-link-go { color: var(--b700); transform: translateX(3px); }
+
+/* Fact tiles: .mp-trait, plus the variants this page's data needs. */
+.mp-traits.sp-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.sp-span-2 { grid-column: 1 / -1; }
+.sp-trait-badge { margin-left: auto; }
+.mp-trait dd.font-mono { font-size: var(--fs-base); }
+.mp-trait dd.sp-trait-hint { margin-top: 3px; font-size: var(--fs-xs); font-weight: 400; color: var(--g500); white-space: normal; }
+.sp-born-val { font-size: var(--fs-lg); letter-spacing: -0.01em; }
+/* Same 16px column gap as the .g2 date row below, so the tile and input edges line up. */
+.sp-page .sp-card-facts { gap: 8px 16px; margin-bottom: 14px; flex: none; }
+/* Info callout: pale panel with a navy icon tile, as on the Programme panel. */
+.sp-note {
+  align-items: center; gap: 12px; margin-top: 12px; padding: 10px 14px; line-height: 1.5;
+  border-radius: var(--rsm); background: var(--b50); border: 1px solid var(--b100); color: var(--g700);
+}
+.sp-note i {
+  flex-shrink: 0; width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center;
+  font-size: 14px; color: var(--white); background: var(--b800); box-shadow: 0 6px 14px -8px rgba(30, 45, 110, .7);
+}
+.sp-note code {
+  padding: 1px 6px; border-radius: 5px; font-family: var(--font-mono), monospace; font-size: .92em; font-weight: 600;
+  color: var(--b700); background: var(--white); border: 1px solid var(--b200);
+}
+.sp-note-top { margin: 0 0 14px; }
+
+/* Credential dispatch: equal-height cards with the actions on one line. */
+.sp-dispatch { display: flex; flex-direction: column; }
+.sp-login { flex-shrink: 0; margin-bottom: 14px; }
+.sp-login .mp-born-val { font-size: var(--fs-lg); font-weight: 600; letter-spacing: .02em; }
+.sp-actions {
+  display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; padding-top: 12px;
+  border-top: 1px solid var(--g100);
+}
+.sp-audit { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr)); gap: 8px 16px; }
+.sp-audit-ic.email { background: var(--b50); color: var(--b700); border-color: var(--b100); }
+.sp-audit-ic.whatsapp { background: var(--green-bg); color: var(--green); border-color: var(--green-bd); }
+
+/* QR Verification */
+/* The code beside the card facts it verifies, filling the strip's width. */
+.sp-qr { display: flex; align-items: center; gap: 18px; }
+.sp-qr img { display: block; flex-shrink: 0; width: 120px; height: 120px; padding: 6px; border-radius: var(--rsm); background: var(--white); border: 1px solid var(--g200); }
+.sp-qr-mock {
+  flex-shrink: 0; width: 120px; height: 120px; padding: 10px; display: grid; place-items: center; text-align: center;
+  border: 1px dashed var(--g200); border-radius: var(--rsm); font-size: var(--fs-xs); line-height: 1.35; color: var(--g500);
+}
+.sp-qr-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+.mp-traits.sp-qr-facts { flex: none; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.sp-qr-note { font-size: var(--fs-sm); color: var(--g500); }
+
+/* ID Card tab: the form and the preview share a row and end level. */
+.sp-card-form, .sp-preview-card { display: flex; flex-direction: column; }
+.sp-card-actions { margin-top: auto; padding-top: 8px; }
+.sp-page .sp-preview-card .id-preview { margin-block: auto; }
+
+/* Live Card Preview: My Profile's ID card navy on the printable .id-preview.
+   Everything stays inside .id-preview so the print rule still picks it up. */
+.sp-page .id-preview {
+  border-radius: var(--radius); background-color: var(--b800);
+  background-image:
+    radial-gradient(120% 90% at 100% 0%, rgba(255, 255, 255, .14), transparent 55%),
+    radial-gradient(rgba(255, 255, 255, .09) 1px, transparent 1.2px);
+  background-size: auto, 14px 14px;
+  box-shadow: 0 14px 28px -18px rgba(20, 30, 80, .75);
+}
+.sp-page .id-preview::before { display: none; }
+.sp-id-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.sp-page .id-logo { margin-bottom: 0; color: var(--b100); }
+.sp-id-main { display: flex; align-items: flex-start; gap: 12px; }
+.sp-id-who { flex: 1; min-width: 0; }
+.sp-page .id-prog { color: var(--b100); }
+.sp-id-qr { flex-shrink: 0; display: flex; align-items: center; justify-content: center; width: 56px; height: 56px; padding: 4px; border-radius: 8px; background: var(--white); }
+.sp-id-qr i { font-size: 26px; color: var(--b800); }
+.sp-id-qr img { display: block; width: 100%; height: 100%; }
+.sp-id-facts { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 10px; margin-top: 12px; font-size: 10.5px; }
+/* Fixed label column, so the values start on one line down the card. */
+.sp-id-facts > div { display: grid; grid-template-columns: 62px minmax(0, 1fr); column-gap: 6px; }
+.sp-id-facts span { color: var(--b200); }
+.sp-page .sp-id-bar { display: flex; justify-content: space-between; gap: 10px; font-family: inherit; font-size: 10px; letter-spacing: normal; color: var(--b200); }
+
+/* Timeline tab: a navy summary strip, then date | rail | record rows whose
+   facts run the full width. */
+/* .rpt-empty i sizes its state icon; the button's own icon stays button-sized. */
+.sp-body .rpt-empty .btn i { display: inline-block; margin: 0; font-size: 13px; color: inherit; }
+
+.sp-tl-summary {
+  margin: 0 0 18px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-radius: var(--rsm); color: var(--white); background-color: var(--b800);
+  background-image: radial-gradient(rgba(255, 255, 255, .09) 1px, transparent 1.2px);
+  background-size: 14px 14px;
+  box-shadow: 0 12px 24px -18px rgba(20, 30, 80, .75);
+}
+.sp-tl-stat { min-width: 0; padding: 14px 20px; }
+.sp-tl-stat + .sp-tl-stat { border-left: 1px solid rgba(255, 255, 255, .16); }
+.sp-tl-stat dt { display: flex; align-items: center; gap: 6px; font-size: var(--fs-xs); font-weight: 600; color: var(--b200); }
+.sp-tl-stat dd { margin: 3px 0 0; font-size: var(--fs-lg); font-weight: 700; color: var(--white); overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+
+.sp-tl { --tl-date: 84px; --tl-gap: 16px; --tl-node: 14px; list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.sp-tl-item {
+  position: relative; display: grid; align-items: start; column-gap: var(--tl-gap);
+  grid-template-columns: var(--tl-date) var(--tl-node) minmax(0, 1fr);
+}
+/* Node to node: centred on the node column, bridging the list gap. */
+.sp-tl-item:not(:last-child)::before {
+  content: ''; position: absolute; top: 19px; bottom: -31px; width: 2px; background: var(--b100);
+  left: calc(var(--tl-date) + var(--tl-gap) + var(--tl-node) / 2 - 1px);
+}
+.sp-tl-date { padding-top: 12px; text-align: right; font-size: var(--fs-sm); font-weight: 600; color: var(--g500); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sp-tl-item.is-current .sp-tl-date { color: var(--b700); }
+.sp-tl-node {
+  position: relative; width: var(--tl-node); height: var(--tl-node); margin-top: 13px; border-radius: 50%;
+  background: var(--white); border: 3px solid var(--b300);
+}
+.sp-tl-item.is-current .sp-tl-node { background: var(--b800); border-color: var(--b800); box-shadow: 0 0 0 4px var(--b100); }
+.sp-tl-body {
+  min-width: 0; padding: 12px 18px 14px; border: 1px solid var(--g100); border-radius: var(--rsm); background: var(--white);
+  transition: border-color var(--tr), box-shadow var(--tr);
+}
+@media (hover: hover) { .sp-tl-body:hover { border-color: var(--b200); box-shadow: 0 8px 18px -14px rgba(45, 68, 143, .5); } }
+.sp-tl-item.is-current .sp-tl-body { background: var(--b50); border-color: var(--b100); }
+.sp-tl-head { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; }
+.sp-tl-title { min-width: 0; font-size: var(--fs-md, 15px); font-weight: 700; color: var(--g900); overflow-wrap: anywhere; }
+
+.sp-tl-facts { margin: 10px 0 0; display: grid; grid-template-columns: minmax(0, 2.2fr) repeat(4, minmax(0, 1fr)); }
+.sp-tl-fact { min-width: 0; padding-inline: 16px; }
+.sp-tl-fact:first-child { padding-left: 0; }
+.sp-tl-fact + .sp-tl-fact { border-left: 1px solid var(--g100); }
+.sp-tl-item.is-current .sp-tl-fact + .sp-tl-fact { border-left-color: var(--b100); }
+.sp-tl-fact dt { font-size: var(--fs-xs); font-weight: 600; color: var(--g500); }
+.sp-tl-fact dd { margin: 2px 0 0; font-size: var(--fs-base); font-weight: 600; color: var(--g900); overflow-wrap: anywhere; }
+.sp-tl-fact.is-changed dd { color: var(--b700); }
+.sp-tl-fact dd.sp-tl-was { margin-top: 1px; font-size: var(--fs-xs); font-weight: 400; color: var(--g500); }
+
+@container sp (max-width: 1039px) {
+  .sp-tl-facts { grid-template-columns: repeat(4, minmax(0, 1fr)); row-gap: 10px; }
+  .sp-tl-fact:first-child { grid-column: 1 / -1; padding-right: 0; }
+  .sp-tl-fact:nth-child(2) { padding-left: 0; border-left: 0; }
+}
+@container sp (max-width: 759px) {
+  .sp-tl-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .sp-tl-stat { padding: 11px 16px; }
+  .sp-tl-stat:nth-child(3) { border-left: 0; }
+  .sp-tl-stat:nth-child(n+3) { border-top: 1px solid rgba(255, 255, 255, .16); }
+  .sp-tl-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .sp-tl-fact:nth-child(4) { padding-left: 0; border-left: 0; }
+}
+/* The date moves above its card, so the card keeps the full width. */
+@container sp (max-width: 559px) {
+  .sp-tl { --tl-gap: 12px; }
+  .sp-tl-item { grid-template-columns: var(--tl-node) minmax(0, 1fr); row-gap: 4px; }
+  .sp-tl-item:not(:last-child)::before { top: 12px; bottom: -18px; left: calc(var(--tl-node) / 2 - 1px); }
+  .sp-tl-date { grid-column: 2; grid-row: 1; padding-top: 0; text-align: left; }
+  .sp-tl-node { grid-column: 1; grid-row: 1; margin-top: 2px; }
+  .sp-tl-body { grid-column: 2; padding: 10px 12px 12px; }
+}
+@container sp (max-width: 339px) {
+  .sp-tl-summary, .sp-tl-facts { grid-template-columns: minmax(0, 1fr); }
+  .sp-tl-stat + .sp-tl-stat { border-left: 0; border-top: 1px solid rgba(255, 255, 255, .16); }
+  .sp-tl-fact, .sp-tl-fact + .sp-tl-fact { padding-inline: 0; border-left: 0; }
+}
+@media (prefers-reduced-motion: reduce) { .sp-tl-body { transition: none; } }
+
+/* Responsive: every rule keys off .sp-body's own width, not the viewport —
+   the sidebar panel takes 294px when open, so the same window can give this
+   page 850px or 1140px. These override the viewport rules .mp-* and .g2 carry
+   (.sp-body raises specificity). max-width queries only: print drops the
+   container below, so the ID card falls back to its full-width layout. */
+.sp-page { max-width: 1600px; margin-inline: auto; }
+.sp-page .lookup-wrap { min-width: min(100%, 220px); }
+.sp-body { container: sp / inline-size; }
+
+/* 1px gaps over a tinted grid draw the dividers, so they hold at any column count. */
+.sp-body .mp-meta { gap: 1px; grid-template-columns: repeat(5, minmax(0, 1fr)); background: var(--g100); }
+.sp-body .mp-meta .mp-meta-item { border: 0; background: var(--surface); }
+.sp-body .mp-hero-name { white-space: normal; overflow-wrap: anywhere; }
+.sp-body .mp-pill { height: auto; min-height: 26px; max-width: 100%; padding-block: 3px; }
+.sp-body .mp-trait dd, .sp-body .mp-born-val, .sp-body .mp-signin-meta { overflow-wrap: anywhere; }
+.sp-body .mp-trait dd { white-space: normal; }
+.sp-body .mp-details { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); }
+.sp-body .card-hdr { flex-wrap: wrap; gap: 8px; }
+.sp-body .sp-split { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.sp-body .sp-pair, .sp-page .sp-card-facts { grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr)); }
+.sp-card-actions { flex-wrap: wrap; }
+
+@container sp (max-width: 959px) {
+  .sp-body .mp-meta { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .sp-body .mp-meta .mp-meta-item { grid-column: span 2; }
+  .sp-body .mp-meta .mp-meta-item:nth-child(n+4) { grid-column: span 3; }
+  .sp-links { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .mp-traits.sp-qr-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@container sp (max-width: 819px) {
+  .sp-body .sp-split { grid-template-columns: minmax(0, 1fr); }
+}
+@container sp (max-width: 759px) {
+  .sp-body .mp-details { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+}
+@container sp (max-width: 619px) {
+  .sp-body .mp-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .sp-body .mp-meta .mp-meta-item, .sp-body .mp-meta .mp-meta-item:nth-child(n+4) { grid-column: span 1; padding-inline: 16px; }
+  .sp-body .mp-meta .mp-meta-item:nth-child(5) { grid-column: 1 / -1; }
+  .sp-body .mp-meta dd, .sp-link-val { white-space: normal; overflow-wrap: anywhere; }
+  .mp-traits.sp-cols-3 { grid-template-columns: minmax(0, 1fr); grid-auto-rows: auto; }
+  /* One swipeable row: wrapped tabs would strand the underline mid-stack. The
+     rule moves to an inset shadow because overflow would clip the tab's -2px overlap. */
+  .sp-body .ptabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; border-bottom: 0; box-shadow: inset 0 -2px 0 var(--g200); }
+  .sp-body .ptabs::-webkit-scrollbar { display: none; }
+  .sp-body .ptab { flex-shrink: 0; margin-bottom: 0; padding-inline: 14px; white-space: nowrap; }
+}
+@container sp (max-width: 559px) {
+  .sp-body .mp-hero-top { flex-direction: column; align-items: flex-start; gap: 12px; padding: 22px 16px 14px; }
+  .sp-body .mp-hero-id { padding-top: 0; }
+  .sp-body .mp-avatar { width: 76px; height: 76px; font-size: 24px; }
+  .sp-hero-menu { right: 14px; }
+  .sp-qr { flex-direction: column; }
+  .sp-qr-body { align-self: stretch; }
+}
+@container sp (max-width: 479px) {
+  .sp-links { grid-template-columns: minmax(0, 1fr); }
+  .sp-link { padding-inline: 16px; }
+}
+@container sp (max-width: 419px) {
+  .sp-body .mp-traits:not(.sp-card-facts):not(.sp-qr-facts) { grid-template-columns: minmax(0, 1fr); grid-auto-rows: auto; }
+  .sp-actions .btn, .sp-card-actions .btn { flex: 1 1 100%; justify-content: center; margin-left: 0; white-space: normal; }
+  /* Photo and QR share the top row; the name gets the card's full width. */
+  .sp-id-main { flex-wrap: wrap; }
+  .sp-id-who { order: 3; flex-basis: 100%; }
+  .sp-id-qr { margin-left: auto; }
+  .sp-page .id-preview { padding: 16px; }
+  .sp-page .id-name, .sp-page .id-num { overflow-wrap: anywhere; }
+  .sp-page .id-num { max-width: 100%; }
+  .sp-page .sp-id-bar { flex-wrap: wrap; }
+  .sp-page .id-logo { letter-spacing: .1em; }
+}
+@container sp (max-width: 299px) {
+  .sp-body .mp-meta, .mp-traits.sp-qr-facts, .sp-id-facts { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 480px) { .sp-page .lookup-shell { padding: 14px; } }
+
+/* Touch: full-size targets, and 16px inputs so iOS doesn't zoom on focus. */
+@media (pointer: coarse) {
+  .sp-body .ptab { min-height: 44px; }
+  .sp-body .btn { min-height: 40px; }
+  .sp-body .ctrl { font-size: 16px; }
+  .sp-hero-menu { top: 12px; }
+  .sp-hero-menu .act-trigger { width: 40px; height: 40px; }
+  .sp-body .mp-trait .mp-link { min-height: 40px; }
+}
+
+/* Containment and a filled transform animation would each re-anchor the
+   card's position: fixed print rule to this page instead of the sheet. */
+@media print {
+  .sp-body { container-type: normal; }
+  .sp-body .mp-panel { animation: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button.sp-link, .sp-link-go { transition: none; }
+}
+
+/* ═══════════════════════════════════════
    CLASS ATTENDANCE (/attendance/*)
    Built on the shared tokens. Present = green, absent = red; everything
    else stays blue/grey. The Record screen fits one viewport: a compact
@@ -17356,4 +17648,23 @@ button.mp-avatar { padding: 0; font-family: inherit; }
 
 @media (prefers-reduced-motion: reduce) {
   .er-spin, .er-row-skel { animation: none }
+}
+
+/* Course Allocation: one row per picked unit, with its own term and load. */
+.cau-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.cau-hdr, .cau-row { display: grid; grid-template-columns: minmax(0, 1fr) 170px 110px 32px; gap: 10px; align-items: center; }
+.cau-hdr { padding: 0 12px; font-size: var(--fs-xs); font-weight: 600; color: var(--g500); }
+.cau-row { padding: 8px 12px; border: 1px solid var(--g100); border-radius: var(--rsm); background: var(--white); }
+.cau-name { min-width: 0; font-size: var(--fs-base); font-weight: 600; color: var(--g900); overflow-wrap: anywhere; }
+.cau-remove {
+  display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: var(--rxs);
+  background: none; color: var(--g500); cursor: pointer; transition: var(--tr);
+}
+.cau-remove:hover { background: var(--red-bg); color: var(--red); }
+.cau-remove:focus-visible { outline: 2px solid var(--b600); outline-offset: 1px; }
+@media (max-width: 640px) {
+  .cau-hdr { display: none; }
+  .cau-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 32px; }
+  .cau-name { grid-column: 1 / 3; }
+  .cau-remove { grid-column: 3; grid-row: 1; }
 }

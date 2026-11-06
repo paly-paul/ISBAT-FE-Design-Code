@@ -47,8 +47,7 @@ export interface ProgramPlanningListResult {
   pageSize: number
 }
 
-// Same request shape for both Create and Update (confirmed via
-// put-program-planning.md: "Identical shape to POST /program-plannings").
+// PUT /program-plannings/{guid}: edits one row.
 export interface ProgramPlanningInput {
   lecturerGuid: string
   unitGuid: string
@@ -58,7 +57,58 @@ export interface ProgramPlanningInput {
   term: number | null
 }
 
+// POST /program-plannings (post-program-planning.md): one row per unit, each
+// with its own load and term. All-or-nothing: if any unit fails, nothing saves.
+export const PROGRAM_PLANNING_MAX_UNITS = 50
+
+export interface ProgramPlanningUnitInput {
+  unitGuid: string
+  load: number | null
+  term: number | null
+}
+
+export interface ProgramPlanningCreateInput {
+  lecturerGuid: string
+  schoolGuid: string
+  intakeGuid: string
+  units: ProgramPlanningUnitInput[]
+}
+
+// GET /program-plannings/course-unit-dropdown: units still unallocated for
+// this lecturer in this intake, ordered by name.
+export interface UnallocatedCourseUnit {
+  courseUnitGuid: string
+  courseUnitCode: string | null
+  courseUnitName: string | null
+  courseUnitRepetitionName: string | null
+}
+
+export interface UnallocatedCourseUnitsResult {
+  items: UnallocatedCourseUnit[]
+  totalCount: number
+  pageNumber: number
+  pageSize: number
+}
+
 const mockProgramPlannings: ProgramPlanningDto[] = []
+const mockCourseUnits: UnallocatedCourseUnit[] = [
+  ['BAA111', 'Business Communication Skills'], ['BCS112', 'Computer Fundamentals'], ['BCS121', 'Data Structures'],
+  ['BCS122', 'Database Systems'], ['BCS211', 'Operating Systems'], ['BCS212', 'Software Engineering'],
+].map(([courseUnitCode, courseUnitName], i) => ({ courseUnitGuid: `mock-unit-${i + 1}`, courseUnitCode, courseUnitName, courseUnitRepetitionName: null }))
+
+export function getUnallocatedCourseUnits(lecturerGuid: string, intakeGuid: string, page: number, pageSize: number, search?: string): Promise<UnallocatedCourseUnitsResult> {
+  const q = search?.trim() ?? ''
+  if (MOCK_AUTH) {
+    const taken = mockProgramPlannings.filter(p => p.lecturerGuid === lecturerGuid && p.intakeGuid === intakeGuid).map(p => p.unitGuid)
+    const free = mockCourseUnits.filter(u => !taken.includes(u.courseUnitGuid)
+      && `${u.courseUnitCode} ${u.courseUnitName}`.toLowerCase().includes(q.toLowerCase()))
+    const start = (page - 1) * pageSize
+    return Promise.resolve({ items: free.slice(start, start + pageSize), totalCount: free.length, pageNumber: page, pageSize })
+  }
+  const qs = new URLSearchParams({ lecturerGuid, intakeGuid, page: String(page), pageSize: String(pageSize) })
+  if (q) qs.set('search', q)
+  return apiGet<UnallocatedCourseUnitsResult>(`/api/v1/academic/program-plannings/course-unit-dropdown?${qs.toString()}`)
+}
 
 export function getProgramPlannings(params: ProgramPlanningListParams = {}, pageNumber = 1, pageSize = 10): Promise<ProgramPlanningListResult> {
   const q = params.search?.trim().toLowerCase() ?? ''
@@ -120,34 +170,37 @@ export function getProgramPlanningById(guid: string): Promise<ProgramPlanningDto
   return apiGet<ProgramPlanningDto>(`/api/v1/academic/program-plannings/${guid}`)
 }
 
-export function createProgramPlanning(input: ProgramPlanningInput): Promise<ProgramPlanningDto> {
+export function createProgramPlannings(input: ProgramPlanningCreateInput): Promise<ProgramPlanningDto[]> {
   if (MOCK_AUTH) {
-    const dup = mockProgramPlannings.find(p => p.lecturerGuid === input.lecturerGuid && p.unitGuid === input.unitGuid && p.intakeGuid === input.intakeGuid)
-    if (dup) return Promise.reject(new Error('Program planning already exists for this lecturer, unit and intake.'))
-    const row: ProgramPlanningDto = {
-      programPlanGuid: crypto.randomUUID(),
-      lecturerGuid: input.lecturerGuid,
-      employeeName: null,
-      unitGuid: input.unitGuid,
-      courseUnitCode: null,
-      courseUnitName: null,
-      load: input.load,
-      schoolGuid: input.schoolGuid,
-      facultyCode: null,
-      facultyName: null,
-      intakeGuid: input.intakeGuid,
-      intakeCode: null,
-      description: null,
-      term: input.term,
-    }
+    const dups = input.units.filter(u => mockProgramPlannings.some(p => p.lecturerGuid === input.lecturerGuid && p.unitGuid === u.unitGuid && p.intakeGuid === input.intakeGuid))
+    if (dups.length) return Promise.reject(new Error(`Program planning already exists for this lecturer and intake for unit(s): ${dups.map(u => u.unitGuid).join(', ')}.`))
+    const rows: ProgramPlanningDto[] = input.units.map(u => {
+      const unit = mockCourseUnits.find(c => c.courseUnitGuid === u.unitGuid)
+      return {
+        programPlanGuid: crypto.randomUUID(),
+        lecturerGuid: input.lecturerGuid,
+        employeeName: null,
+        unitGuid: u.unitGuid,
+        courseUnitCode: unit?.courseUnitCode ?? null,
+        courseUnitName: unit?.courseUnitName ?? null,
+        load: u.load,
+        schoolGuid: input.schoolGuid,
+        facultyCode: null,
+        facultyName: null,
+        intakeGuid: input.intakeGuid,
+        intakeCode: null,
+        description: null,
+        term: u.term,
+      }
+    })
     // Prepended, not appended — mirrors the real endpoint's own documented
     // default order (newest intake first, see getProgramPlannings' own
     // comment) closely enough for mock testing to show a freshly-created
     // row where a "newest to oldest" table expects to find it.
-    mockProgramPlannings.unshift(row)
-    return Promise.resolve(row)
+    mockProgramPlannings.unshift(...rows)
+    return Promise.resolve(rows)
   }
-  return apiPost<ProgramPlanningDto>('/api/v1/academic/program-plannings', input)
+  return apiPost<ProgramPlanningDto[]>('/api/v1/academic/program-plannings', input)
 }
 
 // Returns `true` on success, not the updated row — confirmed via
