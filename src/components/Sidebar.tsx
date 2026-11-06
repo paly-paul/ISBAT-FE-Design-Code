@@ -179,6 +179,19 @@ export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSection
     return map
   }, [menu])
 
+  // When the current activeRail is not accessible in the user's menu (e.g. visiting /profile
+  // as a user who has no Academic access), automatically switch to the first accessible module.
+  useEffect(() => {
+    if (moduleByName.size === 0) return
+    const activeDef = RAIL_DEFS.find(r => r.id === activeRail)
+    if (activeDef && !moduleByName.has(activeDef.name)) {
+      const firstAvailable = RAIL_DEFS.find(r => moduleByName.has(r.name))
+      if (firstAvailable) {
+        setActiveRail(firstAvailable.id)
+      }
+    }
+  }, [moduleByName, activeRail, setActiveRail])
+
   function sbItem(item: MenuNode, railId: RailId) {
     const iconClass = item.icon ?? 'lni lni-dot'
     if (!item.url) {

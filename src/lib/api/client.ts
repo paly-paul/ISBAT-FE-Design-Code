@@ -37,6 +37,9 @@ function isAuthEndpoint(path: string): boolean {
 
 interface RefreshData {
   displayName?: string
+  employeeName?: string
+  department?: string
+  designation?: string
   employeeGuid?: string
   userGuid?: string
   userId?: string
