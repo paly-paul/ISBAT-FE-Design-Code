@@ -130,6 +130,36 @@ const mockCountries: Country[] = [
   { countryGuid: 'mock-country-in', countryCode: 'IND', countryName: 'India',          nationality: 'Indian',         defaultCountry: 0, countryPrefix: '+91'  },
 ]
 
+export interface CountryDropdownItemDto {
+  countryGuid: string
+  countryName: string
+  countryPrefix: string | null
+  isDefault: boolean
+  nationality: string
+}
+
+// GET /api/v1/users/countries/dropdown (get-countries-dropdown.md)
+// Returns all non-deleted countries in a minimal picker-friendly shape without 1000-page limit.
+export function getCountriesDropdown(search = ''): Promise<CountryDropdownItemDto[]> {
+  if (MOCK_AUTH) {
+    const q = search.trim().toLowerCase()
+    return Promise.resolve(
+      mockCountries
+        .filter(c => !q || c.countryName.toLowerCase().includes(q) || c.nationality.toLowerCase().includes(q))
+        .map(c => ({
+          countryGuid: c.countryGuid,
+          countryName: c.countryName,
+          countryPrefix: c.countryPrefix,
+          isDefault: c.defaultCountry === 1,
+          nationality: c.nationality,
+        }))
+    )
+  }
+  const q = search.trim()
+  const url = q ? `/api/v1/users/countries/dropdown?search=${encodeURIComponent(q)}` : '/api/v1/users/countries/dropdown'
+  return apiGet<CountryDropdownItemDto[] | null>(url).then(data => data ?? [])
+}
+
 export function getCountries(page = 1, pageSize = 10): Promise<Country[]> {
   if (MOCK_AUTH) return Promise.resolve(mockCountries)
   return apiGet<CountryListResponse | null>(`/api/v1/users/countries?page=${page}&pageSize=${pageSize}`).then(data => data?.items ?? [])

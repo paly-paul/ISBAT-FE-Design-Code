@@ -80,6 +80,15 @@ export function useSearchEmployeesInfinite(search: string, pageSize: number, ena
 // so useCreateEmployee's invalidateQueries({ queryKey: EMPLOYEES_KEY })
 // below matches this by prefix too and a newly created (pending) employee
 // shows up here without an extra invalidation.
+export function useEmployeesPaged(page = 1, pageSize = 10, search = '') {
+  const q = search.trim()
+  return useQuery({
+    queryKey: [...EMPLOYEES_KEY, 'paged', page, pageSize, q],
+    queryFn: () => getEmployeesPaged(page, pageSize, q),
+    placeholderData: keepPreviousData,
+  })
+}
+
 export function usePendingEmployees(pageNumber = 1, pageSize = 10) {
   return useQuery({
     queryKey: [...EMPLOYEES_KEY, 'pending', pageNumber, pageSize],
