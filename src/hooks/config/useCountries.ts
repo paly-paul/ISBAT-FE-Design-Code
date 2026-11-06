@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Country, CountryInput, createCountry, deleteCountry, findDefaultCountry, getCountries, getCountriesByGuids, getCountriesPaged, updateCountry } from '@/lib/api/academic/country'
+import { Country, CountryInput, CountryDropdownItemDto, createCountry, deleteCountry, findDefaultCountry, getCountries, getCountriesByGuids, getCountriesDropdown, getCountriesPaged, updateCountry } from '@/lib/api/academic/country'
 import { getNextPageParam } from '@/lib/pagination'
 
 const COUNTRIES_KEY = ['countries']
@@ -14,8 +14,29 @@ const HOME_COUNTRY_NAME = 'Uganda'
 export function useCountries(enabled = true) {
   return useQuery({
     queryKey: COUNTRIES_KEY,
-    queryFn: () => getCountries(1, COUNTRIES_PAGE_SIZE),
+    queryFn: async () => {
+      const dropdownItems = await getCountriesDropdown()
+      return dropdownItems.map(d => ({
+        countryGuid: d.countryGuid,
+        countryName: d.countryName,
+        countryCode: d.countryPrefix ? d.countryPrefix.replace(/^\+/, '') : '',
+        countryPrefix: d.countryPrefix ?? '',
+        nationality: d.nationality ?? '',
+        defaultCountry: d.isDefault ? 1 : 0,
+      })) as Country[]
+    },
     // Keep the list cached until a mutation invalidates it.
+    staleTime: Infinity,
+    gcTime: Infinity,
+    enabled,
+  })
+}
+
+export function useCountryDropdown(search = '', enabled = true) {
+  const q = search.trim()
+  return useQuery({
+    queryKey: [...COUNTRIES_KEY, 'dropdown', q],
+    queryFn: () => getCountriesDropdown(q),
     staleTime: Infinity,
     gcTime: Infinity,
     enabled,

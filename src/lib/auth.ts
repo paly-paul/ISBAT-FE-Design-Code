@@ -1,4 +1,5 @@
 import { AuthError, post, apiGet, apiPost, apiPostWithMessage, refreshAccessTokenWithRetry } from './api/client'
+import { setSessionIdentity } from './session'
 
 export { AuthError }
 
@@ -13,7 +14,7 @@ export const MOCK_CREDENTIALS = {
 
 export type StaffLoginResult =
   | { requiresOtp: true; challengeId: string; otpChannel: 'email' | 'sms'; maskedTarget: string }
-  | { requiresOtp: false; displayName?: string; employeeGuid?: string; userGuid?: string; redirect: string }
+  | { requiresOtp: false; displayName?: string; employeeName?: string; department?: string; designation?: string; employeeGuid?: string; userGuid?: string; redirect: string }
 
 export function staffLogin(staffId: string, password: string, trustDevice: boolean): Promise<StaffLoginResult> {
   // Allow test password 'Expired@123' or 'expired' in mock or with ?mockExpired=1 param
@@ -44,6 +45,9 @@ export function staffLogin(staffId: string, password: string, trustDevice: boole
     return {
       requiresOtp: false as const,
       displayName: data?.displayName,
+      employeeName: data?.employeeName,
+      department: data?.department,
+      designation: data?.designation,
       employeeGuid,
       userGuid,
       redirect: '/academic',
@@ -55,6 +59,9 @@ export function staffLogin(staffId: string, password: string, trustDevice: boole
 // no body needed. Used to silently restore/validate a session (e.g. on layout mount).
 
 export interface RefreshResult {
+  employeeName?: string
+  department?: string
+  designation?: string
   displayName?: string
   employeeGuid?: string
   userGuid?: string
@@ -75,7 +82,19 @@ export function refreshSession(): Promise<RefreshResult> {
   // log the user out — which is exactly what happened before this used the
   // retrying variant; see the note on refreshAccessTokenWithRetry in
   // client.ts.
-  return refreshAccessTokenWithRetry()
+  return refreshAccessTokenWithRetry().then(data => {
+    if (data && (data.displayName || data.employeeName)) {
+      setSessionIdentity({
+        displayName: data.displayName || data.employeeName || '',
+        ...(data.employeeName ? { employeeName: data.employeeName } : {}),
+        ...(data.department ? { department: data.department } : {}),
+        ...(data.designation ? { designation: data.designation } : {}),
+        ...(data.employeeGuid ? { employeeGuid: data.employeeGuid } : {}),
+        ...(data.userGuid ? { userGuid: data.userGuid } : {}),
+      })
+    }
+    return data
+  })
 }
 
 // Logout — invalidates the httpOnly session cookie; no body needed.
@@ -192,6 +211,9 @@ export function changeExpiredPassword(
     return {
       requiresOtp: false as const,
       displayName: data?.displayName,
+      employeeName: data?.employeeName,
+      department: data?.department,
+      designation: data?.designation,
       employeeGuid,
       userGuid,
       redirect: '/academic',

@@ -9,28 +9,13 @@ import { SuccessPopup } from '@/components/modals/shared/SuccessPopup'
 import { usePendingEmployees, useApproveEmployee } from '@/hooks/employee/useEmployees'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { normalizeTitle } from '@/components/modals/employee/EmployeeFormModal'
+import { ViewEmployeeModal } from '@/components/modals/employee/ViewEmployeeModal'
 
 const PAGE_SIZE = 10
 
 interface ConfirmTarget { employeeGuid: string; name: string }
 interface SuccessInfo { title: string; subtitle: string }
 
-// Employee Approvals — a trimmed-down view over Employee Master's own list
-// (see employee-master/page.tsx), scoped server-side via usePendingEmployees'
-// own ?isApproved=false + pageNumber/pageSize (getPendingEmployees in
-// employee.ts), with a single Approve action per row instead of the full
-// View/Edit/Assign ActionMenu. Approve hits its own dedicated endpoint
-// (useApproveEmployee → POST /employees/:employeeGuid/approve) rather than
-// useUpdateEmployee, which needs the full CreateEmployeeInput payload this
-// lightweight list row doesn't carry.
-//
-// The confirm step reuses bulk-intake-edit's confirm-popup markup/classes
-// (confirm-modal-overlay/confirm-modal-pop, modal-hdr-blue) instead of a
-// bare window.confirm — same look, just a simpler single-line body since
-// there's no field diff to show here. On confirm, the same modal swaps its
-// body over to SuccessPopup (same "stay open, swap to success" convention
-// as bulk-intake-edit / the academic module's Edit/New modals) instead of
-// just closing outright.
 export default function Page() {
   const permissions = usePagePermissions()
   const [page, setPage] = useState(1)
@@ -39,6 +24,7 @@ export default function Page() {
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [confirmTarget, setConfirmTarget] = useState<ConfirmTarget | null>(null)
   const [successInfo, setSuccessInfo] = useState<SuccessInfo | null>(null)
+  const [viewingEmployeeGuid, setViewingEmployeeGuid] = useState<string | null>(null)
 
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 
@@ -73,7 +59,15 @@ export default function Page() {
           </div>
           <ScrollTable>
             <table>
-              <thead><tr><th>Short Code</th><th>Name</th><th>Sex</th><th>Status</th><th style={{ width: 120 }}></th></tr></thead>
+              <thead>
+                <tr>
+                  <th>Short Code</th>
+                  <th>Name</th>
+                  <th>Sex</th>
+                  <th>Status</th>
+                  <th style={{ width: 170 }} className="text-right">Actions</th>
+                </tr>
+              </thead>
               <tbody>
                 {isLoading
                   ? <TableLoadingState colSpan={999} />
@@ -85,7 +79,10 @@ export default function Page() {
                         <td><strong>{normalizeTitle(r.title)} {r.firstName} {r.surname}</strong></td>
                         <td>{r.sex === 1 ? 'Male' : 'Female'}</td>
                         <td><span className="badge badge-amber"><span className="bdot"></span>Pending</span></td>
-                        <td>
+                        <td className="whitespace-nowrap text-right">
+                          <button className="btn btn-neu btn-sm mr-2" onClick={() => setViewingEmployeeGuid(r.employeeGuid)}>
+                            <i className="lni lni-eye"></i> View
+                          </button>
                           {permissions.approve && (
                             <button className="btn btn-primary btn-sm" onClick={() => setConfirmTarget({ employeeGuid: r.employeeGuid, name: `${r.firstName} ${r.surname}` })}>
                               <i className="lni lni-checkmark"></i> Approve
@@ -100,6 +97,14 @@ export default function Page() {
           <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="pending employees" onPageChange={setPage} />
         </div>
       </div>
+
+      <ViewEmployeeModal
+        isOpen={!!viewingEmployeeGuid}
+        onClose={() => setViewingEmployeeGuid(null)}
+        showToast={showToast}
+        employeeGuid={viewingEmployeeGuid}
+        canEdit={false}
+      />
 
       {confirmTarget && (
         <div className="modal-overlay open confirm-modal-overlay">

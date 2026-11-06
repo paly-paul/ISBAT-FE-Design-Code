@@ -7,6 +7,7 @@
 # testing
 /coverage
 CLAUDE.md
+AGENTS.md
 
 # next.js
 /.next/

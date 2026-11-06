@@ -1,15 +1,16 @@
 'use client'
-import React, { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import React, { useState, useEffect } from 'react'
+import { useRouter, usePathname } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
 import { logout } from '@/lib/auth'
-import { clearSessionIdentity } from '@/lib/session'
+import { clearSessionIdentity, getSessionIdentity, SessionIdentity } from '@/lib/session'
 import { useMarkNotificationRead, useNotificationsPreview, useUnreadCount } from '@/hooks/useNotifications'
 import { notificationHref, notificationVisual, NotificationItem } from '@/lib/api/notifications'
 import { endNotificationsSession } from '@/lib/notificationsHub'
 import { timeAgo } from '@/lib/date'
 import { HeaderDownloads } from '@/components/HeaderDownloads'
 import { useCurrentAcademicIntake } from '@/hooks/academic/useIntakes'
+import { useMyProfile } from '@/hooks/users/useMyProfile'
 
 interface HeaderProps {
   panelOpen: boolean
@@ -20,16 +21,54 @@ interface HeaderProps {
   displayName?: string
 }
 
+const MODULE_CONFIG: Record<string, { label: string; icon: string; pillClass: string }> = {
+  academic: { label: 'Academic', icon: 'lni-graduation', pillClass: 'acad' },
+  assessment: { label: 'Assessment', icon: 'lni-pencil-alt', pillClass: 'adm' },
+  attendance: { label: 'Attendance', icon: 'lni-alarm-clock', pillClass: 'home' },
+  admission: { label: 'Admission', icon: 'lni-clipboard', pillClass: 'adm' },
+  finance: { label: 'Finance', icon: 'lni-dollar', pillClass: 'acad' },
+  student: { label: 'Student', icon: 'lni-user', pillClass: 'home' },
+  employee: { label: 'Employee', icon: 'lni-briefcase', pillClass: 'adm' },
+  config: { label: 'Config', icon: 'lni-cog', pillClass: 'home' },
+  'activity-log': { label: 'Activity Log', icon: 'lni-list', pillClass: 'home' },
+  profile: { label: 'Profile', icon: 'lni-user', pillClass: 'home' },
+}
+
 function initialsOf(name: string): string {
-  const parts = name.trim().split(/\s+/)
+  const parts = name.trim().split(/\s+/).filter(Boolean)
+  if (parts.length === 0) return ''
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
   return ((parts[0]?.[0] ?? '') + (parts[1]?.[0] ?? '')).toUpperCase()
 }
 
 // No made-up name when the session hasn't supplied one — the avatar falls
 // back to a plain user icon and the name is simply left out.
 export function Header({ panelOpen, setPanelOpen, profileOpen, setProfileOpen, profileRef, displayName }: HeaderProps) {
-  const name = displayName?.trim() ?? ''
+  const pathname = usePathname()
+  const moduleKey = pathname ? pathname.split('/').filter(Boolean)[0] || 'academic' : 'academic'
+  const currentModule = MODULE_CONFIG[moduleKey] || { label: 'Academic', icon: 'lni-graduation', pillClass: 'acad' }
+
+  const [sessionIdentity, setSessionIdentityState] = useState<SessionIdentity | null>(() => getSessionIdentity())
+
+  useEffect(() => {
+    setSessionIdentityState(getSessionIdentity())
+  }, [])
+
+  const { data: myProfile } = useMyProfile()
+
+  const name =
+    sessionIdentity?.employeeName ||
+    sessionIdentity?.displayName ||
+    myProfile?.empName ||
+    displayName?.trim() ||
+    ''
   const initials = initialsOf(name)
+
+  const designation = sessionIdentity?.designation?.trim() || myProfile?.account?.userTypeName?.trim() || ''
+  const department = sessionIdentity?.department?.trim() || ''
+
+  const roleParts = [designation, department || (designation ? '' : currentModule.label)].filter(Boolean)
+  const roleSubtitle = roleParts.length > 0 ? roleParts.join(' · ') : 'System Admin · Academic'
   const [signingOut, setSigningOut] = useState(false)
   const queryClient = useQueryClient()
   const router = useRouter()
@@ -103,7 +142,7 @@ export function Header({ panelOpen, setPanelOpen, profileOpen, setProfileOpen, p
           <img className="hdr-logo" src="/isbat-university-logo.png" alt="" width={768} height={252} />
         </button>
         <div className="hdr-right">
-          <div className="hdr-module-pill acad"><i className="lni lni-graduation"></i> Academic</div>
+          <div className={`hdr-module-pill ${currentModule.pillClass}`}><i className={`lni ${currentModule.icon}`}></i> {currentModule.label}</div>
           {currentIntake && <div className="hdr-intake">{currentIntake.description} ({currentIntake.intakeCode})</div>}
           <HeaderDownloads />
           <div
@@ -166,7 +205,7 @@ export function Header({ panelOpen, setPanelOpen, profileOpen, setProfileOpen, p
               <div className="profile-dropdown">
                 <div className="profile-dropdown-info">
                   {name && <div className="profile-dropdown-name">{name}</div>}
-                  <div className="profile-dropdown-role">System Admin · Academic</div>
+                  <div className="profile-dropdown-role">{roleSubtitle}</div>
                 </div>
                 <div className="profile-dropdown-divider" />
                 <button

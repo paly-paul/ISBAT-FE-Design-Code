@@ -62,7 +62,10 @@ export default function StaffLoginPage() {
         router.push('/login/otp')
       } else {
         setSessionIdentity({
-          displayName: result.displayName || '',
+          displayName: result.displayName || result.employeeName || '',
+          employeeName: result.employeeName,
+          department: result.department,
+          designation: result.designation,
           employeeGuid: result.employeeGuid,
           userGuid: result.userGuid,
         })
