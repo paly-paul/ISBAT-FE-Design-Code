@@ -309,6 +309,7 @@ const mockMenu: MenuNode[] = [
       leaf('Dashboard', 'dashboard', '/admission/dashboard'),
       leaf('Application Payment', 'credit-cards', '/admission/payment'),
       leaf('Application Filing', 'pencil-alt', '/admission/filing'),
+      leaf('ODeL Application', 'world', '/admission/odel-application'),
       leaf('Vetting Desk', 'search-alt', '/admission/vetting'),
       leaf("Registrar's Desk", 'graduation', '/admission/registration'),
     ]),
@@ -710,6 +711,41 @@ function renameIaCreation(menu: MenuNode[]): MenuNode[] {
   })
 }
 
+function ensureOdelApplication(menu: MenuNode[]): MenuNode[] {
+  const admissionIdx = menu.findIndex(n => n.name === 'Admission')
+  if (admissionIdx === -1) return menu
+
+  const admissionModule = menu[admissionIdx]
+  const moduleChildren = admissionModule.children || []
+  const hasOdel = moduleChildren.some(sec =>
+    (sec.children || []).some(l => l.url === '/admission/odel-application')
+  )
+  if (hasOdel) return menu
+
+  const flowIdx = moduleChildren.findIndex(s => s.name === 'Admission Flow')
+  const odelLeaf = leaf('ODeL Application', 'world', '/admission/odel-application')
+
+  const newChildren = [...moduleChildren]
+  if (flowIdx !== -1) {
+    const flowSec = newChildren[flowIdx]
+    const flowChildren = flowSec.children || []
+    const filingIdx = flowChildren.findIndex(c => c.url === '/admission/filing')
+    const updated = [...flowChildren]
+    if (filingIdx !== -1) {
+      updated.splice(filingIdx + 1, 0, odelLeaf)
+    } else {
+      updated.push(odelLeaf)
+    }
+    newChildren[flowIdx] = { ...flowSec, children: updated }
+  } else {
+    newChildren.push(section('Admission Flow', [odelLeaf]))
+  }
+
+  const merged = [...menu]
+  merged[admissionIdx] = { ...admissionModule, children: newChildren }
+  return merged
+}
+
 // A failed /me/menu call rejects (no fallback menu): the sidebar shows its
 // "Couldn't load menu" state, RouteGuard blocks the page and
 // usePagePermissions grants nothing, until the user retries.
@@ -720,7 +756,7 @@ export function getMenu(): Promise<MenuResult> {
       // Taken as-is apart from the remove/rename steps — see the note above
       // cleanStudentSections.
       const menu = removeBatchSummary(cleanStudentSections(data ?? []))
-      const finalMenu = stripUnintegratedPages(stripLectureMaster(renameIaCreation(renameTimetable(menu))))
+      const finalMenu = stripUnintegratedPages(stripLectureMaster(renameIaCreation(renameTimetable(ensureOdelApplication(menu)))))
       return { menu: finalMenu }
     })
 }

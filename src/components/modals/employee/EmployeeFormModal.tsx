@@ -9,7 +9,7 @@ import { CreateEmployeeInput } from '@/lib/api/employee/employee'
 import { useEmployee, useCreateEmployee, useUpdateEmployee } from '@/hooks/employee/useEmployees'
 import { useDepartmentsDropdown } from '@/hooks/config/useDepartments'
 import { useDesignationsDropdown } from '@/hooks/config/useDesignations'
-import { useCountries } from '@/hooks/config/useCountries'
+import { useCountryDropdown } from '@/hooks/config/useCountries'
 import { useCampusDropdown } from '@/hooks/config/useCampuses'
 import { scrollToFirstError } from '@/lib/scrollToFirstError'
 
@@ -153,13 +153,13 @@ export function EmployeeFormModal({ isOpen, onClose, showToast, mode, employeeGu
   const { data: departments = [], isLoading: departmentsLoading } = useDepartmentsDropdown(isOpen)
   const { data: designations = [], isLoading: designationsLoading } = useDesignationsDropdown(deptGuid, isOpen)
 
-  const { data: countries = [] } = useCountries()
+  const { data: countries = [] } = useCountryDropdown(isOpen)
   // The campus doc explicitly calls for GET /academic/campus/dropdown, not
   // the paginated campus list useCampuses() hits.
   const { data: campuses = [] } = useCampusDropdown()
   const campusOptions = campuses.map(c => ({ value: c.campusGuid, label: c.campusName }))
   const countryOptions = useMemo(() => countries.map(c => ({ value: c.countryGuid, label: c.countryName })), [countries])
-  const defaultCountryGuid = countries.find(c => c.defaultCountry === 1)?.countryGuid ?? ''
+  const defaultCountryGuid = countries.find(c => c.isDefault || (c as any).defaultCountry === 1)?.countryGuid ?? ''
 
   // On Edit, the employee's saved department/designation is kept as an
   // option even if the list doesn't have it (e.g. since deleted), so the

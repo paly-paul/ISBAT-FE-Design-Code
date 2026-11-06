@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation'
 import { ModalProps } from '../types'
 import { SearchSelect } from '@/components/SearchSelect'
 import { useStudentRefugeeDetails, useAssignRefugeeStatus, useUpdateRefugeeStatus, useRemoveRefugeeStatus } from '@/hooks/student/useRefugee'
-import { useCountries } from '@/hooks/config/useCountries'
+import { useCountryDropdown } from '@/hooks/config/useCountries'
 
 interface Props extends ModalProps {
   studentGuid: string | null
@@ -30,7 +30,7 @@ export function StudentRefugeeModal({ isOpen, onClose, showToast, studentGuid, s
   // CountryGuid — confirmed (post-assign-refugee-status.md) as a real guid
   // field on the student entity, not a legacy numeric code, so the option's
   // own countryGuid is sent as-is; no index/position workaround needed.
-  const { data: countries = [] } = useCountries(isOpen)
+  const { data: countries = [] } = useCountryDropdown(isOpen)
   const countryOptions = countries.map(c => ({ value: c.countryGuid, label: c.countryName }))
 
   const [countryGuid, setCountryGuid] = useState('')

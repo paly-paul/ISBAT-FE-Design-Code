@@ -10,7 +10,7 @@ import {
   useApproveRefugeeStatus,
   PendingRefugeeApprovalRow,
 } from '@/hooks/student/useRefugee'
-import { useCountries } from '@/hooks/config/useCountries'
+import { useCountryDropdown } from '@/hooks/config/useCountries'
 import { downloadDocument } from '@/lib/documentViewer'
 import { DocumentPreviewModal } from '@/components/modals/shared/DocumentPreviewModal'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
@@ -57,7 +57,7 @@ function RefugeeApprovalContent() {
     else if (notice === 'updated') showToast('Refugee status update submitted — pending approval', 'ok')
   }, [searchParams])
 
-  const { data: countries = [] } = useCountries()
+  const { data: countries = [] } = useCountryDropdown()
   function countryName(guid: string | null | undefined) {
     if (!guid) return null
     return countries.find(c => c.countryGuid === guid)?.countryName ?? null
