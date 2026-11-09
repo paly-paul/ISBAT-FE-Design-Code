@@ -20,6 +20,7 @@ import {
   useIaCreationStructure,
   useCreateIaStructure,
 } from '@/hooks/assessment/useIaCreation'
+import { extractApiErrorMessage } from '@/lib/errorMessages'
 
 function formatDateRange(start: string | null, end: string | null) {
   if (!start) return null
@@ -128,7 +129,7 @@ export default function IaCreationPage() {
         showToast('IA Structure already exists for this combination.', '')
         refetchStructure()
       } else {
-        showToast(err.message || 'Failed to create IA Structure.', 'error')
+        showToast(extractApiErrorMessage(err, 'Failed to create IA Structure.'), 'error')
       }
     }
   }

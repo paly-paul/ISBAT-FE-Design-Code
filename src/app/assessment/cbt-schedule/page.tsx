@@ -10,6 +10,7 @@ import { useIaTestSchedule, useUpdateIaTestSchedule } from '@/hooks/assessment/u
 import { useExamRules } from '@/hooks/assessment/useExamRules'
 import Link from 'next/link'
 import { ExamRuleLookupModal } from '@/app/assessment/ia-creation/_components/ExamRuleLookupModal'
+import { extractApiErrorMessage } from '@/lib/errorMessages'
 
 function getTodayYmd(): string {
   const now = new Date()
@@ -169,13 +170,7 @@ function CbtScheduleContent() {
         router.push('/assessment/ia-creation')
       }, 1000)
     } catch (err: any) {
-      // AuthError: `code` from the envelope, `message` = errors[0].
-      const msg: string = err?.message || ''
-      const lower = msg.toLowerCase()
-      if (lower.includes('question') || lower.includes('paper') || lower.includes('qp')) {
-        showToast('Please upload the question paper before scheduling the exam.', 'error')
-        return
-      }
+      const msg: string = extractApiErrorMessage(err, 'Failed to save the schedule.')
       const aboutRule = /rule/i.test(msg)
       if (err?.code === 'not_found' && aboutRule) {
         // The picked rule no longer exists: clear it and ask for a re-pick.

@@ -10,6 +10,7 @@ import { useIaCwSchedule, useUpdateIaCwSchedule } from '@/hooks/assessment/useIa
 import { useExamRules } from '@/hooks/assessment/useExamRules'
 import { SuccessPopup } from '@/components/modals/shared/SuccessPopup'
 import { ExamRuleLookupModal } from './ExamRuleLookupModal'
+import { extractApiErrorMessage } from '@/lib/errorMessages'
 
 interface CwScheduleModalProps {
   isOpen: boolean
@@ -29,6 +30,7 @@ export function CwScheduleModal({ isOpen, onClose, courseworkGuid }: CwScheduleM
   const permissions = usePagePermissions('/assessment/ia-creation')
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const toastTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const modalBodyRef = useRef<HTMLDivElement | null>(null)
   const [saved, setSaved] = useState(false)
   const showToast = (msg: string, type: string = 'success') => {
     if (toastTimerRef.current) {
@@ -57,8 +59,10 @@ export function CwScheduleModal({ isOpen, onClose, courseworkGuid }: CwScheduleM
   const [publishStatus, setPublishStatus] = useState<number>(0)
   const [examRuleGuid, setExamRuleGuid] = useState<string>('')
   const [lookupOpen, setLookupOpen] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
 
   function handleStartDateChange(d: string) {
+    setFormError(null)
     const today = getTodayYmd()
     if (d && d < today) {
       showToast('Before date is not possible', 'error')
@@ -139,17 +143,22 @@ export function CwScheduleModal({ isOpen, onClose, courseworkGuid }: CwScheduleM
 
   async function handleSave() {
     if (!courseworkGuid) return
+    setFormError(null)
 
     // Validation
     if (!startDate || !startTime || !endDate || !endTime) {
-      showToast('Start and End Date/Time are required', 'error')
+      const msg = 'Start and End Date/Time are required'
+      setFormError(msg)
+      showToast(msg, 'error')
       return
     }
     const startDt = new Date(`${startDate}T${startTime}`)
     const endDt = new Date(`${endDate}T${endTime}`)
     
     if (endDt <= startDt) {
-      showToast('End Date/Time must be after Start Date/Time', 'error')
+      const msg = 'End Date/Time must be after Start Date/Time'
+      setFormError(msg)
+      showToast(msg, 'error')
       return
     }
     const effectiveMaxMark = typeof maxMark === 'number' && maxMark > 0 ? maxMark : (schedule?.maxMark && schedule.maxMark > 0 ? schedule.maxMark : 15)
@@ -166,10 +175,11 @@ export function CwScheduleModal({ isOpen, onClose, courseworkGuid }: CwScheduleM
       showToast('Coursework Scheduled successfully')
       setSaved(true)
     } catch (err: any) {
-      if (err.code === 'validation_error' || err.code === 'bad_request') {
-        showToast(err.message || 'Validation failed. Check your inputs.', 'error')
-      } else {
-        showToast(err.message || 'Failed to save schedule.', 'error')
+      const errorMsg = extractApiErrorMessage(err, 'Failed to save schedule.')
+      setFormError(errorMsg)
+      showToast(errorMsg, 'error')
+      if (modalBodyRef.current) {
+        modalBodyRef.current.scrollTo({ top: 0, behavior: 'smooth' })
       }
     }
   }
@@ -204,7 +214,7 @@ export function CwScheduleModal({ isOpen, onClose, courseworkGuid }: CwScheduleM
         </div>
 
         {/* Content */}
-        <div className="p-6 bg-white overflow-y-auto" style={{ maxHeight: 'calc(90vh - 60px)' }}>
+        <div ref={modalBodyRef} className="p-6 bg-white overflow-y-auto" style={{ maxHeight: 'calc(90vh - 60px)' }}>
           <div className={`transition-opacity duration-300 ${isLoading ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
             
             {schedule && (
@@ -213,6 +223,14 @@ export function CwScheduleModal({ isOpen, onClose, courseworkGuid }: CwScheduleM
                 <div className="text-base font-semibold text-slate-900">
                   {schedule.courseUnitCode} — {schedule.courseUnitName}
                 </div>
+              </div>
+            )}
+
+            {/* Server Error Message from API */}
+            {formError && (
+              <div className="mb-5 p-3.5 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3 text-xs text-red-900 shadow-xs">
+                <i className="lni lni-warning text-red-600 text-base shrink-0 mt-0.5"></i>
+                <div className="leading-relaxed font-medium">{formError}</div>
               </div>
             )}
 
@@ -343,19 +361,27 @@ export function CwScheduleModal({ isOpen, onClose, courseworkGuid }: CwScheduleM
             </div>
 
             {/* Footer */}
-            <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-slate-200">
-              <button className="btn btn-neu" onClick={onClose} disabled={updateMut.isPending}>
-                Cancel
-              </button>
-              {(permissions.add || permissions.edit) && (
-              <button
-                className="btn btn-primary"
-                onClick={handleSave}
-                disabled={updateMut.isPending || isLoading}
-              >
-                {updateMut.isPending ? 'Saving...' : 'Save Schedule'}
-              </button>
+            <div className="mt-6 pt-5 border-t border-slate-200">
+              {formError && (
+                <div className="mb-4 p-3.5 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3 text-xs text-red-900 shadow-xs">
+                  <i className="lni lni-warning text-red-600 text-base shrink-0 mt-0.5"></i>
+                  <div className="leading-relaxed font-semibold">{formError}</div>
+                </div>
               )}
+              <div className="flex justify-end gap-3">
+                <button className="btn btn-neu" onClick={onClose} disabled={updateMut.isPending}>
+                  Cancel
+                </button>
+                {(permissions.add || permissions.edit) && (
+                <button
+                  className="btn btn-primary"
+                  onClick={handleSave}
+                  disabled={updateMut.isPending || isLoading}
+                >
+                  {updateMut.isPending ? 'Saving...' : 'Save Schedule'}
+                </button>
+                )}
+              </div>
             </div>
           </div>
         </div>
