@@ -39,7 +39,7 @@ export function ViewPaymentModal({ isOpen, onClose, entry }: ViewPaymentModalPro
         </div>
         <div style={{ padding: 20 }}>
           <div className="receipt-row"><span className="text-muted">Payment Code</span><span className="font-bold font-mono">{entry.paymentCode}</span></div>
-          <div className="receipt-row"><span className="text-muted">Receipt</span><span className="font-bold font-mono">{entry.receipt ?? '—'}</span></div>
+          <div className="receipt-row"><span className="text-muted">Receipt No.</span><span className="font-bold font-mono">{entry.receipt ?? '—'}</span></div>
           <div className="receipt-row"><span className="text-muted">Amount</span><span className="font-bold">{entry.currencyName} {fmtAmount(entry.amount)}</span></div>
           <div className="receipt-row"><span className="text-muted">Payment Date</span><span className="font-bold">{formatDate(entry.payDate)}</span></div>
           <div className="receipt-row"><span className="text-muted">Payment Type</span><span className="font-bold">{entry.payType?.name ?? '—'}</span></div>

@@ -1079,26 +1079,7 @@ export default function QuestionBankUploadPage() {
                             {/* Question Text */}
                             <td style={{ whiteSpace: 'normal', minWidth: 280, maxWidth: 460, lineHeight: 1.6, color: 'var(--g800)' }}>
                               <RichTextDisplay content={q.questionText} />
-                              {q.imageUrl && (
-                                <div className="mt-2 flex items-center gap-2">
-                                  <a
-                                    href={q.imageUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 rounded text-[11px] font-medium transition-colors"
-                                    title="View attached diagram / image"
-                                    onClick={e => e.stopPropagation()}
-                                  >
-                                    <i className="lni lni-image text-xs"></i>
-                                    <span>Image Attached</span>
-                                    {q.imageFileName && (
-                                      <span className="text-slate-400 font-mono text-[10px]">
-                                        ({q.imageFileName})
-                                      </span>
-                                    )}
-                                  </a>
-                                </div>
-                              )}
+                              {q.imageUrl && <QuestionImageThumb url={q.imageUrl} fileName={q.imageFileName} />}
                             </td>
 
                             {/* Options */}
@@ -1957,5 +1938,43 @@ export default function QuestionBankUploadPage() {
       {/* ── Toast Notification ──────────────────────────────────────────────── */}
       <Toast toast={toast} />
     </div>
+  )
+}
+
+// The question's attached diagram, shown in the row so it can be read without
+// opening it. Clicking opens the full-size image in a new tab. If the image
+// can't be loaded (e.g. an expired link), it falls back to the plain link.
+function QuestionImageThumb({ url, fileName }: { url: string; fileName?: string | null }) {
+  const [failed, setFailed] = useState(false)
+  const label = fileName ? `Open ${fileName} full size` : 'Open the attached image full size'
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={failed
+        ? 'mt-2 inline-flex items-center gap-1.5 px-2 py-0.5 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 rounded text-[11px] font-medium transition-colors'
+        : 'group mt-2 block w-fit max-w-full rounded-md border border-slate-200 bg-slate-50 p-1 hover:border-blue-300 transition-colors'}
+      title={label}
+      aria-label={label}
+      onClick={e => e.stopPropagation()}
+    >
+      {failed ? (
+        <>
+          <i className="lni lni-image text-xs"></i>
+          <span>Image Attached</span>
+          {fileName && <span className="text-slate-400 font-mono text-[10px]">({fileName})</span>}
+        </>
+      ) : (
+        // eslint-disable-next-line @next/next/no-img-element -- uploaded file URL; next/image can't optimise it on the static export
+        <img
+          src={url}
+          alt={fileName ? `Attached image: ${fileName}` : 'Attached question image'}
+          loading="lazy"
+          onError={() => setFailed(true)}
+          className="block max-h-40 max-w-full rounded object-contain"
+        />
+      )}
+    </a>
   )
 }

@@ -577,7 +577,8 @@ function StudentProfileContent() {
                         <span className="mp-born-val sp-born-val">{programme}</span>
                       </div>
                     </div>
-                    <dl className="mp-traits sp-cols-3">
+                    {/* 2 × 2: the two intakes, then how and when the student registered. */}
+                    <dl className="mp-traits">
                       <div className="mp-trait">
                         <dt><i className="lni lni-calendar" aria-hidden="true"></i>Joined Intake</dt>
                         <dd title={joinedIntake?.label || '—'}>{joinedIntake?.label || '—'}</dd>
@@ -590,6 +591,10 @@ function StudentProfileContent() {
                         </dt>
                         <dd title={academicIntake?.label || '—'}>{academicIntake?.label || '—'}</dd>
                         <dd className="sp-trait-hint">The intake the student is currently studying in.</dd>
+                      </div>
+                      <div className="mp-trait">
+                        <dt><i className="lni lni-bookmark" aria-hidden="true"></i>Registration Type</dt>
+                        <dd title={detail?.registrationType || '—'}>{detail?.registrationType || '—'}</dd>
                       </div>
                       <div className="mp-trait">
                         <dt><i className="lni lni-calendar" aria-hidden="true"></i>Registration Date</dt>

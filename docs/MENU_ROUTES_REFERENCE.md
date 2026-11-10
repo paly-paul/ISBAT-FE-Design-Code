@@ -3,7 +3,7 @@
 Reference for the permission-driven sidebar menu API, `GET /api/v1/users/me/menu`.
 Each node has the shape `{ name, icon, url, permissions, children }`.
 
-**Last updated: 2026-11-02.** The tree below matches the frontend's mock menu
+**Last updated: 2026-11-10.** The tree below matches the frontend's mock menu
 (`mockMenu` in `src/lib/api/users/menu.ts`), so it lists every page that is in the
 sidebar today. The events on each page come from reading the buttons and actions in
 that page's code.
@@ -829,6 +829,7 @@ each API.
 | Operations | Terminate Student | `/student/terminate-student` | `get` `execute` | `add` | `execute` = terminate |
 | Operations | Passout Confirmation | `/student/passout-confirmation` | `get` `approve` | `edit` | `approve` = confirm passout |
 | Reports | Students in Programme Report | `/student/reports/students-in-programme` | `get` `export` | `export` | Every student of one programme, filtered by semester / intake / status; preview + Excel export; exports land in the shared Downloads list. The APIs check `student.studentsinprogrammereport.get` (preview) and `.export` |
+| Student Services | Service Tickets | `/student/service-tickets` | `get` `edit` | — | Staff triage of student service tickets: change a ticket's category or status and write a response (`edit`). The page doesn't check menu events itself; its APIs check `students.serviceticket.manage`. Section must not be named `Services` (the frontend drops a Student section with that name) |
 | Communications | Send Communication | `/student/communications` | `get` `send` | `add` |  |
 | Events and Announcements | Event Management | `/student/event-management` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
 | Events and Announcements | Announcement Management | `/student/announcement-management` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
@@ -947,6 +948,21 @@ each API.
           "icon": "lni lni-bar-chart",
           "url": "/student/reports/students-in-programme",
           "permissions": { "get": true, "export": true },
+          "children": []
+        }
+      ]
+    },
+    {
+      "name": "Student Services",
+      "icon": null,
+      "url": null,
+      "permissions": null,
+      "children": [
+        {
+          "name": "Service Tickets",
+          "icon": "lni lni-ticket",
+          "url": "/student/service-tickets",
+          "permissions": { "get": true, "edit": true },
           "children": []
         }
       ]
@@ -1831,7 +1847,7 @@ New module (2026-10-28). Its rail sits between Student and Employee.
 
 These pages still exist in the code but are deliberately left out of the menu. Don't
 add them to the menu response. If they are sent, the frontend removes Student Lookup,
-Weight Configuration, Assessment Schedule, Service Tickets and the four Resit & Disputes
+Weight Configuration, Assessment Schedule and the four Resit & Disputes
 ones itself (`stripUnintegratedPages`, which also drops a section left empty), and
 removes any "Lecturer Master" / "Lecture Master" node (`stripLectureMaster`).
 
@@ -1843,7 +1859,6 @@ removes any "Lecturer Master" / "Lecture Master" node (`stripLectureMaster`).
 | Student | Student Services | `/student/services` |
 | Assessment | Weight Configuration | `/assessment/weight-config` |
 | Assessment | Assessment Schedule | `/assessment/schedule` |
-| Assessment | Service Tickets | `/assessment/service-tickets` |
 | Assessment | CW Overview | `/assessment/cw-overview` |
 | Assessment | CW Submissions | `/assessment/cw-submissions` |
 | Assessment | CBT Overview | `/assessment/cbt-overview` |
@@ -1859,7 +1874,22 @@ removes any "Lecturer Master" / "Lecture Master" node (`stripLectureMaster`).
 | Assessment | Pending QP Upload | `/assessment/rpt-pending-qp` |
 | Assessment | Faculty Summary | `/assessment/rpt-faculty` |
 
-## Changes since the previous version (2026-10-30)
+## Changes since the previous version (2026-11-02)
+
+- **Service Tickets moved to Student › Student Services › Service Tickets**
+  (`/student/service-tickets`, icon `lni lni-ticket`), with `get` and `edit`. It's a new
+  **Student Services** section between Reports and Communications. Please register it
+  in the menu API; until then it's hidden and shows Access Denied.
+  - It was **Assessment › Student Services › Service Tickets**
+    (`/assessment/service-tickets`), hidden from the sidebar since 2026-10-15. That URL
+    no longer exists, so remove any registration for it.
+  - The frontend no longer hides this page, so it's off the
+    [Pages hidden from the sidebar](#pages-hidden-from-the-sidebar) list.
+  - Don't name the section `Services`. The frontend drops a Student section with that
+    exact name, which belonged to the old hidden Student Services page
+    (`/student/services`). That page is still hidden; it's not this one.
+
+## Changes in the 2026-11-02 version (since 2026-10-30)
 
 - **Added Student › Reports › Students in Programme Report**
   (`/student/reports/students-in-programme`, icon `lni lni-bar-chart`), with `get` and
