@@ -152,7 +152,13 @@ export default function HallTicketIssuancePage() {
           const failing = checks.filter(c => !c.ok).map(c => c.label.toLowerCase())
           const showChecks = !checking && !eligError && !!elig && !elig.alreadyIssued
           return (
-            <section className="card ht-panel" aria-labelledby="ht-student-name">
+            <div className="modal-overlay open">
+            {/* .ht-panel sets overflow: hidden — keep the modal's scroll on short screens. */}
+            <section className="modal modal-lg ht-panel" style={{ overflowY: 'auto' }} role="dialog" aria-modal="true" aria-labelledby="ht-student-name">
+              <div className="modal-hdr modal-hdr-blue">
+                <div className="modal-title"><i className="lni lni-ticket"></i> Hall Ticket · Term {term}</div>
+                <button type="button" className="modal-close" onClick={() => setSelected(null)} aria-label="Close"><i className="lni lni-close"></i></button>
+              </div>
               <header className="ht-id">
                 <div className="ht-avatar" aria-hidden="true">{initials(name)}</div>
                 <div className="ht-id-main">
@@ -166,7 +172,6 @@ export default function HallTicketIssuancePage() {
                     <div><dt>Batch</dt><dd>{selected.batchCode || '—'}</dd></div>
                   </dl>
                 </div>
-                <button type="button" className="btn btn-neu btn-sm" onClick={() => setSelected(null)}><i className="lni lni-close"></i> Clear</button>
               </header>
 
               {/* Already issued: nothing left to check, so the verdict bar
@@ -247,6 +252,7 @@ export default function HallTicketIssuancePage() {
                 )
               )}
             </section>
+            </div>
           )
         })()}
 

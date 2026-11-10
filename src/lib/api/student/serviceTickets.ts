@@ -4,10 +4,11 @@ import { getServiceCategories } from './serviceCategories'
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
 // Staff service-ticket triage (service-ticket-staff-page.md). Backs the
-// Assessment module's Service Tickets page. The APIs are not deployed yet, so
-// every call has a mock branch; the shapes follow the fields the page doc
-// names — confirm against get-ticket-queue.md / get-ticket-detail-staff.md /
-// put-update-ticket-staff.md / get-enum-values.md once they're available.
+// Assessment module's Service Tickets page. The queue (GET
+// /students/service-tickets) is live and matches ServiceTicketListItem /
+// PagedServiceTickets below. The detail, update and status-enum shapes still
+// follow the page doc — confirm them against the API docs when shared. The
+// mock branches run only under NEXT_PUBLIC_AUTH_MOCK.
 
 // GET /students/enums/ticket-statuses — `value` is the request param,
 // `name` the enum name (Open, InProgress, Closed, Pending).
@@ -50,7 +51,7 @@ export interface ServiceTicketQueueParams {
 export interface PagedServiceTickets {
   items: ServiceTicketListItem[]
   totalCount: number
-  page: number
+  pageNumber: number
   pageSize: number
 }
 
@@ -171,7 +172,7 @@ export function getServiceTicketQueue(params: ServiceTicketQueueParams): Promise
     return delay({
       items: items.slice((page - 1) * pageSize, page * pageSize).map(toListItem),
       totalCount: items.length,
-      page,
+      pageNumber: page,
       pageSize,
     })
   }
@@ -179,7 +180,7 @@ export function getServiceTicketQueue(params: ServiceTicketQueueParams): Promise
   if (params.status !== undefined) qs.set('status', String(params.status))
   if (params.categoryGuid) qs.set('categoryGuid', params.categoryGuid)
   return apiGet<PagedServiceTickets | null>(`/api/v1/students/service-tickets?${qs}`)
-    .then(data => data ?? { items: [], totalCount: 0, page, pageSize })
+    .then(data => data ?? { items: [], totalCount: 0, pageNumber: page, pageSize })
 }
 
 export function getServiceTicket(ticketGuid: string): Promise<ServiceTicketDetail> {

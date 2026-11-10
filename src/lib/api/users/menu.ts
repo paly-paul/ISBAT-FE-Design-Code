@@ -147,6 +147,11 @@ const STUDENT_OPERATIONS_SECTIONS: MenuNode[] = [
   // section('Services', [
   //   leaf('Student Services', 'ticket', '/student/services'),
   // ]),
+  // Staff service-ticket triage (service-ticket-staff-page.md, Students
+  // module). Moved here from the Assessment module, 2026-11-10.
+  section('Student Services', [
+    leaf('Service Tickets', 'ticket', '/student/service-tickets'),
+  ]),
   section('Communications', [
     leaf('Send Communication', 'envelope', '/student/communications'),
   ]),
@@ -276,12 +281,6 @@ const ASSESSMENT_SECTIONS: MenuNode[] = [
     // leaf('CW Recheck Hub', 'search-alt', '/assessment/recheck'),
     leaf('Exam Grievances', 'files', '/assessment/exam-grievances'),
   ]),
-  // Student Services hidden from the sidebar per request, 2026-10-15 — page
-  // still exists on disk. Commented out whole (its only leaf) for the same
-  // reason as Reports below.
-  // section('Student Services', [
-  //   leaf('Service Tickets', 'ticket', '/assessment/service-tickets'),
-  // ]),
   // Reports section hidden from the sidebar per request, 2026-10-05 — both
   // pages still exist on disk. Commented out whole since Sidebar.tsx renders
   // a childless section as a disabled "Soon" item.
@@ -546,7 +545,6 @@ function stripUnintegratedPages(menu: MenuNode[]): MenuNode[] {
     // Hidden from the sidebar per request, 2026-10-15 — pages still exist.
     '/assessment/weight-config',
     '/assessment/schedule',
-    '/assessment/service-tickets',
     // Hidden from the sidebar per request, 2026-10-29 — page still exists.
     '/academic/student-lookup',
   ]

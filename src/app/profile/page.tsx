@@ -5,14 +5,15 @@ import { Toast } from '@/components/Toast'
 import { ChangePhotoModal } from '@/components/modals/shared/ChangePhotoModal'
 import { validatePassword } from '@/lib/errorMessages'
 import { AuthError } from '@/lib/api/client'
-import { useMyProfile } from '@/hooks/users/useMyProfile'
+import { useMyProfile, useUpdateMyPhoto } from '@/hooks/users/useMyProfile'
 import { PROFILE_STATUS_ACTIVE, type MyProfile } from '@/lib/api/users/profile'
 import { parseUtcNoZ } from '@/lib/api/finance/discountReport'
 
 // "My Profile" — the signed-in staff user's own account page, reached from
 // the header's profile dropdown (see Header.tsx) on every module. Profile
-// Info is GET /users/employees/me (get-my-profile.md): read-only, nothing
-// on it can be changed here. The Security tab has no API yet — password
+// Info is GET /users/employees/me (get-my-profile.md): read-only except the
+// photo, which PUT /users/employees/me/photo (put-my-photo.md) saves as soon
+// as one is chosen. The Security tab has no API yet — password
 // change and sign-in history are still local-only.
 // Styles are the .mp-* block in globals.css.
 
@@ -277,8 +278,19 @@ export default function ProfilePage() {
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [tab, setTab] = useState<TabId>('info')
 
-  const [photo, setPhoto] = useState<string | null>(null)
   const [photoModalOpen, setPhotoModalOpen] = useState(false)
+  const updatePhoto = useUpdateMyPhoto()
+  // photoUrl is a signed link that expires after ~1 hour. If it fails to
+  // load, GET /me once for a fresh link (once per page view, not a retry
+  // loop); a link that still fails falls back to the initials.
+  const [brokenPhotoUrl, setBrokenPhotoUrl] = useState<string | null>(null)
+  const [photoRefreshed, setPhotoRefreshed] = useState(false)
+  const photoUrl = profile?.photoUrl && profile.photoUrl !== brokenPhotoUrl ? profile.photoUrl : null
+
+  function handlePhotoError() {
+    setBrokenPhotoUrl(profile?.photoUrl ?? null)
+    if (!photoRefreshed) { setPhotoRefreshed(true); profileQuery.refetch() }
+  }
 
   const [currentPw, setCurrentPw] = useState('')
   const [newPw, setNewPw] = useState('')
@@ -294,9 +306,16 @@ export default function ProfilePage() {
 
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 
-  function handlePhoto(dataUrl: string) {
-    setPhoto(dataUrl)
-    showToast('Photo updated', 'ok')
+  // Rejects on failure so the photo modal stays open for another try.
+  function handlePhoto(file: File) {
+    return updatePhoto.mutateAsync(file).then(
+      () => showToast('Photo updated', 'ok'),
+      (err: unknown) => {
+        // validation_error carries the server's own wording (type / size).
+        showToast(profileErrorMessage(err) || 'Couldn’t save your photo. Please try again.', 'err')
+        throw err
+      },
+    )
   }
 
   function handleChangePassword() {
@@ -345,8 +364,8 @@ export default function ProfilePage() {
             <section className="mp-hero" aria-label="Account summary">
               <div className="mp-hero-top">
                 <button type="button" className="mp-avatar" title="Change photo" aria-label="Change profile photo" onClick={() => setPhotoModalOpen(true)}>
-                  {photo
-                    ? <img src={photo} alt="" />
+                  {photoUrl
+                    ? <img src={photoUrl} alt="" onError={handlePhotoError} />
                     : <span>{initials(name) || <i className="lni lni-user"></i>}</span>}
                   <span className="mp-avatar-cam" aria-hidden="true"><i className="lni lni-camera"></i></span>
                 </button>
