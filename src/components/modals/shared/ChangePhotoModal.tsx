@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
+import { PHOTO_MAX_BYTES, PHOTO_TYPES } from '@/lib/api/users/profile'
 
-const MAX_UPLOAD_BYTES = 2 * 1024 * 1024
 // The stage is square, so the saved photo is exactly the framing on screen.
 const CAPTURE_SIZE = 640
 
@@ -11,7 +11,9 @@ interface ChangePhotoModalProps {
   isOpen: boolean
   onClose: () => void
   showToast: (msg: string, type?: string) => void
-  onPhoto: (dataUrl: string) => void
+  // Saves the photo. The modal stays open (showing "Saving…") until it
+  // resolves, and stays open on a rejection so the user can try another.
+  onPhoto: (file: File) => Promise<unknown>
 }
 
 function cameraErrorMessage(err: unknown) {
@@ -26,7 +28,8 @@ export function ChangePhotoModal({ isOpen, onClose, showToast, onPhoto }: Change
   const [step, setStep] = useState<Step>('choose')
   const [cameraError, setCameraError] = useState<string | null>(null)
   const [cameraReady, setCameraReady] = useState(false)
-  const [captured, setCaptured] = useState<string | null>(null)
+  const [captured, setCaptured] = useState<{ file: File; preview: string } | null>(null)
+  const [saving, setSaving] = useState(false)
   // Bumped by Try again, which re-runs the effect below.
   const [cameraAttempt, setCameraAttempt] = useState(0)
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -59,25 +62,35 @@ export function ChangePhotoModal({ isOpen, onClose, showToast, onPhoto }: Change
   if (!isOpen) return null
 
   function handleClose() {
+    if (saving) return
     setStep('choose')
     setCaptured(null)
     setCameraError(null)
     onClose()
   }
 
-  function finish(dataUrl: string) {
-    onPhoto(dataUrl)
-    handleClose()
+  async function finish(file: File) {
+    setSaving(true)
+    try {
+      await onPhoto(file)
+    } catch {
+      setSaving(false)   // the page has already shown the error
+      return
+    }
+    setSaving(false)
+    setStep('choose')
+    setCaptured(null)
+    setCameraError(null)
+    onClose()
   }
 
   function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     e.target.value = ''
     if (!file) return
-    if (file.size > MAX_UPLOAD_BYTES) return showToast('Photo must be under 2 MB.', 'err')
-    const reader = new FileReader()
-    reader.onload = ev => finish(ev.target?.result as string)
-    reader.readAsDataURL(file)
+    if (!PHOTO_TYPES.includes(file.type)) return showToast('Photo must be a JPG or PNG image.', 'err')
+    if (file.size === 0 || file.size > PHOTO_MAX_BYTES) return showToast('Photo must be 2 MB or smaller.', 'err')
+    finish(file)
   }
 
   function capture() {
@@ -92,22 +105,33 @@ export function ChangePhotoModal({ isOpen, onClose, showToast, onPhoto }: Change
       (video.videoWidth - side) / 2, (video.videoHeight - side) / 2, side, side,
       0, 0, CAPTURE_SIZE, CAPTURE_SIZE,
     )
-    setCaptured(canvas.toDataURL('image/jpeg', 0.9))
-    setStep('review')
+    const preview = canvas.toDataURL('image/jpeg', 0.9)
+    canvas.toBlob(blob => {
+      if (!blob) return showToast('The photo couldn’t be captured. Try again.', 'err')
+      setCaptured({ file: new File([blob], 'photo.jpg', { type: 'image/jpeg' }), preview })
+      setStep('review')
+    }, 'image/jpeg', 0.9)
   }
 
-  const uploadInput = <input type="file" accept="image/*" onChange={handleUpload} aria-label="Upload a photo" />
+  const uploadInput = <input type="file" accept="image/jpeg,image/png" onChange={handleUpload} disabled={saving} aria-label="Upload a photo" />
 
   return (
     <div className="modal-overlay open">
       <div className="modal modal-md" role="dialog" aria-modal="true" aria-label="Change profile photo" onClick={e => e.stopPropagation()}>
         <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title"><i className="lni lni-camera"></i> {step === 'choose' ? 'Change Photo' : step === 'camera' ? 'Take Photo' : 'Use This Photo?'}</div>
-          <button className="modal-close" onClick={handleClose} aria-label="Close"><i className="lni lni-close"></i></button>
+          <button className="modal-close" onClick={handleClose} disabled={saving} aria-label="Close"><i className="lni lni-close"></i></button>
         </div>
 
         <div style={{ padding: 20 }}>
-          {step === 'choose' && (
+          {saving && step === 'choose' && (
+            <div className="rpt-empty" role="status" style={{ padding: '24px 0' }}>
+              <i className="lni lni-spinner-arrow spin" aria-hidden="true" />
+              <div className="rpt-empty-title">Saving your photo…</div>
+            </div>
+          )}
+
+          {!saving && step === 'choose' && (
             <div className="mp-photo-sources">
               <button type="button" className="mp-photo-source" onClick={() => setStep('camera')}>
                 <i className="lni lni-camera" aria-hidden="true"></i>
@@ -118,7 +142,7 @@ export function ChangePhotoModal({ isOpen, onClose, showToast, onPhoto }: Change
                 {uploadInput}
                 <i className="lni lni-upload" aria-hidden="true"></i>
                 <span>Upload Photo</span>
-                <small>Image file, up to 2 MB</small>
+                <small>JPG or PNG, up to 2 MB</small>
               </label>
             </div>
           )}
@@ -137,13 +161,13 @@ export function ChangePhotoModal({ isOpen, onClose, showToast, onPhoto }: Change
 
           {step === 'review' && captured && (
             <div className="mp-photo-stage">
-              <img src={captured} alt="Captured profile" />
+              <img src={captured.preview} alt="Captured profile" />
             </div>
           )}
         </div>
 
         <div className="modal-footer">
-          {step === 'choose' && <button className="btn btn-neu flex-1 justify-center" onClick={handleClose}>Cancel</button>}
+          {step === 'choose' && <button className="btn btn-neu flex-1 justify-center" onClick={handleClose} disabled={saving}>Cancel</button>}
 
           {step === 'camera' && (
             <>
@@ -164,8 +188,10 @@ export function ChangePhotoModal({ isOpen, onClose, showToast, onPhoto }: Change
 
           {step === 'review' && captured && (
             <>
-              <button className="btn btn-neu" onClick={() => { setCaptured(null); setStep('camera') }}><i className="lni lni-reload"></i> Retake</button>
-              <button className="btn btn-primary flex-1 justify-center" onClick={() => finish(captured)}><i className="lni lni-checkmark"></i> Use Photo</button>
+              <button className="btn btn-neu" onClick={() => { setCaptured(null); setStep('camera') }} disabled={saving}><i className="lni lni-reload"></i> Retake</button>
+              <button className="btn btn-primary flex-1 justify-center" onClick={() => finish(captured.file)} disabled={saving}>
+                <i className="lni lni-checkmark"></i> {saving ? 'Saving…' : 'Use Photo'}
+              </button>
             </>
           )}
         </div>

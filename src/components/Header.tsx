@@ -55,6 +55,10 @@ export function Header({ panelOpen, setPanelOpen, profileOpen, setProfileOpen, p
   }, [])
 
   const { data: myProfile } = useMyProfile()
+  // An expired photo link falls back to initials; a new link (photo change,
+  // or the profile page fetching a fresh one) gets another chance.
+  const [brokenPhotoUrl, setBrokenPhotoUrl] = useState<string | null>(null)
+  const photoUrl = myProfile?.photoUrl && myProfile.photoUrl !== brokenPhotoUrl ? myProfile.photoUrl : null
 
   const name =
     sessionIdentity?.employeeName ||
@@ -199,7 +203,11 @@ export function Header({ panelOpen, setPanelOpen, profileOpen, setProfileOpen, p
             )}
           </div>
           <div className="hdr-user" ref={profileRef} onClick={() => setProfileOpen(p => !p)}>
-            <div className="hdr-avatar">{initials || <i className="lni lni-user"></i>}</div>
+            <div className="hdr-avatar">
+              {photoUrl
+                ? <img src={photoUrl} alt="" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} onError={() => setBrokenPhotoUrl(photoUrl)} />
+                : initials || <i className="lni lni-user"></i>}
+            </div>
             {name && <span>{name}</span>}
             {profileOpen && (
               <div className="profile-dropdown">

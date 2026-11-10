@@ -1,4 +1,4 @@
-import { apiGet } from '../client'
+import { apiGet, apiPutForm } from '../client'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
@@ -15,6 +15,8 @@ export interface MyProfile {
   surname: string | null
   firstName: string | null
   otherName: string | null
+  // Signed link to the photo; expires after ~1 hour. null = no photo.
+  photoUrl: string | null
   personal: {
     birthDate: string | null
     sex: number | null              // 0 Male, 1 Female
@@ -53,6 +55,7 @@ const MOCK_PROFILE: MyProfile = {
   surname: 'DOE',
   firstName: 'JANE',
   otherName: null,
+  photoUrl: null,
   personal: { birthDate: '1990-01-01T00:00:00', sex: 1, sexName: 'Female', maritalStatus: 1, maritalStatusName: 'Married', placeOfBirth: 'Kampala', countryName: 'Uganda', nationality: 'Ugandan' },
   documents: { nationalId: 'CM90012345678AB', natId: 'NAT-0012' },
   contact: { email: 'jane.doe@isbat.ac.ug', phone: '0700000000' },
@@ -70,4 +73,19 @@ const MOCK_PROFILE: MyProfile = {
 export function getMyProfile(): Promise<MyProfile> {
   if (MOCK_AUTH) return new Promise(resolve => setTimeout(() => resolve(MOCK_PROFILE), 400))
   return apiGet<MyProfile>('/api/v1/users/employees/me')
+}
+
+// PUT /api/v1/users/employees/me/photo (put-my-photo.md) — add or replace the
+// signed-in employee's own photo. multipart `photo`, JPG or PNG up to 2 MB.
+// No Content-Type header is set, so the browser adds the boundary.
+// Errors: validation_error (400, wrong type / too big), employee_required
+// (400), not_found (404), unauthorized (401).
+export const PHOTO_MAX_BYTES = 2 * 1024 * 1024
+export const PHOTO_TYPES = ['image/jpeg', 'image/png']
+
+export function putMyPhoto(photo: File): Promise<{ photoUrl: string }> {
+  if (MOCK_AUTH) return new Promise(resolve => setTimeout(() => resolve({ photoUrl: URL.createObjectURL(photo) }), 400))
+  const fd = new FormData()
+  fd.append('photo', photo)
+  return apiPutForm<{ photoUrl: string }>('/api/v1/users/employees/me/photo', fd)
 }

@@ -20,8 +20,7 @@ import {
 // student service tickets. Any staff member with
 // students.serviceticket.manage sees every ticket in every category, can
 // reassign its category, change its status and write a response. Every save
-// notifies the student in-app and by email. APIs are not deployed yet; the
-// data comes from the mock branch of lib/api/student/serviceTickets.ts.
+// notifies the student in-app and by email. APIs: lib/api/student/serviceTickets.ts.
 
 const PAGE_SIZE = 10
 const MAX_RESPONSE = 5000

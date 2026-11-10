@@ -16870,6 +16870,12 @@ button.sp-link:hover .sp-link-go { color: var(--b700); transform: translateX(3px
    top rule (the header's own bottom border already separates them). */
 .ht-id + .ht-verdict { border-top: none }
 
+/* Hall ticket card shown in a modal — more breathing room than the inline card. */
+.modal.ht-panel .ht-id { padding: 26px 28px 24px; gap: 20px }
+.modal.ht-panel .ht-meta { margin-top: 10px; gap: 6px 28px }
+.modal.ht-panel .ht-verdict { padding: 18px 28px }
+.modal.ht-panel > .ht-body { padding: 20px 28px 22px }
+
 /* ═══════════════════════════════════════
    PAYMENT CONSOLE — 2026-11-02 redesign (Main.dc.html): white student
    header, Fee Breakdown with a coverage bar, Record Payment form. New pcx-
