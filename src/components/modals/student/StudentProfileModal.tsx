@@ -27,7 +27,7 @@ export function StudentProfileModal({ isOpen, onClose, studentGuid }: Props) {
   // applicationSummary.countryGuid matched any row here, so this app has no
   // catalogue that actually resolves that guid — see the comment on
   // `nationality` below for what that means for the fallback chain.
-  const { data: countries } = useCountryDropdown(isOpen)
+  const { data: countries = [] } = useCountryDropdown(isOpen)
 
   if (!isOpen || !studentGuid) return null
 

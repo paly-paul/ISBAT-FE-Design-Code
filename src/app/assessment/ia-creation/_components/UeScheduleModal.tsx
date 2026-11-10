@@ -10,6 +10,7 @@ import { useIaUeSchedule, useUpdateIaUeSchedule } from '@/hooks/assessment/useIa
 import { useExamRules } from '@/hooks/assessment/useExamRules'
 import { SuccessPopup } from '@/components/modals/shared/SuccessPopup'
 import { ExamRuleLookupModal } from './ExamRuleLookupModal'
+import { extractApiErrorMessage } from '@/lib/errorMessages'
 
 interface UeScheduleModalProps {
   isOpen: boolean
@@ -31,6 +32,7 @@ export function UeScheduleModal({ isOpen, onClose, examGuid, unitCode, unitName 
   const permissions = usePagePermissions('/assessment/ia-creation')
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const toastTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const modalBodyRef = useRef<HTMLDivElement | null>(null)
   const [saved, setSaved] = useState(false)
   const showToast = (msg: string, type: string = 'success') => {
     if (toastTimerRef.current) {
@@ -59,8 +61,10 @@ export function UeScheduleModal({ isOpen, onClose, examGuid, unitCode, unitName 
   const [publishStatus, setPublishStatus] = useState<number>(0)
   const [examRuleGuid, setExamRuleGuid] = useState<string>('')
   const [lookupOpen, setLookupOpen] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
 
   function handleExamDateChange(d: string) {
+    setFormError(null)
     const today = getTodayYmd()
     if (d && d < today) {
       showToast('Before date is not possible', 'error')
@@ -107,6 +111,7 @@ export function UeScheduleModal({ isOpen, onClose, examGuid, unitCode, unitName 
       } else {
         setExamRuleGuid('')
       }
+      setFormError(null)
     } else if (!isOpen) {
       // reset form when closed
       setExamDate(getTodayYmd())
@@ -117,30 +122,40 @@ export function UeScheduleModal({ isOpen, onClose, examGuid, unitCode, unitName 
       setUniversityExamType(0)
       setPublishStatus(0)
       setExamRuleGuid('')
+      setFormError(null)
     }
   }, [schedule, isOpen])
 
   async function handleSave() {
     if (!examGuid) return
+    setFormError(null)
 
     // Validation
     if (!examDate || !startTime || !endTime) {
-      showToast('Exam Date and Start/End Times are required', 'error')
+      const msg = 'Exam Date and Start/End Times are required'
+      setFormError(msg)
+      showToast(msg, 'error')
       return
     }
     
     // Check if end time is after start time
     if (!isTimeRangeValid(startTime, endTime)) {
-      showToast('End Time must be after Start Time', 'error')
+      const msg = 'End Time must be after Start Time'
+      setFormError(msg)
+      showToast(msg, 'error')
       return
     }
 
     if (maxMark === '') {
-      showToast('Max Mark is required', 'error')
+      const msg = 'Max Mark is required'
+      setFormError(msg)
+      showToast(msg, 'error')
       return
     }
     if (Number(maxMark) < 0) {
-      showToast('Max Mark cannot be negative', 'error')
+      const msg = 'Max Mark cannot be negative'
+      setFormError(msg)
+      showToast(msg, 'error')
       return
     }
 
@@ -158,15 +173,11 @@ export function UeScheduleModal({ isOpen, onClose, examGuid, unitCode, unitName 
       showToast('University Exam Scheduled successfully')
       setSaved(true)
     } catch (err: any) {
-      const errMsg = (err?.message || '').toLowerCase()
-      if (errMsg.includes('question') || errMsg.includes('paper') || errMsg.includes('qp')) {
-        showToast('Please upload the question paper before scheduling the exam.', 'error')
-      } else if (err.code === 'not_found' || err.message?.includes('404')) {
-        showToast('This University Exam or Exam Rule does not exist.', 'error')
-      } else if (err.code === 'bad_request' || err.code === 'validation_error') {
-        showToast(err.message || 'Validation failed. Check your inputs.', 'error')
-      } else {
-        showToast(err.message || 'Failed to save schedule.', 'error')
+      const errorMsg = extractApiErrorMessage(err, 'Failed to save schedule.')
+      setFormError(errorMsg)
+      showToast(errorMsg, 'error')
+      if (modalBodyRef.current) {
+        modalBodyRef.current.scrollTo({ top: 0, behavior: 'smooth' })
       }
     }
   }
@@ -201,7 +212,7 @@ export function UeScheduleModal({ isOpen, onClose, examGuid, unitCode, unitName 
         </div>
 
         {/* Content */}
-        <div className="p-6 bg-white overflow-y-auto" style={{ maxHeight: 'calc(90vh - 60px)' }}>
+        <div ref={modalBodyRef} className="p-6 bg-white overflow-y-auto" style={{ maxHeight: 'calc(90vh - 60px)' }}>
           <div className={`transition-opacity duration-300 ${isLoading ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
             
             <div className="mb-6 border-b border-slate-200 pb-4">
@@ -218,6 +229,14 @@ export function UeScheduleModal({ isOpen, onClose, examGuid, unitCode, unitName 
                 <span className="font-semibold text-amber-950">Notice:</span> Please ensure the question paper is uploaded before scheduling the exam.
               </div>
             </div>
+
+            {/* Server Error Message from API */}
+            {formError && (
+              <div className="mb-6 p-3.5 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3 text-xs text-red-900 shadow-xs">
+                <i className="lni lni-warning text-red-600 text-base shrink-0 mt-0.5"></i>
+                <div className="leading-relaxed font-medium">{formError}</div>
+              </div>
+            )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Date */}
@@ -350,19 +369,27 @@ export function UeScheduleModal({ isOpen, onClose, examGuid, unitCode, unitName 
             </div>
 
             {/* Footer */}
-            <div className="flex justify-end gap-3 mt-8 pt-6 border-t border-slate-200">
-              <button className="btn btn-neu" onClick={onClose} disabled={updateMut.isPending}>
-                Cancel
-              </button>
-              {(permissions.add || permissions.edit) && (
-              <button
-                className="btn btn-primary"
-                onClick={handleSave}
-                disabled={updateMut.isPending || isLoading}
-              >
-                {updateMut.isPending ? 'Saving...' : 'Save Schedule'}
-              </button>
+            <div className="mt-8 pt-6 border-t border-slate-200">
+              {formError && (
+                <div className="mb-4 p-3.5 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3 text-xs text-red-900 shadow-xs">
+                  <i className="lni lni-warning text-red-600 text-base shrink-0 mt-0.5"></i>
+                  <div className="leading-relaxed font-semibold">{formError}</div>
+                </div>
               )}
+              <div className="flex justify-end gap-3">
+                <button className="btn btn-neu" onClick={onClose} disabled={updateMut.isPending}>
+                  Cancel
+                </button>
+                {(permissions.add || permissions.edit) && (
+                <button
+                  className="btn btn-primary"
+                  onClick={handleSave}
+                  disabled={updateMut.isPending || isLoading}
+                >
+                  {updateMut.isPending ? 'Saving...' : 'Save Schedule'}
+                </button>
+                )}
+              </div>
             </div>
           </div>
         </div>

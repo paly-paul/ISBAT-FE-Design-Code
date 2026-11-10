@@ -10,6 +10,7 @@ import { useIaTestSchedule, useUpdateIaTestSchedule } from '@/hooks/assessment/u
 import { useExamRules } from '@/hooks/assessment/useExamRules'
 import { SuccessPopup } from '@/components/modals/shared/SuccessPopup'
 import { ExamRuleLookupModal } from './ExamRuleLookupModal'
+import { extractApiErrorMessage } from '@/lib/errorMessages'
 
 interface CbtScheduleModalProps {
   isOpen: boolean
@@ -31,6 +32,7 @@ export function CbtScheduleModal({ isOpen, onClose, testGuid, unitCode, unitName
   const permissions = usePagePermissions('/assessment/ia-creation')
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const toastTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const modalBodyRef = useRef<HTMLDivElement | null>(null)
   const [saved, setSaved] = useState(false)
   const showToast = (msg: string, type: string = 'success') => {
     if (toastTimerRef.current) {
@@ -60,8 +62,10 @@ export function CbtScheduleModal({ isOpen, onClose, testGuid, unitCode, unitName
   const [publishStatus, setPublishStatus] = useState<number>(0)
   const [examRuleGuid, setExamRuleGuid] = useState<string>('')
   const [lookupOpen, setLookupOpen] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
 
   function handleStartDateChange(d: string) {
+    setFormError(null)
     const today = getTodayYmd()
     if (d && d < today) {
       showToast('Before date is not possible', 'error')
@@ -149,21 +153,28 @@ export function CbtScheduleModal({ isOpen, onClose, testGuid, unitCode, unitName
 
   async function handleSave() {
     if (!testGuid) return
+    setFormError(null)
 
     // Validation
     if (!startDate || !startTime || !endDate || !endTime) {
-      showToast('Start and End Date/Time are required', 'error')
+      const msg = 'Start and End Date/Time are required'
+      setFormError(msg)
+      showToast(msg, 'error')
       return
     }
     const startDt = new Date(`${startDate}T${startTime}`)
     const endDt = new Date(`${endDate}T${endTime}`)
     
     if (endDt <= startDt) {
-      showToast('End Date/Time must be after Start Date/Time', 'error')
+      const msg = 'End Date/Time must be after Start Date/Time'
+      setFormError(msg)
+      showToast(msg, 'error')
       return
     }
     if (duration === '' || duration <= 0) {
-      showToast('Duration must be greater than 0', 'error')
+      const msg = 'Duration must be greater than 0'
+      setFormError(msg)
+      showToast(msg, 'error')
       return
     }
     const effectiveMaxMark = typeof maxMark === 'number' && maxMark > 0 ? maxMark : (schedule?.maxMark && schedule.maxMark > 0 ? schedule.maxMark : 15)
@@ -181,15 +192,11 @@ export function CbtScheduleModal({ isOpen, onClose, testGuid, unitCode, unitName
       showToast('CBT Scheduled successfully')
       setSaved(true)
     } catch (err: any) {
-      const errMsg = (err?.message || '').toLowerCase()
-      if (errMsg.includes('question') || errMsg.includes('paper') || errMsg.includes('qp')) {
-        showToast('Please upload the question paper before scheduling the exam.', 'error')
-      } else if (err.code === 'not_found' || err.message?.includes('404')) {
-        showToast('This Class Test or Exam Rule does not exist.', 'error')
-      } else if (err.code === 'bad_request' || err.code === 'validation_error') {
-        showToast(err.message || 'Validation failed. Check your inputs.', 'error')
-      } else {
-        showToast(err.message || 'Failed to save schedule.', 'error')
+      const errorMsg = extractApiErrorMessage(err, 'Failed to save schedule.')
+      setFormError(errorMsg)
+      showToast(errorMsg, 'error')
+      if (modalBodyRef.current) {
+        modalBodyRef.current.scrollTo({ top: 0, behavior: 'smooth' })
       }
     }
   }
@@ -224,7 +231,7 @@ export function CbtScheduleModal({ isOpen, onClose, testGuid, unitCode, unitName
         </div>
 
         {/* Content */}
-        <div className="p-6 bg-white overflow-y-auto" style={{ maxHeight: 'calc(90vh - 60px)' }}>
+        <div ref={modalBodyRef} className="p-6 bg-white overflow-y-auto" style={{ maxHeight: 'calc(90vh - 60px)' }}>
           <div className={`transition-opacity duration-300 ${isLoading ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
             
             <div className="mb-6 border-b border-slate-200 pb-4">
@@ -241,6 +248,14 @@ export function CbtScheduleModal({ isOpen, onClose, testGuid, unitCode, unitName
                 <span className="font-semibold text-amber-950">Notice:</span> Please ensure the question paper is uploaded before scheduling the exam.
               </div>
             </div>
+
+            {/* Server Error Message from API */}
+            {formError && (
+              <div className="mb-6 p-3.5 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3 text-xs text-red-900 shadow-xs">
+                <i className="lni lni-warning text-red-600 text-base shrink-0 mt-0.5"></i>
+                <div className="leading-relaxed font-medium">{formError}</div>
+              </div>
+            )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Dates */}
@@ -375,19 +390,27 @@ export function CbtScheduleModal({ isOpen, onClose, testGuid, unitCode, unitName
             </div>
 
             {/* Footer */}
-            <div className="flex justify-end gap-3 mt-6 pt-6 border-t border-slate-200">
-              <button className="btn btn-neu" onClick={onClose} disabled={updateMut.isPending}>
-                Cancel
-              </button>
-              {(permissions.add || permissions.edit) && (
-              <button
-                className="btn btn-primary"
-                onClick={handleSave}
-                disabled={updateMut.isPending || isLoading}
-              >
-                {updateMut.isPending ? 'Saving...' : 'Save Schedule'}
-              </button>
+            <div className="mt-6 pt-6 border-t border-slate-200">
+              {formError && (
+                <div className="mb-4 p-3.5 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3 text-xs text-red-900 shadow-xs">
+                  <i className="lni lni-warning text-red-600 text-base shrink-0 mt-0.5"></i>
+                  <div className="leading-relaxed font-semibold">{formError}</div>
+                </div>
               )}
+              <div className="flex justify-end gap-3">
+                <button className="btn btn-neu" onClick={onClose} disabled={updateMut.isPending}>
+                  Cancel
+                </button>
+                {(permissions.add || permissions.edit) && (
+                <button
+                  className="btn btn-primary"
+                  onClick={handleSave}
+                  disabled={updateMut.isPending || isLoading}
+                >
+                  {updateMut.isPending ? 'Saving...' : 'Save Schedule'}
+                </button>
+                )}
+              </div>
             </div>
           </div>
         </div>

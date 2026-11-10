@@ -72,3 +72,55 @@ export function validatePassword(pw: string): string | null {
   // if (!/[^a-zA-Z0-9]/.test(pw)) return 'Password must contain at least one special character.'
   return null
 }
+
+/**
+ * Extracts the actual error message from API responses (handles ApiEnvelope errors[],
+ * AuthError, field errors map, nested response payloads).
+ */
+export function extractApiErrorMessage(err: unknown, fallback = 'An unexpected error occurred.'): string {
+  if (!err) return fallback
+  if (typeof err === 'string' && err.trim()) return err.trim()
+  const e = err as any
+
+  // 1. Array of error strings in err.errors (AuthError.errors or ApiEnvelope.errors)
+  if (Array.isArray(e.errors) && e.errors.length > 0) {
+    const valid = e.errors.filter(Boolean)
+    if (valid.length > 0) return valid.join(' ')
+  }
+
+  // 2. Nested response payload (e.response.data.errors / e.data.errors / e.response.data.message)
+  const resData = e.response?.data || e.data
+  if (resData) {
+    if (Array.isArray(resData.errors) && resData.errors.length > 0) {
+      const valid = resData.errors.filter(Boolean)
+      if (valid.length > 0) return valid.join(' ')
+    }
+    if (resData.errors && typeof resData.errors === 'object' && !Array.isArray(resData.errors)) {
+      const msgs = Object.values(resData.errors).flat().filter(Boolean)
+      if (msgs.length > 0) return (msgs as string[]).join(' ')
+    }
+    if (typeof resData.message === 'string' && resData.message.trim()) {
+      return resData.message.trim()
+    }
+  }
+
+  // 3. Object of field errors: { [field]: string[] }
+  if (e.errors && typeof e.errors === 'object' && !Array.isArray(e.errors)) {
+    const msgs = Object.values(e.errors).flat().filter(Boolean)
+    if (msgs.length > 0) return (msgs as string[]).join(' ')
+  }
+
+  // 4. e.message from Error or AuthError
+  if (
+    typeof e.message === 'string' &&
+    e.message.trim() &&
+    e.message !== 'bad_request' &&
+    e.message !== 'validation_error' &&
+    e.message !== 'unknown'
+  ) {
+    return e.message.trim()
+  }
+
+  return fallback
+}
+

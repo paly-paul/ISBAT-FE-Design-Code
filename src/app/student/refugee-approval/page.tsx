@@ -83,7 +83,6 @@ function RefugeeApprovalContent() {
   // Picked from the list, or deep-linked as ?studentGuid=<guid>.
   const [selectedGuid, setSelectedGuid] = useState<string | null>(() => searchParams.get('studentGuid'))
   const [selectedRow, setSelectedRow] = useState<PendingRefugeeApprovalRow | null>(null)
-  const { countries } = useCountriesByGuids([...requests.map(r => r.countryGuid ?? ''), selectedRow?.countryGuid ?? ''])
   const { data: detail, isLoading: detailLoading, isError: detailError } = useStudentRefugeeDetails(selectedGuid, true)
   const approve = useApproveRefugeeStatus()
   const [docPreviewOpen, setDocPreviewOpen] = useState(false)

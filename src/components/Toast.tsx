@@ -33,7 +33,7 @@ export function Toast({ toast, onClose }: ToastProps) {
   return (
     <div className={`toast${normalizedType ? ' toast-' + normalizedType : ''} show`}>
       {icon && <i className={`lni ${icon}`} style={{ fontSize: 18, flexShrink: 0 }} />}
-      <span style={{ flex: 1 }}>{toast.msg}</span>
+      <span style={{ flex: 1, wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>{toast.msg}</span>
       {onClose && (
         <button
           type="button"

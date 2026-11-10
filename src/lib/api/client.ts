@@ -231,7 +231,7 @@ interface ApiEnvelope<T> {
 function extractErrorInfo(envelope: unknown): { code: string; message?: string } {
   const e = envelope as (Partial<ApiEnvelope<unknown>> & { title?: string; errors?: unknown }) | null
   if (!e) return { code: 'unknown' }
-  if (e.code) return { code: e.code, message: (Array.isArray(e.errors) ? e.errors[0] : undefined) ?? e.message ?? undefined }
+  if (e.code) return { code: e.code, message: (Array.isArray(e.errors) ? (e.errors as string[]).filter(Boolean).join(' ') : undefined) ?? e.message ?? undefined }
   if (e.errors && !Array.isArray(e.errors) && typeof e.errors === 'object') {
     const fieldErrors = e.errors as Record<string, string[]>
     const firstField = Object.keys(fieldErrors)[0]
@@ -240,7 +240,7 @@ function extractErrorInfo(envelope: unknown): { code: string; message?: string }
   // An app envelope with a null `code` but a populated errors[]/message
   // (seen on a 400 from announcements create) — surface that text rather
   // than a bare 'unknown'.
-  return { code: 'unknown', message: (Array.isArray(e.errors) ? e.errors[0] : undefined) ?? e.message ?? e.title ?? undefined }
+  return { code: 'unknown', message: (Array.isArray(e.errors) ? (e.errors as string[]).filter(Boolean).join(' ') : undefined) ?? e.message ?? e.title ?? undefined }
 }
 
 export async function apiPost<T>(path: string, body: unknown): Promise<T> {
