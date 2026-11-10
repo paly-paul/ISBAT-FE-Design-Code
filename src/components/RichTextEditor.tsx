@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useRef, useEffect, useState, useCallback } from 'react'
+import { EquationDialog, SymbolPalette, equationHtml } from './MathTools'
 
 export interface RichTextEditorProps {
   value: string
@@ -45,6 +46,8 @@ export function isHtmlEmpty(html: string | null | undefined): boolean {
 export function stripHtmlTags(str: string | null | undefined): string {
   if (!str) return ''
   let cleaned = str
+    // An equation's MathML also carries its LaTeX source; keep only the drawn text.
+    .replace(/<annotation[\s\S]*?<\/annotation>/gi, '')
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<\/p>/gi, '\n')
     .replace(/<\/div>/gi, '\n')
@@ -82,6 +85,23 @@ export function stripHtmlTags(str: string | null | undefined): string {
     .trim()
 }
 
+// Text-alignment icons, drawn here: the LineIcons 4.0 free font draws nothing
+// for lni-text-align-left / -center / -right, though its CSS lists them.
+const ALIGN_LINES: Record<'left' | 'center' | 'right' | 'justify', [number, number][]> = {
+  left: [[2, 14], [2, 10], [2, 14], [2, 8]],
+  center: [[2, 14], [4, 12], [2, 14], [5, 11]],
+  right: [[2, 14], [6, 14], [2, 14], [8, 14]],
+  justify: [[2, 14], [2, 14], [2, 14], [2, 14]],
+}
+
+function AlignIcon({ align }: { align: keyof typeof ALIGN_LINES }) {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden="true">
+      {ALIGN_LINES[align].map(([x1, x2], i) => <line key={i} x1={x1} x2={x2} y1={3 + i * 3.4} y2={3 + i * 3.4} />)}
+    </svg>
+  )
+}
+
 /**
  * Converts legacy plain-text newlines to HTML breaks if no HTML tags are present
  */
@@ -102,6 +122,88 @@ export function RichTextEditor({
   const editorRef = useRef<HTMLDivElement>(null)
   const isFocusedRef = useRef(false)
   const [isEmpty, setIsEmpty] = useState(() => isHtmlEmpty(value))
+
+  // ── Maths tools ──
+  const [symbolsOpen, setSymbolsOpen] = useState(false)
+  // Equation dialog. When editing an equation already in the text, its element
+  // is held in editNodeRef (a DOM node, so a ref rather than state).
+  const [eqDialog, setEqDialog] = useState<{ editing: boolean; latex: string; display: boolean } | null>(null)
+  const editNodeRef = useRef<HTMLElement | null>(null)
+  // The dialog takes focus away from the editor, so the caret is saved first
+  // and restored before the equation goes in.
+  const savedRangeRef = useRef<Range | null>(null)
+
+  function saveCaret() {
+    const sel = window.getSelection()
+    if (sel && sel.rangeCount > 0 && editorRef.current?.contains(sel.getRangeAt(0).commonAncestorContainer)) {
+      savedRangeRef.current = sel.getRangeAt(0).cloneRange()
+    } else {
+      savedRangeRef.current = null
+    }
+  }
+
+  function restoreCaret() {
+    const editor = editorRef.current
+    if (!editor) return
+    editor.focus()
+    const sel = window.getSelection()
+    if (!sel) return
+    sel.removeAllRanges()
+    const saved = savedRangeRef.current
+    if (saved && editor.contains(saved.commonAncestorContainer)) {
+      sel.addRange(saved)
+    } else {
+      // No caret in the editor yet: add at the end.
+      const end = document.createRange()
+      end.selectNodeContents(editor)
+      end.collapse(false)
+      sel.addRange(end)
+    }
+  }
+
+  function openNewEquation() {
+    if (disabled) return
+    saveCaret()
+    editNodeRef.current = null
+    setEqDialog({ editing: false, latex: '', display: false })
+  }
+
+  function saveEquation(latex: string, display: boolean) {
+    setEqDialog(null)
+    let html: string
+    try { html = equationHtml(latex, display) } catch { return }
+    const node = editNodeRef.current
+    editNodeRef.current = null
+    if (node && editorRef.current?.contains(node)) {
+      node.outerHTML = html
+      handleInput()
+      return
+    }
+    restoreCaret()
+    // insertHTML keeps the browser's undo history; the trailing space gives the
+    // caret somewhere to go after the non-editable equation.
+    executeCommand('insertHTML', `${html}&nbsp;`)
+  }
+
+  function removeEquation() {
+    const node = editNodeRef.current
+    editNodeRef.current = null
+    setEqDialog(null)
+    if (node && editorRef.current?.contains(node)) {
+      node.remove()
+      handleInput()
+    }
+  }
+
+  // A click on an equation in the text opens it for editing.
+  function handleEditorClick(e: React.MouseEvent<HTMLDivElement>) {
+    if (disabled) return
+    const node = (e.target as HTMLElement).closest?.('.rte-math') as HTMLElement | null
+    if (!node || !editorRef.current?.contains(node)) return
+    e.preventDefault()
+    editNodeRef.current = node
+    setEqDialog({ editing: true, latex: node.dataset.latex ?? '', display: node.dataset.display === '1' })
+  }
 
   const [activeFormats, setActiveFormats] = useState<FormatState>({
     bold: false,
@@ -235,7 +337,8 @@ export function RichTextEditor({
       `}</style>
 
       {/* ── Rich Text Toolbar ────────────────────────────────────────────── */}
-      <div className="flex flex-wrap items-center gap-0.5 px-2 py-1.5 bg-slate-100/90 border-b border-slate-200 select-none">
+      <div className="rte-tb px-2 py-1.5 bg-slate-100/90 border-b border-slate-200 select-none" role="toolbar" aria-label="Formatting">
+        <div className="rte-tb-group">
         {/* Undo / Redo */}
         <button
           type="button"
@@ -260,7 +363,8 @@ export function RichTextEditor({
           <i className="lni lni-forward text-xs"></i>
         </button>
 
-        <div className="w-[1px] h-4 bg-slate-300 mx-1"></div>
+        </div>
+        <div className="rte-tb-group">
 
         {/* Bold */}
         <button
@@ -330,7 +434,8 @@ export function RichTextEditor({
           <span>S</span>
         </button>
 
-        <div className="w-[1px] h-4 bg-slate-300 mx-1"></div>
+        </div>
+        <div className="rte-tb-group">
 
         {/* Subscript x₂ */}
         <button
@@ -366,7 +471,36 @@ export function RichTextEditor({
           x<sup>2</sup>
         </button>
 
-        <div className="w-[1px] h-4 bg-slate-300 mx-1"></div>
+        </div>
+        <div className="rte-tb-group">
+
+        {/* Maths: symbol palette + equation builder */}
+        <button
+          type="button"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => setSymbolsOpen(o => !o)}
+          aria-expanded={symbolsOpen}
+          className={`px-1.5 h-7 rounded text-[11px] font-medium flex items-center gap-1 transition-all ${
+            symbolsOpen
+              ? 'bg-purple-200 text-purple-950 font-bold border border-purple-400 shadow-inner'
+              : 'hover:bg-slate-200 text-slate-700'
+          }`}
+          title="Maths & science symbols"
+        >
+          <span className="font-serif text-[13px] leading-none" aria-hidden="true">Ω</span> Symbols
+        </button>
+        <button
+          type="button"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={openNewEquation}
+          className="px-1.5 h-7 rounded text-[11px] font-medium flex items-center gap-1 hover:bg-slate-200 text-slate-700 transition-colors"
+          title="Insert an equation: fractions, roots, derivatives, integrals, matrices…"
+        >
+          <span className="font-serif italic text-[13px] leading-none" aria-hidden="true">f(x)</span> Equation
+        </button>
+
+        </div>
+        <div className="rte-tb-group">
 
         {/* Alignment */}
         <button
@@ -382,7 +516,7 @@ export function RichTextEditor({
           }`}
           title="Align Left"
         >
-          <i className="lni lni-align-left text-xs"></i>
+          <AlignIcon align="left" />
         </button>
         <button
           type="button"
@@ -397,7 +531,7 @@ export function RichTextEditor({
           }`}
           title="Align Center"
         >
-          <i className="lni lni-align-center text-xs"></i>
+          <AlignIcon align="center" />
         </button>
         <button
           type="button"
@@ -412,7 +546,7 @@ export function RichTextEditor({
           }`}
           title="Align Right"
         >
-          <i className="lni lni-align-right text-xs"></i>
+          <AlignIcon align="right" />
         </button>
         <button
           type="button"
@@ -427,10 +561,11 @@ export function RichTextEditor({
           }`}
           title="Justify"
         >
-          <span className="text-[11px] font-bold leading-none tracking-tight">≡</span>
+          <AlignIcon align="justify" />
         </button>
 
-        <div className="w-[1px] h-4 bg-slate-300 mx-1"></div>
+        </div>
+        <div className="rte-tb-group">
 
         {/* Bulleted List */}
         <button
@@ -490,7 +625,8 @@ export function RichTextEditor({
           <i className="lni lni-indent-increase text-xs"></i>
         </button>
 
-        <div className="w-[1px] h-4 bg-slate-300 mx-1"></div>
+        </div>
+        <div className="rte-tb-group">
 
         {/* Clear Formatting */}
         <button
@@ -505,8 +641,10 @@ export function RichTextEditor({
           <i className="lni lni-eraser text-xs"></i>
         </button>
 
-        {/* ── Right side controls matching Image 2: Font & Size ────────── */}
-        <div className="ml-auto flex items-center gap-1.5 pl-2">
+        </div>
+
+        {/* Font & Size */}
+        <div className="rte-tb-group rte-tb-fonts">
           {/* Font Family Dropdown */}
           <div className="flex items-center gap-1">
             <span className="text-[11px] text-slate-500 font-medium hidden sm:inline">Font</span>
@@ -551,6 +689,8 @@ export function RichTextEditor({
         </div>
       </div>
 
+      {symbolsOpen && <SymbolPalette onInsert={(text) => executeCommand('insertText', text)} />}
+
       {/* ── ContentEditable Editor Area ──────────────────────────────────── */}
       <div className="relative">
         {isEmpty && (
@@ -575,6 +715,7 @@ export function RichTextEditor({
             handleInput()
           }}
           onInput={handleInput}
+          onClick={handleEditorClick}
           onKeyUp={updateActiveFormats}
           onMouseUp={updateActiveFormats}
           style={{
@@ -585,6 +726,15 @@ export function RichTextEditor({
           className="p-3 text-xs text-slate-800 leading-relaxed overflow-y-auto focus:outline-hidden rich-editor-content cursor-text"
         />
       </div>
+
+      {eqDialog && (
+        <EquationDialog
+          initial={eqDialog.editing ? { latex: eqDialog.latex, display: eqDialog.display } : null}
+          onSave={saveEquation}
+          onRemove={removeEquation}
+          onClose={() => { editNodeRef.current = null; setEqDialog(null) }}
+        />
+      )}
     </div>
   )
 }

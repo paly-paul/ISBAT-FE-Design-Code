@@ -1774,7 +1774,7 @@ export default function PaymentConsolePage() {
                       <>
                       <ScrollTable className="no-sticky-col">
                         <table>
-                          <thead><tr><th style={{ width: 40 }}></th><th>Payment Code</th><th>Date</th><th>Category</th><th>Amount</th><th>Cur.</th><th>Method</th></tr></thead>
+                          <thead><tr><th style={{ width: 40 }}></th><th>Payment Code</th><th>Receipt No.</th><th>Date</th><th>Category</th><th>Amount</th><th>Cur.</th><th>Method</th></tr></thead>
                           <tbody>
                             {pagedPaymentHistory.map(h => {
                               // put-payment.md rejects editing an advance-funded
@@ -1784,8 +1784,17 @@ export default function PaymentConsolePage() {
                               // disabled with the same explanation as its title.
                               const isAdvanceFunded = advanceByPayment.get(h.paymentGuid) === true
                               return (
-                              <tr key={h.paymentGuid}>
-                                <td>
+                              // The whole row opens View; the Actions cell stops
+                              // its own clicks so the menu doesn't also open it.
+                              <tr
+                                key={h.paymentGuid}
+                                className="pc-hist-row"
+                                tabIndex={0}
+                                title="View payment details"
+                                onClick={() => setViewEntry(h)}
+                                onKeyDown={e => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); setViewEntry(h) } }}
+                              >
+                                <td onClick={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()}>
                                   <ActionMenu>
                                     <button className="btn btn-neu btn-sm" onClick={() => setViewEntry(h)}>
                                       <i className="lni lni-eye"></i> View
@@ -1809,6 +1818,10 @@ export default function PaymentConsolePage() {
                                   </ActionMenu>
                                 </td>
                                 <td className="font-mono whitespace-nowrap">{h.paymentCode ?? '—'}</td>
+                                <td className="whitespace-nowrap">
+                                  <span className="font-mono">{h.receipt ?? '—'}</span>
+                                  {h.bookCode && <span className="text-g400" style={{ display: 'block', fontSize: 11 }}>Book {h.bookCode}</span>}
+                                </td>
                                 <td>{h.payDate.slice(0, 10)}</td>
                                 <td>{PAYMENT_CATEGORY_LABELS[h.category] ?? `Category ${h.category}`}</td>
                                 <td className="text-green font-bold">{h.amount.toLocaleString()}</td>
@@ -1839,7 +1852,7 @@ export default function PaymentConsolePage() {
                       <>
                       <ScrollTable className="no-sticky-col">
                         <table>
-                          <thead><tr><th style={{ width: 40 }}></th><th>Payment Code</th><th>Date</th><th>Ledger</th><th>Amount</th><th>Cur.</th><th>Method</th></tr></thead>
+                          <thead><tr><th style={{ width: 40 }}></th><th>Payment Code</th><th>Receipt No.</th><th>Date</th><th>Ledger</th><th>Amount</th><th>Cur.</th><th>Method</th></tr></thead>
                           <tbody>
                             {otherHistoryItems.map(h => (
                               <tr key={h.paymentOtherGuid}>
@@ -1856,6 +1869,8 @@ export default function PaymentConsolePage() {
                                   </ActionMenu>
                                 </td>
                                 <td className="font-mono whitespace-nowrap">{h.paymentCode ?? '—'}</td>
+                                {/* No receipt when the payment drew down an advance deposit. */}
+                                <td className="font-mono whitespace-nowrap" title={h.receipt ? undefined : h.advance === 1 ? 'Paid from an advance deposit — no new receipt' : undefined}>{h.receipt ?? '—'}</td>
                                 <td>{h.payDate.slice(0, 10)}</td>
                                 <td>
                                   {/* One line per ledger — a payment can cover several

@@ -74,6 +74,8 @@ export interface StudentDetailDto extends StudentDto {
   joinedIntake?: string | null
   joinedDate?: string | null
   feeStructure?: string | null
+  // Display name of how the student was admitted, e.g. "Lateral Entry Student".
+  registrationType?: string | null
   // A third live shape, confirmed against students/students/get-student-by-guid.md
   // (2026-08-17 doc) — that response has no top-level nationalityGuid at all;
   // the actual country identifier lives here instead, nested under the
@@ -230,6 +232,7 @@ export function getStudentByGuid(guid: string): Promise<StudentDetailDto> {
       faculty: 'Faculty of Computing', campus: 'ISBAT University - Main Campus',
       email: 'student@example.com', phone: '+256700000000',
       nationalityGuid: null, nationality: 'Ugandan', nationalityCode: 'UG', gender: 'Female', sponsor: null, learningMode: 'Campus Mode', joinedIntake: '20241',
+      registrationType: 'Regular Student',
     })
   }
   return apiGet<StudentDetailDto>(`/api/v1/students/${guid}`)

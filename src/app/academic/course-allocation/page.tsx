@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Toast } from '@/components/Toast'
 import { SuccessPopup } from '@/components/modals/shared/SuccessPopup'
 import { ScrollTable } from '@/components/ScrollTable'
@@ -138,7 +138,9 @@ export default function CourseAllocationPage() {
   }
 
   const [viewRow, setViewRow] = useState<ProgramPlanningDto | null>(null)
-  const formRef = useRef<HTMLDivElement>(null)
+  // The Allocate / Edit form lives in a modal, opened from the page header
+  // (Allocate) or a row's Edit.
+  const [formOpen, setFormOpen] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<ProgramPlanningDto | null>(null)
 
   // Same "swap to SuccessPopup on save" pattern used across the rest of the
@@ -210,9 +212,10 @@ export default function CourseAllocationPage() {
     return null
   }
 
-  // Edit loads the row into the form above (same pickers as Allocate) and
-  // the primary button becomes Update; Cancel edit puts it back.
+  // Edit loads the row into the form modal (same pickers as Allocate) and
+  // the primary button becomes Update; Cancel edit closes it.
   function startEdit(r: ProgramPlanningDto) {
+    setFormOpen(true)
     setEditingRow(r)
     setUnits([])
     setIntakeGuid(r.intakeGuid)
@@ -223,7 +226,11 @@ export default function CourseAllocationPage() {
     setCourseUnit({ value: r.unitGuid, code: r.courseUnitCode ?? '', name: r.courseUnitName ?? '', credits: 0 })
     setLoad(r.load != null ? String(r.load) : '')
     setErrors({})
-    formRef.current?.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' })
+  }
+
+  function openAllocate() {
+    if (editingRow) handleCancel()
+    setFormOpen(true)
   }
 
   function handleUpdate() {
@@ -264,10 +271,11 @@ export default function CourseAllocationPage() {
       {
         onSuccess: () => {
           setSaved({ title: units.length === 1 ? 'Course Unit Allocated!' : 'Course Units Allocated!', subtitle: `${lecturerLabel} has been allocated to ${unitsLabel}.` })
-          // Academic Session/Term/School stay picked — a support staff
-          // member typically allocates several lecturers/course units in a
-          // row for the same session/term/school, so only the
-          // per-allocation fields reset. Cancel below clears everything.
+          // The modal closes, but Academic Session/Term/School stay picked
+          // for the next Allocate — support staff typically allocate several
+          // lecturers in a row for the same session/term/school, so only the
+          // per-allocation fields reset. Cancel clears everything.
+          setFormOpen(false)
           setLecturerGuid('')
           setUnits([])
           setErrors({})
@@ -286,6 +294,7 @@ export default function CourseAllocationPage() {
   }
 
   function handleCancel() {
+    setFormOpen(false)
     setEditingRow(null)
     setIntakeGuid('')
     setTerm('')
@@ -317,20 +326,31 @@ export default function CourseAllocationPage() {
           <div className="pg-title">Course Allocation</div>
           <div className="pg-sub">Assign a lecturer to course units for a session, school &amp; term</div>
         </div>
+        {permissions.add && (
+          <button className="btn btn-primary" onClick={openAllocate}><i className="lni lni-plus"></i> Allocate Lecturer</button>
+        )}
       </div>
 
-      <div className="card" ref={formRef} style={editingRow ? { borderColor: 'var(--b300, var(--b200))', boxShadow: '0 0 0 3px var(--b50)' } : undefined}>
-        <div className="card-hdr">
-          <div className="card-title">
-            <span className="ctitle-icon"><i className={`lni ${editingRow ? 'lni-pencil' : 'lni-agenda'}`}></i></span>
-            {editingRow ? 'Edit Allocation' : 'Allocate Lecturer'}
+      {/* Allocate / Edit form — same modal shell as View Allocation below.
+          Overlay clicks don't close it (app-wide rule); ✕ and Cancel do, and
+          so does a successful Allocate / Update. */}
+      {formOpen && (
+      <div className="modal-overlay open">
+      <div className="modal modal-lg modal-flex" style={{ height: 'auto', maxHeight: '90vh' }} role="dialog" aria-modal="true" aria-labelledby="ca-form-title" onClick={e => e.stopPropagation()}>
+        <div className="modal-hdr modal-hdr-blue">
+          <div className="modal-title" id="ca-form-title">
+            <i className={`lni ${editingRow ? 'lni-pencil' : 'lni-agenda'}`}></i> {editingRow ? 'Edit Allocation' : 'Allocate Lecturer'}
           </div>
-          {editingRow && (
+          <button className="modal-close" onClick={handleCancel} aria-label="Close"><i className="lni lni-close"></i></button>
+        </div>
+        <div className="modal-scroll">
+        {editingRow && (
+          <div style={{ marginBottom: 14 }}>
             <span className="badge badge-blue">
               Editing: {editingRow.employeeName ?? 'Lecturer'} · <span className="font-mono">{editingRow.courseUnitCode ?? ''}</span>
             </span>
-          )}
-        </div>
+          </div>
+        )}
         <div className="g2">
           <div className="fg">
             <div className="lbl">Academic Session <span className="req">*</span></div>
@@ -480,7 +500,8 @@ export default function CourseAllocationPage() {
             )}
           </div>
         )}
-        <div className="flex gap-[10px] justify-end mt-2">
+        </div>
+        <div className="modal-footer">
           <button className="btn btn-neu" onClick={handleCancel}><i className="lni lni-close"></i> {editingRow ? 'Cancel Edit' : 'Cancel'}</button>
           {editingRow ? (
             permissions.edit && (
@@ -497,6 +518,8 @@ export default function CourseAllocationPage() {
           )}
         </div>
       </div>
+      </div>
+      )}
 
       <div className="card">
         <div className="card-hdr">

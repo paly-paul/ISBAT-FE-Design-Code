@@ -17674,3 +17674,88 @@ button.sp-link:hover .sp-link-go { color: var(--b700); transform: translateX(3px
   .cau-name { grid-column: 1 / 3; }
   .cau-remove { grid-column: 3; grid-row: 1; }
 }
+
+/* ═══════════════════════════════════════
+   MATHS IN QUESTIONS — RichTextEditor's symbol palette + equation builder
+   (MathTools.tsx). Equations are stored as native MathML inside
+   span.rte-math, so the .rte-math rules also style saved questions wherever
+   RichTextDisplay shows them.
+   ═══════════════════════════════════════ */
+/* Exam text is small (the editor is 12px), so equations run larger than the
+   words around them, and inline ones use display style (math-style: normal)
+   so fractions, limits and integrals stay full size instead of shrinking to fit
+   the line. */
+.rte-math { display: inline-block; vertical-align: middle; margin: 2px 2px; font-size: 1.4em; line-height: 1.3; }
+.rte-math math { font-family: 'Cambria Math', 'STIX Two Math', 'Latin Modern Math', math, serif; math-style: normal; }
+.rte-math-block { display: block; margin: 8px 0; text-align: center; }
+[contenteditable="true"] .rte-math { cursor: pointer; border-radius: 4px; padding: 1px 3px; transition: background var(--tr), box-shadow var(--tr); }
+[contenteditable="true"] .rte-math:hover { background: var(--b50); box-shadow: inset 0 0 0 1px var(--b200); }
+
+/* Editor toolbar: buttons sit in groups that wrap as whole units, so a narrow
+   editor breaks between groups (undo · text style · sub/sup · maths · align ·
+   lists · clear · font) rather than mid-group. Space separates the groups;
+   divider lines would be stranded at the end of a wrapped row. */
+.rte-tb { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; }
+.rte-tb-group { display: flex; align-items: center; gap: 2px; }
+.rte-tb-fonts { gap: 8px; }
+
+/* Symbol palette: a panel under the editor toolbar. */
+.rte-sym { border-bottom: 1px solid #e2e8f0; background: #fff; padding: 6px 8px 8px; }
+.rte-sym-tabs { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: thin; margin-bottom: 6px; }
+.rte-sym-tab {
+  flex-shrink: 0; padding: 4px 9px; border-radius: 6px; font-size: 11px; font-weight: 600;
+  color: #475569; background: none; border: 1px solid transparent; cursor: pointer; transition: background var(--tr), color var(--tr);
+}
+.rte-sym-tab:hover { background: #f1f5f9; color: #1e293b; }
+.rte-sym-tab.is-on { background: #f3e8ff; color: #3b0764; border-color: #c084fc; }
+.rte-sym-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(32px, 1fr)); gap: 3px; }
+.rte-sym-btn {
+  height: 32px; border-radius: 6px; border: 1px solid #e2e8f0; background: #f8fafc;
+  font-family: 'Cambria Math', 'STIX Two Math', 'Times New Roman', serif; font-size: 16px; line-height: 1; color: #0f172a;
+  cursor: pointer; transition: background var(--tr), border-color var(--tr), transform 120ms cubic-bezier(.16, 1, .3, 1);
+}
+.rte-sym-btn:hover { background: #f3e8ff; border-color: #c084fc; }
+.rte-sym-btn:active { transform: scale(.94); }
+.rte-sym-tab:focus-visible, .rte-sym-btn:focus-visible, .rte-tpl:focus-visible, .rte-eq-link:focus-visible { outline: 2px solid var(--b500); outline-offset: 1px; }
+
+/* Equation builder dialog. */
+.modal.modal-flex.rte-eq { height: auto; max-height: 90vh; }
+.rte-eq-body { display: flex; flex-direction: column; gap: 14px; }
+.rte-eq-groups { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 18px; }
+.rte-eq-groups > section:last-child { grid-column: 1 / -1; }
+.rte-eq-group-lbl { margin: 0 0 6px; font-size: 11.5px; font-weight: 650; color: var(--g700); }
+.rte-eq-tpls { display: flex; flex-wrap: wrap; gap: 5px; }
+.rte-tpl {
+  min-width: 48px; height: 44px; padding: 0 8px; display: inline-grid; place-items: center;
+  border-radius: var(--rxs); border: 1px solid var(--g200); background: var(--white); color: var(--g900);
+  font-size: 14px; cursor: pointer; transition: border-color var(--tr), background var(--tr), box-shadow var(--tr);
+}
+.rte-tpl math { font-family: 'Cambria Math', 'STIX Two Math', 'Latin Modern Math', math, serif; }
+.rte-tpl:hover { border-color: var(--b300); background: var(--b50); box-shadow: 0 2px 6px -3px rgba(15, 30, 61, .25); }
+.rte-tpl-sm { min-width: 36px; height: 34px; padding: 0 6px; font-size: 14px; }
+.rte-eq-src-hdr, .rte-eq-preview-hdr { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 5px; }
+.rte-eq-src { font-family: var(--font-mono), monospace; font-size: 13px; line-height: 1.5; padding: 8px 10px; resize: vertical; min-height: 64px; }
+.rte-eq-help { margin: 5px 0 0; font-size: 11.5px; color: var(--g500); }
+.rte-eq-help code { font-family: var(--font-mono), monospace; font-size: 11px; padding: 0 3px; border-radius: 3px; background: var(--g100); color: var(--g900); }
+.rte-eq-link { background: none; border: none; padding: 0; font-size: 12px; font-weight: 600; color: var(--b600); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.rte-eq-toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--g700); cursor: pointer; }
+.rte-eq-toggle input { accent-color: var(--b600); }
+.rte-eq-preview {
+  min-height: 84px; padding: 16px; display: grid; place-items: center; overflow-x: auto;
+  border-radius: var(--rsm); border: 1px dashed var(--g300); background: var(--surface);
+  font-size: 20px; color: var(--g900);
+}
+.rte-eq-preview math { font-family: 'Cambria Math', 'STIX Two Math', 'Latin Modern Math', math, serif; }
+.rte-eq-preview.is-error { border-style: solid; border-color: var(--red-bd); background: var(--red-bg); color: var(--red); font-size: 12.5px; }
+.rte-eq-empty { font-size: 12.5px; color: var(--g500); }
+
+@media (max-width: 640px) {
+  .rte-eq-groups { grid-template-columns: minmax(0, 1fr); }
+  .rte-eq-src-hdr, .rte-eq-preview-hdr { flex-wrap: wrap; }
+}
+
+/* Payment Console › Payment History: a Semester Payment row opens its View. */
+.pc-hist-row { cursor: pointer; }
+.pc-hist-row:hover > td { background: var(--b50); }
+.pc-hist-row:focus-visible { outline: 2px solid var(--b500); outline-offset: -2px; }
+.pc-hist-row > td:first-child { cursor: default; }
