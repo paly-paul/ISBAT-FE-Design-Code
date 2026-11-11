@@ -141,7 +141,9 @@ export default function HallTicketIssuancePage() {
 
         {selected && (() => {
           const name = elig?.studentName ?? selected.studentName ?? '—'
-          // Term 2 adds Guild and NCHE; both are null for Term 1.
+          // Guild and NCHE are checked only for Term 2 of an even semester
+          // (2, 4, 6, 8); otherwise both are null (not applicable) and their
+          // rows are hidden. Decided by the value, never by the term alone.
           const checks = elig ? [
             { label: 'Fee clearance', ok: elig.feeOk, note: elig.isFeeExcepted ? 'No fee clearance needed' : elig.isExempted ? 'Exemption student' : `Needs ${term === 1 ? '50%' : '100%'} of fees paid` },
             { label: 'Coursework', ok: elig.cwOk, note: 'First coursework submitted on every unit with coursework' },

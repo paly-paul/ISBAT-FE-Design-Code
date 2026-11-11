@@ -18,6 +18,7 @@ import {
   useDashboardSummaryToday,
 } from '@/hooks/finance/useFinanceDashboard'
 import { FEE_TYPE_REGISTRATION, type DashboardCollections, type DashboardFeeType, type DashboardRecentPayment } from '@/lib/api/finance/dashboard'
+import { StudentListModal, type StudentListKind } from './_components/StudentListModal'
 
 // Finance Dashboard — finance-dashboard-page.md. Seven APIs, loaded in
 // parallel; each section renders as its own call returns, with its own
@@ -83,6 +84,14 @@ const GRANULARITY_OPTIONS = [
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 function toYmd(d: Date) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
+
+// Recent Payments heading: "Today", or "02 Nov 2026" when the server fell back
+// to the latest earlier day with payments.
+function recentDayLabel(ymd: string) {
+  if (ymd === toYmd(new Date())) return 'Today'
+  const [y, m, d] = ymd.split('-').map(Number)
+  return `${String(d).padStart(2, '0')} ${MONTHS[m - 1]} ${y}`
+}
 function fromYmd(s: string) { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d) }
 function daysInclusive(from: string, to: string) { return Math.round((fromYmd(to).getTime() - fromYmd(from).getTime()) / 86_400_000) + 1 }
 
@@ -517,6 +526,12 @@ export default function FinanceDashboardPage() {
   function openOutstanding() { setTab('outstanding'); analysisRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }
   function openRecent() { recentRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }
 
+  // Students Fully Cleared / Access Blocked open their student list. It
+  // remembers the intake it was opened for, so a change of intake closes it.
+  const [openList, setOpenList] = useState<{ kind: StudentListKind; intakeGuid: string } | null>(null)
+  const studentList = openList && openList.intakeGuid === intakeGuid ? openList.kind : null
+  function setStudentList(kind: StudentListKind | null) { setOpenList(kind ? { kind, intakeGuid } : null) }
+
   // Payments that arrived since the last refresh get a brief highlight; the
   // first load of an intake highlights nothing.
   const seenRef = useRef<{ intake: string; keys: Set<string> } | null>(null)
@@ -536,7 +551,9 @@ export default function FinanceDashboardPage() {
     const receipts = (n: number) => `${fmtFull(n)} receipts`
     if (breakdown === 'category') return combine(d.byCategory, r => String(r.category), r => r.categoryName, r => r.netInBase, r => r.receiptCount).map(r => ({ ...r, sub: receipts(r.count) }))
     if (breakdown === 'method') return combine(d.byPayType, r => String(r.payType), r => (r.payType ? REPORT_PAYMODE_LABEL[r.payType] ?? r.payTypeName : r.payTypeName), r => r.netInBase, r => r.receiptCount).map(r => ({ ...r, sub: receipts(r.count) }))
-    if (breakdown === 'ledger') return combine(d.topLedgers, r => `${r.category}:${r.ledgerGuid ?? r.ledgerName}`, r => r.ledgerName, r => r.grossInBase).map(r => ({ label: r.label, value: r.value }))
+    // Code with the name ("TF · Tuition Fee"): different ledgers can share a
+    // name ("INST 1" and "INST 3" are both "Tuition"); the code tells them apart.
+    if (breakdown === 'ledger') return combine(d.topLedgers, r => `${r.category}:${r.ledgerGuid ?? r.ledgerName}`, r => (r.ledgerCode ? `${r.ledgerCode} · ${r.ledgerName}` : r.ledgerName), r => r.grossInBase).map(r => ({ label: r.label, value: r.value }))
     return combine(d.byUser, r => r.userName, r => r.userName, r => r.netInBase, r => r.receiptCount).map(r => ({ ...r, sub: receipts(r.count) }))
   }, [collQ.data, breakdown])
 
@@ -560,6 +577,8 @@ export default function FinanceDashboardPage() {
       </div>
     )
   }
+
+  const recentDay = recentQ.data?.date?.slice(0, 10) ?? ''
 
   const att = attQ.data
   const attCount = att ? att.lowReceiptBooks.length + att.categoriesWithoutActiveBook.length + att.missingExchangeRates.length + att.blockedBanks.length + att.recentChanges.length : 0
@@ -634,7 +653,7 @@ export default function FinanceDashboardPage() {
           }}
         />
         <Kpi
-          label="Students Fully Cleared" icon="lni-checkmark-circle" tone="green" query={outQ} onOpen={openOutstanding} openLabel="Clearance"
+          label="Students Fully Cleared" icon="lni-checkmark-circle" tone="green" query={outQ} onOpen={() => setStudentList('cleared')} openLabel="the list of cleared students"
           value={o => fmtFull(o.clearedStudentCount)}
           foot={o => <>{pct(o.clearedStudentCount, o.studentCount).toFixed(0)}% of {fmtFull(o.studentCount)} students</>}
         />
@@ -644,7 +663,7 @@ export default function FinanceDashboardPage() {
           foot={o => <><Money value={o.totalOutstandingInBase} cur={o.baseCurrencyCode} /> owed · {pct(o.owingStudentCount, o.studentCount).toFixed(0)}% of students</>}
         />
         <Kpi
-          label="Access Blocked" icon="lni-lock-alt" tone="red" query={outQ} onOpen={openOutstanding} openLabel="Clearance"
+          label="Access Blocked" icon="lni-lock-alt" tone="red" query={outQ} onOpen={() => setStudentList('blocked')} openLabel="the list of blocked students"
           value={o => fmtFull(o.blockedStudentCount)}
           foot={o => <>Below {o.blockedBelowPercent}% clearance · {pct(o.blockedStudentCount, o.studentCount).toFixed(0)}% of students</>}
         />
@@ -960,16 +979,29 @@ export default function FinanceDashboardPage() {
                           />
                           {out.byCurrency.length > 0 && (
                             <div className="fd-gap">
-                              <PanelHead title="By currency" meta="In each currency’s own amounts" />
+                              {/* Fee, discount and collected cover every student in the intake, cleared
+                                  included, so they're larger than the Outstanding Report's (owing only).
+                                  The amounts owed and the owing count match it. */}
+                              <PanelHead title="Fee, collected and outstanding — all students" meta="In each currency’s own amounts · owing figures match the Outstanding Report" />
                               <ScrollTable className="fd-scroll">
                                 <table>
                                   <thead>
-                                    <tr><th>Cur.</th><th className="text-right" title="A student owing in two currencies is counted in both rows">Students owing</th><th className="text-right">Current sem.</th><th className="text-right">Earlier</th><th className="text-right">Total</th></tr>
+                                    <tr>
+                                      <th>Cur.</th>
+                                      <th className="text-right" title="All students in the intake, cleared included">Fee</th>
+                                      <th className="text-right" title="All students in the intake, cleared included">Discount</th>
+                                      <th className="text-right" title="All students in the intake, cleared included">Collected</th>
+                                      <th className="text-right" title="A student owing in two currencies is counted in both rows">Students owing</th>
+                                      <th className="text-right">Current sem.</th><th className="text-right">Earlier</th><th className="text-right">Total owed</th>
+                                    </tr>
                                   </thead>
                                   <tbody>
                                     {out.byCurrency.map(c => (
                                       <tr key={c.currencyCode}>
                                         <td><span className="badge badge-gold">{c.currencyCode}</span></td>
+                                        <td className="text-right tabular-nums">{fmtFull(c.fee)}</td>
+                                        <td className="text-right tabular-nums">{fmtFull(c.discount)}</td>
+                                        <td className="text-right tabular-nums">{fmtFull(c.collected)}</td>
                                         <td className="text-right tabular-nums">{fmtFull(c.owingStudentCount)}</td>
                                         <td className="text-right tabular-nums">{fmtFull(c.outstanding)}</td>
                                         <td className="text-right tabular-nums">{fmtFull(c.previousOutstanding)}</td>
@@ -1011,14 +1043,19 @@ export default function FinanceDashboardPage() {
       <div className="card fd-anchor" ref={recentRef}>
         <div className="card-hdr">
           <div>
-            <div className="card-title"><span className="ctitle-icon"><i className="lni lni-credit-cards"></i></span> Recent Payments — Today</div>
-            {recentQ.data && recentQ.data.totalCount > recentQ.data.items.length && <div className="card-sub">Showing {recentQ.data.items.length} of {fmtFull(recentQ.data.totalCount)}</div>}
+            {/* The server falls back to the latest earlier day with payments when
+                today has none; `date` says which day the rows are from. */}
+            <div className="card-title"><span className="ctitle-icon"><i className="lni lni-credit-cards"></i></span> Recent Payments{recentDay ? ` — ${recentDayLabel(recentDay)}` : ''}</div>
+            {recentQ.data && (recentDay && recentDayLabel(recentDay) !== 'Today'
+              ? <div className="card-sub">No payments yet today · showing the latest day with payments{recentQ.data.totalCount > recentQ.data.items.length ? ` (${recentQ.data.items.length} of ${fmtFull(recentQ.data.totalCount)})` : ''}</div>
+              : recentQ.data.totalCount > recentQ.data.items.length && <div className="card-sub">Showing {recentQ.data.items.length} of {fmtFull(recentQ.data.totalCount)}</div>)}
           </div>
-          <button className="btn btn-neu btn-sm" onClick={() => nav('payment-history')}>View all <i className="lni lni-arrow-right"></i></button>
+          {/* View all opens that same day in the Transaction Report (it reads ?date=). */}
+          <button className="btn btn-neu btn-sm" onClick={() => nav(recentDay ? `reports/transaction?date=${recentDay}` : 'reports/transaction')}>View all <i className="lni lni-arrow-right"></i></button>
         </div>
         <Section query={recentQ} what="recent payments">
           {recent => recent.items.length === 0 ? (
-            <p className="fd-none">No payments yet today.</p>
+            <p className="fd-none">No payments recorded yet.</p>
           ) : (
             <ScrollTable className="fd-scroll">
               <table>
@@ -1055,6 +1092,10 @@ export default function FinanceDashboardPage() {
         </Section>
       </div>
       </>
+      )}
+
+      {studentList && intakeGuid && (
+        <StudentListModal key={studentList} kind={studentList} intakeGuid={intakeGuid} intakeLabel={intakeLabel} onClose={() => setStudentList(null)} />
       )}
     </div>
   )

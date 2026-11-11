@@ -25,9 +25,9 @@ export interface UpdateUeScheduleRequest {
   endTime: string
   maxMark: number
   examType: number
-  universityExamType: number
+  // universityExamType is not sent: the backend reads it from the exam row.
   publishStatus: number
-  examRuleGuid?: string | null
+  examRuleGuid: string // required
 }
 
 export function getIaUeSchedule(universityExamGuid: string): Promise<UeScheduleDto> {

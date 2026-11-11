@@ -27,4 +27,4 @@ export function useResitFee(studentGuid: string | null, applicationGuid: string 
   })
 }
 
-export type { PaymentOtherDto, PaymentOtherListResponse, PaymentOtherListParams } from '@/lib/api/finance/paymentOthers'
+export type { PaymentOtherDto, PaymentOtherListResponse, PaymentOtherListParams, ResitFee, ResitFeeUnit, ResitFeeSemester } from '@/lib/api/finance/paymentOthers'

@@ -154,6 +154,11 @@ function CbtScheduleContent() {
       showToast('Max Mark cannot be negative', 'error')
       return
     }
+    if (!examRuleGuid) {
+      setRuleError('Exam rule is required.')
+      showToast('Exam rule is required.', 'error')
+      return
+    }
 
     try {
       await updateMut.mutateAsync({
@@ -163,7 +168,7 @@ function CbtScheduleContent() {
         maxMark: Number(maxMark),
         testType,
         publishStatus,
-        examRuleGuid: examRuleGuid || null,
+        examRuleGuid,
       })
       showToast('CBT Scheduled successfully')
       setTimeout(() => {
@@ -390,7 +395,7 @@ function CbtScheduleContent() {
 
           {/* Exam Rule Picker */}
           <div className="md:col-span-2">
-            <label className="lbl">Exam Rule (Optional)</label>
+            <label className="lbl">Exam Rule <span className="text-red-500">*</span></label>
             <div className="flex gap-2 mt-1 max-w-xl">
               <SearchSelect
                 options={ruleOptions}
@@ -402,10 +407,6 @@ function CbtScheduleContent() {
               />
               <button type="button" className="btn btn-neu" onClick={() => setLookupOpen(true)} disabled={isLoading} title="Search exam rules" aria-label="Search exam rules">
                 <i className="lni lni-search-alt"></i>
-              </button>
-              {/* Clearing unlinks the rule: Save sends examRuleGuid: null. */}
-              <button type="button" className="btn btn-neu" onClick={() => { setExamRuleGuid(''); setRuleError(null) }} disabled={isLoading || !examRuleGuid} title="Unlink exam rule">
-                Clear
               </button>
             </div>
             {ruleError && <div className="text-xs mt-1" style={{ color: 'var(--red)' }}><i className="lni lni-warning"></i> {ruleError}</div>}

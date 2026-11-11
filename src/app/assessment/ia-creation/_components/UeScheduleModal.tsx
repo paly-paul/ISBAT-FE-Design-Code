@@ -57,7 +57,6 @@ export function UeScheduleModal({ isOpen, onClose, examGuid, unitCode, unitName 
   const [endTime, setEndTime] = useState('')
   const [maxMark, setMaxMark] = useState<number | ''>(70)
   const [examType, setExamType] = useState<number>(0)
-  const [universityExamType, setUniversityExamType] = useState<number>(0)
   const [publishStatus, setPublishStatus] = useState<number>(0)
   const [examRuleGuid, setExamRuleGuid] = useState<string>('')
   const [lookupOpen, setLookupOpen] = useState(false)
@@ -103,7 +102,6 @@ export function UeScheduleModal({ isOpen, onClose, examGuid, unitCode, unitName 
       setEndTime(schedule.endTime ? schedule.endTime.slice(0, 5) : '')
       setMaxMark(schedule.maxMark && schedule.maxMark > 0 ? schedule.maxMark : 70)
       setExamType(schedule.examType ?? 0)
-      setUniversityExamType(schedule.universityExamType ?? 0)
       setPublishStatus(schedule.publishStatus ?? 0)
       
       if (schedule.examRuleGuid) {
@@ -119,7 +117,6 @@ export function UeScheduleModal({ isOpen, onClose, examGuid, unitCode, unitName 
       setEndTime('')
       setMaxMark(70)
       setExamType(0)
-      setUniversityExamType(0)
       setPublishStatus(0)
       setExamRuleGuid('')
       setFormError(null)
@@ -134,7 +131,6 @@ export function UeScheduleModal({ isOpen, onClose, examGuid, unitCode, unitName 
     if (!examDate || !startTime || !endTime) {
       const msg = 'Exam Date and Start/End Times are required'
       setFormError(msg)
-      showToast(msg, 'error')
       return
     }
     
@@ -142,43 +138,44 @@ export function UeScheduleModal({ isOpen, onClose, examGuid, unitCode, unitName 
     if (!isTimeRangeValid(startTime, endTime)) {
       const msg = 'End Time must be after Start Time'
       setFormError(msg)
-      showToast(msg, 'error')
       return
     }
 
     if (maxMark === '') {
       const msg = 'Max Mark is required'
       setFormError(msg)
-      showToast(msg, 'error')
       return
     }
     if (Number(maxMark) < 0) {
       const msg = 'Max Mark cannot be negative'
       setFormError(msg)
-      showToast(msg, 'error')
+      return
+    }
+    if (!examRuleGuid) {
+      const msg = 'Exam rule is required.'
+      setFormError(msg)
       return
     }
 
     try {
+      // universityExamType is not sent: the backend reads it from the exam row.
       await updateMut.mutateAsync({
         examDate,
         startTime: `${startTime}:00`,
         endTime: `${endTime}:00`,
         maxMark: Number(maxMark),
         examType,
-        universityExamType,
         publishStatus,
-        examRuleGuid: examRuleGuid || null,
+        examRuleGuid,
       })
       showToast('University Exam Scheduled successfully')
       setSaved(true)
     } catch (err: any) {
-      const errorMsg = extractApiErrorMessage(err, 'Failed to save schedule.')
+      // One line per backend error, so "Question paper does not satisfy the exam rule:"
+      // keeps its list of problems readable.
+      const list: string[] = Array.isArray(err?.errors) ? err.errors.filter(Boolean) : []
+      const errorMsg = list.length > 1 ? list.join('\n') : extractApiErrorMessage(err, 'Failed to save schedule.')
       setFormError(errorMsg)
-      showToast(errorMsg, 'error')
-      if (modalBodyRef.current) {
-        modalBodyRef.current.scrollTo({ top: 0, behavior: 'smooth' })
-      }
     }
   }
 
@@ -230,14 +227,6 @@ export function UeScheduleModal({ isOpen, onClose, examGuid, unitCode, unitName 
               </div>
             </div>
 
-            {/* Server Error Message from API */}
-            {formError && (
-              <div className="mb-6 p-3.5 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3 text-xs text-red-900 shadow-xs">
-                <i className="lni lni-warning text-red-600 text-base shrink-0 mt-0.5"></i>
-                <div className="leading-relaxed font-medium">{formError}</div>
-              </div>
-            )}
-
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Date */}
               <div>
@@ -273,7 +262,7 @@ export function UeScheduleModal({ isOpen, onClose, examGuid, unitCode, unitName 
               {/* Exam Rule Picker */}
               <div>
                 <div className="flex justify-between items-center mb-1">
-                  <label className="lbl mb-0">Exam Rule (Optional)</label>
+                  <label className="lbl mb-0">Exam Rule <span className="text-red-500">*</span></label>
                   <button 
                     className="text-[13px] text-[#3a6bc9] hover:underline" 
                     onClick={() => setLookupOpen(true)}
@@ -316,28 +305,11 @@ export function UeScheduleModal({ isOpen, onClose, examGuid, unitCode, unitName 
                 </div>
               </div>
 
-              {/* UE Type */}
+              {/* UE Type: fixed on the exam row, shown read-only */}
               <div>
-                <label className="lbl">UE Type <span className="text-red-500">*</span></label>
-                <div className="flex gap-4 mt-2">
-                  <label className="flex items-center gap-2 text-sm cursor-pointer">
-                    <input
-                      type="radio"
-                      name="universityExamType"
-                      checked={universityExamType === 0}
-                      onChange={() => setUniversityExamType(0)}
-                    />
-                    Theory
-                  </label>
-                  <label className="flex items-center gap-2 text-sm cursor-pointer">
-                    <input
-                      type="radio"
-                      name="universityExamType"
-                      checked={universityExamType === 1}
-                      onChange={() => setUniversityExamType(1)}
-                    />
-                    Practical
-                  </label>
+                <label className="lbl">UE Type</label>
+                <div className="mt-2 text-sm font-medium text-g900">
+                  {schedule ? (schedule.universityExamType === 1 ? 'Practical' : 'Theory') : '—'}
                 </div>
               </div>
 
@@ -373,7 +345,7 @@ export function UeScheduleModal({ isOpen, onClose, examGuid, unitCode, unitName 
               {formError && (
                 <div className="mb-4 p-3.5 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3 text-xs text-red-900 shadow-xs">
                   <i className="lni lni-warning text-red-600 text-base shrink-0 mt-0.5"></i>
-                  <div className="leading-relaxed font-semibold">{formError}</div>
+                  <div className="leading-relaxed font-semibold whitespace-pre-line">{formError}</div>
                 </div>
               )}
               <div className="flex justify-end gap-3">
