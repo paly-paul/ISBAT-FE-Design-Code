@@ -25,10 +25,10 @@ import { StudentListModal, type StudentListKind } from './_components/StudentLis
 // loading and error state. Money on cards and charts is always the …InBase
 // figure in the base currency.
 //
-// Layout: cards, needs attention and fee-type bars first; then the
-// analysis parts (trends, discounts, outstanding detail) in one tabbed
-// card; the latest few payments close the page, with View all going to
-// Payment History.
+// Layout: cards and needs attention first; then the analysis parts
+// (trends, discounts, outstanding detail) in one tabbed card; then the
+// fee-type bars; the latest few payments close the page, with View all
+// going to the Transaction Report for that day.
 
 const FALLBACK_BASE = 'UGX'
 const RECENT_LIMIT = 3
@@ -59,7 +59,25 @@ function fmtUtc(ts: string) {
   return `${d.getDate()} ${MONTHS[d.getMonth()]}, ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
-function Money({ value, cur, className }: { value: number; cur: string; className?: string }) {
+// The same scale in words for headline figures: 57.4 million, 5.48 billion,
+// 950 thousand. Trailing zeros dropped ("57 million", not "57.0 million").
+function scaleWords(n: number): { num: string; word: string } {
+  const a = Math.abs(n)
+  const trim = (s: string) => s.replace(/\.?0+$/, '')
+  if (a >= 1e9) return { num: trim((n / 1e9).toFixed(2)), word: 'billion' }
+  if (a >= 1e6) return { num: trim((n / 1e6).toFixed(1)), word: 'million' }
+  if (a >= 1e3) return { num: String(Math.round(n / 1e3)), word: 'thousand' }
+  return { num: String(Math.round(n)), word: '' }
+}
+
+// `words` spells the scale out for headline figures; charts, bars and
+// legends keep the compact 57.4M form so they don't crowd. The full figure is
+// always in the tooltip.
+function Money({ value, cur, className, words }: { value: number; cur: string; className?: string; words?: boolean }) {
+  if (words) {
+    const { num, word } = scaleWords(value)
+    return <span className={className} title={`${cur} ${fmtFull(value)}`}><span className="fd-cur">{cur}</span> {num}{word && <span className="fd-mag"> {word}</span>}</span>
+  }
   return <span className={className} title={`${cur} ${fmtFull(value)}`}><span className="fd-cur">{cur}</span> {fmtShort(value)}</span>
 }
 
@@ -641,31 +659,32 @@ export default function FinanceDashboardPage() {
       <div className="card fd-kpis">
         <Kpi
           label="Collected Today" icon="lni-wallet" query={summaryQ} onOpen={openRecent} openLabel="Today’s payments"
-          value={s => <Money value={s.currentInBase.net} cur={s.baseCurrencyCode} />}
+          value={s => <Money value={s.currentInBase.net} cur={s.baseCurrencyCode} words />}
           foot={s => {
             // Percent change: a dash when there's nothing to compare against.
             const prev = s.previousInBase.net
             const change = prev > 0 ? ((s.currentInBase.net - prev) / prev) * 100 : null
             const receipts = `${fmtFull(s.currentInBase.receiptCount)} ${s.currentInBase.receiptCount === 1 ? 'receipt' : 'receipts'}`
+            // .fd-nw keeps each phrase whole when the narrow panel wraps the line.
             return change === null
-              ? <>{receipts} · <span title="Nothing collected yesterday to compare with">— vs yesterday</span></>
-              : <>{receipts} · <span className={`fd-chg ${change >= 0 ? 'up' : 'dn'}`} title={`Yesterday ${s.baseCurrencyCode} ${fmtFull(prev)}`}>{change >= 0 ? '↑' : '↓'} {Math.abs(change).toFixed(0)}%</span> vs yesterday</>
+              ? <><span className="fd-nw">{receipts}</span> · <span className="fd-nw" title="Nothing collected yesterday to compare with">— vs yesterday</span></>
+              : <><span className="fd-nw">{receipts}</span> · <span className="fd-nw"><span className={`fd-chg ${change >= 0 ? 'up' : 'dn'}`} title={`Yesterday ${s.baseCurrencyCode} ${fmtFull(prev)}`}>{change >= 0 ? '↑' : '↓'} {Math.abs(change).toFixed(0)}%</span> vs yesterday</span></>
           }}
         />
         <Kpi
           label="Students Fully Cleared" icon="lni-checkmark-circle" tone="green" query={outQ} onOpen={() => setStudentList('cleared')} openLabel="the list of cleared students"
-          value={o => fmtFull(o.clearedStudentCount)}
-          foot={o => <>{pct(o.clearedStudentCount, o.studentCount).toFixed(0)}% of {fmtFull(o.studentCount)} students</>}
+          value={o => <>{fmtFull(o.clearedStudentCount)}<span className="fd-kpi-unit">{o.clearedStudentCount === 1 ? 'student' : 'students'}</span></>}
+          foot={o => <><span className="fd-nw">{pct(o.clearedStudentCount, o.studentCount).toFixed(0)}% of</span> <span className="fd-nw">{fmtFull(o.studentCount)} students</span></>}
         />
         <Kpi
           label="Outstanding Balances" icon="lni-hourglass" tone="amber" query={outQ} onOpen={openOutstanding} openLabel="Breakdown"
           value={o => fmtFull(o.owingStudentCount)}
-          foot={o => <><Money value={o.totalOutstandingInBase} cur={o.baseCurrencyCode} /> owed · {pct(o.owingStudentCount, o.studentCount).toFixed(0)}% of students</>}
+          foot={o => <><span className="fd-nw"><Money value={o.totalOutstandingInBase} cur={o.baseCurrencyCode} words /> owed</span> · <span className="fd-nw">{pct(o.owingStudentCount, o.studentCount).toFixed(0)}% of students</span></>}
         />
         <Kpi
           label="Access Blocked" icon="lni-lock-alt" tone="red" query={outQ} onOpen={() => setStudentList('blocked')} openLabel="the list of blocked students"
-          value={o => fmtFull(o.blockedStudentCount)}
-          foot={o => <>Below {o.blockedBelowPercent}% clearance · {pct(o.blockedStudentCount, o.studentCount).toFixed(0)}% of students</>}
+          value={o => <>{fmtFull(o.blockedStudentCount)}<span className="fd-kpi-unit">{o.blockedStudentCount === 1 ? 'student' : 'students'}</span></>}
+          foot={o => <><span className="fd-nw">Below {o.blockedBelowPercent}% clearance</span> · <span className="fd-nw">{pct(o.blockedStudentCount, o.studentCount).toFixed(0)}% of students</span></>}
         />
       </div>
 
@@ -735,93 +754,6 @@ export default function FinanceDashboardPage() {
           }}
         </Section>
       </div>
-      </div>
-
-      {/* ── Fee-type collection ── */}
-      <div className="card fd-card">
-        <div className="card-hdr">
-          <div>
-            <div className="card-title"><span className="ctitle-icon"><i className="lni lni-bar-chart"></i></span> Collection by Fee Type{intake ? ` — ${intake.description}` : ''}</div>
-            <div className="card-sub">Collected against what was billed to date for this intake</div>
-          </div>
-          {feesQ.data && <span className="fd-updated" title="Recalculated by the server at most every 5 minutes">As of {hhmm(feesQ.data.generatedAt)}</span>}
-        </div>
-
-        <Section query={feesQ} what="fee-type collection" note="The first load can take a few seconds.">
-          {fees => {
-            // One group per fee type, one compact line per currency. The
-            // group header carries the combined figure, from …InBase only.
-            const groups: { feeType: number; name: string; rows: DashboardFeeType[] }[] = []
-            for (const f of fees.feeTypes) {
-              let g = groups.find(x => x.feeType === f.feeType)
-              if (!g) groups.push(g = { feeType: f.feeType, name: f.feeTypeName, rows: [] })
-              g.rows.push(f)
-            }
-            return (
-              <>
-                {groups.length === 0 ? (
-                  <p className="fd-none">No fees billed for this intake yet.</p>
-                ) : (
-                  <div className="fd-fees">
-                    {groups.map(g => {
-                      const collectedInBase = g.rows.reduce((s, f) => s + f.collectedInBase, 0)
-                      const payableInBase = g.rows.reduce((s, f) => s + f.expectedInBase - f.discountInBase, 0)
-                      return (
-                        <section key={g.feeType} className="fd-fee">
-                          <div className="fd-fee-hd">
-                            <h4 className="fd-fee-name">{g.name}</h4>
-                            {g.feeType === FEE_TYPE_REGISTRATION && <span className="fd-fee-note">{fmtFull(fees.registeredCount)}/{fmtFull(fees.studentCount)} registered</span>}
-                            {g.rows.length > 1 && (
-                              <span className="fd-fee-sum">
-                                <Money value={collectedInBase} cur={fees.baseCurrencyCode} /> of <Money value={payableInBase} cur={fees.baseCurrencyCode} />
-                                <strong>{pct(collectedInBase, payableInBase).toFixed(1)}%</strong>
-                              </span>
-                            )}
-                          </div>
-                          <ul className="fd-fee-rows">
-                            {g.rows.map(f => {
-                              const rate = f.collectionRatePercent
-                              const tone = rate === null ? 'var(--g300)' : rate >= 85 ? 'var(--green)' : rate >= 60 ? 'var(--b500)' : 'var(--amber)'
-                              const flagOverpaid = f.overpaid > 0 && f.overpaid >= f.expected * OVERPAID_FLAG_SHARE
-                              return (
-                                <li key={f.currencyCode} className="fd-fee-row">
-                                  <span className="fd-tag">{f.currencyCode}</span>
-                                  <div className="fd-fee-track" role="progressbar" aria-valuenow={Math.round(rate ?? 0)} aria-valuemin={0} aria-valuemax={100} aria-label={`${f.feeTypeName} ${f.currencyCode} collected`}>
-                                    <span style={{ width: `${Math.min(100, rate ?? 0)}%`, background: tone }} />
-                                  </div>
-                                  <span className="fd-fee-rate">{rate === null ? '—' : `${rate.toFixed(1)}%`}</span>
-                                  <span className="fd-fee-amt">
-                                    <span><strong>{fmtFull(f.collected)}</strong> of {fmtFull(f.expected)}</span>
-                                    <span>{fmtFull(f.outstanding)} outstanding</span>
-                                    {flagOverpaid && (
-                                      <span className="fd-overpaid" title="Collected is capped at what is owed; the excess is shown separately">
-                                        <i className="lni lni-warning" aria-hidden="true"></i> Overpaid {fmtFull(f.overpaid)}: check payments
-                                      </span>
-                                    )}
-                                  </span>
-                                </li>
-                              )
-                            })}
-                          </ul>
-                        </section>
-                      )
-                    })}
-                  </div>
-                )}
-
-                {fees.regulatoryFees.length > 0 && (
-                  <div className="fd-reg">
-                    <span className="fd-reg-lbl">NCHE &amp; Guild collected</span>
-                    {fees.regulatoryFees.map(r => (
-                      <span key={r.category + r.currencyCode} className="fd-reg-item">{r.categoryName} <strong>{r.currencyCode} {fmtFull(r.collected)}</strong></span>
-                    ))}
-                    <span className="fd-reg-note">No target · receipts only</span>
-                  </div>
-                )}
-              </>
-            )
-          }}
-        </Section>
       </div>
 
       {/* ── Analysis: trends, discounts, outstanding ── */}
@@ -913,7 +845,7 @@ export default function FinanceDashboardPage() {
                     <div className={`fd-panel fd-disc${discQ.isPlaceholderData ? ' fd-busy' : ''}`}>
                       <div className="fd-hero">
                         <div className="fd-hero-lbl">Total discount given</div>
-                        <div className="fd-hero-num"><Money value={disc.totalDiscountInBase} cur={disc.baseCurrencyCode} /></div>
+                        <div className="fd-hero-num"><Money value={disc.totalDiscountInBase} cur={disc.baseCurrencyCode} words /></div>
                         <div className="fd-hero-sub">{fmtFull(disc.discountedStudentCount)} students · {disc.byType.length} discount types</div>
                         <div className="fd-ratio">
                           <div className="fd-ratio-top"><span>Share of tuition fee value</span><strong>{share === null ? '—' : `${share.toFixed(1)}%`}</strong></div>
@@ -968,7 +900,7 @@ export default function FinanceDashboardPage() {
 
                       <div className="fd-cols2">
                         <div className="min-w-0">
-                          <PanelHead title="Total owed" meta={<><strong><Money value={out.totalOutstandingInBase} cur={ob} /></strong> in {ob}, at today’s rate</>} />
+                          <PanelHead title="Total owed" meta={<><strong><Money value={out.totalOutstandingInBase} cur={ob} words /></strong> in {ob}, at today’s rate</>} />
                           <ShareBar
                             ariaLabel="Outstanding by semester"
                             format={v => <Money value={v} cur={ob} />}
@@ -1037,6 +969,93 @@ export default function FinanceDashboardPage() {
           </div>
         )}
 
+      </div>
+
+      {/* ── Fee-type collection ── */}
+      <div className="card fd-card">
+        <div className="card-hdr">
+          <div>
+            <div className="card-title"><span className="ctitle-icon"><i className="lni lni-bar-chart"></i></span> Collection by Fee Type{intake ? ` — ${intake.description}` : ''}</div>
+            <div className="card-sub">Collected against what was billed to date for this intake</div>
+          </div>
+          {feesQ.data && <span className="fd-updated" title="Recalculated by the server at most every 5 minutes">As of {hhmm(feesQ.data.generatedAt)}</span>}
+        </div>
+
+        <Section query={feesQ} what="fee-type collection" note="The first load can take a few seconds.">
+          {fees => {
+            // One group per fee type, one compact line per currency. The
+            // group header carries the combined figure, from …InBase only.
+            const groups: { feeType: number; name: string; rows: DashboardFeeType[] }[] = []
+            for (const f of fees.feeTypes) {
+              let g = groups.find(x => x.feeType === f.feeType)
+              if (!g) groups.push(g = { feeType: f.feeType, name: f.feeTypeName, rows: [] })
+              g.rows.push(f)
+            }
+            return (
+              <>
+                {groups.length === 0 ? (
+                  <p className="fd-none">No fees billed for this intake yet.</p>
+                ) : (
+                  <div className="fd-fees">
+                    {groups.map(g => {
+                      const collectedInBase = g.rows.reduce((s, f) => s + f.collectedInBase, 0)
+                      const payableInBase = g.rows.reduce((s, f) => s + f.expectedInBase - f.discountInBase, 0)
+                      return (
+                        <section key={g.feeType} className="fd-fee">
+                          <div className="fd-fee-hd">
+                            <h4 className="fd-fee-name">{g.name}</h4>
+                            {g.feeType === FEE_TYPE_REGISTRATION && <span className="fd-fee-note">{fmtFull(fees.registeredCount)}/{fmtFull(fees.studentCount)} registered</span>}
+                            {g.rows.length > 1 && (
+                              <span className="fd-fee-sum">
+                                <Money value={collectedInBase} cur={fees.baseCurrencyCode} /> of <Money value={payableInBase} cur={fees.baseCurrencyCode} />
+                                <strong>{pct(collectedInBase, payableInBase).toFixed(1)}%</strong>
+                              </span>
+                            )}
+                          </div>
+                          <ul className="fd-fee-rows">
+                            {g.rows.map(f => {
+                              const rate = f.collectionRatePercent
+                              const tone = rate === null ? 'var(--g300)' : rate >= 85 ? 'var(--green)' : rate >= 60 ? 'var(--b500)' : 'var(--amber)'
+                              const flagOverpaid = f.overpaid > 0 && f.overpaid >= f.expected * OVERPAID_FLAG_SHARE
+                              return (
+                                <li key={f.currencyCode} className="fd-fee-row">
+                                  <span className="fd-tag">{f.currencyCode}</span>
+                                  <div className="fd-fee-track" role="progressbar" aria-valuenow={Math.round(rate ?? 0)} aria-valuemin={0} aria-valuemax={100} aria-label={`${f.feeTypeName} ${f.currencyCode} collected`}>
+                                    <span style={{ width: `${Math.min(100, rate ?? 0)}%`, background: tone }} />
+                                  </div>
+                                  <span className="fd-fee-rate">{rate === null ? '—' : `${rate.toFixed(1)}%`}</span>
+                                  <span className="fd-fee-amt">
+                                    <span><strong>{fmtFull(f.collected)}</strong> of {fmtFull(f.expected)}</span>
+                                    <span>{fmtFull(f.outstanding)} outstanding</span>
+                                    {flagOverpaid && (
+                                      <span className="fd-overpaid" title="Collected is capped at what is owed; the excess is shown separately">
+                                        <i className="lni lni-warning" aria-hidden="true"></i> Overpaid {fmtFull(f.overpaid)}: check payments
+                                      </span>
+                                    )}
+                                  </span>
+                                </li>
+                              )
+                            })}
+                          </ul>
+                        </section>
+                      )
+                    })}
+                  </div>
+                )}
+
+                {fees.regulatoryFees.length > 0 && (
+                  <div className="fd-reg">
+                    <span className="fd-reg-lbl">NCHE &amp; Guild collected</span>
+                    {fees.regulatoryFees.map(r => (
+                      <span key={r.category + r.currencyCode} className="fd-reg-item">{r.categoryName} <strong>{r.currencyCode} {fmtFull(r.collected)}</strong></span>
+                    ))}
+                    <span className="fd-reg-note">No target · receipts only</span>
+                  </div>
+                )}
+              </>
+            )
+          }}
+        </Section>
       </div>
 
       {/* ── Recent payments ── */}

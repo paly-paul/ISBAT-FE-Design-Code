@@ -8,7 +8,7 @@ import {
   useUploadQuestionImage,
   useDeleteQuestionImage,
 } from '@/hooks/assessment/useQuestions'
-import { RichTextEditor, isHtmlEmpty, stripHtmlTags } from '@/components/RichTextEditor'
+import { RichTextEditor, isHtmlEmpty, sanitizeRichContent, stripHtmlTags } from '@/components/RichTextEditor'
 
 interface SingleQuestionModalProps {
   isOpen: boolean
@@ -40,14 +40,20 @@ export function SingleQuestionModal({
   const isEdit = Boolean(question?.questionGuid)
 
   const [questionType, setQuestionType] = useState<number>(question?.questionType ?? 1)
-  const [level, setLevel] = useState<number>(question?.level ?? 1)
-  const [questionText, setQuestionText] = useState<string>(stripHtmlTags(question?.questionText) ?? '')
+  // Section (API `level`: 1 = A, 2 = B, 3 = C), required for both MCQ and
+  // Descriptive. New questions start on A; an existing question saved
+  // without one (older DQs) starts empty so a section is chosen on purpose.
+  const [level, setLevel] = useState<number | null>(question?.level ?? (isEdit ? null : 1))
+  // Question text and a descriptive answer are rich text (equations, alignment,
+  // bold, lists), loaded and saved as HTML like Question Paper Vetting's form.
+  // MCQ options stay plain text: the API matches answerText against them.
+  const [questionText, setQuestionText] = useState<string>(question?.questionText ?? '')
   const [option1Text, setOption1Text] = useState<string>(stripHtmlTags(question?.option1Text) ?? '')
   const [option2Text, setOption2Text] = useState<string>(stripHtmlTags(question?.option2Text) ?? '')
   const [option3Text, setOption3Text] = useState<string>(stripHtmlTags(question?.option3Text) ?? '')
   const [option4Text, setOption4Text] = useState<string>(stripHtmlTags(question?.option4Text) ?? '')
   const [selectedCorrectOptionIndex, setSelectedCorrectOptionIndex] = useState<number>(0)
-  const [descriptiveAnswer, setDescriptiveAnswer] = useState<string>(stripHtmlTags(question?.answerText) ?? '')
+  const [descriptiveAnswer, setDescriptiveAnswer] = useState<string>(question?.questionType === 2 ? (question?.answerText ?? '') : '')
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
   // Image upload state
@@ -67,8 +73,8 @@ export function SingleQuestionModal({
   useEffect(() => {
     if (question) {
       setQuestionType(question.questionType ?? 1)
-      setLevel(question.level ?? 1)
-      setQuestionText(stripHtmlTags(question.questionText))
+      setLevel(question.level ?? null)
+      setQuestionText(question.questionText ?? '')
       setOption1Text(stripHtmlTags(question.option1Text))
       setOption2Text(stripHtmlTags(question.option2Text))
       setOption3Text(stripHtmlTags(question.option3Text))
@@ -86,7 +92,8 @@ export function SingleQuestionModal({
         else if (ans === o4) setSelectedCorrectOptionIndex(3)
         else setSelectedCorrectOptionIndex(0)
       } else {
-        setDescriptiveAnswer(ans)
+        // Descriptive: keep the answer's formatting.
+        setDescriptiveAnswer(question.answerText ?? '')
       }
 
       setExistingImageUrl(question.imageUrl ?? null)
@@ -179,8 +186,15 @@ export function SingleQuestionModal({
     e.preventDefault()
     setErrorMsg(null)
 
-    const cleanQuestionText = stripHtmlTags(questionText)
-    if (!cleanQuestionText) {
+    if (!level) {
+      setErrorMsg('Please select a section (A, B or C).')
+      return
+    }
+
+    // Saved as HTML so equations and formatting survive; an equation-only
+    // question still counts as filled in (its MathML has text).
+    const cleanQuestionText = sanitizeRichContent(questionText)
+    if (isHtmlEmpty(cleanQuestionText)) {
       setErrorMsg('Question text cannot be left blank!')
       return
     }
@@ -214,8 +228,8 @@ export function SingleQuestionModal({
       }
     } else {
       // Descriptive validation
-      const cleanAnswer = stripHtmlTags(descriptiveAnswer)
-      if (!cleanAnswer) {
+      const cleanAnswer = sanitizeRichContent(descriptiveAnswer)
+      if (isHtmlEmpty(cleanAnswer)) {
         setErrorMsg('Answer / Evaluation criteria cannot be left blank!')
         return
       }
@@ -228,7 +242,7 @@ export function SingleQuestionModal({
           guid: question.questionGuid,
           payload: {
             questionType,
-            level: questionType === 1 ? level : null,
+            level,
             questionText: cleanQuestionText,
             option1Text: questionType === 1 ? stripHtmlTags(option1Text) : null,
             option2Text: questionType === 1 ? stripHtmlTags(option2Text) : null,
@@ -266,7 +280,7 @@ export function SingleQuestionModal({
           category,
           intakeGuid,
           questionType,
-          level: questionType === 1 ? level : null,
+          level,
           questionText: cleanQuestionText,
           option1Text: questionType === 1 ? stripHtmlTags(option1Text) : null,
           option2Text: questionType === 1 ? stripHtmlTags(option2Text) : null,
@@ -371,7 +385,7 @@ export function SingleQuestionModal({
                 </div>
               </div>
 
-              {questionType === 1 ? (
+              {/* Section applies to both MCQ and Descriptive questions. */}
                 <div className="bg-white border border-slate-200 rounded-lg p-3">
                   <label className="text-xs font-bold text-slate-700 block mb-1.5">
                     Section <span className="text-red-500">*</span>
@@ -412,11 +426,6 @@ export function SingleQuestionModal({
                     </button>
                   </div>
                 </div>
-              ) : (
-                <div className="bg-white border border-slate-200 rounded-lg p-3 flex flex-col justify-center text-xs text-slate-400">
-                  <span>Section is not applicable for Descriptive questions.</span>
-                </div>
-              )}
             </div>
 
             {/* Question Text with side Upload Image button */}

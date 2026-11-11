@@ -3,7 +3,7 @@
 Reference for the permission-driven sidebar menu API, `GET /api/v1/users/me/menu`.
 Each node has the shape `{ name, icon, url, permissions, children }`.
 
-**Last updated: 2026-11-10.** The tree below matches the frontend's mock menu
+**Last updated: 2026-11-11.** The tree below matches the frontend's mock menu
 (`mockMenu` in `src/lib/api/users/menu.ts`), so it lists every page that is in the
 sidebar today. The events on each page come from reading the buttons and actions in
 that page's code.
@@ -78,7 +78,7 @@ ignored and the button falls back to `edit`.
   frontend uses the `edit` value for it. To deny approving to a role that can edit,
   send `"approve": false` explicitly.
 - **Some buttons stay visible.** On a few pages (Payment Console, Payment History,
-  Student Statement, Financial Reports, and the Discount, Transaction, Outstanding,
+  Student Statement, and the Discount, Transaction, Outstanding,
   Enquiry, Application Status and Students in Programme reports) the print/export button is always shown, and
   clicking it without the permission shows a "You don't have permission…" message
   instead of running it.
@@ -569,7 +569,6 @@ each API.
 | Payment Collection | Ledger Adjustments | `/finance/ledger-adjustments` | `get` `edit` | `edit` | `edit` = adjust ledger line |
 | Payment Collection | Exchange Rates | `/finance/exchange-rates` | `get` `add` `edit` `delete` | `add` `edit` `delete` | `edit` = save rates |
 | Payment Collection | Advanced Payments | `/finance/advanced-payments` | `get` `add` | `create` (same as `add`) | `add` = new deposit |
-| Reports & Statements | Financial Reports | `/finance/financial-reports` | `get` `export` | `export` |  |
 | Reports & Statements | Discount Report | `/finance/reports/discount` | `get` `export` | `export` | Preview + Excel export; each user sees only their own exports. Downloads icon lives in the app header |
 | Reports & Statements | Transaction Report | `/finance/reports/transaction` | `get` `export` | `export` | Same preview + Excel export flow as Discount Report; exports land in the shared Downloads list |
 | Reports & Statements | Outstanding Report | `/finance/reports/outstanding` | `get` `export` | `export` | Same preview + Excel export flow as Discount Report; exports land in the shared Downloads list |
@@ -677,13 +676,6 @@ each API.
       "url": null,
       "permissions": null,
       "children": [
-        {
-          "name": "Financial Reports",
-          "icon": "lni lni-bar-chart",
-          "url": "/finance/financial-reports",
-          "permissions": { "get": true, "export": true },
-          "children": []
-        },
         {
           "name": "Discount Report",
           "icon": "lni lni-tag",
@@ -1874,7 +1866,20 @@ removes any "Lecturer Master" / "Lecture Master" node (`stripLectureMaster`).
 | Assessment | Pending QP Upload | `/assessment/rpt-pending-qp` |
 | Assessment | Faculty Summary | `/assessment/rpt-faculty` |
 
-## Changes since the previous version (2026-11-02)
+## Changes since the previous version (2026-11-10)
+
+- **Removed Finance › Reports & Statements › Financial Reports**
+  (`/finance/financial-reports`). The page showed fixed sample figures and called no
+  API (there was no backend endpoint or page doc for it), so it has been deleted; its
+  real equivalents are on the Finance Dashboard (Collection Trends, Outstanding,
+  Student clearance). The URL now shows the 404 page. **Please remove it from the menu
+  response** (the live `/me/menu` still sends it); until then the frontend strips it
+  itself so the sidebar doesn't link to a missing page. Its permissions (View Financial
+  Reports, Export Financial Report) can be retired with it. The rest of Reports &
+  Statements (Discount, Transaction and Outstanding reports, Student Statement) is
+  unchanged.
+
+## Changes in the 2026-11-10 version (since 2026-11-02)
 
 - **Service Tickets moved to Student › Student Services › Service Tickets**
   (`/student/service-tickets`, icon `lni lni-ticket`), with `get` and `edit`. It's a new
