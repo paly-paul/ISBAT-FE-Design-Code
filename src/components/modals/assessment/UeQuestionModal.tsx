@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import { UeQuestionDto, SaveUeQuestionRequest } from '@/lib/api/assessment/ueQuestions'
 import { useCreateUeQuestion, useUpdateUeQuestion } from '@/hooks/assessment/useUeQuestions'
-import { RichTextEditor, isHtmlEmpty } from '@/components/RichTextEditor'
+import { RichTextEditor, isHtmlEmpty, sanitizeRichContent } from '@/components/RichTextEditor'
 
 interface UeQuestionModalProps {
   isOpen: boolean
@@ -16,15 +16,6 @@ interface UeQuestionModalProps {
   question?: UeQuestionDto | null
   onSuccess: () => void
   showToast: (msg: string, type?: string) => void
-}
-
-function sanitizeRichContent(html: string): string {
-  if (!html) return ''
-  return html
-    .replace(/^((?:<p>|<div>|<span>)?)(&amp;#160;|&amp;nbsp;|&#160;|&nbsp;|\s)+/gi, '$1')
-    .replace(/(&amp;#160;|&amp;nbsp;|&#160;|&nbsp;|\s)+(<\/(?:p|div|li|span)>|$)/gi, '$2')
-    .replace(/(<p><br\s*\/?><\/p>|<br\s*\/?>)+$/gi, '')
-    .trim()
 }
 
 export function UeQuestionModal({

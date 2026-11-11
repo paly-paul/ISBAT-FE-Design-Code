@@ -1,21 +1,35 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
-import { usePathname, useRouter } from 'next/navigation'
-import { loginUrlForCurrentPage } from '@/lib/postLoginRedirect'
+import { usePathname } from 'next/navigation'
 import { Query, QueryClient, QueryClientProvider, QueryKey, useQueryClient } from '@tanstack/react-query'
-import { AuthError, refreshSession } from '@/lib/auth'
-import { getSessionIdentity, setSessionIdentity, clearSessionIdentity } from '@/lib/session'
+import { getSessionIdentity } from '@/lib/session'
+// Used only by the disabled SessionKeepAlive below; restore with it.
+// import { useRouter } from 'next/navigation'
+// import { loginUrlForCurrentPage } from '@/lib/postLoginRedirect'
+// import { AuthError, refreshSession } from '@/lib/auth'
+// import { setSessionIdentity, clearSessionIdentity } from '@/lib/session'
 import { NotificationToastHost } from '@/components/NotificationToastHost'
 import { useNotificationsHubBridge } from '@/hooks/useNotifications'
 import { MENU_KEY } from '@/hooks/users/useMenu'
 import { REPORT_JOBS_KEY } from '@/lib/reportDownloads'
 
-const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
-
-// Access-token TTL is confirmed at 15 minutes — refreshing every 5 (a third
-// of that) leaves two spare attempts before expiry if one is missed (tab
-// backgrounded, transient network blip).
-const SESSION_REFRESH_INTERVAL_MS = 5 * 60 * 1000
+// ── Proactive keep-alive: DISABLED (2026-11-11) ──
+// The session now follows the backend's own access-token window instead of
+// a frontend timer. erp_access lasts 15 min (Jwt:AccessTokenMinutes,
+// post-login.md); when it expires, the next API call gets a 401 and
+// client.ts's handleUnauthorized refreshes once (erp_refresh, 7 days) and
+// retries that call. So a refresh happens only when the backend says the
+// token is spent, not every 5 minutes from every open tab, which also kept
+// spending the /auth group's 10 req/min per-IP limit (post-refresh.md).
+// Trade-off: the first call after 15 idle minutes takes one extra round trip.
+// To turn the timer back on, uncomment this block, SessionKeepAlive below,
+// its imports at the top, and <SessionKeepAlive /> in Providers.
+//
+// const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
+// // Access-token TTL is confirmed at 15 minutes — refreshing every 5 (a third
+// // of that) leaves two spare attempts before expiry if one is missed (tab
+// // backgrounded, transient network blip).
+// const SESSION_REFRESH_INTERVAL_MS = 5 * 60 * 1000
 
 // Single, app-wide proactive keep-alive. This used to be duplicated as a
 // separate setInterval in every module layout (academic/admission/config/
@@ -29,6 +43,7 @@ const SESSION_REFRESH_INTERVAL_MS = 5 * 60 * 1000
 // Providers sits above every route in src/app/layout.tsx and never
 // unmounts on client-side navigation for the life of the tab, so a single
 // timer here always keeps running regardless of how the user navigates.
+/*
 function SessionKeepAlive() {
   const pathname = usePathname()
   const router = useRouter()
@@ -67,6 +82,7 @@ function SessionKeepAlive() {
 
   return null
 }
+*/
 
 // Starts the notifications hub bridge (unread-count fetch → hub connect →
 // live updates, see useNotificationsHubBridge) once a session actually
@@ -213,7 +229,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <SessionKeepAlive />
+      {/* <SessionKeepAlive /> disabled: the session follows the backend's token window (see top of file). */}
       <NotificationsBridge />
       <NumberInputScrollPrevent />
       {children}
