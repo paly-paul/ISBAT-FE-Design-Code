@@ -46,7 +46,7 @@ import {
   CurrentSemesterPayableTotal,
   PaymentHistoryEntry,
 } from '@/hooks/finance/usePaymentConsole'
-import { usePaymentOthersList, useResitFee } from '@/hooks/finance/usePaymentOthers'
+import { usePaymentOthersList, useResitFee, type ResitFee, type ResitFeeSemester } from '@/hooks/finance/usePaymentOthers'
 import { getPaymentReceiptPdf, isResitLedger, refugeeLabel, studCategoryLabel } from '@/lib/api/finance/paymentConsole'
 import { downloadBlob } from '@/lib/downloadBlob'
 import { formatDate, formatDateTime } from '@/lib/date'
@@ -108,6 +108,84 @@ function OutstandingCategoryTable({ items, isLoading, isError }: { items: AllOut
 // of "500.00"), which reads as imprecise next to a currency figure.
 function fmtAmt(n: number) {
   return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
+// The units behind the locked resit amount (get-resit-fee.md): grouped by
+// semester, each semester showing its capped amount. Unit amounts are before
+// the cap, so they're never summed here; the total is the API's amount, which
+// always equals the sum of the semester amounts. "Applied to resit", not
+// "scheduled": these units have no exam date yet.
+const RESIT_FEE_TYPE: Record<string, { label: string; badge: string; title: string }> = {
+  UE: { label: 'Resit exam', badge: 'badge-blue', title: 'University exam resit (a unit applied for both is charged as UE)' },
+  IA: { label: 'Coursework', badge: 'badge-purple', title: 'Coursework (IA) resit only' },
+}
+
+function ResitUnitsBreakdown({ fee, isLoading }: { fee: ResitFee | undefined; isLoading: boolean }) {
+  if (isLoading || !fee) return <div className="text-g400 text-center" style={{ padding: 12, fontSize: 12.5 }}>Loading resit units…</div>
+  if (fee.amount === 0 && fee.units.length === 0) {
+    return (
+      <div className="pc-ledger-item">
+        <span className="pc-ledger-icon"><i className="lni lni-checkmark-circle"></i></span>
+        <div className="flex-1 min-w-0">
+          <div className="pc-ledger-name">No resit exams to pay</div>
+          <div className="pc-ledger-sub">Nothing applied to resit is unpaid for this student.</div>
+        </div>
+      </div>
+    )
+  }
+  // Semesters in the API's order; a unit whose semester isn't listed (or is
+  // null and unlisted) goes in a trailing "Semester not resolved" group.
+  const listed = new Set(fee.semesters.map(s => s.semesterGuid))
+  const groups = fee.semesters.map(s => ({ key: s.semesterGuid ?? 'none', name: s.semesterName || 'Semester not resolved', semester: s as ResitFeeSemester | null, units: fee.units.filter(u => u.semesterGuid === s.semesterGuid) }))
+  const orphans = fee.units.filter(u => !listed.has(u.semesterGuid))
+  if (orphans.length) groups.push({ key: 'orphans', name: 'Semester not resolved', semester: null, units: orphans })
+
+  return (
+    <div className="flex flex-col gap-2" aria-label="Resit units included in the resit fee">
+      <div className="pc-ledger-sub" style={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.04em' }}>
+        Resit units applied for · {fee.units.length} {fee.units.length === 1 ? 'unit' : 'units'}
+      </div>
+      {groups.map(g => {
+        const capped = !!g.semester && g.semester.subtotal > g.semester.amount
+        return (
+          <div key={g.key} style={{ border: '1.5px solid var(--g200)', borderRadius: 'var(--rsm)', overflow: 'hidden' }}>
+            <div className="flex items-center gap-2" style={{ padding: '8px 12px', background: 'var(--surface)', borderBottom: '1px solid var(--g200)' }}>
+              <span className="font-semibold text-g800 flex-1 min-w-0 truncate" style={{ fontSize: 13 }}>{semesterLabel(g.name)}</span>
+              {g.semester && (
+                <span className="flex items-baseline gap-1.5 shrink-0">
+                  <span className="text-g400 font-semibold" style={{ fontSize: 11 }}>UGX</span>
+                  <span className="font-bold text-amber">{fmtAmt(g.semester.amount)}</span>
+                </span>
+              )}
+            </div>
+            {capped && (
+              <div style={{ padding: '6px 12px', fontSize: 'var(--fs-xs)', color: 'var(--g600)', background: 'var(--amber-bg)', borderBottom: '1px solid var(--amber-bd)' }}>
+                <i className="lni lni-information" aria-hidden="true"></i> Units add up to UGX {fmtAmt(g.semester!.subtotal)}; this semester is capped at UGX {fmtAmt(g.semester!.amount)}.
+              </div>
+            )}
+            {g.units.map(u => {
+              const t = RESIT_FEE_TYPE[u.feeType] ?? { label: u.feeType, badge: 'badge-grey', title: u.feeType }
+              return (
+                <div key={u.courseUnitGuid} className="flex items-center gap-3" style={{ padding: '8px 12px', borderTop: '1px solid var(--g100)' }}>
+                  <div className="flex-1 min-w-0">
+                    <div className="truncate text-g900" style={{ fontSize: 13, fontWeight: 500 }} title={u.unitName}>{u.unitName}</div>
+                    <div className="font-mono text-g500" style={{ fontSize: 11.5 }}>{u.unitCode}</div>
+                  </div>
+                  <span className={`badge ${t.badge} shrink-0`} title={t.title}>{t.label}</span>
+                  <span className="tabular-nums text-g700 shrink-0" style={{ fontSize: 13, minWidth: 90, textAlign: 'right' }}
+                    title={capped ? 'Unit fee before the semester cap' : undefined}>{fmtAmt(u.amount)}</span>
+                </div>
+              )
+            })}
+          </div>
+        )
+      })}
+      <div className="pc-total-due">
+        <span className="text-muted" style={{ fontSize: 12 }}>Resit fee (UGX)</span>
+        <span className="font-bold text-amber" style={{ fontSize: 15 }}>{fmtAmt(fee.amount)}</span>
+      </div>
+    </div>
+  )
 }
 
 // Icons for Record Payment's method choice, keyed like PAY_TYPE_LABELS.
@@ -990,8 +1068,10 @@ export default function PaymentConsolePage() {
   const resitLedgerGuid = ledgerOthers.find(isResitLedger)?.ledgerOthersGuid ?? null
   const hasResitRow = !!resitLedgerGuid && otherLedgerRows.some(r => r.ledgerOthersGuid === resitLedgerGuid)
   const {
-    data: resitFee, isFetching: isResitFeeLoading, isError: isResitFeeError, error: resitFeeError,
+    data: resitFeeData, isFetching: isResitFeeLoading, isError: isResitFeeError, error: resitFeeError,
   } = useResitFee(studentGuid, selectedApplicationGuid, activePayTab === 'other' && hasResitRow)
+  // The locked amount stays the API's total; units/semesters only explain it.
+  const resitFee = resitFeeData?.amount
   const resitFeeErrorMsg = resitFeeError instanceof Error ? resitFeeError.message : 'Could not fetch the resit fee.'
   useEffect(() => {
     if (!resitLedgerGuid || resitFee === undefined) return
@@ -1964,7 +2044,7 @@ export default function PaymentConsolePage() {
                         : !studentGuid ? { text: 'Resit fee needs a registered student.', color: 'var(--amber)' }
                         : isResitFeeLoading ? { text: 'Fetching resit fee…', color: 'var(--g400)' }
                         : isResitFeeError ? { text: resitFeeErrorMsg, color: 'var(--red)' }
-                        : resitFee === 0 ? { text: 'No resit fee owed.', color: 'var(--amber)' }
+                        : resitFee === 0 ? { text: 'No resit exams to pay.', color: 'var(--amber)' }
                         : null
                       return (
                       <div className="recgrid-row recgrid-body" key={row.id}>
@@ -2017,6 +2097,12 @@ export default function PaymentConsolePage() {
                       <span style={{ color: 'var(--gold)' }}>{fmtAmt(otherLedgerRowsTotal)}</span>
                     </div>
                   </div>
+
+                  {/* What the locked resit amount is for: the units applied to
+                      resit, grouped by semester, each semester capped. */}
+                  {hasResitRow && !!studentGuid && !isResitFeeError && (
+                    <ResitUnitsBreakdown fee={resitFeeData} isLoading={isResitFeeLoading && !resitFeeData} />
+                  )}
 
                   {/* Advance Payment deposit picker — revealed by the
                       checkbox above; a row click selects (or deselects) the

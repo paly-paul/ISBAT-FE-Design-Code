@@ -149,7 +149,6 @@ export function CwScheduleModal({ isOpen, onClose, courseworkGuid }: CwScheduleM
     if (!startDate || !startTime || !endDate || !endTime) {
       const msg = 'Start and End Date/Time are required'
       setFormError(msg)
-      showToast(msg, 'error')
       return
     }
     const startDt = new Date(`${startDate}T${startTime}`)
@@ -158,7 +157,11 @@ export function CwScheduleModal({ isOpen, onClose, courseworkGuid }: CwScheduleM
     if (endDt <= startDt) {
       const msg = 'End Date/Time must be after Start Date/Time'
       setFormError(msg)
-      showToast(msg, 'error')
+      return
+    }
+    if (!examRuleGuid) {
+      const msg = 'Exam rule is required.'
+      setFormError(msg)
       return
     }
     const effectiveMaxMark = typeof maxMark === 'number' && maxMark > 0 ? maxMark : (schedule?.maxMark && schedule.maxMark > 0 ? schedule.maxMark : 15)
@@ -170,17 +173,13 @@ export function CwScheduleModal({ isOpen, onClose, courseworkGuid }: CwScheduleM
         maxMark: effectiveMaxMark,
         courseworkType,
         publishStatus,
-        examRuleGuid: examRuleGuid || null,
+        examRuleGuid,
       })
       showToast('Coursework Scheduled successfully')
       setSaved(true)
     } catch (err: any) {
       const errorMsg = extractApiErrorMessage(err, 'Failed to save schedule.')
       setFormError(errorMsg)
-      showToast(errorMsg, 'error')
-      if (modalBodyRef.current) {
-        modalBodyRef.current.scrollTo({ top: 0, behavior: 'smooth' })
-      }
     }
   }
 
@@ -223,14 +222,6 @@ export function CwScheduleModal({ isOpen, onClose, courseworkGuid }: CwScheduleM
                 <div className="text-base font-semibold text-slate-900">
                   {schedule.courseUnitCode} — {schedule.courseUnitName}
                 </div>
-              </div>
-            )}
-
-            {/* Server Error Message from API */}
-            {formError && (
-              <div className="mb-5 p-3.5 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3 text-xs text-red-900 shadow-xs">
-                <i className="lni lni-warning text-red-600 text-base shrink-0 mt-0.5"></i>
-                <div className="leading-relaxed font-medium">{formError}</div>
               </div>
             )}
 
@@ -341,7 +332,7 @@ export function CwScheduleModal({ isOpen, onClose, courseworkGuid }: CwScheduleM
               {/* Exam Rule Picker */}
               <div className="pt-1">
                 <div className="flex justify-between items-center mb-1">
-                  <label className="lbl mb-0">Exam Rule (Optional)</label>
+                  <label className="lbl mb-0">Exam Rule <span className="text-red-500">*</span></label>
                   <button 
                     className="text-[13px] text-[#3a6bc9] hover:underline" 
                     onClick={() => setLookupOpen(true)}

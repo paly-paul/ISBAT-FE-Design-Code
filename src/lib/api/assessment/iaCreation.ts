@@ -35,6 +35,7 @@ export interface IaStructureRowDto {
   unitName: string | null
   unitCode: string | null
   semesterGuid: string
+  canEdit: boolean // true only for the current intake; the save APIs don't check it
   courseworkGuid: string | null
   courseworkMaxMark: number | null
   courseworkStartDateTime: string | null
@@ -43,11 +44,17 @@ export interface IaStructureRowDto {
   classTestMaxMark: number | null
   classTestStartDateTime: string | null
   classTestEndDateTime: string | null
-  universityExamGuid: string | null
+  universityExamGuid: string | null // Theory exam for a combined unit
   universityExamMaxMark: number | null
   examDate: string | null
   examStartTime: string | null
   examEndTime: string | null
+  // Practical exam: set only for a combined unit (practicalExamGuid not null).
+  practicalExamGuid: string | null
+  practicalExamMaxMark: number | null
+  practicalExamDate: string | null
+  practicalExamStartTime: string | null
+  practicalExamEndTime: string | null
 }
 
 export interface CreateIaStructureRequest {
@@ -90,6 +97,7 @@ const mockStructure: IaStructureRowDto[] = [
     unitName: 'Operating Systems',
     unitCode: 'BNCS125',
     semesterGuid: 'sem-001',
+    canEdit: true,
     courseworkGuid: 'cw-001',
     courseworkMaxMark: 15,
     courseworkStartDateTime: null,
@@ -103,6 +111,11 @@ const mockStructure: IaStructureRowDto[] = [
     examDate: null,
     examStartTime: null,
     examEndTime: null,
+    practicalExamGuid: null,
+    practicalExamMaxMark: null,
+    practicalExamDate: null,
+    practicalExamStartTime: null,
+    practicalExamEndTime: null,
   },
   {
     internalAssessmentGuid: 'ia-002',
@@ -110,6 +123,7 @@ const mockStructure: IaStructureRowDto[] = [
     unitName: 'Database Systems',
     unitCode: 'BNCS126',
     semesterGuid: 'sem-001',
+    canEdit: true,
     courseworkGuid: 'cw-002',
     courseworkMaxMark: 15,
     courseworkStartDateTime: null,
@@ -119,10 +133,15 @@ const mockStructure: IaStructureRowDto[] = [
     classTestStartDateTime: null,
     classTestEndDateTime: null,
     universityExamGuid: 'ue-002',
-    universityExamMaxMark: 70,
+    universityExamMaxMark: 35,
     examDate: null,
     examStartTime: null,
     examEndTime: null,
+    practicalExamGuid: 'ue-002-p', // combined unit
+    practicalExamMaxMark: 35,
+    practicalExamDate: null,
+    practicalExamStartTime: null,
+    practicalExamEndTime: null,
   },
 ]
 

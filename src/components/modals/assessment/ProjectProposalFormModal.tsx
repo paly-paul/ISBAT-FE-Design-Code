@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { SearchSelect } from '@/components/SearchSelect'
+import DatePicker from '@/components/DatePicker'
 import {
   useProjectProposalUnits,
   useProjectProposalEligibleStudents,
@@ -193,12 +194,7 @@ export function ProjectProposalFormModal({ isOpen, onClose, proposalGuid, onSucc
               
               <div className="fg mb-0">
                 <div className="lbl">Proposal Date <span className="req">*</span></div>
-                <input 
-                  type="date" 
-                  className="ctrl"
-                  value={proposalDate}
-                  onChange={e => setProposalDate(e.target.value)}
-                />
+                <DatePicker value={proposalDate} onChange={setProposalDate} />
               </div>
 
               <div className="fg mb-0">

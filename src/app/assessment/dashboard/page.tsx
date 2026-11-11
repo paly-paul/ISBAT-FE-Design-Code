@@ -288,7 +288,7 @@ export default function AssessmentDashboard() {
       list.push({
         id: 'ht-term-2',
         title: `${term2Pending} Term 2 Hall Ticket${term2Pending > 1 ? 's' : ''} Not Issued`,
-        subtitle: '100% fee clearance, Guild & NCHE fee checks required before issuance',
+        subtitle: '100% fee clearance required; Guild & NCHE fees too in even semesters',
         tag: 'Term 2 Pending',
         badgeClass: 'badge-cyan',
         buttonText: 'View',

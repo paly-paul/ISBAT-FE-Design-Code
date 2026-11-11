@@ -31,7 +31,7 @@ export interface UpdateTestScheduleRequest {
   maxMark: number
   testType: number
   publishStatus: number
-  examRuleGuid: string | null
+  examRuleGuid: string // required
 }
 
 // ──────────────────────────────────────────

@@ -8,6 +8,7 @@ import { AuthError } from '@/lib/api/client'
 import { useMyProfile, useUpdateMyPhoto } from '@/hooks/users/useMyProfile'
 import { PROFILE_STATUS_ACTIVE, type MyProfile } from '@/lib/api/users/profile'
 import { parseUtcNoZ } from '@/lib/api/finance/discountReport'
+import { MyTeachingTab } from './_components/MyTeachingTab'
 
 // "My Profile" — the signed-in staff user's own account page, reached from
 // the header's profile dropdown (see Header.tsx) on every module. Profile
@@ -19,6 +20,7 @@ import { parseUtcNoZ } from '@/lib/api/finance/discountReport'
 
 const TABS = [
   { id: 'info', label: 'Profile Info', icon: 'lni-user' },
+  { id: 'teaching', label: 'Timetable & Course Units', icon: 'lni-calendar' },
   { id: 'security', label: 'Security & Access', icon: 'lni-shield' },
 ] as const
 type TabId = typeof TABS[number]['id']
@@ -409,6 +411,9 @@ export default function ProfilePage() {
             </div>
 
             {tab === 'info' && <ProfileInfo p={profile} />}
+
+            {/* Mounted only when opened, so its two calls run only then. */}
+            {tab === 'teaching' && <MyTeachingTab />}
 
             {tab === 'security' && (
               <div className="mp-panel">

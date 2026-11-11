@@ -46,11 +46,10 @@ import { stripLeadingZeros } from '@/lib/errorMessages'
 // Outstanding Balance now comes straight off get-semester-status
 // (nche/get-semester-status.md, guild/get-semester-status.md) instead of
 // Payment Console's get-all-outstanding-ledgers — per request (2026-09-01),
-// same endpoint the card-header due/paid badge already used. That response
-// carries no monetary amount at all (just one Paid/Due/"" row per
-// semester), so the table below shows a status badge per semester in place
-// of a currency amount, keeping the same label-left/value-right row plus
-// summary-footer layout the amount-based version used.
+// same endpoint the card-header due/paid badge already used. One Paid/Due/""
+// row per semester, each with `amount` (the per-semester fee, added
+// 2026-11-11), so the table shows the fee and a status badge per semester
+// and the summary adds up the amount due.
 const CATEGORY_LABEL: Record<PaymentCategory, string> = { nche: 'NCHE', guild: 'Guild' }
 const HISTORY_PAGE_SIZE = 10
 
@@ -109,32 +108,42 @@ function statusBadgeClass(status: string | null | undefined) {
 }
 
 // One row per semester from get-semester-status (nche/get-semester-status.md,
-// guild/get-semester-status.md), in Payment Console's Fee Breakdown grid. That
-// response carries no amounts, so a status badge stands in for them.
+// guild/get-semester-status.md), in Payment Console's Fee Breakdown grid:
+// the semester, its fee (`amount`, the full per-semester rate, not what's
+// been paid) and its status. The summary's amount due adds up the Due rows.
 function RegulatoryOutstandingTable({ items, isLoading, isError, category }: { items: RegulatorySemesterStatus[] | null | undefined; isLoading: boolean; isError: boolean; category: PaymentCategory }) {
   if (isLoading) return <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>Loading outstanding balance…</div>
   if (isError) return <div className="text-clr-red text-center" style={{ padding: 16, fontSize: 12.5 }}><i className="lni lni-warning"></i> Couldn&apos;t load the outstanding balance.</div>
   const semesters = items ?? []
   if (semesters.length === 0) return <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>No {CATEGORY_LABEL[category]} semester schedule found for this application.</div>
-  const dueCount = semesters.filter(s => s.status === 'Due').length
+  const due = semesters.filter(s => s.status === 'Due')
   const paidCount = semesters.filter(s => s.status === 'Paid').length
+  // Older responses had no amount; show "—" rather than 0 for those.
+  const hasAmounts = semesters.some(s => typeof s.amount === 'number')
+  const amountDue = due.reduce((sum, s) => sum + (s.amount ?? 0), 0)
+  const fmt = (n: number) => n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   return (
     <>
-      <div className="recgrid recgrid-2col pcx-ledgers">
+      <div className="recgrid recgrid-2col pcx-ledgers" style={{ gridTemplateColumns: 'minmax(0, 1fr) auto auto' }}>
         <div className="recgrid-row recgrid-hdr">
           <span>Semester</span>
+          <span style={{ textAlign: 'right' }}>Fee</span>
           <span>Status</span>
         </div>
         {semesters.map(s => (
           <div className="recgrid-row recgrid-body" key={s.semesterGuid}>
             <span className="pcx-ledger-cell"><span className="pcx-ledger-name">{s.semName}</span></span>
+            <span data-label="Fee" className="tabular-nums" style={{ textAlign: 'right' }}>{typeof s.amount === 'number' ? fmt(s.amount) : '—'}</span>
             <span data-label="Status"><span className={`badge ${statusBadgeClass(s.status)}`}>{s.status || 'Not Yet Due'}</span></span>
           </div>
         ))}
       </div>
       <dl className="pcx-summary">
         <div><dt>Semesters paid</dt><dd>{paidCount} of {semesters.length}</dd></div>
-        <div className="pcx-summary-total"><dt>Semesters due</dt><dd className={dueCount > 0 ? 'text-amber' : undefined}>{dueCount}</dd></div>
+        <div><dt>Semesters due</dt><dd className={due.length > 0 ? 'text-amber' : undefined}>{due.length}</dd></div>
+        {hasAmounts && (
+          <div className="pcx-summary-total"><dt>Amount due</dt><dd className={amountDue > 0 ? 'text-amber' : undefined}>{fmt(amountDue)}</dd></div>
+        )}
       </dl>
     </>
   )
@@ -365,9 +374,9 @@ export default function NcheGuildPaymentPage() {
 
   // The create validator (post-payment-nche.md / post-payment-guild.md ›
   // Validation), checked all at once and shown inline. "Multiple of the
-  // configured rate" and "not more than the outstanding balance" can't be
-  // checked here — semester-status carries no amounts — so those come back
-  // from the server and land under Amount (see onError below).
+  // configured rate" and "not more than the outstanding balance" stay with
+  // the server (semester-status now shows the rate, but the server owns the
+  // rule) and land under Amount (see onError below).
   function validate(): Record<string, string> {
     const e: Record<string, string> = {}
     const amt = parseFloat(amount)

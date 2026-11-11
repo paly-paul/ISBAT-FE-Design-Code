@@ -76,7 +76,7 @@ export interface BulkUpdateCwScheduleRequest {
   maxMark: number
   courseworkType: number // 0 = Online, 1 = Offline
   publishStatus: number // 0 = Unpublished, 1 = Published
-  examRuleGuid?: string | null
+  examRuleGuid: string // required
 }
 
 export interface BulkUpdateResponse {
@@ -173,7 +173,7 @@ export interface BulkUpdateTestScheduleRequest {
   maxMark: number
   testType: number // 0 = Online, 1 = Offline
   publishStatus: number // 0 = Unpublished, 1 = Published
-  examRuleGuid?: string | null
+  examRuleGuid: string // required
 }
 
 /** Check status for a single Programme Semester (Class Test) */
@@ -255,9 +255,9 @@ export interface BulkUpdateUeScheduleRequest {
   endTime: string
   maxMark: number
   examType: number // 0 = Online, 1 = Offline
-  universityExamType: number // 0 = Theory, 1 = Practical
+  // universityExamType is not sent: each exam row keeps its own type.
   publishStatus: number // 0 = Unpublished, 1 = Published
-  examRuleGuid?: string | null
+  examRuleGuid: string // required
 }
 
 /** Check status for a single Programme Semester (University Exam) */
@@ -329,7 +329,7 @@ export interface BulkUpdateMockScheduleRequest {
   scheduledStartDateTime: string
   scheduledEndDateTime: string
   durationMinutes: number
-  examRuleGuid?: string | null
+  examRuleGuid: string // required
 }
 
 /** Check status for a single Programme Semester (Mock Exam) */

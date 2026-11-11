@@ -14348,6 +14348,68 @@ body:has(.drawer-overlay) {
 .fd-state-err > i { color: var(--red); }
 .fd-none { margin: 0; padding: 20px 0; font-size: var(--fs-base); color: var(--g500); }
 .fd-busy { opacity: .55; transition: opacity .2s; }
+
+/* Cleared / blocked student lists (StudentListModal). Toolbar (search +
+   folding filters), one summary strip with the totals, a full-bleed table
+   that scrolls inside the modal with pinned headings and student column,
+   and one footer (freshness + paging). */
+.fd-sl-hdr-note { margin-left: 8px; font-size: var(--fs-sm); font-weight: 500; opacity: .85; }
+.fd-sl-toolbar { flex-shrink: 0; display: flex; align-items: center; gap: 10px; padding: 14px 22px; border-bottom: 1px solid var(--g200); }
+.fd-sl-search-box { position: relative; flex: 1; min-width: 0; }
+.fd-sl-search-box > i { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: var(--g400); font-size: 14px; pointer-events: none; }
+.fd-sl-search-box .ctrl { padding-left: 32px; width: 100%; }
+.fd-sl-filter-btn { flex-shrink: 0; gap: 7px; }
+.fd-sl-filter-btn .badge { padding: 1px 7px; }
+.fd-sl-chev { font-size: 10px; color: var(--g400); transition: transform .2s cubic-bezier(.22, 1, .36, 1); }
+.fd-sl-filter-btn.open .fd-sl-chev { transform: rotate(180deg); }
+.fd-sl-filter-btn.open { color: var(--b700); background: var(--b50); }
+.fd-sl-filters { flex-shrink: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px 14px; padding: 14px 22px 16px; border-bottom: 1px solid var(--g200); background: var(--surface); animation: fd-sl-reveal .22s cubic-bezier(.22, 1, .36, 1); }
+@keyframes fd-sl-reveal { from { opacity: 0; transform: translateY(-4px); } }
+.fd-sl-field { min-width: 0; }
+.fd-sl-field .lbl { margin-bottom: 4px; }
+.fd-sl-summary { flex-shrink: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 8px 24px; padding: 12px 22px; border-bottom: 1px solid var(--g200); }
+.fd-sl-count { display: flex; flex-direction: column; gap: 2px; font-size: var(--fs-base); color: var(--g700); }
+.fd-sl-count-main strong { color: var(--g900); font-variant-numeric: tabular-nums; }
+.fd-sl-count-sub { font-size: var(--fs-xs); color: var(--g500); }
+.fd-sl-stats { margin: 0 0 0 auto; display: flex; align-items: flex-end; flex-wrap: wrap; gap: 4px 22px; font-variant-numeric: tabular-nums; }
+.fd-sl-stats > div { display: flex; flex-direction: column; align-items: flex-end; }
+.fd-sl-stats dt { font-size: var(--fs-xs); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--g500); }
+.fd-sl-stats dd { margin: 0; font-size: var(--fs-base); font-weight: 700; color: var(--g900); }
+.fd-sl-stats-cur { align-self: flex-end; margin-left: -14px; font-size: var(--fs-xs); font-weight: 600; color: var(--g500); }
+.fd-sl-owed dd, .fd-sl-owed dt { color: var(--red); }
+.fd-sl-warn { flex-shrink: 0; margin: 10px 22px 0; padding: 8px 12px; border-radius: var(--rxs); background: var(--amber-bg); border: 1px solid var(--amber-bd); color: var(--g800); font-size: var(--fs-sm); }
+.fd-sl-warn i { color: var(--amber); margin-right: 4px; }
+/* Body fills the rest of the modal; the table (standard .tbl-wrap card) is the
+   scroller, so its heading row and student column pin against it. */
+.fd-sl-body { flex: 1 1 auto; min-height: 220px; display: flex; flex-direction: column; overflow: hidden; padding: 14px 22px 16px; }
+.fd-sl-body > .fd-state { flex: 1; }
+.fd-sl-list { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.fd-sl-list > .tbl-scroll-host { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.tbl-wrap.fd-sl-table { flex: 1; min-height: 0; overflow: auto; }
+/* The blue lives on `thead tr`, so pin the whole row (as .fd-scroll does)
+   rather than each th, or the headings lose their background. */
+.tbl-wrap.fd-sl-table thead { position: sticky; top: 0; z-index: 12; }
+.tbl-wrap.fd-sl-table thead th { position: static; }
+.tbl-wrap.fd-sl-table td { vertical-align: top; padding-top: 10px; padding-bottom: 10px; }
+.tbl-wrap.fd-sl-table td:nth-child(2) { min-width: 200px; max-width: 280px; white-space: normal; }
+/* The global sticky first column is centred for action menus; here it's the
+   student's name: left-aligned, and allowed to wrap so long names don't
+   push the amounts out of view. */
+.tbl-wrap.fd-sl-table table th:first-child,
+.tbl-wrap.fd-sl-table table td:first-child { text-align: left; }
+.tbl-wrap.fd-sl-table thead th:first-child { position: sticky; left: 0; }
+.tbl-wrap.fd-sl-table td:first-child { min-width: 180px; max-width: 240px; white-space: normal; }
+.fd-sl-clr { display: flex; align-items: center; gap: 8px; min-width: 96px; font-weight: 600; color: var(--red); }
+.fd-sl-clr-track { flex: 1; height: 5px; border-radius: 3px; background: var(--g100); overflow: hidden; }
+.fd-sl-clr-track > span { display: block; height: 100%; background: var(--red); border-radius: 3px; }
+.fd-sl-footer { flex-shrink: 0; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.fd-sl-asof { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-sm); color: var(--g500); }
+@media (prefers-reduced-motion: reduce) { .fd-sl-filters { animation: none; } .fd-sl-chev { transition: none; } }
+@media (max-width: 640px) {
+  .fd-sl-toolbar, .fd-sl-filters, .fd-sl-summary { padding-left: 16px; padding-right: 16px; }
+  .fd-sl-stats { margin-left: 0; }
+  .fd-sl-stats > div { align-items: flex-start; }
+}
 .fd-kpi-err { color: var(--red); }
 .fd-toolbar-err { color: var(--red); }
 .fd-skel {
@@ -15177,6 +15239,24 @@ button.mp-avatar { padding: 0; font-family: inherit; }
 @media (max-width: 760px) {
   .mp-sec-strip { grid-template-columns: 1fr; }
   .mp-sec-item + .mp-sec-item { border-left: 0; border-top: 1px solid var(--g100); }
+}
+
+/* Timetable & Course Units tab (MyTeachingTab): one shared Session + Term
+   bar, the summary strip above, the week grid, then the allocation table. */
+.mp-teach-filters { display: grid; grid-template-columns: minmax(200px, 280px) minmax(140px, 180px) 1fr; align-items: end; gap: 14px 18px; }
+.mp-teach-filters .fg { margin-bottom: 0; }
+.mp-teach-note { margin: 0 0 9px; font-size: var(--fs-sm); color: var(--g500); }
+.mp-teach-note strong { color: var(--g800); font-weight: 600; }
+.mp-teach-legend { margin: 10px 2px 0; font-size: var(--fs-xs); color: var(--g500); }
+.mp-teach-units-hdr { flex-wrap: wrap; gap: 12px; }
+.mp-teach-search { width: min(320px, 100%); }
+.mp-teach-search .ctrl { width: 100%; }
+/* The global sticky first column is centred for action menus; here it's the unit code. */
+.tbl-wrap.mp-teach-table table th:first-child,
+.tbl-wrap.mp-teach-table table td:first-child { text-align: left; }
+@media (max-width: 760px) {
+  .mp-teach-filters { grid-template-columns: 1fr 1fr; }
+  .mp-teach-note { grid-column: 1 / -1; margin: 0; }
 }
 
 /* Live password rules under New Password */

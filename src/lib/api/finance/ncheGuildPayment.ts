@@ -125,6 +125,9 @@ export interface RegulatorySemesterStatus {
   semCode: number
   semName: string
   status: 'Paid' | 'Due' | ''
+  // The full fee for one semester (the configured NCHE or Guild rate), not
+  // what's been paid. Same on every row; also present on Due / not-yet-due rows.
+  amount: number
 }
 
 let mockPaymentSeq = 1
@@ -179,11 +182,14 @@ export function getRegulatoryPaymentHistory(category: PaymentCategory, studentGu
 // missing status badge either way, and a hard error here shouldn't block the
 // rest of the page (outstanding balance, payment form, history) from working.
 export function getRegulatorySemesterStatus(category: PaymentCategory, applicationGuid: string, studentGuid?: string | null): Promise<RegulatorySemesterStatus[] | null> {
-  if (MOCK_AUTH) return Promise.resolve([
-    { semesterGuid: 'sem-mock-1', semCode: 1, semName: 'Semester 1', status: 'Paid' },
-    { semesterGuid: 'sem-mock-2', semCode: 2, semName: 'Semester 2', status: 'Due' },
-    { semesterGuid: 'sem-mock-3', semCode: 3, semName: 'Semester 3', status: '' },
-  ])
+  if (MOCK_AUTH) {
+    const amount = category === 'nche' ? 10000 : 20000
+    return Promise.resolve([
+      { semesterGuid: 'sem-mock-1', semCode: 1, semName: 'Semester 1', status: 'Paid', amount },
+      { semesterGuid: 'sem-mock-2', semCode: 2, semName: 'Semester 2', status: 'Due', amount },
+      { semesterGuid: 'sem-mock-3', semCode: 3, semName: 'Semester 3', status: '', amount },
+    ])
+  }
   const qs = studentGuid ? `?studentGuid=${encodeURIComponent(studentGuid)}` : ''
   return apiGet<RegulatorySemesterStatus[]>(`${basePath(category)}/semester-status/${applicationGuid}${qs}`).catch(() => null)
 }

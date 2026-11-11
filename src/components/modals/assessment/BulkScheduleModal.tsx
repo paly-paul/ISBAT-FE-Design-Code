@@ -13,6 +13,20 @@ import {
 } from '@/lib/api/assessment/iaBulkSchedule'
 import { getExamRules, ExamRuleDto } from '@/lib/api/assessment/examRule'
 import TimeRangePicker from '@/components/TimeRangePicker'
+import DatePicker from '@/components/DatePicker'
+import TimePicker from '@/components/TimePicker'
+import { extractApiErrorMessage } from '@/lib/errorMessages'
+
+// The CW / Class Test / CA / Mock window is held as one "YYYY-MM-DDTHH:mm" string;
+// these split it for the separate date and time pickers and join it back.
+const datePart = (dt: string) => dt.slice(0, 10)
+const timePart = (dt: string) => dt.slice(11, 16)
+const joinDateTime = (d: string, t: string) => `${d}T${t}`
+const isCompleteDateTime = (dt: string) => /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(dt)
+function todayYmd() {
+  const n = new Date()
+  return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`
+}
 
 export type BulkAssessmentType = 'CW' | 'CLASS_TEST' | 'CA' | 'UE' | 'MOCK'
 
@@ -138,7 +152,6 @@ export function BulkScheduleModal({
   const [examDate, setExamDate] = useState('')
   const [startTime, setStartTime] = useState('09:00')
   const [endTime, setEndTime] = useState('12:00')
-  const [ueType, setUeType] = useState<number>(0) // 0 = Theory, 1 = Practical
 
   // Execution
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -262,7 +275,6 @@ export function BulkScheduleModal({
           if (res.endTime) setEndTime(res.endTime.slice(0, 5))
           if (res.maxMark != null) setMaxMark(Number(res.maxMark))
           if (res.examType != null) setAssessmentTypeMode(res.examType)
-          if (res.universityExamType != null) setUeType(res.universityExamType)
           if (res.publishStatus != null) setPublishStatus(res.publishStatus)
           if (res.examRuleGuid) setSelectedExamRuleGuid(res.examRuleGuid)
         })
@@ -319,7 +331,7 @@ export function BulkScheduleModal({
         return
       }
     } else {
-      if (!startDateTime || !endDateTime) {
+      if (!isCompleteDateTime(startDateTime) || !isCompleteDateTime(endDateTime)) {
         setSubmitError('Scheduled start and end dates/times are required.')
         return
       }
@@ -331,6 +343,10 @@ export function BulkScheduleModal({
 
       if (scheduleType !== 'MOCK' && maxMark < 0) {
       setSubmitError('Maximum mark cannot be negative.')
+      return
+    }
+    if (!selectedExamRuleGuid) {
+      setSubmitError('Exam rule is required.')
       return
     }
 
@@ -356,7 +372,7 @@ export function BulkScheduleModal({
             maxMark: Number(maxMark),
             courseworkType: assessmentTypeMode,
             publishStatus,
-            examRuleGuid: selectedExamRuleGuid || null,
+            examRuleGuid: selectedExamRuleGuid,
           }
         )
         updatedCount = res.data ?? 1
@@ -370,7 +386,7 @@ export function BulkScheduleModal({
             maxMark: Number(maxMark),
             courseworkType: assessmentTypeMode,
             publishStatus,
-            examRuleGuid: selectedExamRuleGuid || null,
+            examRuleGuid: selectedExamRuleGuid,
           }
         )
         updatedCount = res.data ?? 1
@@ -385,7 +401,7 @@ export function BulkScheduleModal({
             maxMark: Number(maxMark),
             testType: assessmentTypeMode,
             publishStatus,
-            examRuleGuid: selectedExamRuleGuid || null,
+            examRuleGuid: selectedExamRuleGuid,
           }
         )
         updatedCount = res.data ?? 1
@@ -399,9 +415,8 @@ export function BulkScheduleModal({
             endTime: endTime.length === 5 ? `${endTime}:00` : endTime,
             maxMark: Number(maxMark),
             examType: assessmentTypeMode,
-            universityExamType: ueType,
             publishStatus,
-            examRuleGuid: selectedExamRuleGuid || null,
+            examRuleGuid: selectedExamRuleGuid,
           }
         )
         updatedCount = res.data ?? 1
@@ -413,7 +428,7 @@ export function BulkScheduleModal({
             scheduledStartDateTime: new Date(startDateTime).toISOString(),
             scheduledEndDateTime: new Date(endDateTime).toISOString(),
             durationMinutes: Number(durationMinutes) || 60,
-            examRuleGuid: selectedExamRuleGuid || null,
+            examRuleGuid: selectedExamRuleGuid,
           }
         )
         updatedCount = res.data ?? 1
@@ -423,7 +438,7 @@ export function BulkScheduleModal({
       onSuccess(updatedCount, resMessage)
       onClose()
     } catch (err: any) {
-      setSubmitError(err?.message || 'Failed to update schedule. Please check inputs and try again.')
+      setSubmitError(extractApiErrorMessage(err, 'Failed to update schedule. Please check inputs and try again.'))
     } finally {
       setIsSubmitting(false)
     }
@@ -530,25 +545,45 @@ export function BulkScheduleModal({
                     <label className="block text-slate-700 font-semibold mb-1">
                       Start Date &amp; Time <span className="text-rose-500">*</span>
                     </label>
-                    <input
-                      type="datetime-local"
-                      className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded focus:border-blue-500 focus:outline-hidden"
-                      value={startDateTime}
-                      onChange={e => setStartDateTime(e.target.value)}
-                      required
-                    />
+                    <div className="flex gap-2">
+                      <div className="flex-1 min-w-0">
+                        <DatePicker
+                          value={datePart(startDateTime)}
+                          onChange={d => setStartDateTime(joinDateTime(d, timePart(startDateTime)))}
+                          minYmd={todayYmd()}
+                          rangeMessage="Before date is not possible"
+                          onError={setSubmitError}
+                        />
+                      </div>
+                      <div className="w-[120px] shrink-0">
+                        <TimePicker
+                          value={timePart(startDateTime)}
+                          onChange={t => setStartDateTime(joinDateTime(datePart(startDateTime), t))}
+                        />
+                      </div>
+                    </div>
                   </div>
                   <div>
                     <label className="block text-slate-700 font-semibold mb-1">
                       End Date &amp; Time <span className="text-rose-500">*</span>
                     </label>
-                    <input
-                      type="datetime-local"
-                      className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded focus:border-blue-500 focus:outline-hidden"
-                      value={endDateTime}
-                      onChange={e => setEndDateTime(e.target.value)}
-                      required
-                    />
+                    <div className="flex gap-2">
+                      <div className="flex-1 min-w-0">
+                        <DatePicker
+                          value={datePart(endDateTime)}
+                          onChange={d => setEndDateTime(joinDateTime(d, timePart(endDateTime)))}
+                          minYmd={datePart(startDateTime) || todayYmd()}
+                          rangeMessage="Before date is not possible"
+                          onError={setSubmitError}
+                        />
+                      </div>
+                      <div className="w-[120px] shrink-0">
+                        <TimePicker
+                          value={timePart(endDateTime)}
+                          onChange={t => setEndDateTime(joinDateTime(datePart(endDateTime), t))}
+                        />
+                      </div>
+                    </div>
                   </div>
                 </div>
 
@@ -617,14 +652,14 @@ export function BulkScheduleModal({
 
                 <div>
                   <label className="block text-slate-700 font-semibold mb-1">
-                    Exam Rule (Grading / Structure)
+                    Exam Rule (Grading / Structure) <span className="text-rose-500">*</span>
                   </label>
                   <select
                     className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded focus:border-blue-500 focus:outline-hidden"
                     value={selectedExamRuleGuid}
                     onChange={e => setSelectedExamRuleGuid(e.target.value)}
                   >
-                    <option value="">-- No Specific Exam Rule / Standard --</option>
+                    <option value="" disabled>-- Select an exam rule --</option>
                     {examRules.map(r => (
                       <option key={r.examRuleGuid} value={r.examRuleGuid}>
                         {r.ruleName || 'Unnamed'} {r.ruleCode ? `(${r.ruleCode})` : ''} — Total:{' '}
@@ -644,12 +679,12 @@ export function BulkScheduleModal({
                     <label className="block text-slate-700 font-semibold mb-1">
                       Exam Date <span className="text-rose-500">*</span>
                     </label>
-                    <input
-                      type="date"
-                      className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded focus:border-blue-500 focus:outline-hidden"
+                    <DatePicker
                       value={examDate}
-                      onChange={e => setExamDate(e.target.value)}
-                      required
+                      onChange={setExamDate}
+                      minYmd={todayYmd()}
+                      rangeMessage="Before date is not possible"
+                      onError={setSubmitError}
                     />
                   </div>
                   <div className="sm:col-span-2">
@@ -664,7 +699,7 @@ export function BulkScheduleModal({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
                     <label className="block text-slate-700 font-semibold mb-1">
                       Max Mark <span className="text-rose-500">*</span>
@@ -691,17 +726,6 @@ export function BulkScheduleModal({
                     </select>
                   </div>
                   <div>
-                    <label className="block text-slate-700 font-semibold mb-1">Paper Type</label>
-                    <select
-                      className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded focus:border-blue-500 focus:outline-hidden"
-                      value={ueType}
-                      onChange={e => setUeType(Number(e.target.value))}
-                    >
-                      <option value={0}>Theory</option>
-                      <option value={1}>Practical</option>
-                    </select>
-                  </div>
-                  <div>
                     <label className="block text-slate-700 font-semibold mb-1">Publish Status</label>
                     <select
                       className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded focus:border-blue-500 focus:outline-hidden"
@@ -716,14 +740,14 @@ export function BulkScheduleModal({
 
                 <div>
                   <label className="block text-slate-700 font-semibold mb-1">
-                    Exam Rule (Grading / Question Structure)
+                    Exam Rule (Grading / Question Structure) <span className="text-rose-500">*</span>
                   </label>
                   <select
                     className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded focus:border-blue-500 focus:outline-hidden"
                     value={selectedExamRuleGuid}
                     onChange={e => setSelectedExamRuleGuid(e.target.value)}
                   >
-                    <option value="">-- No Specific Exam Rule / Standard --</option>
+                    <option value="" disabled>-- Select an exam rule --</option>
                     {examRules.map(r => (
                       <option key={r.examRuleGuid} value={r.examRuleGuid}>
                         {r.ruleName || 'Unnamed'} {r.ruleCode ? `(${r.ruleCode})` : ''} — Total:{' '}
@@ -731,6 +755,15 @@ export function BulkScheduleModal({
                       </option>
                     ))}
                   </select>
+                </div>
+
+                {/* Bulk writes the same slot to both exams of a combined course unit. */}
+                <div className="p-2.5 bg-amber-50 border border-amber-200 rounded text-amber-800 text-[11px] flex items-start gap-1.5">
+                  <i className="lni lni-warning text-sm shrink-0 mt-px"></i>
+                  <span>
+                    For combined course units, the Theory and Practical exams both get this date and time.
+                    Reschedule the Practical exam afterwards from IA Creation.
+                  </span>
                 </div>
               </>
             )}

@@ -1,11 +1,11 @@
 'use client'
 
-import { useState } from 'react'
-import Link from 'next/link'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { IaStructureRowDto } from '@/lib/api/assessment/iaCreation'
 import { useIaTestSchedule } from '@/hooks/assessment/useIaTestSchedule'
 import { useIaCwSchedule } from '@/hooks/assessment/useIaCwSchedule'
 import { useIaUeSchedule } from '@/hooks/assessment/useIaUeSchedule'
+import type { UeScheduleDto } from '@/lib/api/assessment/iaUeSchedule'
 
 interface Props {
   row: IaStructureRowDto | null
@@ -17,248 +17,304 @@ interface Props {
   onEditUe?: (universityExamGuid: string) => void
 }
 
+type Tab = 'CT' | 'CW' | 'UE'
+
+// Same order as the grid columns.
+const TABS: { id: Tab; label: string; icon: string }[] = [
+  { id: 'CT', label: 'Class Test', icon: 'lni-pencil' },
+  { id: 'CW', label: 'Course Work', icon: 'lni-book' },
+  { id: 'UE', label: 'University Exam', icon: 'lni-graduation' },
+]
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+// "14 Sep 2026" from "2026-09-14" or "2026-09-14T09:00:00".
+function fmtDate(value: string | null | undefined) {
+  if (!value) return '—'
+  const [y, m, d] = value.split('T')[0].split('-').map(Number)
+  if (!y || !m || !d) return '—'
+  return `${d} ${MONTHS[m - 1]} ${y}`
+}
+
+// "2:30 PM" from "14:30" or "14:30:00".
+function fmtTime(value: string | null | undefined) {
+  const match = value?.match(/^(\d{1,2}):(\d{2})/)
+  if (!match) return '—'
+  const h = Number(match[1])
+  return `${h % 12 || 12}:${match[2]} ${h < 12 ? 'AM' : 'PM'}`
+}
+
+// "14 Sep 2026, 9:00 AM" from an ISO date-time.
+function fmtDateTime(value: string | null | undefined) {
+  if (!value) return '—'
+  return `${fmtDate(value)}, ${fmtTime(value.split('T')[1])}`
+}
+
+function Field({ label, value, full }: { label: string; value: React.ReactNode; full?: boolean }) {
+  return (
+    <div style={full ? { gridColumn: '1 / -1' } : undefined}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--g500)', marginBottom: 4 }}>{label}</div>
+      <div style={{ fontSize: 14, color: 'var(--g900)', fontWeight: 500 }}>{value}</div>
+    </div>
+  )
+}
+
+function SectionTitle({ children }: { children: React.ReactNode }) {
+  return <div className="sec-divider" style={{ gridColumn: '1 / -1', marginTop: 6, marginBottom: 0 }}>{children}</div>
+}
+
+type UeKind = 'theory' | 'practical'
+const UE_TABS: { id: UeKind; label: string }[] = [
+  { id: 'theory', label: 'Theory' },
+  { id: 'practical', label: 'Practical' },
+]
+
+function Grid({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', rowGap: 20, columnGap: 24 }}>
+      {children}
+    </div>
+  )
+}
+
+function EmptyBox({ icon, children }: { icon: string; children: React.ReactNode }) {
+  return (
+    <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '32px 16px', border: '1.5px dashed var(--g200)', borderRadius: 'var(--rsm)', color: 'var(--g500)', fontSize: 13 }}>
+      <i className={`lni ${icon}`} style={{ fontSize: 28, color: 'var(--g300)', display: 'block', marginBottom: 8 }} aria-hidden="true" />
+      {children}
+    </div>
+  )
+}
+
+function LoadingBox({ children }: { children: React.ReactNode }) {
+  return <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '32px 16px', color: 'var(--g400)', fontSize: 13 }}>{children}</div>
+}
+
+const modeBadge = (v: number | null | undefined) =>
+  v === 1 ? <span className="badge badge-grey">Offline</span> : v === 0 ? <span className="badge badge-blue">Online</span> : '—'
+
+const publishBadge = (v: number | null | undefined) =>
+  v === 1
+    ? <span className="badge badge-green"><i className="lni lni-checkmark" aria-hidden="true" /> Published to students</span>
+    : <span className="badge badge-grey">Not published</span>
+
+// The exam rule is now required on every save, so a missing one is worth flagging.
+const ruleValue = (code: string | null | undefined, name: string | null | undefined) =>
+  code ? <span><span className="font-mono">{code}</span> — {name}</span> : <span className="badge badge-amber">No rule linked</span>
+
+// One university exam (Theory or Practical), loaded by its own guid.
+function UeSection({ examGuid }: { examGuid: string }) {
+  const { data, isLoading, isError } = useIaUeSchedule(examGuid)
+  const scheduled = (d: UeScheduleDto) => Boolean(d.examDate && d.startTime && !d.startTime.startsWith('00:00'))
+
+  return (
+    <>
+      {isLoading ? (
+        <LoadingBox>Loading exam details…</LoadingBox>
+      ) : isError || !data ? (
+        <EmptyBox icon="lni-warning">Couldn’t load this exam’s schedule.</EmptyBox>
+      ) : !scheduled(data) ? (
+        <EmptyBox icon="lni-calendar">This exam hasn’t been scheduled yet.</EmptyBox>
+      ) : (
+        <>
+          <Field label="Exam Date" value={fmtDate(data.examDate)} />
+          <Field label="Start Time" value={fmtTime(data.startTime)} />
+          <Field label="End Time" value={fmtTime(data.endTime)} />
+          <Field label="Max Mark" value={data.maxMark ?? '—'} />
+          <Field label="UE Type" value={data.universityExamType === 1 ? <span className="badge badge-purple">Practical</span> : <span className="badge badge-blue">Theory</span>} />
+          <Field label="Exam Mode" value={modeBadge(data.examType)} />
+          <Field label="Publish Status" value={publishBadge(data.publishStatus)} />
+          <Field label="Exam Rule" value={ruleValue(data.examRuleCode, data.examRuleName)} full />
+        </>
+      )}
+    </>
+  )
+}
+
 export function IaStructureViewModal({ row, progName, semName, onClose, onEditCw, onEditCt, onEditUe }: Props) {
-  const [activeTab, setActiveTab] = useState<'CW' | 'CT' | 'UE'>('CT')
-  
-  // Fetch details for CT, CW, and UE
-  const { data: ctSchedule, isLoading: ctLoading } = useIaTestSchedule(row?.classTestGuid || null)
-  const { data: cwSchedule, isLoading: cwLoading } = useIaCwSchedule(row?.courseworkGuid || null)
-  const { data: ueSchedule, isLoading: ueLoading } = useIaUeSchedule(row?.universityExamGuid || null)
+  const [activeTab, setActiveTab] = useState<Tab>('CT')
+  // Combined units: which of the two university exams the UE tab shows.
+  const [ueKind, setUeKind] = useState<UeKind>('theory')
+
+  const { data: ct, isLoading: ctLoading, isError: ctError } = useIaTestSchedule(row?.classTestGuid || null)
+  const { data: cw, isLoading: cwLoading, isError: cwError } = useIaCwSchedule(row?.courseworkGuid || null)
+
+  // Same sliding underline as the Academic view modals.
+  const tabRefs = useRef<Partial<Record<Tab, HTMLButtonElement>>>({})
+  const [indicator, setIndicator] = useState({ left: 0, width: 0 })
+  useLayoutEffect(() => {
+    const el = tabRefs.current[activeTab]
+    if (el) setIndicator({ left: el.offsetLeft, width: el.offsetWidth })
+  }, [activeTab, row])
+
+  // Second-level underline for the Theory / Practical tabs.
+  const ueTabRefs = useRef<Partial<Record<UeKind, HTMLButtonElement>>>({})
+  const [ueIndicator, setUeIndicator] = useState({ left: 0, width: 0 })
+  useLayoutEffect(() => {
+    const el = ueTabRefs.current[ueKind]
+    if (el) setUeIndicator({ left: el.offsetLeft, width: el.offsetWidth })
+  }, [ueKind, activeTab, row])
 
   if (!row) return null
 
-  // Helper to safely format dates
-  const formatDate = (dateStr: string | null) => {
-    if (!dateStr) return '—'
-    return new Date(dateStr).toLocaleString(undefined, { 
-      day: '2-digit', month: 'short', year: 'numeric',
-      hour: '2-digit', minute: '2-digit'
-    })
-  }
+  // Past intakes are read-only (canEdit false); the save APIs don't check it.
+  const editable = row.canEdit
+  const combined = Boolean(row.practicalExamGuid)
 
-  // No editLink needed anymore, we use callbacks
+  const context = (
+    <>
+      <Field label="Course Unit" value={row.unitName ?? '—'} full />
+      <Field label="Programme" value={progName || '—'} />
+      <Field label="Semester" value={semName || '—'} />
+    </>
+  )
+
+  // The University Exam shown: the Practical one only when that tab is picked on a combined unit.
+  const ueGuid = combined && ueKind === 'practical' ? row.practicalExamGuid : row.universityExamGuid
+
+  const footerEdit =
+    !editable ? null
+      : activeTab === 'CT' && row.classTestGuid && onEditCt ? () => { onClose(); onEditCt(row.classTestGuid!) }
+      : activeTab === 'CW' && row.courseworkGuid && onEditCw ? () => { onClose(); onEditCw(row.courseworkGuid!) }
+      : activeTab === 'UE' && ueGuid && onEditUe ? () => { onClose(); onEditUe(ueGuid) }
+      : null
 
   return (
     <div className="modal-overlay open">
-      <div className="modal modal-md modal-flex" style={{ maxWidth: '800px', borderRadius: '12px' }} onClick={e => e.stopPropagation()}>
-        
-        {/* Header */}
-        <div className="modal-hdr modal-hdr-blue" style={{ display: 'flex', alignItems: 'center', padding: '16px 20px' }}>
-          <div className="modal-title text-white font-medium text-base" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <i className="lni lni-eye" style={{ fontSize: '18px' }}></i> View Structure — {row.unitCode}
+      <div className="modal modal-lg modal-flex" onClick={e => e.stopPropagation()}>
+        <div className="modal-hdr modal-hdr-blue">
+          <div className="modal-title"><i className="lni lni-eye"></i> View Structure &mdash; <span className="font-mono">{row.unitCode}</span></div>
+          <button className="modal-close" onClick={onClose} aria-label="Close"><i className="lni lni-close"></i></button>
+        </div>
+
+        <div className="tab-bar" role="tablist" aria-label="Assessment structure" style={{ flexShrink: 0, padding: 0, background: 'var(--surface)' }}>
+          {TABS.map(t => {
+            const active = activeTab === t.id
+            return (
+              <button
+                key={t.id}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                ref={el => { if (el) tabRefs.current[t.id] = el }}
+                className={`tab-btn${active ? ' active' : ''}`}
+                style={{ flex: 1, justifyContent: 'center' }}
+                onClick={() => setActiveTab(t.id)}
+              >
+                <i className={`lni ${t.icon}`} aria-hidden="true" /> {t.label}
+                {t.id === 'UE' && combined && (
+                  <span className={`badge ${active ? 'badge-blue' : 'badge-grey'}`}>2</span>
+                )}
+              </button>
+            )
+          })}
+          <span className="tab-indicator" style={{ left: indicator.left, width: indicator.width }} />
+        </div>
+
+        {activeTab === 'CT' && (
+          <div key="CT" className="modal-scroll tab-panel-in" style={{ padding: '20px clamp(14px, 4vw, 24px)' }}>
+            <Grid>
+              {context}
+              <SectionTitle>Class Test Schedule</SectionTitle>
+              {!row.classTestGuid ? (
+                <EmptyBox icon="lni-pencil">This unit has no class test.</EmptyBox>
+              ) : ctLoading ? (
+                <LoadingBox>Loading class test details…</LoadingBox>
+              ) : ctError || !ct ? (
+                <EmptyBox icon="lni-warning">Couldn’t load the class test schedule.</EmptyBox>
+              ) : !ct.scheduledStartDateTime ? (
+                <EmptyBox icon="lni-calendar">The class test hasn’t been scheduled yet.</EmptyBox>
+              ) : (
+                <>
+                  <Field label="Start" value={fmtDateTime(ct.scheduledStartDateTime)} />
+                  <Field label="End" value={fmtDateTime(ct.scheduledEndDateTime)} />
+                  <Field label="Duration" value={ct.durationMinutes ? `${ct.durationMinutes} mins` : '—'} />
+                  <Field label="Test Mode" value={modeBadge(ct.testType)} />
+                  <Field label="Publish Status" value={publishBadge(ct.publishStatus)} />
+                  <Field label="Exam Rule" value={ruleValue(ct.examRuleCode, ct.examRuleName)} full />
+                </>
+              )}
+            </Grid>
           </div>
-          <button className="modal-close text-white hover:text-white/80 transition-colors" onClick={onClose} style={{ marginLeft: 'auto', background: 'transparent', border: 'none', cursor: 'pointer' }}>
-            <i className="lni lni-close" style={{ fontSize: '18px' }}></i>
-          </button>
-        </div>
+        )}
 
-        {/* Tabs */}
-        <div className="flex border-b border-g200 px-8 pt-4">
-          <button 
-            className={`flex-1 flex justify-center items-center gap-2 pb-4 text-[13.5px] font-medium transition-colors border-b-[2px] ${activeTab === 'CW' ? 'border-blue-500 text-blue-600' : 'border-transparent text-g600 hover:text-g800'}`}
-            onClick={() => setActiveTab('CW')}
-          >
-            <i className="lni lni-book" style={{ fontSize: '16px' }} /> Course Work
-          </button>
-          <button 
-            className={`flex-1 flex justify-center items-center gap-2 pb-4 text-[13.5px] font-medium transition-colors border-b-[2px] ${activeTab === 'CT' ? 'border-blue-500 text-blue-600' : 'border-transparent text-g600 hover:text-g800'}`}
-            onClick={() => setActiveTab('CT')}
-          >
-            <i className="lni lni-pencil" style={{ fontSize: '16px' }} /> Class Test
-          </button>
-          <button 
-            className={`flex-1 flex justify-center items-center gap-2 pb-4 text-[13.5px] font-medium transition-colors border-b-[2px] ${activeTab === 'UE' ? 'border-blue-500 text-blue-600' : 'border-transparent text-g600 hover:text-g800'}`}
-            onClick={() => setActiveTab('UE')}
-          >
-            <i className="lni lni-graduation" style={{ fontSize: '16px' }} /> University Exam
-          </button>
-        </div>
-
-        {/* Scrollable Content */}
-        <div className="modal-scroll p-8 bg-white flex-1 overflow-y-auto">
-          <div className="grid grid-cols-3 gap-y-8 gap-x-6">
-            
-            <div className="col-span-3">
-              <div className="text-[12.5px] font-medium text-g500 mb-1">Subject</div>
-              <div className="text-[14.5px] text-g900 font-medium">{row.unitCode} — {row.unitName}</div>
-            </div>
-
-            {activeTab === 'CW' && (
-              <>
-                {cwLoading ? (
-                  <div className="col-span-3 py-8 text-center text-g500">Loading Course Work details...</div>
-                ) : cwSchedule ? (
-                  <>
-                    {/* Max Mark removed as requested */}
-                    {/*
-                    <div>
-                      <div className="text-[12.5px] font-medium text-g500 mb-1">Max Mark</div>
-                      <div className="text-[14.5px] text-g900">{cwSchedule.maxMark ?? '—'}</div>
-                    </div>
-                    */}
-                    <div>
-                      <div className="text-[12.5px] font-medium text-g500 mb-1">Start Date & Time</div>
-                      <div className="text-[14.5px] text-g900">{formatDate(cwSchedule.scheduledStartDateTime)}</div>
-                    </div>
-                    <div>
-                      <div className="text-[12.5px] font-medium text-g500 mb-1">End Date & Time</div>
-                      <div className="text-[14.5px] text-g900">{formatDate(cwSchedule.scheduledEndDateTime)}</div>
-                    </div>
-
-                    <div>
-                      <div className="text-[12.5px] font-medium text-g500 mb-1">Duration</div>
-                      <div className="text-[14.5px] text-g900">—</div>
-                    </div>
-                    <div>
-                      <div className="text-[12.5px] font-medium text-g500 mb-1">Test Type</div>
-                      <div className="text-[14.5px] text-g900">{cwSchedule.courseworkType === 1 ? 'Offline' : 'Online'}</div>
-                    </div>
-                    <div>
-                      <div className="text-[12.5px] font-medium text-g500 mb-1">Publish Status</div>
-                      <div className="text-[14.5px] text-g900">
-                        {cwSchedule.publishStatus === 1 ? 'Publish to student' : 'Not publish to student'}
-                      </div>
-                    </div>
-
-                    <div className="col-span-3">
-                      <div className="text-[12.5px] font-medium text-g500 mb-1">Exam Rule</div>
-                      <div className="text-[14.5px] text-g900">
-                        {cwSchedule.examRuleCode ? `${cwSchedule.examRuleCode} — ${cwSchedule.examRuleName}` : 'No rule linked'}
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <div className="col-span-3 py-8 text-center text-g500 italic">No detailed schedule found for this Course Work.</div>
-                )}
-              </>
-            )}
-
-            {activeTab === 'CT' && (
-              <>
-                {ctLoading ? (
-                  <div className="col-span-3 py-8 text-center text-g500">Loading Class Test details...</div>
-                ) : ctSchedule ? (
-                  <>
-                    {/* Max Mark removed as requested */}
-                    {/*
-                    <div>
-                      <div className="text-[12.5px] font-medium text-g500 mb-1">Max Mark</div>
-                      <div className="text-[14.5px] text-g900">{ctSchedule.maxMark ?? '—'}</div>
-                    </div>
-                    */}
-                    <div>
-                      <div className="text-[12.5px] font-medium text-g500 mb-1">Start Date & Time</div>
-                      <div className="text-[14.5px] text-g900">{formatDate(ctSchedule.scheduledStartDateTime)}</div>
-                    </div>
-                    <div>
-                      <div className="text-[12.5px] font-medium text-g500 mb-1">End Date & Time</div>
-                      <div className="text-[14.5px] text-g900">{formatDate(ctSchedule.scheduledEndDateTime)}</div>
-                    </div>
-
-                    <div>
-                      <div className="text-[12.5px] font-medium text-g500 mb-1">Duration</div>
-                      <div className="text-[14.5px] text-g900">{ctSchedule.durationMinutes ? `${ctSchedule.durationMinutes} mins` : '—'}</div>
-                    </div>
-                    <div>
-                      <div className="text-[12.5px] font-medium text-g500 mb-1">Test Type</div>
-                      <div className="text-[14.5px] text-g900">{ctSchedule.testType === 1 ? 'Offline' : 'Online'}</div>
-                    </div>
-                    <div>
-                      <div className="text-[12.5px] font-medium text-g500 mb-1">Publish Status</div>
-                      <div className="text-[14.5px] text-g900">
-                        {ctSchedule.publishStatus === 1 ? 'Publish to student' : 'Not publish to student'}
-                      </div>
-                    </div>
-
-                    <div className="col-span-3">
-                      <div className="text-[12.5px] font-medium text-g500 mb-1">Exam Rule</div>
-                      <div className="text-[14.5px] text-g900">
-                        {ctSchedule.examRuleCode ? `${ctSchedule.examRuleCode} — ${ctSchedule.examRuleName}` : 'No rule linked'}
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <div className="col-span-3 py-8 text-center text-g500 italic">No detailed schedule found for this Class Test.</div>
-                )}
-              </>
-            )}
-
-            {activeTab === 'UE' && (
-              <>
-                {ueLoading ? (
-                  <div className="col-span-3 py-8 text-center text-g500">Loading University Exam details...</div>
-                ) : ueSchedule ? (
-                  <>
-                    <div>
-                      <div className="text-[12.5px] font-medium text-g500 mb-1">Exam Date</div>
-                      <div className="text-[14.5px] text-g900">{formatDate(ueSchedule.examDate && ueSchedule.startTime ? `${ueSchedule.examDate.split('T')[0]}T${ueSchedule.startTime}` : null).split(',')[0]}</div>
-                    </div>
-                    <div>
-                      <div className="text-[12.5px] font-medium text-g500 mb-1">Start Time</div>
-                      <div className="text-[14.5px] text-g900">{ueSchedule.startTime ?? '—'}</div>
-                    </div>
-                    <div>
-                      <div className="text-[12.5px] font-medium text-g500 mb-1">End Time</div>
-                      <div className="text-[14.5px] text-g900">{ueSchedule.endTime ?? '—'}</div>
-                    </div>
-
-                    <div>
-                      <div className="text-[12.5px] font-medium text-g500 mb-1">Max Mark</div>
-                      <div className="text-[14.5px] text-g900">{ueSchedule.maxMark ?? '—'}</div>
-                    </div>
-                    <div>
-                      <div className="text-[12.5px] font-medium text-g500 mb-1">Exam Type</div>
-                      <div className="text-[14.5px] text-g900">{ueSchedule.examType === 1 ? 'Offline' : (ueSchedule.examType === 0 ? 'Online' : '—')}</div>
-                    </div>
-                    <div>
-                      <div className="text-[12.5px] font-medium text-g500 mb-1">UE Type</div>
-                      <div className="text-[14.5px] text-g900">{ueSchedule.universityExamType === 1 ? 'Practical' : (ueSchedule.universityExamType === 0 ? 'Theory' : '—')}</div>
-                    </div>
-                    <div>
-                      <div className="text-[12.5px] font-medium text-g500 mb-1">Publish Status</div>
-                      <div className="text-[14.5px] text-g900">
-                        {ueSchedule.publishStatus === 1 ? 'Publish to student' : 'Not publish to student'}
-                      </div>
-                    </div>
-
-                    <div className="col-span-3">
-                      <div className="text-[12.5px] font-medium text-g500 mb-1">Exam Rule</div>
-                      <div className="text-[14.5px] text-g900">
-                        {ueSchedule.examRuleCode ? `${ueSchedule.examRuleCode} — ${ueSchedule.examRuleName}` : 'No rule linked'}
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <div className="col-span-3 py-8 text-center text-g500 italic">No detailed schedule found for this University Exam.</div>
-                )}
-              </>
-            )}
-            
+        {activeTab === 'CW' && (
+          <div key="CW" className="modal-scroll tab-panel-in" style={{ padding: '20px clamp(14px, 4vw, 24px)' }}>
+            <Grid>
+              {context}
+              <SectionTitle>Course Work Schedule</SectionTitle>
+              {!row.courseworkGuid ? (
+                <EmptyBox icon="lni-book">This unit has no course work.</EmptyBox>
+              ) : cwLoading ? (
+                <LoadingBox>Loading course work details…</LoadingBox>
+              ) : cwError || !cw ? (
+                <EmptyBox icon="lni-warning">Couldn’t load the course work schedule.</EmptyBox>
+              ) : !cw.scheduledStartDateTime ? (
+                <EmptyBox icon="lni-calendar">The course work hasn’t been scheduled yet.</EmptyBox>
+              ) : (
+                <>
+                  <Field label="Start" value={fmtDateTime(cw.scheduledStartDateTime)} />
+                  <Field label="End" value={fmtDateTime(cw.scheduledEndDateTime)} />
+                  <Field label="Mode" value={modeBadge(cw.courseworkType)} />
+                  <Field label="Publish Status" value={publishBadge(cw.publishStatus)} />
+                  <Field label="Exam Rule" value={ruleValue(cw.examRuleCode, cw.examRuleName)} full />
+                </>
+              )}
+            </Grid>
           </div>
-        </div>
+        )}
 
-        {/* Footer */}
-        <div className="p-5 flex justify-end gap-3" style={{ borderTop: 'none' }}>
-          {activeTab === 'CT' && row.classTestGuid ? (
-            <button className="btn btn-primary" style={{ padding: '8px 20px', borderRadius: '6px' }} onClick={() => { onClose(); onEditCt?.(row.classTestGuid!); }}>
-              Edit
-            </button>
-          ) : activeTab === 'CW' && row.courseworkGuid ? (
-            <button className="btn btn-primary" style={{ padding: '8px 20px', borderRadius: '6px' }} onClick={() => { onClose(); onEditCw?.(row.courseworkGuid!); }}>
-              Edit
-            </button>
-          ) : activeTab === 'UE' && row.universityExamGuid ? (
-            <button className="btn btn-primary" style={{ padding: '8px 20px', borderRadius: '6px' }} onClick={() => { onClose(); onEditUe?.(row.universityExamGuid!); }}>
-              Edit
-            </button>
-          ) : (
-            <button className="btn btn-primary opacity-50 cursor-not-allowed" style={{ padding: '8px 20px', borderRadius: '6px' }} title={`${activeTab} editing not implemented yet`}>
-              Edit
+        {activeTab === 'UE' && (
+          <div key="UE" className="modal-scroll tab-panel-in" style={{ padding: '20px clamp(14px, 4vw, 24px)' }}>
+            <Grid>
+              {context}
+              <SectionTitle>University Exam Schedule</SectionTitle>
+              {combined && (
+                // Second-level tabs: same .tab-bar / .tab-btn as the main row, compact and left-aligned.
+                <div className="tab-bar" role="tablist" aria-label="University exam" style={{ gridColumn: '1 / -1', padding: 0, marginTop: -8 }}>
+                  {UE_TABS.map(t => {
+                    const active = ueKind === t.id
+                    return (
+                      <button
+                        key={t.id}
+                        type="button"
+                        role="tab"
+                        aria-selected={active}
+                        ref={el => { if (el) ueTabRefs.current[t.id] = el }}
+                        className={`tab-btn${active ? ' active' : ''}`}
+                        style={{ padding: '9px 18px' }}
+                        onClick={() => setUeKind(t.id)}
+                      >
+                        {t.label}
+                      </button>
+                    )
+                  })}
+                  <span className="tab-indicator" style={{ left: ueIndicator.left, width: ueIndicator.width }} />
+                </div>
+              )}
+              {!ueGuid ? (
+                <EmptyBox icon="lni-graduation">This unit has no university exam.</EmptyBox>
+              ) : (
+                // key: a fresh section per exam, so it shows that exam's own loading state.
+                <UeSection key={ueGuid} examGuid={ueGuid} />
+              )}
+            </Grid>
+          </div>
+        )}
+
+        <div className="modal-footer">
+          <span className="text-sm" style={{ color: 'var(--g500)' }}>
+            {editable
+              ? combined ? 'Combined unit · Theory & Practical exams' : 'Current intake'
+              : <><i className="lni lni-lock-alt" aria-hidden="true" /> Read-only · past intake</>}
+          </span>
+          <span className="flex-1"></span>
+          {footerEdit && (
+            <button className="btn btn-neu" onClick={footerEdit}>
+              <i className="lni lni-pencil"></i> Edit
             </button>
           )}
-          <button className="btn btn-primary" style={{ padding: '8px 20px', borderRadius: '6px', background: '#3b82f6', border: 'none' }} onClick={onClose}>
-            Close
-          </button>
+          <button className="btn btn-primary" onClick={onClose}>Close</button>
         </div>
       </div>
     </div>

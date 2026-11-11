@@ -133,6 +133,8 @@ export interface DashboardRecentPayment {
 }
 
 export interface DashboardRecentPayments {
+  // The day the rows belong to. Without a date in the request: today, or the
+  // latest earlier day with payments when today has none.
   date: string
   baseCurrencyCode: string
   hasMissingRates: boolean
@@ -198,6 +200,76 @@ export interface DashboardDiscounts {
   }[]
 }
 
+// ── Cleared / blocked student lists (the two clickable cards) ──────────────
+// Cached 5 min per intake on the server, shared with the Outstanding card.
+// Never add amounts across currencies; the …InBase fields are for totals.
+
+export interface DashboardStudentListParams {
+  intakeGuid: string        // required (400 "Intake is required." otherwise)
+  campusGuid?: string
+  programGuid?: string
+  semesterGuids?: string[]  // repeated key
+  batchGuids?: string[]     // repeated key
+  regStatuses?: number[]    // 1 Registered, 2 Yet to Register, 4 Yet to Clear; omit for all three
+  search?: string           // name, reg no or student number
+  pageNumber: number        // from 1
+  pageSize: number          // default 15, max 100
+}
+
+export interface DashboardStudentAmount { currencyCode: string; fee: number; collected: number; discount: number }
+
+export interface DashboardClearedStudent {
+  studentGuid: string
+  studentNumber: string
+  studentName: string
+  programName: string | null
+  feeInBase: number
+  collectedInBase: number
+  discountInBase: number
+  amounts: DashboardStudentAmount[]
+}
+
+export interface DashboardBlockedStudent extends Omit<DashboardClearedStudent, 'amounts'> {
+  clearancePercent: number            // 0–49
+  outstandingInBase: number           // this semester
+  previousOutstandingInBase: number
+  totalOutstandingInBase: number
+  amounts: (DashboardStudentAmount & { outstanding: number; previousOutstanding: number; totalOutstanding: number })[]
+}
+
+interface DashboardStudentListBase<T> {
+  generatedAt: string
+  baseCurrencyCode: string
+  hasMissingRates: boolean
+  totalCount: number                  // equals the card figure when no filter is set
+  pageNumber: number
+  pageSize: number
+  // Whole filtered list, not just this page.
+  totalFeeInBase: number
+  totalCollectedInBase: number
+  totalDiscountInBase: number
+  items: T[]
+}
+
+export type DashboardClearedStudents = DashboardStudentListBase<DashboardClearedStudent>
+
+// Sorted lowest clearance first.
+export interface DashboardBlockedStudents extends DashboardStudentListBase<DashboardBlockedStudent> {
+  blockedBelowPercent: number
+  totalOutstandingInBase: number
+}
+
+function studentListParams(p: DashboardStudentListParams) {
+  const params = new URLSearchParams({ intakeGuid: p.intakeGuid, pageNumber: String(p.pageNumber), pageSize: String(p.pageSize) })
+  if (p.campusGuid) params.set('campusGuid', p.campusGuid)
+  if (p.programGuid) params.set('programGuid', p.programGuid)
+  p.semesterGuids?.forEach(g => params.append('semesterGuids', g))
+  p.batchGuids?.forEach(g => params.append('batchGuids', g))
+  p.regStatuses?.forEach(s => params.append('regStatuses', String(s)))
+  if (p.search) params.set('search', p.search)
+  return params
+}
+
 // ── Endpoints ──────────────────────────────────────────────────────────────
 
 function rangeParams(p: DashboardRangeParams) {
@@ -224,7 +296,18 @@ export function getDashboardCollectionByFeeType(intakeGuid: string): Promise<Das
   return apiGet<DashboardCollectionByFeeType>(`/api/v1/finance/dashboard/collection-by-fee-type?${new URLSearchParams({ intakeGuid }).toString()}`)
 }
 
-// GET /finance/dashboard/recent-payments. No date = today on the server.
+// GET /finance/dashboard/cleared-students (Students Fully Cleared card).
+export function getDashboardClearedStudents(p: DashboardStudentListParams): Promise<DashboardClearedStudents> {
+  return apiGet<DashboardClearedStudents>(`/api/v1/finance/dashboard/cleared-students?${studentListParams(p).toString()}`)
+}
+
+// GET /finance/dashboard/blocked-students (Access Blocked card).
+export function getDashboardBlockedStudents(p: DashboardStudentListParams): Promise<DashboardBlockedStudents> {
+  return apiGet<DashboardBlockedStudents>(`/api/v1/finance/dashboard/blocked-students?${studentListParams(p).toString()}`)
+}
+
+// GET /finance/dashboard/recent-payments. Sent without a date: today, falling
+// back to the latest earlier day with payments (response.date says which).
 export function getDashboardRecentPayments(intakeGuid: string, limit = 20): Promise<DashboardRecentPayments> {
   const params = new URLSearchParams({ intakeGuid, limit: String(limit) })
   return apiGet<DashboardRecentPayments>(`/api/v1/finance/dashboard/recent-payments?${params.toString()}`)

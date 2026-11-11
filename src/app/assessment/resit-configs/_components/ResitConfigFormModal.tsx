@@ -3,6 +3,7 @@ import { SuccessPopup } from '@/components/modals/shared/SuccessPopup'
 import { useCreateResitConfig, useResitConfig, useUpdateResitConfig } from '@/hooks/assessment/useResitConfigs'
 import { useIntakesDropdown } from '@/hooks/academic/useIntakes'
 import { SearchSelect } from '@/components/SearchSelect'
+import DatePicker from '@/components/DatePicker'
 
 interface ResitConfigFormModalProps {
   isOpen: boolean
@@ -145,23 +146,16 @@ export function ResitConfigFormModal({ isOpen, onClose, showToast, editingGuid }
                 <div className="grid grid-cols-2 gap-4">
                   <div className="fg mb-0">
                     <label className="lbl">Start Date <span className="text-clr-red">*</span></label>
-                    <input 
-                      type="date"
-                      className="ctrl" 
-                      value={startDate}
-                      onChange={e => setStartDate(e.target.value)}
-                      required
-                    />
+                    <DatePicker value={startDate} onChange={setStartDate} />
                   </div>
                   <div className="fg mb-0">
                     <label className="lbl">End Date <span className="text-clr-red">*</span></label>
-                    <input 
-                      type="date"
-                      className="ctrl" 
+                    <DatePicker
                       value={endDate}
-                      onChange={e => setEndDate(e.target.value)}
-                      min={startDate}
-                      required
+                      onChange={setEndDate}
+                      minYmd={startDate || undefined}
+                      rangeMessage="End Date cannot be before Start Date"
+                      onError={msg => setErrorMsg(msg)}
                     />
                   </div>
                 </div>
