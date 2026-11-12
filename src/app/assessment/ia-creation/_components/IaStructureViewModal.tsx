@@ -1,6 +1,6 @@
 'use client'
 
-import { useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { IaStructureRowDto } from '@/lib/api/assessment/iaCreation'
 import { useIaTestSchedule } from '@/hooks/assessment/useIaTestSchedule'
 import { useIaCwSchedule } from '@/hooks/assessment/useIaCwSchedule'
@@ -136,6 +136,14 @@ export function IaStructureViewModal({ row, progName, semName, onClose, onEditCw
   // Combined units: which of the two university exams the UE tab shows.
   const [ueKind, setUeKind] = useState<UeKind>('theory')
 
+  useEffect(() => {
+    if (row && !row.universityExamGuid && row.practicalExamGuid) {
+      setUeKind('practical')
+    } else if (row && row.universityExamGuid) {
+      setUeKind('theory')
+    }
+  }, [row])
+
   const { data: ct, isLoading: ctLoading, isError: ctError } = useIaTestSchedule(row?.classTestGuid || null)
   const { data: cw, isLoading: cwLoading, isError: cwError } = useIaCwSchedule(row?.courseworkGuid || null)
 
@@ -159,7 +167,10 @@ export function IaStructureViewModal({ row, progName, semName, onClose, onEditCw
 
   // Past intakes are read-only (canEdit false); the save APIs don't check it.
   const editable = row.canEdit
-  const combined = Boolean(row.practicalExamGuid)
+  const hasTheory = Boolean(row.universityExamGuid)
+  const hasPractical = Boolean(row.practicalExamGuid)
+  const combined = hasTheory && hasPractical
+  const practicalOnly = !hasTheory && hasPractical
 
   const context = (
     <>
@@ -169,8 +180,12 @@ export function IaStructureViewModal({ row, progName, semName, onClose, onEditCw
     </>
   )
 
-  // The University Exam shown: the Practical one only when that tab is picked on a combined unit.
-  const ueGuid = combined && ueKind === 'practical' ? row.practicalExamGuid : row.universityExamGuid
+  // The University Exam shown:
+  // If combined: theory or practical based on ueKind.
+  // If theory-only or practical-only: whichever exam guid exists.
+  const ueGuid = combined
+    ? (ueKind === 'practical' ? row.practicalExamGuid : row.universityExamGuid)
+    : (row.universityExamGuid || row.practicalExamGuid)
 
   const footerEdit =
     !editable ? null
@@ -305,7 +320,11 @@ export function IaStructureViewModal({ row, progName, semName, onClose, onEditCw
         <div className="modal-footer">
           <span className="text-sm" style={{ color: 'var(--g500)' }}>
             {editable
-              ? combined ? 'Combined unit · Theory & Practical exams' : 'Current intake'
+              ? combined
+                ? 'Combined unit · Theory & Practical exams'
+                : practicalOnly
+                ? 'Practical-only unit'
+                : 'Current intake'
               : <><i className="lni lni-lock-alt" aria-hidden="true" /> Read-only · past intake</>}
           </span>
           <span className="flex-1"></span>

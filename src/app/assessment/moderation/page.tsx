@@ -1,623 +1,1648 @@
 'use client'
 
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
-import { useState, useEffect } from 'react'
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { SearchSelect } from '@/components/SearchSelect'
 import { ScrollTable } from '@/components/ScrollTable'
 import { Toast } from '@/components/Toast'
-import { ActionMenu } from '@/components/ActionMenu'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
+import { SearchSelect } from '@/components/SearchSelect'
+import { TableSearch, type TableSearchResult } from '@/components/TableSearch'
+import { useIntakesDropdown } from '@/hooks/academic/useIntakes'
+import { useProgramDropdown } from '@/hooks/academic/useProgramMaster'
+import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
 import {
-  useSearchModerationStudents,
-  useModerationStudentDetail,
-  useStudentModerationRows,
-  useUpdateModeration
-} from '@/hooks/assessment/useModeration'
+  useProgramCourseUnitsDropdown,
+  type ProgramCourseUnitDropdownItem,
+} from '@/hooks/academic/useProgramCourseUnits'
+import {
+  useApplyModeration,
+  useGeneratedResults,
+  GENERATE_RESULT_KEYS,
+  type ExamResultRow,
+  type ResultFilters,
+  type ResultOperator,
+  type ModerationSkippedItem,
+} from '@/hooks/assessment/useGenerateResult'
+import {
+  updateModeration,
+  searchModerationStudents,
+} from '@/lib/api/assessment/moderation'
 
-export default function ModerationPage() {
-  const [searchTerm, setSearchTerm] = useState('')
-  const [studentGuid, setStudentGuid] = useState<string | null>(null)
-  
-  // Queries
-  const { data: searchResults, isLoading: searching } = useSearchModerationStudents(searchTerm)
-  const { data: studentDetail, isLoading: loadingDetail } = useModerationStudentDetail(studentGuid)
-  const { data: rows, isLoading: loadingRows } = useStudentModerationRows(studentGuid)
-  
-  // Options for SearchSelect
-  const searchOptions = (searchResults || []).map(s => ({
-    value: s.studentGuid,
-    label: `${s.studentNum || s.studentNumber || s.registrationNumber || ''} - ${s.studentName} (${s.programName})`
-  }))
+const OPERATOR_OPTIONS = [
+  { value: '', label: 'Any' },
+  { value: '=', label: 'Equals (=)' },
+  { value: '<>', label: 'Not Equals (≠)' },
+  { value: '<', label: 'Below (<)' },
+  { value: '<=', label: 'Below or Equal (≤)' },
+  { value: '>', label: 'Above (>)' },
+  { value: '>=', label: 'Above or Equal (≥)' },
+]
 
-  const [toast, setToast] = useState<{ msg: string, type: 'success' | 'error' } | null>(null)
-  const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
+function formatScore(val: number | null | undefined): string {
+  if (val === null || val === undefined) return '—'
+  return Number.isInteger(val) ? String(val) : Number(val.toFixed(2)).toString()
+}
+
+export default function ResultModerationPage() {
+  const permissions = usePagePermissions()
+  const queryClient = useQueryClient()
+
+  // ── Intake Dropdown API ──────────────────────────────────────────
+  const intakesQ = useIntakesDropdown()
+  const intakes = useMemo(() => intakesQ.data ?? [], [intakesQ.data])
+
+  const [selectedIntake, setSelectedIntake] = useState<string>('')
+
+  // Default to the intake whose currentIntake is true
+  useEffect(() => {
+    if (!selectedIntake && intakes.length > 0) {
+      const current = intakes.find((i) => i.currentIntake) ?? intakes[0]
+      setSelectedIntake(current.intakeGuid)
+    }
+  }, [intakes, selectedIntake])
+
+  const selectedIntakeObj = useMemo(
+    () => intakes.find((i) => i.intakeGuid === selectedIntake),
+    [intakes, selectedIntake]
+  )
+  const isCurrentIntake = Boolean(selectedIntakeObj?.currentIntake)
+
+  const intakeOptions = useMemo(() => {
+    return intakes.map((i) => ({
+      value: i.intakeGuid,
+      label: `${i.description} (${i.intakeCode})${i.currentIntake ? ' • Current' : ''}`,
+    }))
+  }, [intakes])
+
+  // Permissions check
+  const canGetGrid = permissions.get ?? true
+  const canModerate = (permissions.moderate ?? true) && isCurrentIntake
+  const canEditRow = (permissions.edit ?? true) && isCurrentIntake
+
+  // ── Search with 400ms Debounce ──────────────────────────────────
+  const [searchQuery, setSearchQuery] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery)
+    }, 400)
+    return () => clearTimeout(timer)
+  }, [searchQuery])
+
+  // Panels state
+  const [filterPanelOpen, setFilterPanelOpen] = useState(false)
+  const [moderationPanelOpen, setModerationPanelOpen] = useState(false)
+  const stackRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      const target = event.target as Element | null
+      // Ignore clicks inside portal elements like SearchSelect dropdowns (.ss-drop) or modals
+      if (target?.closest('.ss-drop') || target?.closest('.modal-overlay') || target?.closest('.modal')) {
+        return
+      }
+      if (stackRef.current && !stackRef.current.contains(target as Node)) {
+        setFilterPanelOpen(false)
+        setModerationPanelOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  // ── Filters State ────────────────────────────────────────────────
+  const [filterProg, setFilterProg] = useState('')
+  const [filterSem, setFilterSem] = useState('')
+  const [filterCu, setFilterCu] = useState('')
+  const [filterIaOp, setFilterIaOp] = useState<'' | ResultOperator>('')
+  const [filterIaVal, setFilterIaVal] = useState('')
+  const [filterUeOp, setFilterUeOp] = useState<'' | ResultOperator>('')
+  const [filterUeVal, setFilterUeVal] = useState('')
+
+  // Programme dropdown
+  const progQ = useProgramDropdown()
+  const programs = useMemo(() => progQ.data ?? [], [progQ.data])
+  const programOptions = useMemo(() => {
+    return [
+      { value: '', label: 'All programmes' },
+      ...programs.map((p) => ({
+        value: p.programGuid,
+        label: `${p.programCode} — ${p.programName}`,
+      })),
+    ]
+  }, [programs])
+
+  // Semester dropdown (disabled until programme selected)
+  const semQ = useSemestersForProgram(filterProg, Boolean(filterProg))
+  const semesters = useMemo(() => semQ.data ?? [], [semQ.data])
+  const semesterOptions = useMemo(() => {
+    return [
+      { value: '', label: 'All semesters' },
+      ...semesters.map((s) => ({
+        value: s.semesterGuid,
+        label: s.semName,
+      })),
+    ]
+  }, [semesters])
+
+  // Course unit dropdown (disabled until programme selected; in parallel with semester)
+  const cuQ = useProgramCourseUnitsDropdown(filterProg, Boolean(filterProg))
+  const rawUnits = useMemo(() => cuQ.data ?? [], [cuQ.data])
+
+  // De-duplicate units by courseUnitGuid
+  const unitsForProgram = useMemo(() => {
+    const map = new Map<string, ProgramCourseUnitDropdownItem>()
+    for (const u of rawUnits) {
+      if (!map.has(u.courseUnitGuid)) {
+        map.set(u.courseUnitGuid, u)
+      }
+    }
+    return Array.from(map.values())
+  }, [rawUnits])
+
+  // Filter units client-side by semester when chosen
+  const visibleUnits = useMemo(() => {
+    if (!filterSem) return unitsForProgram
+    return rawUnits.filter((u) => u.semesterGuid === filterSem)
+  }, [rawUnits, unitsForProgram, filterSem])
+
+  // If selected course unit not in visible units, clear it
+  useEffect(() => {
+    if (filterCu && visibleUnits.length > 0 && !visibleUnits.some((u) => u.courseUnitGuid === filterCu)) {
+      setFilterCu('')
+    }
+  }, [visibleUnits, filterCu])
+
+  const courseUnitOptions = useMemo(() => {
+    return [
+      { value: '', label: 'All course units' },
+      ...visibleUnits.map((u) => ({
+        value: u.courseUnitGuid,
+        label: `${u.courseUnitCode} · ${u.courseUnitName}`,
+      })),
+    ]
+  }, [visibleUnits])
+
+  // Clear / change handlers
+  const handleProgChange = (val: string) => {
+    setFilterProg(val)
+    setFilterSem('')
+    setFilterCu('')
+    setPage(1)
+    setLoadedRows([])
+    setModerationPanelOpen(false)
+  }
+
+  const handleSemChange = (val: string) => {
+    setFilterSem(val)
+    setFilterCu('')
+    setPage(1)
+    setLoadedRows([])
+    setModerationPanelOpen(false)
+  }
+
+  const handleCuChange = (val: string) => {
+    setFilterCu(val)
+    setPage(1)
+    setLoadedRows([])
+    setModerationPanelOpen(false)
+  }
+
+  // ── Results Grid & Infinite Scroll ──────────────────────────────
+  const [page, setPage] = useState(1)
+  const pageSize = 50
+  const [loadedRows, setLoadedRows] = useState<ExamResultRow[]>([])
+
+  const apiFilters = useMemo<ResultFilters | null>(() => {
+    if (!selectedIntake) return null
+
+    const trimmed = debouncedSearch.trim()
+    // Backend search rule: min 3 characters required, otherwise omit search
+    const searchParam = trimmed.length >= 3 ? trimmed : undefined
+
+    const hasIa = filterIaOp !== '' && filterIaVal.trim() !== '' && !isNaN(Number(filterIaVal))
+    const hasUe = filterUeOp !== '' && filterUeVal.trim() !== '' && !isNaN(Number(filterUeVal))
+
+    return {
+      intakeGuid: selectedIntake,
+      programGuid: filterProg || undefined,
+      semesterGuid: filterSem || undefined,
+      courseUnitGuid: filterCu || undefined,
+      iaOperator: hasIa ? filterIaOp : undefined,
+      iaValue: hasIa ? Number(filterIaVal) : undefined,
+      ueOperator: hasUe ? filterUeOp : undefined,
+      ueValue: hasUe ? Number(filterUeVal) : undefined,
+      search: searchParam,
+    }
+  }, [
+    selectedIntake,
+    filterProg,
+    filterSem,
+    filterCu,
+    filterIaOp,
+    filterIaVal,
+    filterUeOp,
+    filterUeVal,
+    debouncedSearch,
+  ])
+
+  const resultsQ = useGeneratedResults(canGetGrid ? apiFilters : null, page, pageSize)
+  const totalCount = resultsQ.data?.totalCount ?? 0
+
+  // Accumulate rows for infinite scroll
+  useEffect(() => {
+    if (!resultsQ.data) return
+    const newItems = resultsQ.data.items ?? []
+    if (page === 1) {
+      setLoadedRows(newItems)
+    } else {
+      setLoadedRows((prev) => {
+        const existingIds = new Set(prev.map((r) => r.examResultGuid))
+        const fresh = newItems.filter((r) => !existingIds.has(r.examResultGuid))
+        return [...prev, ...fresh]
+      })
+    }
+  }, [resultsQ.data, page])
+
+  // Clear loaded rows and reset page on filter/search/intake changes
+  useEffect(() => {
+    setPage(1)
+    setLoadedRows([])
+  }, [apiFilters])
+
+  // Scroll to fetch next page
+  const fetchNextPage = useCallback(() => {
+    if (resultsQ.isFetching) return
+    if (loadedRows.length >= totalCount) return
+    setPage((prev) => prev + 1)
+  }, [resultsQ.isFetching, loadedRows.length, totalCount])
+
+  const handleTableScroll = useCallback(
+    (e: React.UIEvent<HTMLDivElement>) => {
+      const el = e.currentTarget
+      if (el.scrollHeight - el.scrollTop - el.clientHeight < 120) {
+        fetchNextPage()
+      }
+    },
+    [fetchNextPage]
+  )
+
+  useEffect(() => {
+    const handleWindowScroll = () => {
+      if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 250) {
+        fetchNextPage()
+      }
+    }
+    window.addEventListener('scroll', handleWindowScroll)
+    return () => window.removeEventListener('scroll', handleWindowScroll)
+  }, [fetchNextPage])
+
+  // Autocomplete items derived from loaded rows
+  const searchResults: TableSearchResult[] = useMemo(() => {
+    if (!searchQuery.trim() || !loadedRows.length) return []
+    const q = searchQuery.toLowerCase()
+    return loadedRows
+      .filter(
+        (r) =>
+          (r.studentName?.toLowerCase().includes(q) ?? false) ||
+          (r.studentNum?.toLowerCase().includes(q) ?? false)
+      )
+      .slice(0, 6)
+      .map((r) => ({
+        id: r.examResultGuid,
+        primary: r.studentName || 'Student',
+        secondary: `${r.studentNum || '—'} · ${r.programCode || '—'} · ${r.unitCode || '—'}`,
+      }))
+  }, [loadedRows, searchQuery])
+
+  // Active filter chips
+  const activeChips = useMemo(() => {
+    const chips: { key: string; label: string; onRemove: () => void }[] = []
+    if (filterProg) {
+      const p = programs.find((x) => x.programGuid === filterProg)
+      chips.push({
+        key: 'prog',
+        label: `Programme: ${p ? p.programCode : filterProg}`,
+        onRemove: () => { setFilterProg(''); setFilterSem(''); setFilterCu(''); setPage(1); setLoadedRows([]) },
+      })
+    }
+    if (filterSem) {
+      const s = semesters.find((x) => x.semesterGuid === filterSem)
+      chips.push({
+        key: 'sem',
+        label: `Semester: ${s ? s.semName : filterSem}`,
+        onRemove: () => { setFilterSem(''); setFilterCu(''); setPage(1); setLoadedRows([]) },
+      })
+    }
+    if (filterCu) {
+      const u = visibleUnits.find((x) => x.courseUnitGuid === filterCu)
+      chips.push({
+        key: 'cu',
+        label: `Course unit: ${u ? u.courseUnitCode : filterCu}`,
+        onRemove: () => { setFilterCu(''); setPage(1); setLoadedRows([]) },
+      })
+    }
+    const opText: Record<string, string> = {
+      '=': '=',
+      '<>': '≠',
+      '<': '<',
+      '<=': '≤',
+      '>': '>',
+      '>=': '≥',
+    }
+    if (filterIaOp && filterIaVal !== '') {
+      chips.push({
+        key: 'ia',
+        label: `IA total ${opText[filterIaOp] || filterIaOp} ${filterIaVal}`,
+        onRemove: () => { setFilterIaOp(''); setFilterIaVal(''); setPage(1); setLoadedRows([]) },
+      })
+    }
+    if (filterUeOp && filterUeVal !== '') {
+      chips.push({
+        key: 'ue',
+        label: `UE total ${opText[filterUeOp] || filterUeOp} ${filterUeVal}`,
+        onRemove: () => { setFilterUeOp(''); setFilterUeVal(''); setPage(1); setLoadedRows([]) },
+      })
+    }
+    return chips
+  }, [filterProg, filterSem, filterCu, filterIaOp, filterIaVal, filterUeOp, filterUeVal, programs, semesters, visibleUnits])
+
+  const handleClearFilters = () => {
+    setFilterProg('')
+    setFilterSem('')
+    setFilterCu('')
+    setFilterIaOp('')
+    setFilterIaVal('')
+    setFilterUeOp('')
+    setFilterUeVal('')
+    setPage(1)
+    setLoadedRows([])
+  }
+
+  // ── Moderation Panel & Operations ────────────────────────────────
+  const applyModMut = useApplyModeration()
+  const [iaModInput, setIaModInput] = useState('')
+  const [ueModInput, setUeModInput] = useState('')
+  const [iaModMsg, setIaModMsg] = useState<{ text: string; ok: boolean } | null>(null)
+  const [ueModMsg, setUeModMsg] = useState<{ text: string; ok: boolean } | null>(null)
+
+  const [confirmBatchMod, setConfirmBatchMod] = useState<{
+    field: 1 | 2
+    value: number
+    count: number
+  } | null>(null)
+
+  const [skippedModalData, setSkippedModalData] = useState<{
+    rowsMatched: number
+    rowsModerated: number
+    rowsSkipped: number
+    items: ModerationSkippedItem[]
+  } | null>(null)
+
+  // Modals state for single row
+  const [editRow, setEditRow] = useState<ExamResultRow | null>(null)
+  const [removeRow, setRemoveRow] = useState<ExamResultRow | null>(null)
+  const [isRemovingMod, setIsRemovingMod] = useState(false)
+
+  // Toast notification
+  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null)
+  const showToast = useCallback((msg: string, type: 'success' | 'error' = 'success') => {
     setToast({ msg, type })
-    setTimeout(() => setToast(null), 3000)
+    setTimeout(() => setToast(null), 4000)
+  }, [])
+
+  const toggleFilterPanel = () => {
+    setFilterPanelOpen((prev) => !prev)
+    if (!filterPanelOpen) setModerationPanelOpen(false)
+  }
+
+  const toggleModerationPanel = () => {
+    setModerationPanelOpen((prev) => !prev)
+    if (!moderationPanelOpen) setFilterPanelOpen(false)
+  }
+
+  // Batch Moderation Request
+  const handleRequestBatchMod = (field: 1 | 2) => {
+    const inputVal = field === 1 ? iaModInput : ueModInput
+    const val = parseFloat(inputVal)
+    const setMsg = field === 1 ? setIaModMsg : setUeModMsg
+
+    if (isNaN(val) || val <= 0) {
+      setMsg({ text: 'Please enter a positive value greater than 0.', ok: false })
+      return
+    }
+
+    if (!loadedRows.length && totalCount === 0) {
+      setMsg({ text: 'No rows match the current filters.', ok: false })
+      return
+    }
+
+    setMsg(null)
+    setConfirmBatchMod({ field, value: val, count: totalCount || loadedRows.length })
+  }
+
+  // Execute Batch Moderation
+  const executeBatchMod = () => {
+    if (!confirmBatchMod || !apiFilters) return
+    const { field, value, count } = confirmBatchMod
+
+    applyModMut.mutate(
+      {
+        filters: apiFilters,
+        field,
+        value,
+      },
+      {
+        onSuccess: (res: any) => {
+          const appliedCount = res?.rowsModerated ?? 0
+          const matchedCount = res?.rowsMatched ?? count
+          const skippedCount = res?.rowsSkipped ?? 0
+
+          showToast(`Moderated ${appliedCount} of ${matchedCount} rows.`)
+          const setMsg = field === 1 ? setIaModMsg : setUeModMsg
+          setMsg({
+            text: `Moderated ${appliedCount} of ${matchedCount} rows.`,
+            ok: true,
+          })
+
+          if (field === 1) setIaModInput('')
+          else setUeModInput('')
+          setConfirmBatchMod(null)
+          setModerationPanelOpen(false)
+
+          // Check if there are skipped rows to report
+          if (skippedCount > 0 && Array.isArray(res?.skipped) && res.skipped.length > 0) {
+            setSkippedModalData({
+              rowsMatched: matchedCount,
+              rowsModerated: appliedCount,
+              rowsSkipped: skippedCount,
+              items: res.skipped,
+            })
+          }
+
+          // Reload grid from page 1
+          setPage(1)
+          setLoadedRows([])
+          queryClient.invalidateQueries({ queryKey: GENERATE_RESULT_KEYS.results() })
+        },
+        onError: (err: any) => {
+          showToast(err?.message || 'Failed to apply moderation', 'error')
+          const setMsg = field === 1 ? setIaModMsg : setUeModMsg
+          setMsg({
+            text: err?.message || 'Failed to apply moderation',
+            ok: false,
+          })
+          setConfirmBatchMod(null)
+        },
+      }
+    )
+  }
+
+  // Helper to resolve studentGuid if not provided directly on row
+  const resolveStudentGuid = async (r: ExamResultRow): Promise<string> => {
+    if (r.studentGuid) return r.studentGuid
+
+    const direct =
+      (r as any).StudentGuid ||
+      (r as any).studentId ||
+      (r as any).StudentId ||
+      (r as any).studentMasterGuid
+    if (direct) return direct
+
+    if (r.studentNum) {
+      try {
+        const list = await searchModerationStudents(r.studentNum)
+        const match =
+          list.find(
+            (s) =>
+              (s.studentNum || s.studentNumber || s.registrationNumber) ===
+              r.studentNum
+          ) ?? list[0]
+        if (match?.studentGuid) return match.studentGuid
+      } catch (e) {
+        console.warn('Could not resolve studentGuid via search:', e)
+      }
+    }
+    return ''
+  }
+
+  // Single Row Edit Save
+  const handleSaveSingleRowMod = async (
+    row: ExamResultRow,
+    newIaDelta: number,
+    newUeDelta: number
+  ): Promise<{ ok: boolean; error?: string }> => {
+    const studentGuid = row.studentGuid || (await resolveStudentGuid(row))
+    const examResultGuid = row.examResultGuid
+
+    if (!studentGuid || !examResultGuid) {
+      showToast('Could not resolve student record for saving moderation', 'error')
+      return { ok: false, error: 'Could not resolve student record' }
+    }
+
+    try {
+      const res = await updateModeration(studentGuid, examResultGuid, {
+        iaMod: newIaDelta,
+        ueMod: newUeDelta,
+      })
+      showToast('Moderation saved successfully')
+
+      // Update that row in loadedRows in-place per API doc rule
+      setLoadedRows((prev) =>
+        prev.map((r) =>
+          r.examResultGuid === examResultGuid
+            ? {
+                ...r,
+                iaMod: res?.iaMod !== undefined && res?.iaMod !== null ? res.iaMod : newIaDelta,
+                iaTotal: res?.iaTotal !== undefined && res?.iaTotal !== null ? res.iaTotal : r.iaTotal,
+                ueMod: res?.ueMod !== undefined && res?.ueMod !== null ? res.ueMod : newUeDelta,
+                ueTotal: res?.ueTotal !== undefined && res?.ueTotal !== null ? res.ueTotal : r.ueTotal,
+              }
+            : r
+        )
+      )
+      setEditRow(null)
+      return { ok: true }
+    } catch (err: any) {
+      if (err?.status === 404 || err?.code === 'not_found') {
+        showToast('This exam result was not found. Reloading results...', 'error')
+        setEditRow(null)
+        setPage(1)
+        setLoadedRows([])
+        queryClient.invalidateQueries({ queryKey: GENERATE_RESULT_KEYS.results() })
+        return { ok: false, error: 'Row not found' }
+      }
+      const msg = err?.message || 'Unable to apply this moderation.'
+      return { ok: false, error: msg }
+    }
+  }
+
+  // Single Row Remove Moderation
+  const handleExecuteRemoveMod = async () => {
+    if (!removeRow || isRemovingMod) return
+    setIsRemovingMod(true)
+    try {
+      const studentGuid = removeRow.studentGuid || (await resolveStudentGuid(removeRow))
+      const examResultGuid = removeRow.examResultGuid
+
+      if (!studentGuid || !examResultGuid) {
+        showToast('Could not resolve student record for removing moderation', 'error')
+        return
+      }
+
+      const res = await updateModeration(studentGuid, examResultGuid, {
+        iaMod: 0,
+        ueMod: 0,
+      })
+      showToast('Moderation removed successfully')
+
+      // Update that row in loadedRows in-place
+      setLoadedRows((prev) =>
+        prev.map((r) =>
+          r.examResultGuid === examResultGuid
+            ? {
+                ...r,
+                iaMod: 0,
+                iaTotal: res?.iaTotal !== undefined && res?.iaTotal !== null ? res.iaTotal : r.iaTotal,
+                ueMod: 0,
+                ueTotal: res?.ueTotal !== undefined && res?.ueTotal !== null ? res.ueTotal : r.ueTotal,
+              }
+            : r
+        )
+      )
+      setRemoveRow(null)
+    } catch (err: any) {
+      if (err?.status === 404 || err?.code === 'not_found') {
+        showToast('This exam result was not found. Reloading results...', 'error')
+        setRemoveRow(null)
+        setPage(1)
+        setLoadedRows([])
+        queryClient.invalidateQueries({ queryKey: GENERATE_RESULT_KEYS.results() })
+        return
+      }
+      showToast(err?.message || 'Failed to remove moderation', 'error')
+    } finally {
+      setIsRemovingMod(false)
+    }
   }
 
   return (
     <div className="page active">
-      <div className="pg-hdr">
+      {/* ── Page Header ────────────────────────────────────────── */}
+      <div className="pg-hdr flex flex-col md:flex-row md:items-end justify-between gap-4 mb-4">
         <div>
-          <div className="pg-title">Result & Moderation</div>
-          <div className="pg-sub">Search students and apply IA/UE grace marks to individual units</div>
+          <div className="flex items-center gap-2.5">
+            <h1 className="pg-title text-2xl font-bold tracking-tight text-slate-900">
+              Result and Moderation
+            </h1>
+            {!isCurrentIntake && selectedIntake && (
+              <span className="badge badge-amber text-xs font-semibold px-2 py-0.5">
+                View Only
+              </span>
+            )}
+          </div>
+          <div className="pg-sub text-sm text-slate-500 mt-1">
+            Review results and apply moderation marks for an academic intake.
+          </div>
+        </div>
+
+        {/* Academic Intake Dropdown */}
+        <div className="flex flex-col gap-1 min-w-[270px]">
+          <label className="text-[12px] font-semibold text-slate-600">
+            Academic intake
+          </label>
+          <SearchSelect
+            options={intakeOptions}
+            value={selectedIntake}
+            onChange={(val) => {
+              setSelectedIntake(val)
+              setPage(1)
+              setLoadedRows([])
+              setModerationPanelOpen(false)
+            }}
+            placeholder="Select Academic Intake"
+            isLoading={intakesQ.isLoading}
+          />
         </div>
       </div>
 
-      <div className="card mb-5">
-        <div className="p-4 sm:p-5 flex flex-col xl:flex-row xl:items-center justify-between gap-4 lg:gap-6">
-          <div className="w-full xl:w-[380px] shrink-0">
-            <label className="block text-[12px] font-semibold text-slate-700 mb-1.5">
-              Search Student
-            </label>
-            <SearchSelect
-              options={searchOptions}
-              value={studentGuid || undefined}
-              onChange={(val) => setStudentGuid(val)}
-              onSearch={setSearchTerm}
-              isLoading={searching}
-              placeholder="Type name or student number..."
+      {/* ── Main Action Bar & Drawers ──────────────────────────── */}
+      <div ref={stackRef} className="relative z-30 mb-4">
+        {/* Toolbar */}
+        <div className="card shadow-xs border border-slate-200 rounded-xl bg-white p-3 sm:p-4 flex flex-wrap items-center gap-2.5">
+          {/* Reusable TableSearch Component */}
+          <div className="flex items-center gap-1.5 flex-1 min-w-[240px] max-w-[380px]">
+            <TableSearch
+              className="w-full"
+              placeholder="Search name, reg no, student no..."
+              value={searchQuery}
+              onChange={(val) => {
+                setSearchQuery(val)
+              }}
+              results={searchResults.length > 0 ? searchResults : undefined}
+              onSelect={(r) => {
+                setSearchQuery(r.primary)
+              }}
             />
+            {searchQuery && (
+              <button
+                type="button"
+                className="btn btn-neu btn-sm"
+                title="Clear search"
+                onClick={() => {
+                  setSearchQuery('')
+                }}
+              >
+                <i className="lni lni-close"></i>
+              </button>
+            )}
           </div>
-          
-          {studentDetail && (
-            <div className="flex-1 min-w-0 bg-slate-50/80 border border-slate-200/90 rounded-xl p-3.5 lg:px-5 lg:py-3.5 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-2xs">
-              {/* Left Column: Avatar + Student Profile Info */}
-              <div className="flex items-center gap-3.5 min-w-0">
-                <div className="w-11 h-11 rounded-full bg-blue-600 text-white flex items-center justify-center text-base font-bold shrink-0 shadow-xs ring-4 ring-blue-50">
-                  {studentDetail.studentName.charAt(0).toUpperCase()}
-                </div>
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-[14px] font-bold text-slate-900 leading-tight">
-                      {studentDetail.studentName}
-                    </span>
-                    <span className="font-mono text-[11px] font-semibold bg-white text-slate-700 border border-slate-200 px-2 py-0.5 rounded shadow-2xs">
-                      {studentDetail.studentNum || studentDetail.studentNumber || studentDetail.registrationNumber || '—'}
-                    </span>
-                  </div>
-                  <div className="text-[12px] text-slate-600 mt-1 truncate flex items-center gap-1.5" title={studentDetail.programName}>
-                    <i className="lni lni-graduation text-slate-400 text-xs shrink-0"></i>
-                    <span className="truncate">{studentDetail.programName}</span>
-                  </div>
+
+          <div className="flex-1 hidden sm:block"></div>
+
+          {/* + Moderation Button (Only available for current intake) */}
+          {canModerate && (
+            <button
+              type="button"
+              className={`btn btn-sm flex items-center gap-1.5 font-medium transition-all ${
+                moderationPanelOpen
+                  ? 'bg-b50 font-semibold shadow-xs'
+                  : 'bg-white hover:bg-b50/60'
+              }`}
+              style={{
+                borderColor: 'var(--b600)',
+                borderWidth: '1.5px',
+                borderStyle: 'solid',
+                color: 'var(--b600)',
+              }}
+              onClick={toggleModerationPanel}
+              aria-expanded={moderationPanelOpen}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+              <span>Moderation</span>
+            </button>
+          )}
+
+          {/* Filters Button */}
+          <button
+            type="button"
+            className={`btn btn-sm flex items-center gap-2 font-medium transition-all ${
+              filterPanelOpen || activeChips.length > 0
+                ? 'bg-b50 font-semibold shadow-xs'
+                : 'bg-white hover:bg-b50/60'
+            }`}
+            style={{
+              borderColor: 'var(--b600)',
+              borderWidth: '1.5px',
+              borderStyle: 'solid',
+              color: 'var(--b600)',
+            }}
+            onClick={toggleFilterPanel}
+            aria-expanded={filterPanelOpen}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <path d="M4 6h16M7 12h10M10 18h4" />
+            </svg>
+            <span>Filters</span>
+            {activeChips.length > 0 && (
+              <span
+                className="inline-flex items-center justify-center text-white rounded-full text-[11px] min-w-[18px] h-[18px] px-1 font-bold"
+                style={{ background: 'var(--b600)' }}
+              >
+                {activeChips.length}
+              </span>
+            )}
+          </button>
+        </div>
+
+        {/* ── Filters Floating Panel ─────────────────────────── */}
+        {filterPanelOpen && (
+          <div className="absolute left-0 right-0 top-full mt-2 z-50 bg-white border border-slate-200 rounded-xl p-4 sm:p-5 shadow-[0_16px_40px_rgba(16,24,40,0.16)] transition-all">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 mb-4">
+              {/* Programme */}
+              <div className="flex flex-col gap-1">
+                <label className="text-[12px] font-semibold text-slate-600">
+                  Programme
+                </label>
+                <SearchSelect
+                  options={programOptions}
+                  value={filterProg}
+                  onChange={handleProgChange}
+                  placeholder="All programmes"
+                />
+              </div>
+
+              {/* Semester */}
+              <div className="flex flex-col gap-1">
+                <label className="text-[12px] font-semibold text-slate-600">
+                  Semester
+                </label>
+                <SearchSelect
+                  options={semesterOptions}
+                  value={filterSem}
+                  onChange={handleSemChange}
+                  placeholder="All semesters"
+                  disabled={!filterProg}
+                />
+              </div>
+
+              {/* Course unit */}
+              <div className="flex flex-col gap-1">
+                <label className="text-[12px] font-semibold text-slate-600">
+                  Course unit
+                </label>
+                <SearchSelect
+                  options={courseUnitOptions}
+                  value={filterCu}
+                  onChange={handleCuChange}
+                  placeholder="All course units"
+                  disabled={!filterProg}
+                />
+              </div>
+
+              {/* IA total comparison */}
+              <div className="flex flex-col gap-1">
+                <label className="text-[12px] font-semibold text-slate-600">
+                  IA total
+                </label>
+                <div className="grid grid-cols-[105px_1fr] gap-1.5 items-center">
+                  <SearchSelect
+                    options={OPERATOR_OPTIONS}
+                    value={filterIaOp}
+                    onChange={(v) => {
+                      setFilterIaOp(v as any)
+                      setPage(1)
+                      setLoadedRows([])
+                    }}
+                    placeholder="Any"
+                  />
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="Any total"
+                    className="ctrl text-[13px] h-[38px] bg-white border border-slate-200 rounded-lg"
+                    value={filterIaVal}
+                    onChange={(e) => {
+                      setFilterIaVal(e.target.value)
+                      setPage(1)
+                      setLoadedRows([])
+                    }}
+                  />
                 </div>
               </div>
 
-              {/* Right Column: Key Academic Badges (Batch & Semester) */}
-              <div className="flex items-center gap-3 shrink-0 pt-2.5 md:pt-0 border-t md:border-t-0 border-slate-200/60">
-                <div>
-                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 md:text-right">Batch</div>
-                  <span className="inline-flex items-center px-2.5 py-1 rounded-md bg-white border border-slate-200 text-slate-700 text-[11px] font-semibold shadow-2xs whitespace-nowrap">
-                    {studentDetail.batchCode || studentDetail.batchName || '—'}
-                  </span>
-                </div>
-                <div>
-                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 md:text-right">Semester</div>
-                  <span className="inline-flex items-center px-2.5 py-1 rounded-md bg-indigo-50 border border-indigo-200/80 text-indigo-700 text-[11px] font-semibold shadow-2xs whitespace-nowrap">
-                    {studentDetail.semesterName || studentDetail.currentSemester || '—'}
-                  </span>
+              {/* UE total comparison */}
+              <div className="flex flex-col gap-1">
+                <label className="text-[12px] font-semibold text-slate-600">
+                  UE total
+                </label>
+                <div className="grid grid-cols-[105px_1fr] gap-1.5 items-center">
+                  <SearchSelect
+                    options={OPERATOR_OPTIONS}
+                    value={filterUeOp}
+                    onChange={(v) => {
+                      setFilterUeOp(v as any)
+                      setPage(1)
+                      setLoadedRows([])
+                    }}
+                    placeholder="Any"
+                  />
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="Any total"
+                    className="ctrl text-[13px] h-[38px] bg-white border border-slate-200 rounded-lg"
+                    value={filterUeVal}
+                    onChange={(e) => {
+                      setFilterUeVal(e.target.value)
+                      setPage(1)
+                      setLoadedRows([])
+                    }}
+                  />
                 </div>
               </div>
             </div>
-          )}
-        </div>
+
+            {/* Panel Buttons */}
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-200/70">
+              <button
+                type="button"
+                className="btn btn-neu btn-sm"
+                onClick={handleClearFilters}
+              >
+                Clear filters
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={() => setFilterPanelOpen(false)}
+              >
+                Show results
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── Moderation Floating Panel ──────────────────────── */}
+        {moderationPanelOpen && canModerate && (
+          <div className="absolute left-0 right-0 top-full mt-2 z-50 bg-white border border-slate-200 rounded-xl p-4 sm:p-5 shadow-[0_16px_40px_rgba(16,24,40,0.16)] transition-all">
+            <div className="mb-3">
+              <h2 className="text-base font-bold text-slate-900 leading-tight">
+                Bulk Moderation
+              </h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Applies moderation marks to all {totalCount || loadedRows.length}{' '}
+                {(totalCount || loadedRows.length) === 1 ? 'row' : 'rows'} currently matching these filters.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* IA total moderation box */}
+              <div className="p-4 bg-slate-50/70 rounded-xl border border-slate-200">
+                <h3 className="text-[14px] font-bold text-slate-800">
+                  IA total
+                </h3>
+                <div className="text-xs text-slate-500 mb-3">
+                  Raises the IA total up to 50% of the IA maximum. Rows already at or above are skipped.
+                </div>
+                <div className="flex gap-2 items-center">
+                  <input
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    placeholder="e.g. 2.5"
+                    className="ctrl text-[13px] h-[36px] max-w-[140px] bg-white border border-slate-200 rounded-lg"
+                    value={iaModInput}
+                    onChange={(e) => setIaModInput(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    onClick={() => handleRequestBatchMod(1)}
+                    disabled={applyModMut.isPending}
+                  >
+                    Apply to IA total
+                  </button>
+                </div>
+                {iaModMsg && (
+                  <div
+                    className={`text-xs mt-2 font-medium ${
+                      iaModMsg.ok ? 'text-emerald-700' : 'text-red-600'
+                    }`}
+                  >
+                    {iaModMsg.text}
+                  </div>
+                )}
+              </div>
+
+              {/* UE total moderation box */}
+              <div className="p-4 bg-slate-50/70 rounded-xl border border-slate-200">
+                <h3 className="text-[14px] font-bold text-slate-800">
+                  UE total
+                </h3>
+                <div className="text-xs text-slate-500 mb-3">
+                  Raises the UE total up to 50% of the UE maximum. Rows already at or above are skipped.
+                </div>
+                <div className="flex gap-2 items-center">
+                  <input
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    placeholder="e.g. 5"
+                    className="ctrl text-[13px] h-[36px] max-w-[140px] bg-white border border-slate-200 rounded-lg"
+                    value={ueModInput}
+                    onChange={(e) => setUeModInput(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    onClick={() => handleRequestBatchMod(2)}
+                    disabled={applyModMut.isPending}
+                  >
+                    Apply to UE total
+                  </button>
+                </div>
+                {ueModMsg && (
+                  <div
+                    className={`text-xs mt-2 font-medium ${
+                      ueModMsg.ok ? 'text-emerald-700' : 'text-red-600'
+                    }`}
+                  >
+                    {ueModMsg.text}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
-      <div className="card">
-        <div className="card-hdr">
-          <div className="card-title">
-            <span className="ctitle-icon"><i className="lni lni-list"></i></span> Unit Results
-          </div>
-        </div>
-        <ScrollTable>
+      {/* ── Table Container (ScrollTable with infinite scroll) ── */}
+      <div className="card shadow-xs border border-slate-200 rounded-xl overflow-hidden bg-white mb-3">
+        <ScrollTable onScroll={handleTableScroll} maxHeight="calc(100vh - 290px)">
           <table>
             <thead>
               <tr>
-                <th style={{ width: 48 }}></th>
-                <th>SEMESTER</th>
-                <th>UNIT CODE</th>
-                <th>UNIT NAME</th>
-                <th>IA</th>
-                <th>UE</th>
-                <th>TOTAL</th>
-                <th>STATUS</th>
-                <th>IA MOD</th>
-                <th>UE MOD</th>
+                <th style={{ textAlign: 'left', width: 44 }}>#</th>
+                <th style={{ textAlign: 'left', minWidth: 160 }}>STUDENT</th>
+                <th style={{ textAlign: 'left', width: 100 }}>PROGRAMME</th>
+                <th style={{ textAlign: 'center', width: 60 }}>SEM</th>
+                <th style={{ textAlign: 'left', minWidth: 200 }}>COURSE UNIT</th>
+                <th style={{ textAlign: 'right', width: 60 }}>CT</th>
+                <th style={{ textAlign: 'right', width: 60 }}>CW</th>
+                <th style={{ textAlign: 'right', width: 60 }}>CA</th>
+                <th style={{ textAlign: 'right', width: 75 }}>IA MOD</th>
+                <th style={{ textAlign: 'right', width: 95 }}>IA TOTAL</th>
+                <th style={{ textAlign: 'right', width: 65 }}>UE</th>
+                <th style={{ textAlign: 'right', width: 65 }}>UE PR.</th>
+                <th style={{ textAlign: 'right', width: 75 }}>UE MOD</th>
+                <th style={{ textAlign: 'right', width: 95 }}>UE TOTAL</th>
+                <th style={{ textAlign: 'right', width: 90 }}>MODERATION</th>
               </tr>
             </thead>
             <tbody>
-              {loadingRows ? (
-                <TableLoadingState colSpan={10} title="Loading unit results..." subtitle="Fetching results for the selected student." />
-              ) : !studentGuid ? (
-                <EmptyState 
-                  colSpan={10} 
-                  title="No Student Selected" 
-                  subtitle="Search and select a student from the dropdown above to view and moderate their unit results." 
+              {resultsQ.isLoading && loadedRows.length === 0 ? (
+                <TableLoadingState
+                  colSpan={15}
+                  title="Loading results..."
+                  subtitle="Fetching moderation records for the intake."
                 />
-              ) : rows && rows.length > 0 ? (
-                rows.map(row => (
-                  <ModerationRowItem 
-                    key={row.examResultGuid} 
-                    row={row} 
-                    studentGuid={studentGuid} 
-                    onSuccess={() => showToast('Moderation saved successfully')}
-                    onError={(err) => showToast(err || 'Failed to save moderation', 'error')}
-                  />
-                ))
+              ) : loadedRows.length === 0 ? (
+                <EmptyState
+                  colSpan={15}
+                  title="No results match these filters"
+                  subtitle="Clear a filter or search query to see student results."
+                />
               ) : (
-                <EmptyState 
-                  colSpan={10} 
-                  title="No results found" 
-                  subtitle="There are no recorded results for this student." 
-                />
+                loadedRows.map((row, idx) => {
+                  const iaMax = row.iaMax || 30
+                  const ueMax = row.ueMax || 70
+                  const iaTotal = row.iaTotal ?? 0
+                  const ueTotal = row.ueTotal ?? 0
+
+                  const iaPercent = Math.min(
+                    100,
+                    Math.max(0, (iaTotal / iaMax) * 100)
+                  )
+                  const uePercent = Math.min(
+                    100,
+                    Math.max(0, (ueTotal / ueMax) * 100)
+                  )
+                  const hasMod = !!((row.iaMod && row.iaMod > 0) || (row.ueMod && row.ueMod > 0))
+
+                  return (
+                    <tr
+                      key={row.examResultGuid || idx}
+                      className="hover:bg-slate-50 transition-colors"
+                    >
+                      {/* # */}
+                      <td className="text-slate-500 font-mono text-xs" style={{ textAlign: 'left' }}>
+                        {idx + 1}
+                      </td>
+
+                      {/* Student */}
+                      <td style={{ textAlign: 'left' }}>
+                        <div className="font-semibold text-slate-900 text-[13px] whitespace-nowrap">
+                          {row.studentName ?? '—'}
+                        </div>
+                        <div className="text-slate-500 font-mono text-[11px] mt-0.5">
+                          {row.studentNum ?? '—'}
+                        </div>
+                      </td>
+
+                      {/* Programme */}
+                      <td className="font-mono text-slate-700 text-xs" style={{ textAlign: 'left' }}>
+                        {row.programCode ?? '—'}
+                      </td>
+
+                      {/* Sem */}
+                      <td className="text-slate-700 text-xs font-semibold" style={{ textAlign: 'center' }}>
+                        {row.semCode ?? '—'}
+                      </td>
+
+                      {/* Course unit */}
+                      <td style={{ textAlign: 'left', maxWidth: 240 }}>
+                        <div className="font-semibold text-slate-900 text-xs">
+                          {row.unitCode ?? '—'}
+                        </div>
+                        <div className="text-slate-500 text-[11.5px] truncate mt-0.5" title={row.unitName ?? undefined}>
+                          {row.unitName ?? '—'}
+                        </div>
+                      </td>
+
+                      {/* CT */}
+                      <td className="font-mono text-xs text-slate-700" style={{ textAlign: 'right' }}>
+                        {formatScore(row.midSem)}
+                      </td>
+
+                      {/* CW */}
+                      <td className="font-mono text-xs text-slate-700" style={{ textAlign: 'right' }}>
+                        {formatScore(row.cw1)}
+                      </td>
+
+                      {/* CA */}
+                      <td className="font-mono text-xs text-slate-700" style={{ textAlign: 'right' }}>
+                        {formatScore(row.cw2)}
+                      </td>
+
+                      {/* IA mod */}
+                      <td className="font-mono text-xs" style={{ textAlign: 'right' }}>
+                        {row.iaMod ? (
+                          <span className="font-semibold text-emerald-700">
+                            +{formatScore(row.iaMod)}
+                          </span>
+                        ) : (
+                          <span className="text-slate-300">—</span>
+                        )}
+                      </td>
+
+                      {/* IA total */}
+                      <td style={{ textAlign: 'right' }}>
+                        <div className="inline-block min-w-[72px]">
+                          <div className="font-mono text-xs whitespace-nowrap">
+                            <strong className="text-slate-900 font-bold">{formatScore(iaTotal)}</strong>{' '}
+                            <span className="text-slate-400 font-normal">/ {iaMax}</span>
+                          </div>
+                          <div className="w-full h-[3px] bg-slate-200 rounded-full mt-1 overflow-hidden">
+                            <div
+                              className="h-full bg-blue-600 rounded-full transition-all duration-300"
+                              style={{ width: `${iaPercent}%` }}
+                            ></div>
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* UE */}
+                      <td className="font-mono text-xs text-slate-700" style={{ textAlign: 'right' }}>
+                        {row.ue ? (
+                          row.ue.toUpperCase() === 'ABS' ? (
+                            <span className="badge badge-red font-bold text-[10px] px-1.5 py-0.2">ABS</span>
+                          ) : (
+                            row.ue
+                          )
+                        ) : (
+                          <span className="text-slate-300">—</span>
+                        )}
+                      </td>
+
+                      {/* UE Pr. */}
+                      <td className="font-mono text-xs text-slate-700" style={{ textAlign: 'right' }}>
+                        {row.uePractical ? (
+                          row.uePractical.toUpperCase() === 'ABS' ? (
+                            <span className="badge badge-red font-bold text-[10px] px-1.5 py-0.2">ABS</span>
+                          ) : (
+                            row.uePractical
+                          )
+                        ) : (
+                          <span className="text-slate-300">—</span>
+                        )}
+                      </td>
+
+                      {/* UE mod */}
+                      <td className="font-mono text-xs" style={{ textAlign: 'right' }}>
+                        {row.ueMod ? (
+                          <span className="font-semibold text-emerald-700">
+                            +{formatScore(row.ueMod)}
+                          </span>
+                        ) : (
+                          <span className="text-slate-300">—</span>
+                        )}
+                      </td>
+
+                      {/* UE total */}
+                      <td style={{ textAlign: 'right' }}>
+                        <div className="inline-block min-w-[72px]">
+                          <div className="font-mono text-xs whitespace-nowrap">
+                            <strong className="text-slate-900 font-bold">{formatScore(ueTotal)}</strong>{' '}
+                            <span className="text-slate-400 font-normal">/ {ueMax}</span>
+                          </div>
+                          <div className="w-full h-[3px] bg-slate-200 rounded-full mt-1 overflow-hidden">
+                            <div
+                              className="h-full bg-blue-600 rounded-full transition-all duration-300"
+                              style={{ width: `${uePercent}%` }}
+                            ></div>
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Moderation Actions (Gated by current intake & permission) */}
+                      <td style={{ textAlign: 'right' }}>
+                        {canEditRow ? (
+                          <div className="inline-flex items-center justify-end gap-1">
+                            <button
+                              type="button"
+                              className="w-8 h-8 rounded-lg inline-flex items-center justify-center text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors border border-transparent hover:border-blue-100"
+                              title="Edit moderation"
+                              aria-label={`Edit moderation for ${row.studentName ?? 'student'}, ${row.unitCode ?? ''}`}
+                              onClick={() => setEditRow(row)}
+                            >
+                              <svg
+                                width="15"
+                                height="15"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              >
+                                <path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                              </svg>
+                            </button>
+                            <button
+                              type="button"
+                              className="w-8 h-8 rounded-lg inline-flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 disabled:opacity-30 disabled:pointer-events-none transition-colors border border-transparent hover:border-red-100"
+                              title="Remove moderation"
+                              aria-label={`Remove moderation for ${row.studentName ?? 'student'}, ${row.unitCode ?? ''}`}
+                              disabled={!hasMod}
+                              onClick={() => setRemoveRow(row)}
+                            >
+                              <svg
+                                width="15"
+                                height="15"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              >
+                                <path d="M3 6h18M8 6V4h8v2m-9 0 1 14h8l1-14" />
+                              </svg>
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-slate-300 text-xs">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })
               )}
             </tbody>
           </table>
         </ScrollTable>
       </div>
-      
+
+      {/* ── Table Footer & Infinite Scroll Progress ───────────── */}
+      <div className="flex flex-col sm:flex-row justify-between items-center text-xs text-slate-500 px-1 py-1 gap-2">
+        <span>
+          Showing {loadedRows.length} of {totalCount} records
+        </span>
+        {resultsQ.isFetching && loadedRows.length > 0 && (
+          <span className="text-blue-600 font-medium flex items-center gap-1.5">
+            <i className="lni lni-reload animate-spin text-xs"></i> Loading more records...
+          </span>
+        )}
+      </div>
+
+      {/* ── Batch Moderation Confirmation Dialog ───────────────── */}
+      {confirmBatchMod && (
+        <div className="modal-overlay open">
+          <div className="modal" style={{ maxWidth: 440 }}>
+            <div className="modal-hdr modal-hdr-blue">
+              <div className="modal-title">
+                <i className="lni lni-question-circle"></i> Apply bulk moderation?
+              </div>
+              <button
+                className="modal-close"
+                onClick={() => setConfirmBatchMod(null)}
+              >
+                <i className="lni lni-close"></i>
+              </button>
+            </div>
+            <div className="modal-body p-5">
+              <p className="text-sm text-slate-700 leading-relaxed">
+                This will apply{' '}
+                <strong>+{confirmBatchMod.value} marks</strong> to the{' '}
+                <strong>{confirmBatchMod.field === 1 ? 'IA' : 'UE'} total</strong> of all{' '}
+                <strong>{confirmBatchMod.count}</strong> matching{' '}
+                {confirmBatchMod.count === 1 ? 'row' : 'rows'} across the entire academic intake.
+              </p>
+              <p className="text-xs text-slate-500 mt-2.5">
+                Moderation raises totals up to 50% of each row's maximum. Rows already at or above 50% are skipped.
+              </p>
+            </div>
+            <div className="modal-footer flex justify-end items-center gap-2">
+              <button
+                type="button"
+                className="btn btn-neu btn-sm"
+                onClick={() => setConfirmBatchMod(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={executeBatchMod}
+                disabled={applyModMut.isPending}
+              >
+                {applyModMut.isPending ? 'Applying...' : 'Apply moderation'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Skipped Rows Modal ─────────────────────────────────── */}
+      {skippedModalData && (
+        <div className="modal-overlay open">
+          <div className="modal" style={{ maxWidth: 620 }}>
+            <div className="modal-hdr modal-hdr-blue">
+              <div className="modal-title flex items-center gap-2">
+                <i className="lni lni-information"></i> Moderation Summary
+              </div>
+              <button className="modal-close" onClick={() => setSkippedModalData(null)}>
+                <i className="lni lni-close"></i>
+              </button>
+            </div>
+            <div className="modal-body p-4 sm:p-5">
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-900 mb-3 flex items-center justify-between">
+                <span>
+                  Moderated <strong>{skippedModalData.rowsModerated}</strong> of{' '}
+                  <strong>{skippedModalData.rowsMatched}</strong> rows.
+                </span>
+                <span className="badge badge-amber font-semibold text-[11px]">
+                  {skippedModalData.rowsSkipped} Skipped
+                </span>
+              </div>
+              <div className="text-xs font-semibold text-slate-700 mb-2">
+                Skipped Rows Details:
+              </div>
+              <div className="max-h-60 overflow-y-auto border border-slate-200 rounded-lg">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50 text-slate-600 font-semibold sticky top-0">
+                    <tr>
+                      <th className="py-2 px-3">Student</th>
+                      <th className="py-2 px-3">Reg / Number</th>
+                      <th className="py-2 px-3">Course Unit</th>
+                      <th className="py-2 px-3">Reason</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {skippedModalData.items.map((item, idx) => (
+                      <tr key={item.examResultGuid || idx} className="hover:bg-slate-50">
+                        <td className="py-2 px-3 font-medium text-slate-800">{item.studentName || '—'}</td>
+                        <td className="py-2 px-3 font-mono text-slate-500">{item.studentRegNo || item.registrationNumber || item.studentNum || '—'}</td>
+                        <td className="py-2 px-3 font-mono text-slate-700">{item.unitCode || '—'}</td>
+                        <td className="py-2 px-3 text-amber-700">{item.reason || 'Skipped'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div className="modal-footer flex justify-end p-3 bg-slate-50 border-t border-slate-200 rounded-b-xl">
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={() => setSkippedModalData(null)}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Edit Moderation Modal (Single Row) ─────────────────── */}
+      {editRow && (
+        <EditRowModerationModal
+          row={editRow}
+          onClose={() => setEditRow(null)}
+          onSave={(iaDelta, ueDelta) => handleSaveSingleRowMod(editRow, iaDelta, ueDelta)}
+        />
+      )}
+
+      {/* ── Remove Moderation Confirmation Dialog ──────────────── */}
+      {removeRow && (
+        <div
+          className="modal-overlay open"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setRemoveRow(null)
+          }}
+        >
+          <div className="bg-white rounded-2xl p-6 shadow-2xl w-full max-w-[420px]" role="dialog" aria-modal="true">
+            <h2 className="text-[17px] font-bold text-slate-900 mb-1.5">
+              Remove moderation
+            </h2>
+            <p className="text-[13px] text-slate-500 mb-5 leading-normal">
+              This removes the moderation marks for{' '}
+              <strong className="text-slate-800">{removeRow.studentName || removeRow.studentNum}</strong> in{' '}
+              <strong className="text-slate-800">{removeRow.unitCode}</strong> and restores the original
+              totals.
+            </p>
+            <div className="flex justify-end items-center gap-2">
+              <button
+                type="button"
+                className="btn btn-neu text-xs py-2 px-4 font-medium"
+                onClick={() => setRemoveRow(null)}
+                disabled={isRemovingMod}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger text-xs py-2 px-4 font-semibold"
+                onClick={handleExecuteRemoveMod}
+                disabled={isRemovingMod}
+              >
+                {isRemovingMod ? 'Removing...' : 'Remove moderation'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toast Alert */}
       {toast && <Toast toast={toast} />}
     </div>
   )
 }
 
-function ModerationRowItem({ row, studentGuid, onSuccess, onError }: { 
-  row: any, 
-  studentGuid: string, 
-  onSuccess: () => void, 
-  onError: (msg: string) => void 
+// ── Edit Row Moderation Modal Component ──────────────────────
+function EditRowModerationModal({
+  row,
+  onClose,
+  onSave,
+}: {
+  row: ExamResultRow
+  onClose: () => void
+  onSave: (iaDelta: number, ueDelta: number) => Promise<{ ok: boolean; error?: string }>
 }) {
-  const permissions = usePagePermissions()
-  const [isViewModalOpen, setViewModalOpen] = useState(false)
-  const [isEditModalOpen, setEditModalOpen] = useState(false)
-  
-  const currentIaMod = Number(row.iaMod) || 0
-  const currentUeMod = Number(row.ueMod) || 0
-  const baseIa = Math.max(0, (Number(row.iaTotal) || 0) - currentIaMod)
-  const baseUe = Math.max(0, (Number(row.ueTotal) || 0) - currentUeMod)
+  const iaMax = row.iaMax || 30
+  const ueMax = row.ueMax || 70
 
-  const computedTotal = (Number(row.iaTotal) || 0) + (Number(row.ueTotal) || 0)
+  const hasIaMarks = row.iaMax !== null && row.iaMax !== undefined && row.iaTotal !== null && row.iaTotal !== undefined
+  const hasUeMarks = row.ueMax !== null && row.ueMax !== undefined && row.ueTotal !== null && row.ueTotal !== undefined
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'Pass': return <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded text-[11px] font-bold">Pass</span>
-      case 'Fail': return <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded text-[11px] font-bold">Fail</span>
-      case 'RL': return <span className="bg-amber-100 text-amber-700 px-2 py-0.5 rounded text-[11px] font-bold">RL</span>
-      default: return <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-[11px] font-bold">{status}</span>
-    }
-  }
+  // Base marks before any moderation
+  const currentIaTotal = row.iaTotal ?? 0
+  const currentIaMod = row.iaMod ?? 0
+  const baseIa = Math.max(0, currentIaTotal - currentIaMod)
 
-  return (
-    <>
-      <tr>
-        <td>
-          <ActionMenu>
-            <button className="btn btn-neu btn-sm" onClick={() => setViewModalOpen(true)}>
-              <i className="lni lni-eye"></i> View Details
-            </button>
-            {permissions.edit && (
-              <button className="btn btn-neu btn-sm" onClick={() => setEditModalOpen(true)}>
-                <i className="lni lni-pencil"></i> Edit Moderation
-              </button>
-            )}
-          </ActionMenu>
-        </td>
-        <td className="text-[12px] text-slate-500 whitespace-nowrap">{row.semesterName || '—'}</td>
-        <td className="font-mono text-slate-700 text-[12px]">{row.unitCode || '—'}</td>
-        <td className="font-medium text-slate-900">{row.unitName}</td>
-        <td>
-          <div className="flex flex-col">
-            <span className="font-medium text-slate-800">
-              {row.iaTotal} <span className="text-slate-400 font-normal">/ {row.iaMax}</span>
-            </span>
-            {currentIaMod > 0 && <span className="text-[10px] text-purple-600 font-semibold">(+{currentIaMod} grace)</span>}
-          </div>
-        </td>
-        <td>
-          <div className="flex flex-col">
-            <span className="font-medium text-slate-800">
-              {row.ueTotal} <span className="text-slate-400 font-normal">/ {row.ueMax}</span>
-            </span>
-            {currentUeMod > 0 && <span className="text-[10px] text-purple-600 font-semibold">(+{currentUeMod} grace)</span>}
-          </div>
-        </td>
-        <td className="font-bold text-slate-900">{computedTotal.toFixed(1)}</td>
-        <td>{getStatusBadge(row.passStatus)}</td>
-        <td>
-          <div className="flex flex-col">
-            {currentIaMod > 0 ? <span className="text-[12px] text-purple-600 font-bold">+{currentIaMod}</span> : <span className="text-slate-400">-</span>}
-          </div>
-        </td>
-        <td>
-          <div className="flex flex-col">
-            {currentUeMod > 0 ? <span className="text-[12px] text-purple-600 font-bold">+{currentUeMod}</span> : <span className="text-slate-400">-</span>}
-          </div>
-        </td>
-      </tr>
+  const currentUeTotal = row.ueTotal ?? 0
+  const currentUeMod = row.ueMod ?? 0
+  const baseUe = Math.max(0, currentUeTotal - currentUeMod)
 
-      {isViewModalOpen && (
-        <div className="modal-overlay open">
-          <div className="modal" style={{ maxWidth: 520 }}>
-            <div className="modal-hdr modal-hdr-blue">
-              <div className="modal-title"><i className="lni lni-eye"></i> Result &amp; Moderation Breakdown</div>
-              <button className="modal-close" onClick={() => setViewModalOpen(false)}>
-                <i className="lni lni-close"></i>
-              </button>
-            </div>
-            <div className="modal-body p-5">
-              <div className="mb-4 pb-3 border-b border-slate-200">
-                <div className="text-xs text-slate-500 uppercase font-semibold">Subject / Unit</div>
-                <div className="font-bold text-base text-slate-900">{row.unitCode} — {row.unitName}</div>
-                <div className="text-xs text-slate-500 mt-0.5">{row.semesterName}</div>
-              </div>
+  // Cap is exactly 50% of maximum
+  const iaCap = iaMax * 0.5
+  const ueCap = ueMax * 0.5
 
-              <div className="grid grid-cols-2 gap-4 mb-4">
-                <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
-                  <div className="text-xs font-bold text-slate-700 uppercase mb-2">Internal Assessment (IA)</div>
-                  <div className="space-y-1 text-xs">
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">Base Score:</span>
-                      <span className="font-semibold text-slate-800">{baseIa}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">Grace Applied:</span>
-                      <span className={currentIaMod > 0 ? 'font-bold text-purple-600' : 'text-slate-500'}>
-                        {currentIaMod > 0 ? `+${currentIaMod}` : 'None (0)'}
-                      </span>
-                    </div>
-                    <div className="flex justify-between pt-1 border-t border-slate-200 font-bold text-sm">
-                      <span>Total IA:</span>
-                      <span>{row.iaTotal} <span className="text-slate-400 font-normal text-xs">/ {row.iaMax}</span></span>
-                    </div>
-                    <div className="text-[11px] text-slate-500 pt-1">Pass line (50%): <strong>{(row.iaMax * 0.5).toFixed(1)}</strong></div>
-                  </div>
-                </div>
+  // Maximum allowed moderation for this specific row
+  const maxAllowedIa = hasIaMarks ? Math.max(0, Number((iaCap - baseIa).toFixed(2))) : 0
+  const maxAllowedUe = hasUeMarks ? Math.max(0, Number((ueCap - baseUe).toFixed(2))) : 0
 
-                <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
-                  <div className="text-xs font-bold text-slate-700 uppercase mb-2">University Exam (UE)</div>
-                  <div className="space-y-1 text-xs">
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">Base Score:</span>
-                      <span className="font-semibold text-slate-800">{baseUe}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">Grace Applied:</span>
-                      <span className={currentUeMod > 0 ? 'font-bold text-purple-600' : 'text-slate-500'}>
-                        {currentUeMod > 0 ? `+${currentUeMod}` : 'None (0)'}
-                      </span>
-                    </div>
-                    <div className="flex justify-between pt-1 border-t border-slate-200 font-bold text-sm">
-                      <span>Total UE:</span>
-                      <span>{row.ueTotal} <span className="text-slate-400 font-normal text-xs">/ {row.ueMax}</span></span>
-                    </div>
-                    <div className="text-[11px] text-slate-500 pt-1">Pass line (50%): <strong>{(row.ueMax * 0.5).toFixed(1)}</strong></div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between p-3 bg-blue-50/70 border border-blue-200 rounded-lg">
-                <div>
-                  <div className="text-xs text-blue-900 font-bold">Overall Status</div>
-                  <div className="text-xs text-blue-700">Combined Total: <strong>{computedTotal.toFixed(1)}</strong> / {row.iaMax + row.ueMax}</div>
-                </div>
-                <div>{getStatusBadge(row.passStatus)}</div>
-              </div>
-            </div>
-            <div className="modal-ftr">
-              <button className="btn btn-neu" onClick={() => setViewModalOpen(false)}>Close</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {isEditModalOpen && (
-        <EditModerationModal 
-          row={row} 
-          studentGuid={studentGuid} 
-          onClose={() => setEditModalOpen(false)} 
-          onSuccess={onSuccess} 
-          onError={onError} 
-        />
-      )}
-    </>
+  const [iaVal, setIaVal] = useState<string>(
+    row.iaMod !== null && row.iaMod !== undefined ? String(row.iaMod) : '0'
   )
-}
+  const [ueVal, setUeVal] = useState<string>(
+    row.ueMod !== null && row.ueMod !== undefined ? String(row.ueMod) : '0'
+  )
+  const [serverError, setServerError] = useState<string | null>(null)
+  const [isSaving, setIsSaving] = useState(false)
 
-function EditModerationModal({ row, studentGuid, onClose, onSuccess, onError }: any) {
-  const currentIaMod = Number(row.iaMod) || 0
-  const currentUeMod = Number(row.ueMod) || 0
-  const baseIa = Math.max(0, (Number(row.iaTotal) || 0) - currentIaMod)
-  const baseUe = Math.max(0, (Number(row.ueTotal) || 0) - currentUeMod)
-  const iaMax = Number(row.iaMax) || 0
-  const ueMax = Number(row.ueMax) || 0
-  const iaThreshold = Number((iaMax * 0.5).toFixed(2))
-  const ueThreshold = Number((ueMax * 0.5).toFixed(2))
-
-  // Maximum allowed grace marks without exceeding 50% limit (landing exactly on line is allowed):
-  const maxAllowedIaMod = Math.max(0, Number((iaThreshold - baseIa).toFixed(2)))
-  const maxAllowedUeMod = Math.max(0, Number((ueThreshold - baseUe).toFixed(2)))
-
-  const isRL = row.passStatus === 'RL' || (Number(row.ueTotal) === 0 && Number(row.ueMax) > 0 && currentUeMod === 0)
-
-  const [iaMod, setIaMod] = useState<string>(currentIaMod.toString())
-  const [ueMod, setUeMod] = useState<string>(currentUeMod.toString())
-  const updateMut = useUpdateModeration()
-  const isPending = updateMut.isPending
-  const [saveError, setSaveError] = useState<string | null>(null)
-  const queryClient = useQueryClient()
-
-  const numIa = parseFloat(iaMod) || 0
-  const numUe = parseFloat(ueMod) || 0
-
-  // ── Validation logic (per result-moderation-page.md & update-moderation.md) ──
-  let iaError: string | null = null
-  let ueError: string | null = null
-
-  if (isNaN(numIa)) {
-    iaError = 'Enter a valid number.'
-  } else if (numIa < 0) {
-    iaError = 'IA moderation cannot be negative.'
-  } else if (numIa > 0 && baseIa >= iaThreshold) {
-    iaError = `Base IA (${baseIa}/${iaMax}) is already at or above 50%. Grace marks cannot be added.`
-  } else if (numIa > 0 && Number((baseIa + numIa).toFixed(2)) > iaThreshold) {
-    iaError = `IA total would reach ${(baseIa + numIa).toFixed(1)}, exceeding 50% of max (${iaThreshold}). Max allowed grace is ${maxAllowedIaMod}.`
-  }
-
-  if (isNaN(numUe)) {
-    ueError = 'Enter a valid number.'
-  } else if (numUe < 0) {
-    ueError = 'UE moderation cannot be negative.'
-  } else if (isRL && numUe > 0) {
-    ueError = 'Student has not sat University Exam yet (RL). UE moderation cannot be applied.'
-  } else if (numUe > 0 && baseUe >= ueThreshold) {
-    ueError = `Base UE (${baseUe}/${ueMax}) is already at or above 50%. Grace marks cannot be added.`
-  } else if (numUe > 0 && Number((baseUe + numUe).toFixed(2)) > ueThreshold) {
-    ueError = `UE total would reach ${(baseUe + numUe).toFixed(1)}, exceeding 50% of max (${ueThreshold}). Max allowed grace is ${maxAllowedUeMod}.`
-  }
-
-  const hasValidationError = !!iaError || !!ueError
-
-  // Projected totals:
-  const validIaVal = isNaN(numIa) ? 0 : Math.max(0, numIa)
-  const validUeVal = isNaN(numUe) ? 0 : Math.max(0, numUe)
-  const projectedIa = Number((baseIa + validIaVal).toFixed(1))
-  const projectedUe = Number((baseUe + validUeVal).toFixed(1))
-  const projectedTotal = Number((projectedIa + projectedUe).toFixed(1))
-  const maxTotal = iaMax + ueMax
-
-  const isProjectedPass = !isRL && projectedIa >= iaThreshold && projectedUe >= ueThreshold
-
-  const handleSave = () => {
-    if (hasValidationError) return
-    setSaveError(null)
-
-    const payload = {
-      iaModeration: numIa,
-      ueModeration: numUe,
-      iaMod: numIa,
-      ueMod: numUe,
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
     }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [onClose])
 
-    updateMut.mutate({ studentGuid, examResultGuid: row.examResultGuid, data: payload }, {
-      onSuccess: () => {
-        onSuccess()
-        onClose()
-      },
-      onError: (err: any) => {
-        if (err?.code === 'not_found') {
-          onError(err?.message || 'This result no longer exists.')
-          queryClient.invalidateQueries({ queryKey: ['moderation-student-rows', studentGuid] })
-          onClose()
-          return
-        }
-        setSaveError(err?.message || 'Unable to apply this moderation. Moderation cannot push total above 50% of max.')
-      }
-    })
+  // Real-time Field Validations
+  const iaNum = parseFloat(iaVal)
+  let iaError: string | null = null
+  if (iaVal.trim() === '') {
+    iaError = 'Please enter a value (0 to clear).'
+  } else if (isNaN(iaNum)) {
+    iaError = 'Please enter a valid number.'
+  } else if (iaNum < 0) {
+    iaError = 'Moderation marks cannot be negative.'
+  } else if ((iaVal.split('.')[1] || '').length > 2) {
+    iaError = 'Can have at most 2 decimal places.'
+  } else if (iaNum > 0) {
+    if (!hasIaMarks) {
+      iaError = 'This row has no IA marks to moderate.'
+    } else if (baseIa >= iaCap) {
+      iaError = `Base score (${baseIa}) is already at 50% cap (${iaCap}).`
+    } else if (baseIa + iaNum > iaCap + 0.0001) {
+      iaError = `Exceeds 50% cap (${iaCap}). Max allowed is +${maxAllowedIa}.`
+    }
   }
+
+  const ueNum = parseFloat(ueVal)
+  let ueError: string | null = null
+  if (ueVal.trim() === '') {
+    ueError = 'Please enter a value (0 to clear).'
+  } else if (isNaN(ueNum)) {
+    ueError = 'Please enter a valid number.'
+  } else if (ueNum < 0) {
+    ueError = 'Moderation marks cannot be negative.'
+  } else if ((ueVal.split('.')[1] || '').length > 2) {
+    ueError = 'At most 2 decimal places allowed.'
+  } else if (ueNum > 0) {
+    if (!hasUeMarks) {
+      ueError = 'This row has no UE marks to moderate.'
+    } else if (baseUe >= ueCap) {
+      ueError = `Base score (${baseUe}) is already at 50% cap (${ueCap}).`
+    } else if (baseUe + ueNum > ueCap + 0.0001) {
+      ueError = `Exceeds 50% cap (${ueCap}). Max allowed is +${maxAllowedUe}.`
+    }
+  }
+
+  const hasErrors = Boolean(iaError || ueError)
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (hasErrors) return
+
+    setServerError(null)
+    setIsSaving(true)
+    try {
+      const res = await onSave(isNaN(iaNum) ? 0 : iaNum, isNaN(ueNum) ? 0 : ueNum)
+      if (!res.ok && res.error) {
+        setServerError(res.error)
+      }
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const studentDisplay = row.studentName || 'Student'
+  const unitDisplay = [row.unitCode, row.unitName].filter(Boolean).join(' ')
 
   return (
-    <div className="modal-overlay open">
-      <div className="modal" style={{ maxWidth: 540 }}>
-        <div className="modal-hdr modal-hdr-blue">
-          <div className="modal-title"><i className="lni lni-pencil"></i> Edit Grace Marks (Moderation)</div>
-          <button className="modal-close" onClick={onClose} disabled={isPending}><i className="lni lni-close"></i></button>
-        </div>
+    <div
+      className="modal-overlay open"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose()
+      }}
+    >
+      <div className="bg-white rounded-2xl p-6 shadow-2xl w-full max-w-[440px]" role="dialog" aria-modal="true">
+        <h2 className="text-[17px] font-bold text-slate-900 mb-1">
+          Edit moderation
+        </h2>
+        <p className="text-[13px] text-slate-500 mb-3.5 leading-normal">
+          {studentDisplay} {unitDisplay ? `· ${unitDisplay}` : ''}
+        </p>
 
-        <div className="modal-body p-5">
-          {/* Unit header */}
-          <div className="mb-4 pb-3 border-b border-slate-200 flex justify-between items-start">
-            <div>
-              <div className="text-[11px] text-slate-500 font-semibold uppercase">Unit</div>
-              <div className="font-bold text-[15px] text-slate-900">{row.unitCode} — {row.unitName}</div>
-              <div className="text-xs text-slate-500">{row.semesterName}</div>
-            </div>
-            <div>
-              <span className="text-[11px] font-semibold text-slate-500 block text-right mb-0.5">Current Status</span>
-              <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${row.passStatus === 'Pass' ? 'bg-green-100 text-green-700' : row.passStatus === 'RL' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>
-                {row.passStatus}
+        {/* Server-side Error Alert */}
+        {serverError && (
+          <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700 font-medium mb-3 flex items-start gap-2">
+            <i className="lni lni-warning text-sm shrink-0 mt-0.5"></i>
+            <span>{serverError}</span>
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit}>
+          {/* IA Moderation Field */}
+          <div className="flex flex-col gap-1 mb-3.5">
+            <div className="flex items-center justify-between">
+              <label htmlFor="eia" className="text-xs font-semibold text-slate-800">
+                IA moderation
+              </label>
+              <span className="text-[11px] text-slate-500 font-medium">
+                Max allowed: <strong className="text-slate-700">+{maxAllowedIa}</strong>
               </span>
             </div>
+            <input
+              id="eia"
+              type="number"
+              min="0"
+              step="0.01"
+              autoFocus
+              className={`ctrl w-full text-sm h-[38px] px-3 rounded-lg border transition-colors ${
+                iaError
+                  ? 'border-red-400 bg-red-50/20 focus:border-red-500'
+                  : 'border-slate-300 focus:border-blue-600'
+              } focus:outline-none`}
+              value={iaVal}
+              onChange={(e) => {
+                setIaVal(e.target.value)
+                setServerError(null)
+              }}
+            />
+            {iaError ? (
+              <span className="text-[11.5px] text-red-600 font-medium mt-0.5">
+                {iaError}
+              </span>
+            ) : !isNaN(iaNum) && iaNum >= 0 ? (
+              <span className="text-[11px] text-slate-500 mt-0.5">
+                New IA total:{' '}
+                <strong className="text-slate-700">
+                  {formatScore(baseIa + iaNum)}
+                </strong>{' '}
+                / {iaMax}
+              </span>
+            ) : null}
           </div>
 
-          {/* Policy Guard Notice */}
-          <div className="info-box mb-4" style={{ fontSize: '11.5px', padding: '8px 12px', background: '#F8FAFC', border: '1px solid #E2E8F0' }}>
-            <i className="lni lni-shield" style={{ color: 'var(--b700)', fontSize: 14 }}></i>
-            <div>
-              <strong>50% Guard Rule:</strong> Moderation rescues borderline results up to Pass. It can <strong>never push a component above 50% of its max</strong>. Enter <strong>0</strong> to remove grace marks.
+          {/* UE Moderation Field */}
+          <div className="flex flex-col gap-1 mb-4">
+            <div className="flex items-center justify-between">
+              <label htmlFor="eue" className="text-xs font-semibold text-slate-800">
+                UE moderation
+              </label>
+              <span className="text-[11px] text-slate-500 font-medium">
+                Max allowed: <strong className="text-slate-700">+{maxAllowedUe}</strong>
+              </span>
             </div>
+            <input
+              id="eue"
+              type="number"
+              min="0"
+              step="0.01"
+              className={`ctrl w-full text-sm h-[38px] px-3 rounded-lg border transition-colors ${
+                ueError
+                  ? 'border-red-400 bg-red-50/20 focus:border-red-500'
+                  : 'border-slate-300 focus:border-blue-600'
+              } focus:outline-none`}
+              value={ueVal}
+              onChange={(e) => {
+                setUeVal(e.target.value)
+                setServerError(null)
+              }}
+            />
+            {ueError ? (
+              <span className="text-[11.5px] text-red-600 font-medium mt-0.5">
+                {ueError}
+              </span>
+            ) : !isNaN(ueNum) && ueNum >= 0 ? (
+              <span className="text-[11px] text-slate-500 mt-0.5">
+                New UE total:{' '}
+                <strong className="text-slate-700">
+                  {formatScore(baseUe + ueNum)}
+                </strong>{' '}
+                / {ueMax}
+              </span>
+            ) : null}
           </div>
 
-          {/* Moderation Inputs */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-            {/* IA Moderation */}
-            <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
-              <div className="flex justify-between items-center mb-1">
-                <label className="text-xs font-bold text-slate-800">IA Moderation</label>
-                <span className="text-[11px] font-semibold text-slate-500">Max: {iaMax} (50%: {iaThreshold})</span>
-              </div>
-              <div className="text-[11px] text-slate-500 mb-2">Base IA: <strong>{baseIa}</strong> / {iaMax}</div>
-              
-              <div className="flex gap-2 items-center">
-                <input 
-                  type="number" 
-                  className={`ctrl w-full ${iaError ? 'border-red-500 focus:border-red-500' : ''}`}
-                  value={iaMod} 
-                  onChange={e => setIaMod(e.target.value)} 
-                  min="0" 
-                  step="0.5" 
-                  disabled={isPending} 
-                  placeholder="0"
-                />
-              </div>
-
-              {/* Quick Fill / Clear */}
-              <div className="flex gap-2 mt-2">
-                {maxAllowedIaMod > 0 && (
-                  <button 
-                    type="button" 
-                    className="btn btn-neu btn-xs" 
-                    style={{ fontSize: 10.5, padding: '2px 6px' }}
-                    onClick={() => setIaMod(maxAllowedIaMod.toString())}
-                    disabled={isPending}
-                    title="Fill maximum allowed grace marks"
-                  >
-                    Set Max (+{maxAllowedIaMod})
-                  </button>
-                )}
-                <button 
-                  type="button" 
-                  className="btn btn-neu btn-xs" 
-                  style={{ fontSize: 10.5, padding: '2px 6px' }}
-                  onClick={() => setIaMod('0')}
-                  disabled={isPending}
-                >
-                  Clear (0)
-                </button>
-              </div>
-
-              {iaError && <div className="text-[11px] text-red-600 mt-1.5 font-medium leading-tight">{iaError}</div>}
-            </div>
-
-            {/* UE Moderation */}
-            <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
-              <div className="flex justify-between items-center mb-1">
-                <label className="text-xs font-bold text-slate-800">UE Moderation</label>
-                <span className="text-[11px] font-semibold text-slate-500">Max: {ueMax} (50%: {ueThreshold})</span>
-              </div>
-              <div className="text-[11px] text-slate-500 mb-2">Base UE: <strong>{baseUe}</strong> / {ueMax}</div>
-
-              {isRL ? (
-                <div className="text-[11px] text-amber-700 bg-amber-50 p-2 rounded border border-amber-200">
-                  <i className="lni lni-warning mr-1"></i> Exam not sat yet (RL). UE moderation cannot be applied.
-                </div>
-              ) : (
-                <>
-                  <div className="flex gap-2 items-center">
-                    <input 
-                      type="number" 
-                      className={`ctrl w-full ${ueError ? 'border-red-500 focus:border-red-500' : ''}`}
-                      value={ueMod} 
-                      onChange={e => setUeMod(e.target.value)} 
-                      min="0" 
-                      step="0.5" 
-                      disabled={isPending} 
-                      placeholder="0"
-                    />
-                  </div>
-
-                  {/* Quick Fill / Clear */}
-                  <div className="flex gap-2 mt-2">
-                    {maxAllowedUeMod > 0 && (
-                      <button 
-                        type="button" 
-                        className="btn btn-neu btn-xs" 
-                        style={{ fontSize: 10.5, padding: '2px 6px' }}
-                        onClick={() => setUeMod(maxAllowedUeMod.toString())}
-                        disabled={isPending}
-                        title="Fill maximum allowed grace marks"
-                      >
-                        Set Max (+{maxAllowedUeMod})
-                      </button>
-                    )}
-                    <button 
-                      type="button" 
-                      className="btn btn-neu btn-xs" 
-                      style={{ fontSize: 10.5, padding: '2px 6px' }}
-                      onClick={() => setUeMod('0')}
-                      disabled={isPending}
-                    >
-                      Clear (0)
-                    </button>
-                  </div>
-                </>
-              )}
-
-              {ueError && <div className="text-[11px] text-red-600 mt-1.5 font-medium leading-tight">{ueError}</div>}
-            </div>
+          <div className="flex justify-end items-center gap-2.5 mt-5">
+            <button
+              type="button"
+              className="btn btn-neu text-xs py-2 px-4 font-medium"
+              onClick={onClose}
+              disabled={isSaving}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="btn btn-primary text-xs py-2 px-4 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={isSaving || hasErrors}
+            >
+              {isSaving && <i className="lni lni-reload animate-spin text-xs mr-1.5"></i>}
+              Save changes
+            </button>
           </div>
-
-          {/* Live Outcome Preview */}
-          <div className="p-3 bg-blue-50/60 rounded-lg border border-blue-200">
-            <div className="text-[11px] font-bold text-blue-900 uppercase tracking-wider mb-1.5 flex justify-between items-center">
-              <span>Live Projected Result</span>
-              {isProjectedPass ? (
-                <span className="badge badge-green font-bold text-[10.5px]">Projected: Pass (Rescued)</span>
-              ) : isRL ? (
-                <span className="badge badge-amber font-bold text-[10.5px]">Projected: RL</span>
-              ) : (
-                <span className="badge badge-red font-bold text-[10.5px]">Projected: Fail</span>
-              )}
-            </div>
-
-            <div className="grid grid-cols-3 gap-2 text-xs">
-              <div>
-                <span className="text-slate-500 block">New IA:</span>
-                <span className="font-bold text-slate-800">
-                  {projectedIa} <span className="text-slate-400 font-normal">/ {iaMax}</span>
-                </span>
-                <span className={`text-[10px] block font-semibold ${projectedIa >= iaThreshold ? 'text-green-600' : 'text-red-500'}`}>
-                  {projectedIa >= iaThreshold ? '✓ ≥ 50%' : '✗ Below 50%'}
-                </span>
-              </div>
-
-              <div>
-                <span className="text-slate-500 block">New UE:</span>
-                <span className="font-bold text-slate-800">
-                  {projectedUe} <span className="text-slate-400 font-normal">/ {ueMax}</span>
-                </span>
-                <span className={`text-[10px] block font-semibold ${projectedUe >= ueThreshold ? 'text-green-600' : 'text-red-500'}`}>
-                  {projectedUe >= ueThreshold ? '✓ ≥ 50%' : '✗ Below 50%'}
-                </span>
-              </div>
-
-              <div>
-                <span className="text-slate-500 block">Combined Total:</span>
-                <span className="font-bold text-slate-900 text-sm">{projectedTotal}</span>
-                <span className="text-slate-400 text-[10px] block">/ {maxTotal}</span>
-              </div>
-            </div>
-          </div>
-
-          {saveError && (
-            <div className="danger-box mt-3 text-xs">
-              <i className="lni lni-warning"></i> {saveError}
-            </div>
-          )}
-        </div>
-
-        <div className="modal-ftr">
-          <button className="btn btn-neu" onClick={onClose} disabled={isPending}>Cancel</button>
-          <button 
-            className="btn btn-primary" 
-            onClick={handleSave} 
-            disabled={isPending || hasValidationError}
-            title={hasValidationError ? 'Resolve errors before saving' : 'Save moderation'}
-          >
-            {isPending ? 'Saving...' : 'Save Changes'}
-          </button>
-        </div>
+        </form>
       </div>
     </div>
   )

@@ -129,15 +129,38 @@ export function getStudentModerationRows(studentGuid: string) {
   return apiGet<ModerationRow[]>(`/api/v1/assessment/exam-results/students/${studentGuid}/moderation`)
 }
 
-export function updateModeration(studentGuid: string, examResultGuid: string, data: UpdateModerationPayload) {
+export interface UpdateModerationResponse {
+  examResultGuid?: string
+  courseUnitGuid?: string
+  unitCode?: string
+  unitName?: string
+  semesterGuid?: string
+  semesterName?: string | null
+  iaTotal?: number
+  iaMax?: number
+  iaMod?: number
+  ueTotal?: number
+  ueMax?: number
+  ueMod?: number
+  passStatus?: string
+  success?: boolean
+}
+
+export function updateModeration(studentGuid: string, examResultGuid: string, data: UpdateModerationPayload): Promise<UpdateModerationResponse> {
   if (MOCK_AUTH) {
-    return Promise.resolve({ success: true })
+    return Promise.resolve({
+      examResultGuid,
+      iaMod: data.iaMod ?? data.iaModeration ?? 0,
+      ueMod: data.ueMod ?? data.ueModeration ?? 0,
+      success: true,
+    })
+  }
+  if (!studentGuid || !examResultGuid) {
+    return Promise.reject(new Error('Cannot update moderation: missing studentGuid or examResultGuid'))
   }
   const payload = {
-    iaModeration: data.iaModeration ?? data.iaMod ?? 0,
-    ueModeration: data.ueModeration ?? data.ueMod ?? 0,
-    iaMod: data.iaMod ?? data.iaModeration ?? 0,
-    ueMod: data.ueMod ?? data.ueModeration ?? 0,
+    iaMod: Number(data.iaMod ?? data.iaModeration ?? 0),
+    ueMod: Number(data.ueMod ?? data.ueModeration ?? 0),
   }
-  return apiPut<{ success: boolean }>(`/api/v1/assessment/exam-results/students/${studentGuid}/${examResultGuid}/moderation`, payload)
+  return apiPut<UpdateModerationResponse>(`/api/v1/assessment/exam-results/students/${encodeURIComponent(studentGuid)}/${encodeURIComponent(examResultGuid)}/moderation`, payload)
 }

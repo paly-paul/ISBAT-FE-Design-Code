@@ -9,6 +9,7 @@ interface ScrollTableProps {
   maxHeight?: string | number
   hideArrows?: boolean
   style?: React.CSSProperties
+  onScroll?: (e: React.UIEvent<HTMLDivElement>) => void
 }
 
 export function ScrollTable({
@@ -19,6 +20,7 @@ export function ScrollTable({
   maxHeight,
   hideArrows,
   style,
+  onScroll,
 }: ScrollTableProps) {
   const hasActiveFilters = filters ? Object.values(filters).some(v => v.length > 0) : false
   const ref = useRef<HTMLDivElement>(null)
@@ -71,7 +73,15 @@ export function ScrollTable({
           <i className="lni lni-chevron-left" />
         </button>
       )}
-      <div ref={ref} className={`tbl-wrap${className ? ' ' + className : ''}`} style={wrapStyle} onScroll={check}>
+      <div
+        ref={ref}
+        className={`tbl-wrap${className ? ' ' + className : ''}`}
+        style={wrapStyle}
+        onScroll={(e) => {
+          check()
+          onScroll?.(e)
+        }}
+      >
         {children}
       </div>
       {!hideArrows && canRight && (

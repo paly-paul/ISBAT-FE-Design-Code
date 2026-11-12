@@ -29,6 +29,29 @@ export function getProgramCourseUnits(programGuid: string): Promise<ProgramCours
     .then((data: any) => Array.isArray(data) ? data : (data && typeof data === 'object' ? (data.items || Object.values(data).find(Array.isArray) || []) : []))
 }
 
+// GET /api/v1/academic/program-course-units/{programGuid}/dropdown — per get-program-course-unit-dropdown.md
+export interface ProgramCourseUnitDropdownItem {
+  courseUnitGuid: string
+  courseUnitName: string
+  courseUnitCode: string
+  semesterGuid: string
+  semName: string
+  flag?: number
+  streamGuid?: string | null
+  streamName?: string | null
+  unitTypeGuid?: string | null
+  unitTypeName?: string | null
+  unitCatGuid?: string | null
+  unitCatName?: string | null
+}
+
+export function getProgramCourseUnitsDropdown(programGuid: string): Promise<ProgramCourseUnitDropdownItem[]> {
+  if (!programGuid) return Promise.resolve([])
+  if (MOCK_AUTH) return Promise.resolve([])
+  return apiGet<ProgramCourseUnitDropdownItem[] | null>(`/api/v1/academic/program-course-units/${encodeURIComponent(programGuid)}/dropdown`)
+    .then((data: any) => Array.isArray(data) ? data : (data && typeof data === 'object' ? (data.items || Object.values(data).find(Array.isArray) || []) : []))
+}
+
 // POST /api/v1/academic/program-course-units — see post-program-course-units.md.
 // Step 2 of ProgrammeModal's Add-mode wizard (bulk-adds every course unit
 // across every semester in one call, keyed by the real semesterGuid values

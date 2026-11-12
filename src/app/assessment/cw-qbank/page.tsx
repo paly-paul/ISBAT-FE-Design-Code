@@ -459,6 +459,32 @@ export default function QuestionBankUploadPage() {
     return repoCourseUnits?.find(u => u.courseUnitGuid === repoCourseUnitGuid)
   }, [repoCourseUnits, repoCourseUnitGuid])
 
+  const isRepoUniversityExam = String(repoCategory) === String(CATEGORY_UNIVERSITY_EXAM)
+  const repoAllowedUeTypes = selectedRepoUnit?.allowedUeTypes ?? null
+
+  const repoUeTypeInfo = useMemo(() => {
+    if (!isRepoUniversityExam || !selectedRepoUnit) return null
+    const types = repoAllowedUeTypes
+
+    if (types && types.length > 0) {
+      const has0 = types.includes(0)
+      const has1 = types.includes(1)
+
+      if (has0 && has1) {
+        return { label: 'Combined', type: 'combined', badgeClass: 'badge-purple' }
+      }
+      if (has1 && !has0) {
+        return { label: 'Practical', type: 'practical', badgeClass: 'badge-amber' }
+      }
+      if (has0 && !has1) {
+        return { label: 'Theory', type: 'theory', badgeClass: 'badge-cyan' }
+      }
+    }
+
+    // Default fallback if not specified: Combined
+    return { label: 'Combined', type: 'combined', badgeClass: 'badge-purple' }
+  }, [isRepoUniversityExam, selectedRepoUnit, repoAllowedUeTypes])
+
   const selectedRepoCategoryObj = useMemo(() => {
     if (!repoCategory) return null
     const defaultList = [
@@ -874,6 +900,21 @@ export default function QuestionBankUploadPage() {
             </div>
           </div>
 
+          {/* University Exam Type (Theory / Practical / Combined) Label for Question Repository */}
+          {activeTab === 'repository' && isRepoUniversityExam && repoCourseUnitGuid && repoUeTypeInfo && (
+            <div className="mt-3 pt-3 border-t border-slate-100 flex flex-wrap items-center">
+              <div className="inline-flex items-center gap-2 text-xs text-slate-700 bg-slate-50/90 py-1.5 px-3 rounded-xl border border-slate-200/90 shadow-2xs w-fit">
+                <span className="w-6 h-6 rounded-md bg-blue-50 text-blue-600 border border-blue-200/60 flex items-center justify-center text-[11px] shrink-0">
+                  <i className="lni lni-layers" />
+                </span>
+                <span className="font-bold text-slate-800 whitespace-nowrap">University Exam Type:</span>
+                <span className={`badge ${repoUeTypeInfo.badgeClass} font-bold whitespace-nowrap text-[11px] py-0.5 px-2.5`}>
+                  {repoUeTypeInfo.label}
+                </span>
+              </div>
+            </div>
+          )}
+
           {/* University Exam Type (Theory / Practical) Selector for Bulk Import */}
           {activeTab === 'import' && isImportUniversityExam && importCourseUnitGuid && (
             <div className="mt-3 pt-3 border-t border-slate-100 flex flex-wrap items-center">
@@ -959,8 +1000,8 @@ export default function QuestionBankUploadPage() {
               {/* Questions List Card */}
               <div className="card p-4">
                 {/* Header Bar */}
-                <div className="flex flex-wrap items-center justify-between pb-3 mb-3 border-b border-slate-100 gap-3">
-                  <div>
+                <div className="flex flex-col sm:flex-row sm:items-start justify-between pb-3 mb-3 border-b border-slate-100 gap-3">
+                  <div className="flex-1 min-w-0">
                     <div className="font-semibold text-base text-slate-800 mb-1 flex items-center gap-2 flex-wrap">
                       <span className="w-6 h-6 rounded-md bg-indigo-50 text-indigo-600 flex items-center justify-center text-xs font-bold">
                         <i className="lni lni-list"></i>
@@ -976,11 +1017,22 @@ export default function QuestionBankUploadPage() {
                           {selectedRepoCategoryObj.name}
                         </span>
                       )}
+                      {isRepoUniversityExam && repoUeTypeInfo && (
+                        <span className={`badge ${repoUeTypeInfo.badgeClass} text-xs font-semibold`}>
+                          {repoUeTypeInfo.label}
+                        </span>
+                      )}
                     </div>
-                    <div className="text-xs text-slate-500">
+                    <div className="text-xs text-slate-500 leading-relaxed">
                       Course: <strong className="text-slate-800">{selectedRepoUnit?.courseUnitName || 'Select a course unit'}</strong>
                       {' • '}
                       Intake: <strong className="text-slate-800">{selectedIntake?.intakeCode || 'Active Intake'}</strong>
+                      {isRepoUniversityExam && repoUeTypeInfo && (
+                        <>
+                          {' • '}
+                          <span>Exam Type: <strong className={repoUeTypeInfo.type === 'combined' ? 'text-purple-700 font-semibold' : repoUeTypeInfo.type === 'practical' ? 'text-amber-700 font-semibold' : 'text-cyan-700 font-semibold'}>{repoUeTypeInfo.label}</strong></span>
+                        </>
+                      )}
                       {(repoTheoryCount > 0 || repoPracticalCount > 0) && (
                         <>
                           {' • '}
@@ -990,11 +1042,11 @@ export default function QuestionBankUploadPage() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto sm:ml-auto">
                     {permissions.add && (
                     <button
                       type="button"
-                      className="btn btn-primary btn-sm flex items-center gap-1.5"
+                      className="btn btn-primary btn-sm flex items-center gap-1.5 whitespace-nowrap"
                       onClick={() => setIsAddingQuestion(true)}
                       disabled={!repoCourseUnitGuid || !repoCategory || !intakeGuid}
                       title="Add a single new question to the selected course unit bank"
@@ -1006,7 +1058,7 @@ export default function QuestionBankUploadPage() {
 
                     <button
                       type="button"
-                      className="btn btn-neu btn-sm flex items-center gap-1.5"
+                      className="btn btn-neu btn-sm flex items-center gap-1.5 whitespace-nowrap"
                       onClick={() => refetchQuestions()}
                       disabled={isFetchingQuestions}
                       title="Refresh questions from database"
@@ -1018,7 +1070,7 @@ export default function QuestionBankUploadPage() {
                     {repoCourseUnitGuid && (liveQuestions && liveQuestions.length > 0) && (
                       <button
                         type="button"
-                        className="btn btn-danger btn-sm flex items-center gap-1.5"
+                        className="btn btn-danger btn-sm flex items-center gap-1.5 whitespace-nowrap"
                         onClick={() => setShowDeleteBankModal(true)}
                         title="Delete all questions in this question bank"
                       >
@@ -1073,53 +1125,6 @@ export default function QuestionBankUploadPage() {
                         </span>
                       </button>
                     </div>
-
-                    {/* UE Bank Filter Tabs: Theory / Practical (for University Exam) */}
-                    {repoCategory === '5' && (
-                      <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200/70">
-                        <button
-                          type="button"
-                          className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all flex items-center gap-1.5 ${
-                            repoUeFilterType === 'ALL'
-                              ? 'bg-white text-slate-900 shadow-xs font-bold'
-                              : 'text-slate-600 hover:text-slate-900'
-                          }`}
-                          onClick={() => setRepoUeFilterType('ALL')}
-                        >
-                          <span>All Banks</span>
-                        </button>
-                        <button
-                          type="button"
-                          className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all flex items-center gap-1.5 ${
-                            repoUeFilterType === 'THEORY'
-                              ? 'bg-cyan-600 text-white shadow-xs font-bold'
-                              : 'text-slate-600 hover:text-slate-900'
-                          }`}
-                          onClick={() => setRepoUeFilterType('THEORY')}
-                        >
-                          <i className="lni lni-book" />
-                          <span>Theory</span>
-                          <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded ${repoUeFilterType === 'THEORY' ? 'bg-cyan-700 text-white' : 'badge badge-cyan'}`}>
-                            {repoTheoryCount}
-                          </span>
-                        </button>
-                        <button
-                          type="button"
-                          className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all flex items-center gap-1.5 ${
-                            repoUeFilterType === 'PRACTICAL'
-                              ? 'bg-amber-600 text-white shadow-xs font-bold'
-                              : 'text-slate-600 hover:text-slate-900'
-                          }`}
-                          onClick={() => setRepoUeFilterType('PRACTICAL')}
-                        >
-                          <i className="lni lni-cog" />
-                          <span>Practical</span>
-                          <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded ${repoUeFilterType === 'PRACTICAL' ? 'bg-amber-700 text-white' : 'badge badge-amber'}`}>
-                            {repoPracticalCount}
-                          </span>
-                        </button>
-                      </div>
-                    )}
                   </div>
 
                   <TableSearch
@@ -1218,16 +1223,6 @@ export default function QuestionBankUploadPage() {
                                   <i className="lni lni-eye text-indigo-600"></i>
                                   <span>View Details</span>
                                 </button>
-                                {permissions.edit && (
-                                  <button
-                                    type="button"
-                                    className="btn btn-neu btn-sm flex items-center gap-1.5"
-                                    onClick={() => setEditingQuestion(q)}
-                                  >
-                                    <i className="lni lni-pencil-alt text-amber-600"></i>
-                                    <span>Edit Question</span>
-                                  </button>
-                                )}
                                 {permissions.delete && (
                                   <button
                                     type="button"
