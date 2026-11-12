@@ -4227,6 +4227,23 @@ tr.flagged td {
   background: #fffbeb
 }
 
+/* Totals in a table's <tfoot> (one row per currency), set apart from the rows above. */
+tfoot td {
+  background: var(--surface);
+  border-top: 2px solid var(--g200);
+  border-bottom: none;
+  font-weight: 600;
+  color: var(--g900)
+}
+
+tfoot tr + tr td {
+  border-top: none
+}
+
+tfoot tr:hover td {
+  background: var(--surface)
+}
+
 /* ── SEARCHABLE SELECT ── */
 .ss-trigger {
   display: flex !important;

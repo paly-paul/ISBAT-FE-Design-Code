@@ -5,7 +5,7 @@ import { loginUrlForCurrentPage } from '@/lib/postLoginRedirect'
 import { Header } from '@/components/Header'
 import { Sidebar, RailId } from '@/components/Sidebar'
 import { RouteGuard } from '@/components/RouteGuard'
-import { refreshSession } from '@/lib/auth'
+import { isRateLimited, refreshSession } from '@/lib/auth'
 import { getSessionIdentity, setSessionIdentity } from '@/lib/session'
 
 // The proactive keep-alive refresh timer lives in src/app/providers.tsx now
@@ -56,8 +56,11 @@ export default function AcademicLayout({ children }: { children: React.ReactNode
         if (result.displayName) setSessionIdentity({ displayName: result.displayName })
         setDisplayName(result.displayName ?? null)
         setAuthChecked(true)
-      } catch {
-        if (!cancelled) router.replace(loginUrlForCurrentPage())
+      } catch (err) {
+        if (cancelled) return
+        // A rate limit isn't a dead session: carry on, the page's own calls still work.
+        if (isRateLimited(err)) { setAuthChecked(true); return }
+        router.replace(loginUrlForCurrentPage())
       }
     }
 

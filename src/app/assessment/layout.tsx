@@ -5,7 +5,7 @@ import { loginUrlForCurrentPage } from '@/lib/postLoginRedirect'
 import { Header } from '@/components/Header'
 import { Sidebar, RailId } from '@/components/Sidebar'
 import { RouteGuard } from '@/components/RouteGuard'
-import { refreshSession } from '@/lib/auth'
+import { isRateLimited, refreshSession } from '@/lib/auth'
 import { getSessionIdentity, setSessionIdentity } from '@/lib/session'
 
 export default function AssessmentLayout({ children }: { children: React.ReactNode }) {
@@ -53,8 +53,11 @@ export default function AssessmentLayout({ children }: { children: React.ReactNo
         }
         setDisplayName(result.displayName ?? null)
         setAuthChecked(true)
-      } catch {
-        if (!cancelled) router.replace(loginUrlForCurrentPage())
+      } catch (err) {
+        if (cancelled) return
+        // A rate limit isn't a dead session: carry on, the page's own calls still work.
+        if (isRateLimited(err)) { setAuthChecked(true); return }
+        router.replace(loginUrlForCurrentPage())
       }
     }
 

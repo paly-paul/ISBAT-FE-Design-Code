@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation'
 import { loginUrlForCurrentPage } from '@/lib/postLoginRedirect'
 import { Header } from '@/components/Header'
 import { Sidebar, RailId } from '@/components/Sidebar'
-import { refreshSession } from '@/lib/auth'
+import { isRateLimited, refreshSession } from '@/lib/auth'
 import { getSessionIdentity, setSessionIdentity } from '@/lib/session'
 
 // Same auth-guard + layout-shell boilerplate every module layout carries
@@ -54,8 +54,11 @@ export default function NotificationsLayout({ children }: { children: React.Reac
         if (result.displayName) setSessionIdentity({ displayName: result.displayName })
         setDisplayName(result.displayName ?? null)
         setAuthChecked(true)
-      } catch {
-        if (!cancelled) router.replace(loginUrlForCurrentPage())
+      } catch (err) {
+        if (cancelled) return
+        // A rate limit isn't a dead session: carry on, the page's own calls still work.
+        if (isRateLimited(err)) { setAuthChecked(true); return }
+        router.replace(loginUrlForCurrentPage())
       }
     }
 
