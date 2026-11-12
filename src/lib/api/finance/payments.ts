@@ -1,4 +1,5 @@
 import { apiGet } from '../client'
+import type { TotalPaid } from './totalPaid'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
@@ -47,13 +48,21 @@ export interface Payment {
   bankReconcile: number | null
 }
 
+// totalPaid (MR !137): per-currency total of every payment matching the
+// filters, not just this page. No screen lists these payments yet (only
+// getAllPaymentsForApplication reads them, for the advance flag), so it's
+// typed here but not shown anywhere.
+export interface PaymentsPage extends PagedResult<Payment> {
+  totalPaid?: TotalPaid[]
+}
+
 // applicationGuid/studentGuid confirmed as optional filters on this same
 // endpoint (get-payments.md) — same "either can be used independently"
 // convention as getPaymentAdvances below. Used to answer "is THIS payment
 // advance-funded" for a specific application, since the fee-line history
 // views (getPaymentHistory/getPaymentHistoryList) carry no `advance` field
 // at all — this raw list is the only place that flag lives.
-export function getPayments(page = 1, pageSize = 10, applicationGuid?: string | null, studentGuid?: string | null): Promise<PagedResult<Payment>> {
+export function getPayments(page = 1, pageSize = 10, applicationGuid?: string | null, studentGuid?: string | null): Promise<PaymentsPage> {
   if (MOCK_AUTH) return Promise.resolve(emptyPage(page, pageSize))
   const qs = new URLSearchParams({ page: String(page), pageSize: String(pageSize) })
   if (applicationGuid) qs.set('applicationGuid', applicationGuid)
@@ -62,7 +71,7 @@ export function getPayments(page = 1, pageSize = 10, applicationGuid?: string | 
   // (get-payments.md's changelog) — the read endpoint now sits in the
   // payment-console route group next to the tuition create/update
   // endpoints. API ID unchanged.
-  return apiGet<PagedResult<Payment> | null>(`/api/v1/finance/payment-console/payments?${qs.toString()}`)
+  return apiGet<PaymentsPage | null>(`/api/v1/finance/payment-console/payments?${qs.toString()}`)
     .then(data => data ?? emptyPage(page, pageSize))
 }
 

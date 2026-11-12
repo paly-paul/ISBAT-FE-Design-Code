@@ -46,23 +46,92 @@ interface RefreshData {
   uuid?: string
 }
 
-// Prevent duplicate refresh calls when several requests fail at once.
-// This only dedupes calls made *within this tab* — every caller that needs
-// a fresh access token (both the reactive 401 handler below and
-// src/lib/auth.ts's refreshSession(), used on layout mount) must go through
-// this same function rather than posting to /auth/refresh directly, or the
-// dedup silently stops covering them.
+// ── Session refresh ──
+// erp_refresh is single-use: every /auth/refresh rotates it, and sending one
+// that was already used revokes ALL of the user's sessions and clears the
+// cookies (post-refresh.md). Cookies are shared by every tab of the browser,
+// so two tabs refreshing at the same moment would send the same token and
+// log the user out everywhere. Every refresh therefore runs under one Web
+// Lock shared by all tabs, and a tab that waited on the lock first checks
+// whether another tab already refreshed after its own request was sent; if
+// so, the new cookie is already in the jar and it just re-sends the request.
+
+const REFRESH_LOCK = 'erp-session-refresh'
+const LAST_REFRESH_KEY = 'erp_last_refresh_at'
+export const RATE_LIMIT_CODE = 'rate_limit_exceeded'
+const RATE_LIMIT_MESSAGE = 'Too many requests right now. Please wait a minute and try again.'
+
+function readLastRefresh(): number {
+  try { return Number(localStorage.getItem(LAST_REFRESH_KEY)) || 0 } catch { return 0 }
+}
+function writeLastRefresh() {
+  try { localStorage.setItem(LAST_REFRESH_KEY, String(Date.now())) } catch { /* storage blocked: the lock still serialises refreshes */ }
+}
+
+// Runs fn while holding the cross-tab refresh lock. Web Locks need a secure
+// context (https or localhost); without them this falls back to running fn
+// directly, which is the old per-tab behaviour.
+function withRefreshLock<T>(fn: () => Promise<T>): Promise<T> {
+  if (typeof navigator !== 'undefined' && navigator.locks?.request) {
+    // request() resolves with fn's own resolved value; this lib.dom version
+    // types it as Promise<Promise<T>> because it doesn't unwrap.
+    return navigator.locks.request(REFRESH_LOCK, fn) as unknown as Promise<T>
+  }
+  return fn()
+}
+
+// The raw call. Uses fetch directly (not apiPost) so a 429 can be told apart
+// by status even when the rate limiter sends no JSON body.
+async function postRefresh(): Promise<RefreshData> {
+  const res = await fetch(buildUrl('/api/v1/users/auth/refresh'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...NGROK_HEADERS },
+    credentials: 'include',
+    body: '{}',
+  })
+  const envelope = (await readJsonNullingText(res).catch(() => null)) as ApiEnvelope<RefreshData | null> | null
+  if (res.status === 429 || envelope?.code === RATE_LIMIT_CODE) throw new AuthError(RATE_LIMIT_CODE, RATE_LIMIT_MESSAGE)
+  if (!res.ok || (envelope && !envelope.success)) {
+    const { code, message } = extractErrorInfo(envelope)
+    throw new AuthError(code === 'unknown' ? 'unauthorized' : code, message)
+  }
+  writeLastRefresh()
+  return envelope?.data ?? {}
+}
+
+// Always refreshes (under the lock) and returns the user. Used by
+// src/lib/auth.ts's refreshSession(), which needs the UserDto on layout
+// mount. The in-flight promise also dedupes callers within this tab.
 let refreshInFlight: Promise<RefreshData> | null = null
 
 export function refreshAccessToken(): Promise<RefreshData> {
   if (!refreshInFlight) {
-    refreshInFlight = apiPost<RefreshData | null>('/api/v1/users/auth/refresh', {})
-      .then(data => data ?? {})
-      .finally(() => {
-        refreshInFlight = null
-      })
+    refreshInFlight = withRefreshLock(postRefresh).finally(() => {
+      refreshInFlight = null
+    })
   }
   return refreshInFlight
+}
+
+// For a request that came back 401: refresh only if no tab has refreshed
+// since that request was sent. Requests from this tab that fail together
+// queue on the same lock, so only the first actually refreshes.
+function ensureFreshSession(sentAt: number): Promise<void> {
+  return withRefreshLock(async () => {
+    if (readLastRefresh() > sentAt) return
+    await postRefresh()
+  })
+}
+
+// When each request was sent, read by handleUnauthorized on a 401.
+const sentAtByResponse = new WeakMap<Response, number>()
+
+function send(path: string, init: RequestInit): Promise<Response> {
+  const sentAt = Date.now()
+  return fetch(buildUrl(path), init).then(res => {
+    sentAtByResponse.set(res, sentAt)
+    return res
+  })
 }
 
 function redirectToLogin(triggeredBy: string, cause: unknown) {
@@ -88,56 +157,28 @@ function redirectToLogin(triggeredBy: string, cause: unknown) {
   }
 }
 
-// Only a real refresh failure should log the user out. The backend's
-// erp_refresh cookie is single-use (rotates on every call, confirmed via a
-// real concurrent-request test: two /auth/refresh calls with the same
-// still-valid token raced 200/401) — so a 401 here doesn't necessarily mean
-// the session is actually gone. If the user has a second tab open (each tab
-// runs its own independent proactive refresh timer — see the module
-// layouts' SESSION_REFRESH_INTERVAL_MS — so this isn't a rare edge case),
-// or an unrelated refresh from elsewhere in this same tab slipped past the
-// dedup above, it may have already rotated the cookie a moment before this
-// attempt reached the server. Give that a brief window to land in the
-// browser's cookie store and try once more before concluding the session is
-// genuinely gone. Shared by both the reactive 401 handler below AND the
-// proactive keep-alive (via refreshSession() in auth.ts) — every caller
-// needs this same tolerance, not just the reactive path; a previous version
-// of the proactive timer skipped it and logged users out on the very first
-// racy collision instead of retrying, which is exactly the failure this was
-// built to prevent.
-let refreshRetryInFlight: Promise<RefreshData> | null = null
-
-export function refreshAccessTokenWithRetry(): Promise<RefreshData> {
-  if (!refreshRetryInFlight) {
-    refreshRetryInFlight = (async () => {
-      try {
-        return await refreshAccessToken()
-      } catch (err) {
-        if (!(err instanceof AuthError) || err.code === 'rate_limited') throw err
-        await new Promise(resolve => setTimeout(resolve, 500))
-        return await refreshAccessToken()
-      }
-    })().finally(() => {
-      refreshRetryInFlight = null
-    })
-  }
-  return refreshRetryInFlight
-}
+// No retry after a failed refresh: per post-refresh.md the backend has
+// already revoked the session and cleared the cookies by then, so a second
+// attempt can't succeed and only spends the /auth rate limit. Cross-tab
+// collisions, which that retry was meant to cover, can't happen under the
+// lock above.
 
 // `triggeredBy` is the path of the original request whose 401 kicked this
-// off — purely for diagnostics, see redirectToLogin() above.
-async function handleUnauthorized(triggeredBy: string): Promise<void> {
+// off — purely for diagnostics, see redirectToLogin() above. A rate limit
+// (429) is not a dead session: the request fails with that message once and
+// the user stays where they are.
+async function handleUnauthorized(triggeredBy: string, res: Response): Promise<void> {
   try {
-    await refreshAccessTokenWithRetry()
+    await ensureFreshSession(sentAtByResponse.get(res) ?? Date.now())
   } catch (err) {
-    if (err instanceof AuthError) redirectToLogin(triggeredBy, err)
+    if (err instanceof AuthError && err.code !== RATE_LIMIT_CODE) redirectToLogin(triggeredBy, err)
     throw err
   }
 }
 
 // Some auth endpoints still use the older plain JSON format.
 export async function post<T>(path: string, body: unknown, retried = false): Promise<T> {
-  const res = await fetch(buildUrl(path), {
+  const res = await send(path, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...NGROK_HEADERS },
     credentials: 'include',
@@ -145,7 +186,7 @@ export async function post<T>(path: string, body: unknown, retried = false): Pro
   })
 
   if (res.status === 401 && !isAuthEndpoint(path) && !retried) {
-    await handleUnauthorized(path)
+    await handleUnauthorized(path, res)
     return post<T>(path, body, true)
   }
 
@@ -159,14 +200,14 @@ export async function post<T>(path: string, body: unknown, retried = false): Pro
 }
 
 export async function get<T>(path: string, retried = false): Promise<T> {
-  const res = await fetch(buildUrl(path), {
+  const res = await send(path, {
     method: 'GET',
     headers: NGROK_HEADERS,
     credentials: 'include',
   })
 
   if (res.status === 401 && !isAuthEndpoint(path) && !retried) {
-    await handleUnauthorized(path)
+    await handleUnauthorized(path, res)
     return get<T>(path, true)
   }
 
@@ -190,14 +231,14 @@ export async function get<T>(path: string, retried = false): Promise<T> {
 // isn't distinguishable from a genuine envelope-less error response,
 // since there's no envelope to read a `code` off before the retry check.
 export async function del<T>(path: string, retried = false): Promise<T> {
-  const res = await fetch(buildUrl(path), {
+  const res = await send(path, {
     method: 'DELETE',
     headers: NGROK_HEADERS,
     credentials: 'include',
   })
 
   if (res.status === 401 && !isAuthEndpoint(path) && !retried) {
-    await handleUnauthorized(path)
+    await handleUnauthorized(path, res)
     return del<T>(path, true)
   }
 
@@ -256,7 +297,7 @@ export async function apiPost<T>(path: string, body: unknown): Promise<T> {
 // hall ticket issue's `data: true` with "Hall ticket already issued."
 // (post-issue.md).
 export async function apiPostWithMessage<T>(path: string, body: unknown, retried = false): Promise<{ data: T; message: string | null }> {
-  const res = await fetch(buildUrl(path), {
+  const res = await send(path, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...NGROK_HEADERS },
     credentials: 'include',
@@ -267,7 +308,7 @@ export async function apiPostWithMessage<T>(path: string, body: unknown, retried
   const unauthorized = res.status === 401 || (envelope != null && !envelope.success && envelope.code === 'unauthorized')
 
   if (unauthorized && !isAuthEndpoint(path) && !retried) {
-    await handleUnauthorized(path)
+    await handleUnauthorized(path, res)
     return apiPostWithMessage<T>(path, body, true)
   }
 
@@ -303,7 +344,7 @@ export async function apiPostForm<T>(path: string, formData: FormData, retried =
     }
   }
 
-  const res = await fetch(buildUrl(path), {
+  const res = await send(path, {
     method: 'POST',
     headers: NGROK_HEADERS,
     credentials: 'include',
@@ -324,7 +365,7 @@ export async function apiPostForm<T>(path: string, formData: FormData, retried =
   const unauthorized = res.status === 401 || (envelope != null && !envelope.success && envelope.code === 'unauthorized')
 
   if (unauthorized && !isAuthEndpoint(path) && !retried) {
-    await handleUnauthorized(path)
+    await handleUnauthorized(path, res)
     return apiPostForm<T>(path, formData, true)
   }
 
@@ -349,7 +390,7 @@ export async function apiPutForm<T>(path: string, formData: FormData, retried = 
     console.log(`   ${k}:`, v)
   }
 
-  const res = await fetch(buildUrl(path), {
+  const res = await send(path, {
     method: 'PUT',
     headers: NGROK_HEADERS,
     credentials: 'include',
@@ -369,7 +410,7 @@ export async function apiPutForm<T>(path: string, formData: FormData, retried = 
   const unauthorized = res.status === 401 || (envelope != null && !envelope.success && envelope.code === 'unauthorized')
 
   if (unauthorized && !isAuthEndpoint(path) && !retried) {
-    await handleUnauthorized(path)
+    await handleUnauthorized(path, res)
     return apiPutForm<T>(path, formData, true)
   }
 
@@ -387,7 +428,7 @@ export async function apiPutForm<T>(path: string, formData: FormData, retried = 
 
 export async function apiPut<T>(path: string, body: unknown, retried = false): Promise<T> {
   console.log(` [apiPut] ${path}:`, body)
-  const res = await fetch(buildUrl(path), {
+  const res = await send(path, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...NGROK_HEADERS },
     credentials: 'include',
@@ -407,7 +448,7 @@ export async function apiPut<T>(path: string, body: unknown, retried = false): P
   const unauthorized = res.status === 401 || (envelope != null && !envelope.success && envelope.code === 'unauthorized')
 
   if (unauthorized && !isAuthEndpoint(path) && !retried) {
-    await handleUnauthorized(path)
+    await handleUnauthorized(path, res)
     return apiPut<T>(path, body, true)
   }
 
@@ -424,7 +465,7 @@ export async function apiPut<T>(path: string, body: unknown, retried = false): P
 }
 
 export async function apiPatch<T>(path: string, body: unknown, retried = false): Promise<T> {
-  const res = await fetch(buildUrl(path), {
+  const res = await send(path, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', ...NGROK_HEADERS },
     credentials: 'include',
@@ -435,7 +476,7 @@ export async function apiPatch<T>(path: string, body: unknown, retried = false):
   const unauthorized = res.status === 401 || (envelope != null && !envelope.success && envelope.code === 'unauthorized')
 
   if (unauthorized && !isAuthEndpoint(path) && !retried) {
-    await handleUnauthorized(path)
+    await handleUnauthorized(path, res)
     return apiPatch<T>(path, body, true)
   }
 
@@ -460,7 +501,7 @@ export async function apiDelete<T>(path: string): Promise<T> {
 // first call answering `{ data: false, message: "You are about to delete
 // … Do you want to continue?" }` (resit-question-print/delete-*.md).
 export async function apiDeleteWithMessage<T>(path: string, retried = false): Promise<{ data: T; message: string | null }> {
-  const res = await fetch(buildUrl(path), {
+  const res = await send(path, {
     method: 'DELETE',
     headers: NGROK_HEADERS,
     credentials: 'include',
@@ -470,7 +511,7 @@ export async function apiDeleteWithMessage<T>(path: string, retried = false): Pr
   const unauthorized = res.status === 401 || (envelope != null && !envelope.success && envelope.code === 'unauthorized')
 
   if (unauthorized && !isAuthEndpoint(path) && !retried) {
-    await handleUnauthorized(path)
+    await handleUnauthorized(path, res)
     return apiDeleteWithMessage<T>(path, true)
   }
 
@@ -497,14 +538,14 @@ export async function apiDeleteWithMessage<T>(path: string, retried = false): Pr
 // the header's missing or in an unexpected shape, leaving the caller to
 // fall back to a name of its own.
 export async function apiGetBlob(path: string, retried = false): Promise<{ blob: Blob; filename: string | null }> {
-  const res = await fetch(buildUrl(path), {
+  const res = await send(path, {
     method: 'GET',
     headers: NGROK_HEADERS,
     credentials: 'include',
   })
 
   if (res.status === 401 && !isAuthEndpoint(path) && !retried) {
-    await handleUnauthorized(path)
+    await handleUnauthorized(path, res)
     return apiGetBlob(path, true)
   }
 
@@ -531,7 +572,7 @@ function readJsonNullingText(res: Response): Promise<unknown> {
 }
 
 export async function apiGet<T>(path: string, retried = false): Promise<T> {
-  const res = await fetch(buildUrl(path), {
+  const res = await send(path, {
     method: 'GET',
     headers: NGROK_HEADERS,
     credentials: 'include',
@@ -541,7 +582,7 @@ export async function apiGet<T>(path: string, retried = false): Promise<T> {
   const unauthorized = res.status === 401 || (envelope != null && !envelope.success && envelope.code === 'unauthorized')
 
   if (unauthorized && !isAuthEndpoint(path) && !retried) {
-    await handleUnauthorized(path)
+    await handleUnauthorized(path, res)
     return apiGet<T>(path, true)
   }
 

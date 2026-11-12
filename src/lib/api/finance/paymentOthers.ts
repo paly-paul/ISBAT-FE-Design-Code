@@ -1,4 +1,5 @@
 import { apiGet } from '../client'
+import type { TotalPaid } from './totalPaid'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
@@ -46,6 +47,9 @@ export interface PaymentOtherListResponse {
   totalCount: number
   pageNumber: number
   pageSize: number
+  // Every payment matching the filters, not just this page (MR !137), so it
+  // stays the same across pages.
+  totalPaid: TotalPaid[]
 }
 
 export interface PaymentOtherListParams {
@@ -58,12 +62,12 @@ export interface PaymentOtherListParams {
 export function getPaymentOthers(params: PaymentOtherListParams): Promise<PaymentOtherListResponse> {
   const page = params.page ?? 1
   const pageSize = params.pageSize ?? 10
-  if (MOCK_AUTH) return Promise.resolve({ items: [], totalCount: 0, pageNumber: page, pageSize })
+  if (MOCK_AUTH) return Promise.resolve({ items: [], totalCount: 0, pageNumber: page, pageSize, totalPaid: [] })
   const qs = new URLSearchParams({ page: String(page), pageSize: String(pageSize) })
   if (params.studentGuid) qs.set('studentGuid', params.studentGuid)
   if (params.applicationGuid) qs.set('applicationGuid', params.applicationGuid)
   return apiGet<PaymentOtherListResponse | null>(`/api/v1/finance/other-payment?${qs.toString()}`)
-    .then(data => data ?? { items: [], totalCount: 0, pageNumber: page, pageSize })
+    .then(data => data ? { ...data, totalPaid: data.totalPaid ?? [] } : { items: [], totalCount: 0, pageNumber: page, pageSize, totalPaid: [] })
 }
 
 // Confirmed via get-resit-fee.md (repo root) — previews the resit fee the

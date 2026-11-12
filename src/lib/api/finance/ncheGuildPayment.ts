@@ -1,4 +1,5 @@
 import { apiGet, apiPost, apiPut, del } from '../client'
+import type { TotalPaid } from './totalPaid'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
@@ -164,10 +165,18 @@ export function deleteRegulatoryPayment(category: PaymentCategory, paymentGuid: 
   return del<boolean>(`${basePath(category)}/payment-${category}/${paymentGuid}`)
 }
 
-export function getRegulatoryPaymentHistory(category: PaymentCategory, studentGuid: string): Promise<RegulatoryPaymentHistoryEntry[]> {
-  if (MOCK_AUTH) return Promise.resolve(mockHistory[category][studentGuid] ?? [])
-  return apiGet<RawPaymentHistoryEntry[] | null>(`${basePath(category)}/payment-history/${studentGuid}`)
-    .then(data => (data ?? []).map(normalizeHistoryEntry))
+export interface RegulatoryPaymentHistory {
+  items: RegulatoryPaymentHistoryEntry[]
+  totalPaid: TotalPaid[]
+}
+
+// data used to be a bare array; since MR !137 it is { items, totalPaid }
+// (nche/get-payment-history.md, guild/get-payment-history.md). The rows in
+// items are unchanged. An unknown student still 404s.
+export function getRegulatoryPaymentHistory(category: PaymentCategory, studentGuid: string): Promise<RegulatoryPaymentHistory> {
+  if (MOCK_AUTH) return Promise.resolve({ items: mockHistory[category][studentGuid] ?? [], totalPaid: [] })
+  return apiGet<{ items: RawPaymentHistoryEntry[] | null; totalPaid: TotalPaid[] | null } | null>(`${basePath(category)}/payment-history/${studentGuid}`)
+    .then(data => ({ items: (data?.items ?? []).map(normalizeHistoryEntry), totalPaid: data?.totalPaid ?? [] }))
 }
 
 // A 404 here is documented as "Application not found" — but confirmed live

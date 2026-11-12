@@ -25,6 +25,7 @@ import {
   RegulatorySemesterStatus,
 } from '@/hooks/finance/useNcheGuildPayment'
 import { refugeeLabel, studCategoryLabel } from '@/lib/api/finance/paymentConsole'
+import { formatTotalAmount } from '@/lib/api/finance/totalPaid'
 import { SearchSelect } from '@/components/SearchSelect'
 import { getDefaultFinanceCurrencyGuid } from '@/hooks/finance/useFinanceCurrencies'
 import { useCurrenciesDropdown } from '@/hooks/finance/useCurrencies'
@@ -259,7 +260,9 @@ export default function NcheGuildPaymentPage() {
   const { data: semesterStatusList, isLoading: isOutstandingLoading, isError: isOutstandingError } = useRegulatorySemesterStatus(category, selectedApplicationGuid, !!selectedApplicationGuid, studentGuid)
   const dueSemester = semesterStatusList?.find(s => s.status === 'Due') ?? null
   const allSemestersPaid = !!semesterStatusList?.length && semesterStatusList.every(s => s.status === 'Paid')
-  const { data: history = [], isLoading: isHistoryLoading } = useRegulatoryPaymentHistory(category, studentGuid, !!studentGuid)
+  const { data: historyData, isLoading: isHistoryLoading } = useRegulatoryPaymentHistory(category, studentGuid, !!studentGuid)
+  const history = useMemo(() => historyData?.items ?? [], [historyData])
+  const historyTotalPaid = historyData?.totalPaid ?? []
   // Payment History is fetched whole per student — not server-paginated —
   // so it's paged client-side, same as Payment Console's own left-column
   // Payment History card.
@@ -687,6 +690,19 @@ export default function NcheGuildPaymentPage() {
                               </tr>
                             ))}
                           </tbody>
+                          {/* One row per currency, never added together. Covers every
+                              payment, not just this page. */}
+                          {historyTotalPaid.length > 0 && (
+                            <tfoot>
+                              {historyTotalPaid.map((t, i) => (
+                                <tr key={t.currency?.currencyGuid ?? i}>
+                                  <td colSpan={3}>{i === 0 && <>Total paid{historyTotalPages > 1 && <span className="text-g500" style={{ fontWeight: 400 }}> · all pages</span>}</>}</td>
+                                  <td className="text-green font-bold tabular-nums">{t.currency?.currencyCode} {formatTotalAmount(t.totalAmount)}</td>
+                                  {category === 'nche' && <td />}
+                                </tr>
+                              ))}
+                            </tfoot>
+                          )}
                         </table>
                       </ScrollTable>
                       <Pagination page={historyPage} totalPages={historyTotalPages} totalCount={history.length} itemLabel="payments" onPageChange={setHistoryPage} />

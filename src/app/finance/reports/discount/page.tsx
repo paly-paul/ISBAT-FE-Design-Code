@@ -33,14 +33,17 @@ const EMPTY_FORM: FormState = { fromDate: '', toDate: '', intakeGuid: '', discou
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 // payDate is a calendar date (time always 00:00:00): format the string
-// itself, never via Date, so no time-zone shift can move it a day.
-function fmtPayDate(value: string): string {
+// itself, never via Date, so no time-zone shift can move it a day. Some rows
+// come back with payDate null, which used to throw here and crash the page.
+function fmtPayDate(value: string | null | undefined): string {
+  if (!value) return '—'
   const [y, m, d] = value.slice(0, 10).split('-')
   return y && m && d ? `${d}/${MONTHS[+m - 1]}/${y}` : value
 }
 function fmtYmd(ymd: string): string { return fmtPayDate(ymd) }
 
-function fmtAmount(n: number): string {
+function fmtAmount(n: number | null | undefined): string {
+  if (n == null) return '—'
   return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 function fmtCount(n: number): string { return n.toLocaleString('en-US') }
@@ -310,11 +313,13 @@ export default function DiscountReportPage() {
                       <td>{r.semesterName}</td>
                       <td>{r.discountName === 'Unknown discount' ? <span className="text-g400">Unknown discount</span> : r.discountName}</td>
                       <td>
-                        <span className={`badge ${r.source.value === 2 ? 'badge-amber' : 'badge-grey'}`}>
-                          {SOURCE_LABEL[r.source.value] ?? r.source.name}
-                        </span>
+                        {r.source ? (
+                          <span className={`badge ${r.source.value === 2 ? 'badge-amber' : 'badge-grey'}`}>
+                            {SOURCE_LABEL[r.source.value] ?? r.source.name}
+                          </span>
+                        ) : '—'}
                       </td>
-                      <td>{PAYMODE_LABEL[r.payMode.value] ?? r.payMode.name}</td>
+                      <td>{r.payMode ? (PAYMODE_LABEL[r.payMode.value] ?? r.payMode.name) : '—'}</td>
                       <td>{r.currencyCode}</td>
                       <td className="num"><span className="rpt-amt">{fmtAmount(r.discountAmount)}</span><span className="rpt-cur">{r.currencyCode}</span></td>
                     </tr>

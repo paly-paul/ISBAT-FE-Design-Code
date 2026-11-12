@@ -25,8 +25,10 @@ export const DISCOUNT_REPORT_MAX_SEARCH = 100
 
 // ── Preview ────────────────────────────────────────────────────────────────
 
+// Real responses can leave fields null (confirmed for payDate, which crashed
+// the page), so the ones the table formats are typed nullable.
 export interface DiscountReportRow {
-  payDate: string          // calendar date, time always 00:00:00; no TZ conversion
+  payDate: string | null   // calendar date, time always 00:00:00; no TZ conversion
   receipt: string
   studentNumber: string    // AppRefNo
   studentName: string
@@ -34,10 +36,10 @@ export interface DiscountReportRow {
   semesterName: string
   semCode: number
   discountName: string
-  source: { value: number; name: string }   // 1 DirectPayment, 2 AdvanceAdjustment
-  payMode: { value: number; name: string }  // 1 Cash, 2 Cheque, 3 Bank, 4 DemandDraft, 5 Online
+  source: { value: number; name: string } | null   // 1 DirectPayment, 2 AdvanceAdjustment
+  payMode: { value: number; name: string } | null  // 1 Cash, 2 Cheque, 3 Bank, 4 DemandDraft, 5 Online
   currencyCode: string
-  discountAmount: number   // always positive
+  discountAmount: number | null   // always positive when present
 }
 
 export interface DiscountReportCurrencyTotal {
@@ -204,8 +206,8 @@ function mockFilter(f: DiscountReportFilters): DiscountReportRow[] {
   const term = f.search?.toLowerCase()
   const discountName = f.discountGuid ? mockDiscounts.find(d => d.discountGuid === f.discountGuid)?.discountName : undefined
   return MOCK_ROWS.filter(r =>
-    (!f.fromDate || r.payDate.slice(0, 10) >= f.fromDate)
-    && (!f.toDate || r.payDate.slice(0, 10) <= f.toDate)
+    (!f.fromDate || (r.payDate ?? '').slice(0, 10) >= f.fromDate)
+    && (!f.toDate || (r.payDate ?? '').slice(0, 10) <= f.toDate)
     && (!discountName || r.discountName === discountName)
     && (!term || r.studentName.toLowerCase().includes(term) || r.studentNumber.toLowerCase() === term))
 }
@@ -235,7 +237,7 @@ export function getDiscountReportPreview(filters: DiscountReportFilters, pageNum
       totalStudents: new Set(rows.map(r => r.studentNumber)).size,
       byCurrency: currencies.map(code => {
         const inCur = rows.filter(r => r.currencyCode === code)
-        return { currencyCode: code, rowCount: inCur.length, studentCount: new Set(inCur.map(r => r.studentNumber)).size, totalDiscount: inCur.reduce((s, r) => s + r.discountAmount, 0) }
+        return { currencyCode: code, rowCount: inCur.length, studentCount: new Set(inCur.map(r => r.studentNumber)).size, totalDiscount: inCur.reduce((s, r) => s + (r.discountAmount ?? 0), 0) }
       }),
     }
     return new Promise(resolve => setTimeout(() => resolve({

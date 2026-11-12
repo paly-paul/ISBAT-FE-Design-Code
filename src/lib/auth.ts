@@ -1,4 +1,4 @@
-import { AuthError, post, apiGet, apiPost, apiPostWithMessage, refreshAccessTokenWithRetry } from './api/client'
+import { AuthError, post, apiGet, apiPost, apiPostWithMessage, refreshAccessToken, RATE_LIMIT_CODE } from './api/client'
 import { setSessionIdentity } from './session'
 
 export { AuthError }
@@ -68,21 +68,21 @@ export interface RefreshResult {
   uuid?: string
 }
 
+// A 429 from /auth/refresh means the shared /auth rate limit (10 req/min per
+// IP) was hit, not that the session is gone, so callers shouldn't log out.
+export function isRateLimited(err: unknown): boolean {
+  return err instanceof AuthError && err.code === RATE_LIMIT_CODE
+}
+
 export function refreshSession(): Promise<RefreshResult> {
   if (MOCK_AUTH) {
     return Promise.resolve({ displayName: 'Mock User' })
   }
-  // Routed through refreshAccessTokenWithRetry() (not a direct apiPost call)
-  // so every caller — the mount-time check AND the proactive keep-alive
-  // interval in every module layout — shares both the in-flight dedup and
-  // the retry-once-after-500ms tolerance for a racy rotation collision
-  // (confirmed live: two /auth/refresh calls with the same still-valid
-  // token race 200/401 against each other). Without the retry, a call here
-  // that lost that race would be treated as a genuinely dead session and
-  // log the user out — which is exactly what happened before this used the
-  // retrying variant; see the note on refreshAccessTokenWithRetry in
-  // client.ts.
-  return refreshAccessTokenWithRetry().then(data => {
+  // Routed through refreshAccessToken() (not a direct apiPost call) so it
+  // shares the cross-tab refresh lock and in-tab dedup with the 401 handler
+  // in client.ts. The refresh token is single-use, and two tabs sending the
+  // same one would revoke every session (post-refresh.md).
+  return refreshAccessToken().then(data => {
     if (data && (data.displayName || data.employeeName)) {
       setSessionIdentity({
         displayName: data.displayName || data.employeeName || '',

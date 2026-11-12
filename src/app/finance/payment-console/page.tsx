@@ -50,6 +50,7 @@ import { usePaymentOthersList, useResitFee, type ResitFee, type ResitFeeSemester
 import { getPaymentReceiptPdf, isResitLedger, refugeeLabel, studCategoryLabel } from '@/lib/api/finance/paymentConsole'
 import { downloadBlob } from '@/lib/downloadBlob'
 import { formatDate, formatDateTime } from '@/lib/date'
+import { formatTotalAmount } from '@/lib/api/finance/totalPaid'
 import { AuthError } from '@/lib/api/client'
 import { scrollToFirstError } from '@/lib/scrollToFirstError'
 import { stripLeadingZeros } from '@/lib/errorMessages'
@@ -1034,6 +1035,8 @@ export default function PaymentConsolePage() {
     !!selectedApplicationGuid && (activePayTab === 'other' || showPaymentHistory),
   )
   const otherHistoryItems = otherPaymentHistory?.items ?? []
+  // Same on every page: covers all of this student's other payments.
+  const otherHistoryTotalPaid = otherPaymentHistory?.totalPaid ?? []
   const otherHistoryTotalPages = Math.max(1, Math.ceil((otherPaymentHistory?.totalCount ?? 0) / HISTORY_PAGE_SIZE))
 
   // Campus/Programme/Batch client-side fallback lookups (useCampuses/
@@ -2011,6 +2014,20 @@ export default function PaymentConsolePage() {
                               </tr>
                             ))}
                           </tbody>
+                          {/* One row per currency, never added together. Covers every
+                              payment, not just this page (server-paged list). */}
+                          {otherHistoryTotalPaid.length > 0 && (
+                            <tfoot>
+                              {otherHistoryTotalPaid.map((t, i) => (
+                                <tr key={t.currency?.currencyGuid ?? i}>
+                                  <td colSpan={5}>{i === 0 && <>Total paid{otherHistoryTotalPages > 1 && <span className="text-g500" style={{ fontWeight: 400 }}> · all pages</span>}</>}</td>
+                                  <td className="text-green font-bold tabular-nums">{formatTotalAmount(t.totalAmount)}</td>
+                                  <td>{t.currency?.currencyCode ?? '—'}</td>
+                                  <td />
+                                </tr>
+                              ))}
+                            </tfoot>
+                          )}
                         </table>
                       </ScrollTable>
                       <Pagination page={otherHistoryPage} totalPages={otherHistoryTotalPages} totalCount={otherPaymentHistory?.totalCount ?? 0} itemLabel="payments" onPageChange={setOtherHistoryPage} />
