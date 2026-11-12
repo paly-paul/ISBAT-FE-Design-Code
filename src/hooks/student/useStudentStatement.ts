@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { getStudentStatement, searchStudentStatement, StudentStatementSearchFilters, getStudentFeeSummary } from '@/lib/api/student/studentStatement'
+import { getStudentStatement, searchStudentStatement, statementSearchFilters, StudentStatementSearchFilters, getStudentFeeSummary } from '@/lib/api/student/studentStatement'
 
 // Search-as-you-type box, same "browse all on an empty box" behavior as the
 // Finance Payment Console's own student search (PaymentConsoleStudentSearch
@@ -16,7 +16,7 @@ export function useStudentStatementSearch(term: string, enabled = true) {
   const trimmed = term.trim()
   return useInfiniteQuery({
     queryKey: ['student-statement-search', trimmed],
-    queryFn: ({ pageParam = 1 }) => searchStudentStatement({ studentName: trimmed }, pageParam, 15),
+    queryFn: ({ pageParam = 1 }) => searchStudentStatement(statementSearchFilters(trimmed), pageParam, 15),
     initialPageParam: 1,
     getNextPageParam: (lastPage) => {
       const loaded = lastPage.page * lastPage.pageSize

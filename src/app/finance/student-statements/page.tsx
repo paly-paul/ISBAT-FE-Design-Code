@@ -749,14 +749,15 @@ export default function StudentStatementPage() {
               setTerm(v)
               setSelectedGuid(null)
             }}
-            placeholder="Search student by Name, Reg No (e.g. 027240104), or Programme…"
+            placeholder="Search student by Name, Reg No (e.g. 027240104), Email or Phone…"
             loading={isSearching}
             emptyLabel="No students found matching your search"
             minChars={0}
             results={matches.map(m => ({
               id: m.studentGuid,
               primary: m.studentName ?? '—',
-              secondary: [m.studentRegNo, m.programName, m.batchCode].filter(Boolean).join(' • '),
+              // The contact field that was searched on shows too, so the match is visible.
+              secondary: [m.studentRegNo, term.includes('@') ? m.email : /^\+?[\d\s-]+$/.test(term.trim()) && m.phone ? m.phone : null, m.programName, m.batchCode].filter(Boolean).join(' • '),
             }))}
             onSelect={r => handleSelect(r.id)}
             onLoadMore={() => hasNextPage && fetchNextPage()}

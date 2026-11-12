@@ -4,6 +4,7 @@ import { ModalProps } from '../types'
 import { SuccessPopup } from '../shared/SuccessPopup'
 import { FailurePopup } from '../shared/FailurePopup'
 import { DocumentPreviewModal } from '../shared/DocumentPreviewModal'
+import { QualificationCard } from '@/components/admission/QualificationCard'
 import { applicantProfileHref } from '@/lib/applicantProfileLink'
 import { useVettingApplicationDetail, useWaitApplication } from '@/hooks/admission/useVetting'
 import { NO_CURRENT_INTAKE_MESSAGE, NOT_CURRENT_INTAKE_MESSAGE, VetApplicationInput } from '@/lib/api/admission/vetting'
@@ -319,24 +320,8 @@ export function VettingReviewModal({ isOpen, onClose, showToast, applicationGuid
                   <p className="text-sm text-g500">No qualifications submitted yet.</p>
                 ) : (
                   <div className="vd-list">
-                    {detail.qualifications.map(q => (
-                      <div key={q.applicationQualGuid} className={`vd-doc${q.proofUrl ? '' : ' missing'}`}>
-                        <span className="vd-doc-icon"><i className={`lni ${q.proofUrl ? 'lni-book' : 'lni-question-circle'}`} aria-hidden="true" /></span>
-                        <div className="vd-doc-body">
-                          {/* institution is free text by convention only (e.g. "O Level" /
-                              "A Level") — there is no separate structured type column. */}
-                          <div className="vd-doc-name">{orDash(q.institution)} &middot; {orDash(q.university)}</div>
-                          <div className="vd-doc-sub">
-                            Grade {orDash(q.grade)} &middot; {q.passYear ?? '—'} &middot; {q.yearsTaken != null ? `${q.yearsTaken} yrs` : '—'}
-                            {!q.proofUrl && <> &middot; No proof</>}
-                          </div>
-                        </div>
-                        {q.proofUrl && (
-                          <button type="button" className="btn btn-neu btn-sm" onClick={() => setPreview({ url: q.proofUrl!, title: `Proof — ${q.institution} · ${q.university}` })} aria-label={`View proof for ${q.institution}`}>
-                            <i className="lni lni-eye" aria-hidden="true" /> View Proof
-                          </button>
-                        )}
-                      </div>
+                    {detail.qualifications.map((q, i) => (
+                      <QualificationCard key={q.applicationQualGuid} q={q} index={i} onViewProof={(url, title) => setPreview({ url, title })} />
                     ))}
                   </div>
                 )}
