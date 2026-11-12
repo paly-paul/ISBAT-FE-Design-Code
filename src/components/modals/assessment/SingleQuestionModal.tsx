@@ -20,6 +20,7 @@ interface SingleQuestionModalProps {
   courseUnitCode?: string
   courseUnitName?: string
   categoryName?: string
+  allowedUeTypes?: number[] | null
   onSuccess: () => void
   showToast: (msg: string, type?: string) => void
 }
@@ -34,10 +35,24 @@ export function SingleQuestionModal({
   courseUnitCode,
   courseUnitName,
   categoryName,
+  allowedUeTypes,
   onSuccess,
   showToast,
 }: SingleQuestionModalProps) {
   const isEdit = Boolean(question?.questionGuid)
+
+  // University Exam Type: Theory (0) vs Practical (1)
+  const ueOptions = allowedUeTypes && allowedUeTypes.length > 0 ? allowedUeTypes : [0, 1]
+  const showUeRadios = category === 5 && ueOptions.length > 1 && !isEdit
+  const [ueType, setUeType] = useState<number | null>(() => {
+    if (question?.universityExamType !== undefined && question?.universityExamType !== null) {
+      return question.universityExamType
+    }
+    if (category === 5 && ueOptions.length === 1) {
+      return ueOptions[0]
+    }
+    return null
+  })
 
   const [questionType, setQuestionType] = useState<number>(question?.questionType ?? 1)
   // Section (API `level`: 1 = A, 2 = B, 3 = C), required for both MCQ and
@@ -274,6 +289,11 @@ export function SingleQuestionModal({
         return
       }
 
+      if (category === 5 && !isEdit && showUeRadios && ueType === null) {
+        setErrorMsg('This is a combined course unit. Select Theory or Practical before adding the question.')
+        return
+      }
+
       try {
         const created = await createMut.mutateAsync({
           courseUnitGuid,
@@ -281,6 +301,7 @@ export function SingleQuestionModal({
           intakeGuid,
           questionType,
           level,
+          universityExamType: category === 5 ? (ueOptions.length === 1 ? ueOptions[0] : ueType) : undefined,
           questionText: cleanQuestionText,
           option1Text: questionType === 1 ? stripHtmlTags(option1Text) : null,
           option2Text: questionType === 1 ? stripHtmlTags(option2Text) : null,
@@ -340,6 +361,11 @@ export function SingleQuestionModal({
               <div className="flex items-center gap-2">
                 <span className="font-semibold text-slate-500">Category:</span>
                 <span className="badge badge-purple">{categoryName || 'Assessment'}</span>
+                {(category === 5 || (question?.universityExamType !== undefined && question?.universityExamType !== null)) && (
+                  <span className={`badge ${question?.universityExamType === 1 ? 'badge-amber' : 'badge-cyan'} font-bold`}>
+                    {question?.universityExamType === 1 ? 'Practical' : 'Theory'}
+                  </span>
+                )}
               </div>
             </div>
 
@@ -348,6 +374,65 @@ export function SingleQuestionModal({
               <div className="bg-red-50 border border-red-200 text-red-900 rounded-lg p-3 text-xs flex items-center gap-2">
                 <i className="lni lni-warning text-red-600 text-base shrink-0"></i>
                 <span className="font-medium">{errorMsg}</span>
+              </div>
+            )}
+
+            {/* University Exam Type (Theory / Practical) */}
+            {(category === 5 || (isEdit && question?.universityExamType !== undefined && question?.universityExamType !== null)) && (
+              <div className="bg-white border border-slate-200 rounded-lg p-3">
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-bold text-slate-700">
+                    University Exam Type {!isEdit && showUeRadios && <span className="text-red-500">*</span>}
+                  </label>
+                  {!isEdit && showUeRadios && (
+                    <span className="badge badge-amber text-[10px] font-semibold whitespace-nowrap">Combined Unit</span>
+                  )}
+                </div>
+
+                {isEdit ? (
+                  <div className="text-xs font-semibold text-slate-700 flex items-center gap-2">
+                    <span className={`badge ${question?.universityExamType === 1 ? 'badge-amber' : 'badge-cyan'} font-bold`}>
+                      {question?.universityExamType === 1 ? 'Practical' : 'Theory'}
+                    </span>
+                    <span className="text-[11px] text-slate-400 font-normal">(Exam type cannot be edited)</span>
+                  </div>
+                ) : showUeRadios ? (
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      className={`py-1.5 px-3 rounded text-xs font-semibold border transition-all flex items-center justify-center gap-1.5 ${
+                        ueType === 0
+                          ? 'bg-blue-50 border-blue-300 text-blue-800 shadow-xs'
+                          : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                      }`}
+                      onClick={() => setUeType(0)}
+                    >
+                      <i className="lni lni-book" />
+                      <span>Theory</span>
+                    </button>
+                    <button
+                      type="button"
+                      className={`py-1.5 px-3 rounded text-xs font-semibold border transition-all flex items-center justify-center gap-1.5 ${
+                        ueType === 1
+                          ? 'bg-purple-50 border-purple-300 text-purple-800 shadow-xs'
+                          : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                      }`}
+                      onClick={() => setUeType(1)}
+                    >
+                      <i className="lni lni-cog" />
+                      <span>Practical</span>
+                    </button>
+                  </div>
+                ) : (
+                  <div className="text-xs text-slate-600 flex items-center gap-2">
+                    <span className={`badge ${ueOptions[0] === 1 ? 'badge-amber' : 'badge-cyan'} font-bold`}>
+                      {ueOptions[0] === 1 ? 'Practical' : 'Theory'}
+                    </span>
+                    <span className="text-[11px] text-slate-400">
+                      (Preselected for {ueOptions[0] === 1 ? 'Practical-only' : 'Theory-only'} unit)
+                    </span>
+                  </div>
+                )}
               </div>
             )}
 

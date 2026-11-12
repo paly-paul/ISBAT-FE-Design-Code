@@ -13,6 +13,7 @@ export interface QuestionDto {
   answerText: string | null
   questionType: number | null
   level: number | null
+  universityExamType?: number | null
   imageFileName?: string | null
   imageUrl?: string | null
 }
@@ -23,6 +24,7 @@ export interface CreateQuestionRequest {
   intakeGuid: string
   questionType: number
   level: number | null
+  universityExamType?: number | null
   questionText: string
   option1Text: string | null
   option2Text: string | null
@@ -56,7 +58,8 @@ export function getSingleQuestionCategories(): Promise<QuestionBankCategory[]> {
     return Promise.resolve([
       { value: 1, name: 'Class Test' },
       { value: 2, name: 'Course Work' },
-      { value: 3, name: 'Class Activity' }
+      { value: 3, name: 'Class Activity' },
+      { value: 5, name: 'University Exam' }
     ])
   }
   return apiGet<QuestionBankCategory[]>('/api/v1/assessment/questions/categories')
@@ -64,7 +67,8 @@ export function getSingleQuestionCategories(): Promise<QuestionBankCategory[]> {
     .catch(() => [
       { value: 1, name: 'Class Test' },
       { value: 2, name: 'Course Work' },
-      { value: 3, name: 'Class Activity' }
+      { value: 3, name: 'Class Activity' },
+      { value: 5, name: 'University Exam' }
     ])
 }
 
@@ -75,6 +79,7 @@ function normalizeCourseUnits(data: any): QuestionBankCourseUnit[] {
       courseUnitGuid: item.courseUnitGuid || item.guid || item.unitGuid || item.id || '',
       courseUnitCode: item.courseUnitCode || item.code || item.unitCode || '',
       courseUnitName: item.courseUnitName || item.name || item.unitName || item.title || 'Untitled Unit',
+      allowedUeTypes: Array.isArray(item.allowedUeTypes) ? item.allowedUeTypes : null,
     }))
     .filter((u: QuestionBankCourseUnit) => Boolean(u.courseUnitGuid))
 }
@@ -121,6 +126,7 @@ export async function getQuestions(courseUnitGuid: string, category: number, int
       answerText: q.answerText ?? q.answer ?? '',
       questionType: typeof q.questionType === 'number' ? q.questionType : (q.questionType === 'MCQ' ? 1 : 2),
       level: q.level ?? null,
+      universityExamType: typeof q.universityExamType === 'number' ? q.universityExamType : (q.universityExamType === null ? null : (typeof q.examType === 'number' ? q.examType : null)),
       imageFileName: q.imageFileName ?? null,
       imageUrl: q.imageUrl ?? null,
     }))
@@ -145,6 +151,7 @@ export async function getQuestionByGuid(guid: string): Promise<QuestionDto> {
     answerText: data?.answerText ?? '',
     questionType: typeof data?.questionType === 'number' ? data.questionType : (data?.questionType === 'MCQ' ? 1 : 2),
     level: data?.level ?? null,
+    universityExamType: typeof data?.universityExamType === 'number' ? data.universityExamType : null,
     imageFileName: data?.imageFileName ?? null,
     imageUrl: data?.imageUrl ?? null,
   }

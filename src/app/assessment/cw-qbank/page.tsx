@@ -29,7 +29,11 @@ import {
   QuestionPreviewItem,
 } from '@/hooks/assessment/useQuestionBank'
 import { QuestionDto } from '@/lib/api/assessment/questions'
+import { extractApiErrorMessage } from '@/lib/errorMessages'
 import { ExistingQuestionsTable } from './ExistingQuestionsTable'
+
+const CATEGORY_UNIVERSITY_EXAM = 5
+const UE_TYPE = { Theory: 0, Practical: 1 } as const
 
 export default function QuestionBankUploadPage() {
   const permissions = usePagePermissions()
@@ -47,6 +51,7 @@ export default function QuestionBankUploadPage() {
   const handleTabChange = (newTab: 'repository' | 'import') => {
     if (newTab === activeTab) return
     setActiveTab(newTab)
+    setImportUeType(null)
     setIsCategoryLoading(true)
     setTimeout(() => {
       setIsCategoryLoading(false)
@@ -63,12 +68,14 @@ export default function QuestionBankUploadPage() {
   const [repoCategory, setRepoCategory] = useState<string>('')
   const [repoCourseUnitGuid, setRepoCourseUnitGuid] = useState<string>('')
   const [repoFilterType, setRepoFilterType] = useState<'ALL' | 'MCQ' | 'DQ'>('ALL')
+  const [repoUeFilterType, setRepoUeFilterType] = useState<'ALL' | 'THEORY' | 'PRACTICAL'>('ALL')
   const [repoSearch, setRepoSearch] = useState<string>('')
 
   // ── Tab 2: Bulk Excel Import Scope (Question Bank API) ──────────────────────
   // Categories: CBT (1), Course Work (2), University Exam (5)
   const [importCategory, setImportCategory] = useState<string>('')
   const [importCourseUnitGuid, setImportCourseUnitGuid] = useState<string>('')
+  const [importUeType, setImportUeType] = useState<number | null>(null)
   const [file, setFile] = useState<File | null>(null)
   const [sheetNames, setSheetNames] = useState<string[]>([])
   const [selectedSheet, setSelectedSheet] = useState<string>('')
@@ -127,6 +134,26 @@ export default function QuestionBankUploadPage() {
   )
   const importCourseUnits = importUnitsQuery.data
   const needsLecturer = activeTab === 'import' && !loggedInUserGuid
+
+  // ── Derived Lookups: Tab 2 (Import) ─────────────────────────────────────────
+  const selectedImportUnit = useMemo(() => {
+    return importCourseUnits?.find(u => u.courseUnitGuid === importCourseUnitGuid)
+  }, [importCourseUnits, importCourseUnitGuid])
+
+  const isImportUniversityExam = String(importCategory) === String(CATEGORY_UNIVERSITY_EXAM)
+  const importAllowedUeTypes = selectedImportUnit?.allowedUeTypes ?? null
+  const importUeOptions = useMemo(() => {
+    if (!isImportUniversityExam) return []
+    if (importAllowedUeTypes && importAllowedUeTypes.length > 0) return importAllowedUeTypes
+    return [UE_TYPE.Theory, UE_TYPE.Practical]
+  }, [isImportUniversityExam, importAllowedUeTypes])
+
+  const showImportUeRadios = isImportUniversityExam && importUeOptions.length > 1
+  const effectiveImportUeType = useMemo(() => {
+    if (!isImportUniversityExam) return null
+    if (importUeOptions.length === 1) return importUeOptions[0]
+    return importUeType
+  }, [isImportUniversityExam, importUeOptions, importUeType])
 
   // ── Tab 2: Query already uploaded questions for selected course unit & category ──
   const {
@@ -283,6 +310,10 @@ export default function QuestionBankUploadPage() {
       showToast('Please select an Academic Intake', 'warn')
       return
     }
+    if (isImportUniversityExam && effectiveImportUeType === null) {
+      showToast('This is a combined course unit. Please select Theory or Practical before previewing.', 'warn')
+      return
+    }
 
     setValidationError(null)
 
@@ -293,6 +324,7 @@ export default function QuestionBankUploadPage() {
         courseUnitGuid: importCourseUnitGuid,
         category: Number(importCategory),
         intakeGuid,
+        universityExamType: isImportUniversityExam ? effectiveImportUeType : undefined,
       },
       {
         onSuccess: (data) => {
@@ -305,7 +337,7 @@ export default function QuestionBankUploadPage() {
         },
         onError: (err) => {
           setPreviewRows(null)
-          setValidationError(err.message || 'Validation failed. Please verify the Excel sheet structure.')
+          setValidationError(extractApiErrorMessage(err, 'Validation failed. Please verify the Excel sheet structure.'))
           setTimeout(() => {
             errorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
           }, 100)
@@ -320,6 +352,10 @@ export default function QuestionBankUploadPage() {
       showToast('Missing required fields for import', 'warn')
       return
     }
+    if (isImportUniversityExam && effectiveImportUeType === null) {
+      showToast('This is a combined course unit. Please select Theory or Practical before uploading.', 'warn')
+      return
+    }
 
     setValidationError(null)
     importMut.mutate(
@@ -329,6 +365,7 @@ export default function QuestionBankUploadPage() {
         courseUnitGuid: importCourseUnitGuid,
         category: Number(importCategory),
         intakeGuid,
+        universityExamType: isImportUniversityExam ? effectiveImportUeType : undefined,
       },
       {
         onSuccess: () => {
@@ -351,8 +388,9 @@ export default function QuestionBankUploadPage() {
           setActiveTab('import')
         },
         onError: (err) => {
-          setValidationError(err.message || 'Import failed. Please check validation rules.')
-          showToast(err.message || 'Import failed', 'danger')
+          const msg = extractApiErrorMessage(err, 'Import failed. Please check validation rules.')
+          setValidationError(msg)
+          showToast(msg, 'danger')
         },
       },
     )
@@ -427,16 +465,13 @@ export default function QuestionBankUploadPage() {
       { value: 1, name: 'Class Test' },
       { value: 2, name: 'Course Work' },
       { value: 3, name: 'Class Activity' },
+      { value: 5, name: 'University Exam' },
     ]
     const list = singleCategories && singleCategories.length > 0 ? singleCategories : defaultList
     return list.find(c => String(c.value) === String(repoCategory)) || null
   }, [singleCategories, repoCategory])
 
   // ── Derived Lookups: Tab 2 (Import) ─────────────────────────────────────────
-  const selectedImportUnit = useMemo(() => {
-    return importCourseUnits?.find(u => u.courseUnitGuid === importCourseUnitGuid)
-  }, [importCourseUnits, importCourseUnitGuid])
-
   const selectedImportCategoryObj = useMemo(() => {
     if (!importCategory) return null
     const defaultList = [
@@ -459,6 +494,10 @@ export default function QuestionBankUploadPage() {
     return liveQuestions.filter((q) => {
       if (repoFilterType === 'MCQ' && q.questionType !== 1) return false
       if (repoFilterType === 'DQ' && q.questionType !== 2) return false
+      if (repoCategory === '5') {
+        if (repoUeFilterType === 'THEORY' && q.universityExamType !== 0) return false
+        if (repoUeFilterType === 'PRACTICAL' && q.universityExamType !== 1) return false
+      }
       if (repoSearch.trim()) {
         const needle = repoSearch.toLowerCase()
         const matchQ = q.questionText?.toLowerCase().includes(needle)
@@ -472,7 +511,7 @@ export default function QuestionBankUploadPage() {
       }
       return true
     })
-  }, [liveQuestions, repoFilterType, repoSearch])
+  }, [liveQuestions, repoFilterType, repoUeFilterType, repoCategory, repoSearch])
 
   const liveMcqCount = useMemo(
     () => liveQuestions?.filter(q => q.questionType === 1).length ?? 0,
@@ -480,6 +519,14 @@ export default function QuestionBankUploadPage() {
   )
   const liveDqCount = useMemo(
     () => liveQuestions?.filter(q => q.questionType === 2).length ?? 0,
+    [liveQuestions],
+  )
+  const repoTheoryCount = useMemo(
+    () => liveQuestions?.filter(q => q.universityExamType === 0).length ?? 0,
+    [liveQuestions],
+  )
+  const repoPracticalCount = useMemo(
+    () => liveQuestions?.filter(q => q.universityExamType === 1).length ?? 0,
     [liveQuestions],
   )
 
@@ -515,7 +562,12 @@ export default function QuestionBankUploadPage() {
   )
 
   const isFormValidForPreview = Boolean(
-    file && importCourseUnitGuid && importCategory && intakeGuid && !sheetsMut.isPending,
+    file &&
+    importCourseUnitGuid &&
+    importCategory &&
+    intakeGuid &&
+    !sheetsMut.isPending &&
+    (!isImportUniversityExam || effectiveImportUeType !== null),
   )
 
   return (
@@ -720,6 +772,7 @@ export default function QuestionBankUploadPage() {
                             { value: '1', label: 'Class Test' },
                             { value: '2', label: 'Course Work' },
                             { value: '3', label: 'Class Activity' },
+                            { value: '5', label: 'University Exam' },
                           ])
                     : (bankCategories && bankCategories.length > 0
                         ? bankCategories.map(c => ({
@@ -738,6 +791,7 @@ export default function QuestionBankUploadPage() {
                     setRepoCategory(val)
                   } else {
                     setImportCategory(val)
+                    setImportUeType(null)
                     setPreviewRows(null)
                     setValidationError(null)
                   }
@@ -790,6 +844,7 @@ export default function QuestionBankUploadPage() {
                     setRepoCourseUnitGuid(val)
                   } else {
                     setImportCourseUnitGuid(val)
+                    setImportUeType(null)
                     setPreviewRows(null)
                     setValidationError(null)
                   }
@@ -818,6 +873,76 @@ export default function QuestionBankUploadPage() {
               </div>
             </div>
           </div>
+
+          {/* University Exam Type (Theory / Practical) Selector for Bulk Import */}
+          {activeTab === 'import' && isImportUniversityExam && importCourseUnitGuid && (
+            <div className="mt-3 pt-3 border-t border-slate-100 flex flex-wrap items-center">
+              {showImportUeRadios ? (
+                <div className="inline-flex flex-wrap sm:flex-nowrap items-center gap-3 bg-gradient-to-r from-blue-50/90 via-slate-50/70 to-white py-1.5 px-3 rounded-xl border border-blue-200/80 shadow-2xs w-fit">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-blue-600 text-white flex items-center justify-center text-xs font-bold shadow-2xs shrink-0">
+                      <i className="lni lni-layers" />
+                    </div>
+                    <span className="text-xs font-bold text-slate-900 whitespace-nowrap">
+                      University Exam Type <span className="text-red-500">*</span>
+                    </span>
+                    <span className="badge badge-amber text-[10px] font-bold py-0.5 px-2 whitespace-nowrap">
+                      Combined Unit
+                    </span>
+                  </div>
+
+                  <div className="inline-flex items-center p-0.5 bg-white border border-slate-200 rounded-lg shadow-2xs gap-0.5 shrink-0">
+                    <button
+                      type="button"
+                      className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap ${
+                        importUeType === UE_TYPE.Theory
+                          ? 'bg-blue-600 text-white shadow-xs font-bold'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                      }`}
+                      onClick={() => {
+                        setImportUeType(UE_TYPE.Theory)
+                        setPreviewRows(null)
+                        setValidationError(null)
+                      }}
+                    >
+                      <i className="lni lni-book text-xs" />
+                      <span>Theory</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap ${
+                        importUeType === UE_TYPE.Practical
+                          ? 'bg-blue-600 text-white shadow-xs font-bold'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                      }`}
+                      onClick={() => {
+                        setImportUeType(UE_TYPE.Practical)
+                        setPreviewRows(null)
+                        setValidationError(null)
+                      }}
+                    >
+                      <i className="lni lni-cog text-xs" />
+                      <span>Practical</span>
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="inline-flex items-center gap-2 text-xs text-slate-700 bg-slate-50/90 py-1.5 px-3 rounded-xl border border-slate-200/90 w-fit">
+                  <span className="w-6 h-6 rounded-md bg-blue-50 text-blue-600 border border-blue-200/60 flex items-center justify-center text-[11px] shrink-0">
+                    <i className="lni lni-information" />
+                  </span>
+                  <span className="font-bold text-slate-800 whitespace-nowrap">University Exam Type:</span>
+                  <span className={`badge ${effectiveImportUeType === 1 ? 'badge-amber' : 'badge-cyan'} font-bold whitespace-nowrap text-[11px] py-0.5 px-2`}>
+                    {effectiveImportUeType === 1 ? 'Practical' : 'Theory'}
+                  </span>
+                  <span className="text-[11px] text-slate-400 whitespace-nowrap">
+                    (Auto-selected)
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
       </div>
@@ -856,6 +981,12 @@ export default function QuestionBankUploadPage() {
                       Course: <strong className="text-slate-800">{selectedRepoUnit?.courseUnitName || 'Select a course unit'}</strong>
                       {' • '}
                       Intake: <strong className="text-slate-800">{selectedIntake?.intakeCode || 'Active Intake'}</strong>
+                      {(repoTheoryCount > 0 || repoPracticalCount > 0) && (
+                        <>
+                          {' • '}
+                          <span>UE Banks: <strong className="text-cyan-700 font-semibold">{repoTheoryCount} Theory</strong>, <strong className="text-amber-700 font-semibold">{repoPracticalCount} Practical</strong></span>
+                        </>
+                      )}
                     </div>
                   </div>
 
@@ -900,46 +1031,95 @@ export default function QuestionBankUploadPage() {
 
                 {/* Filter Toolbar with Counts & Search */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-                  <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-lg border border-slate-200/70">
-                    <button
-                      type="button"
-                      className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all flex items-center gap-1.5 ${repoFilterType === 'ALL'
-                        ? 'bg-white text-slate-900 shadow-xs'
-                        : 'text-slate-600 hover:text-slate-900'
-                        }`}
-                      onClick={() => setRepoFilterType('ALL')}
-                    >
-                      <span>All Questions</span>
-                      <span className="badge badge-neu text-[11px] font-bold px-1.5 py-0.2">
-                        {liveQuestions?.length ?? 0}
-                      </span>
-                    </button>
-                    <button
-                      type="button"
-                      className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all flex items-center gap-1.5 ${repoFilterType === 'MCQ'
-                        ? 'bg-white text-purple-700 shadow-xs'
-                        : 'text-slate-600 hover:text-slate-900'
-                        }`}
-                      onClick={() => setRepoFilterType('MCQ')}
-                    >
-                      <span>Multiple Choice</span>
-                      <span className="badge badge-purple text-[11px] font-bold px-1.5 py-0.2">
-                        {liveMcqCount}
-                      </span>
-                    </button>
-                    <button
-                      type="button"
-                      className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all flex items-center gap-1.5 ${repoFilterType === 'DQ'
-                        ? 'bg-white text-blue-700 shadow-xs'
-                        : 'text-slate-600 hover:text-slate-900'
-                        }`}
-                      onClick={() => setRepoFilterType('DQ')}
-                    >
-                      <span>Descriptive</span>
-                      <span className="badge badge-blue text-[11px] font-bold px-1.5 py-0.2">
-                        {liveDqCount}
-                      </span>
-                    </button>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-lg border border-slate-200/70">
+                      <button
+                        type="button"
+                        className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all flex items-center gap-1.5 ${repoFilterType === 'ALL'
+                          ? 'bg-white text-slate-900 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                        onClick={() => setRepoFilterType('ALL')}
+                      >
+                        <span>All Questions</span>
+                        <span className="badge badge-neu text-[11px] font-bold px-1.5 py-0.2">
+                          {liveQuestions?.length ?? 0}
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all flex items-center gap-1.5 ${repoFilterType === 'MCQ'
+                          ? 'bg-white text-purple-700 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                        onClick={() => setRepoFilterType('MCQ')}
+                      >
+                        <span>Multiple Choice</span>
+                        <span className="badge badge-purple text-[11px] font-bold px-1.5 py-0.2">
+                          {liveMcqCount}
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all flex items-center gap-1.5 ${repoFilterType === 'DQ'
+                          ? 'bg-white text-blue-700 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                        onClick={() => setRepoFilterType('DQ')}
+                      >
+                        <span>Descriptive</span>
+                        <span className="badge badge-blue text-[11px] font-bold px-1.5 py-0.2">
+                          {liveDqCount}
+                        </span>
+                      </button>
+                    </div>
+
+                    {/* UE Bank Filter Tabs: Theory / Practical (for University Exam) */}
+                    {repoCategory === '5' && (
+                      <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200/70">
+                        <button
+                          type="button"
+                          className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all flex items-center gap-1.5 ${
+                            repoUeFilterType === 'ALL'
+                              ? 'bg-white text-slate-900 shadow-xs font-bold'
+                              : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                          onClick={() => setRepoUeFilterType('ALL')}
+                        >
+                          <span>All Banks</span>
+                        </button>
+                        <button
+                          type="button"
+                          className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all flex items-center gap-1.5 ${
+                            repoUeFilterType === 'THEORY'
+                              ? 'bg-cyan-600 text-white shadow-xs font-bold'
+                              : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                          onClick={() => setRepoUeFilterType('THEORY')}
+                        >
+                          <i className="lni lni-book" />
+                          <span>Theory</span>
+                          <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded ${repoUeFilterType === 'THEORY' ? 'bg-cyan-700 text-white' : 'badge badge-cyan'}`}>
+                            {repoTheoryCount}
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all flex items-center gap-1.5 ${
+                            repoUeFilterType === 'PRACTICAL'
+                              ? 'bg-amber-600 text-white shadow-xs font-bold'
+                              : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                          onClick={() => setRepoUeFilterType('PRACTICAL')}
+                        >
+                          <i className="lni lni-cog" />
+                          <span>Practical</span>
+                          <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded ${repoUeFilterType === 'PRACTICAL' ? 'bg-amber-700 text-white' : 'badge badge-amber'}`}>
+                            {repoPracticalCount}
+                          </span>
+                        </button>
+                      </div>
+                    )}
                   </div>
 
                   <TableSearch
@@ -1068,12 +1248,19 @@ export default function QuestionBankUploadPage() {
 
                             {/* Type Badge */}
                             <td style={{ textAlign: 'center' }}>
-                              <span
-                                className={`badge ${q.questionType === 1 ? 'badge-purple' : 'badge-blue'
-                                  }`}
-                              >
-                                {q.questionType === 1 ? 'MCQ' : 'DQ'}
-                              </span>
+                              <div className="flex flex-col items-center gap-1">
+                                <span
+                                  className={`badge ${q.questionType === 1 ? 'badge-purple' : 'badge-blue'
+                                    }`}
+                                >
+                                  {q.questionType === 1 ? 'MCQ' : 'DQ'}
+                                </span>
+                                {q.universityExamType !== undefined && q.universityExamType !== null && (
+                                  <span className={`badge ${q.universityExamType === 1 ? 'badge-amber' : 'badge-cyan'} text-[10px] font-bold`}>
+                                    {q.universityExamType === 1 ? 'Practical' : 'Theory'}
+                                  </span>
+                                )}
+                              </div>
                             </td>
 
                             {/* Question Text */}
@@ -1601,6 +1788,7 @@ export default function QuestionBankUploadPage() {
           courseUnitCode={selectedRepoUnit?.courseUnitCode || ''}
           courseUnitName={selectedRepoUnit?.courseUnitName || ''}
           categoryName={selectedRepoCategoryObj?.name || ''}
+          allowedUeTypes={selectedRepoUnit?.allowedUeTypes}
           onSuccess={() => refetchQuestions()}
           showToast={showToast}
         />
@@ -1618,6 +1806,7 @@ export default function QuestionBankUploadPage() {
           courseUnitCode={selectedRepoUnit?.courseUnitCode || ''}
           courseUnitName={selectedRepoUnit?.courseUnitName || ''}
           categoryName={selectedRepoCategoryObj?.name || ''}
+          allowedUeTypes={selectedRepoUnit?.allowedUeTypes}
           onSuccess={() => refetchQuestions()}
           showToast={showToast}
         />
@@ -1668,6 +1857,12 @@ export default function QuestionBankUploadPage() {
                     </span>
                   ) : (
                     <span className="text-xs text-slate-400 font-medium">Section: Not Required</span>
+                  )}
+
+                  {viewingQuestion.universityExamType !== undefined && viewingQuestion.universityExamType !== null && (
+                    <span className={`badge ${viewingQuestion.universityExamType === 1 ? 'badge-amber' : 'badge-cyan'} text-xs font-semibold`}>
+                      Exam Type: {viewingQuestion.universityExamType === 1 ? 'Practical' : 'Theory'}
+                    </span>
                   )}
                 </div>
 

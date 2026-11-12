@@ -131,6 +131,17 @@ export interface OdelPaymentSlipResponse {
   slipUrl: string
 }
 
+export interface OdelSubmitInput {
+  odelApplicationGuid: string
+  declarationAccepted: boolean
+}
+
+export interface OdelSubmitResponse {
+  odelApplicationGuid: string
+  appRefNo: string
+  status: number
+}
+
 // ---- Mock mode --------------------------------------------------------------
 // In-memory only; files are kept as blob: URLs so the preview modal can open them.
 const mockApps = new Map<string, OdelApplication & { photoUrl: string | null; slipUrl: string | null; quals: OdelQualification[] }>()
@@ -304,5 +315,33 @@ export function uploadOdelPaymentSlip(odelApplicationGuid: string, slip: File): 
   formData.append('slip', slip)
   return apiPostForm<OdelPaymentSlipResponse>(`${BASE}/payment-slip`, formData)
 }
+
+// ---- Submit -----------------------------------------------------------------
+// Submits the application and closes the wizard. ACTION is set to 1 (submitted).
+export function submitOdelApplication(input: OdelSubmitInput): Promise<OdelSubmitResponse> {
+  if (MOCK_AUTH) {
+    const app = mockGet(input.odelApplicationGuid)
+    if (!input.declarationAccepted) {
+      return Promise.reject(new Error('You must accept the declaration to submit your application.'))
+    }
+    if (app.status === 1) {
+      return Promise.reject(new Error('This application is already submitted!'))
+    }
+    if (!app.quals || app.quals.length === 0) {
+      return Promise.reject(new Error('Please add at least one Educational Qualification before submitting.'))
+    }
+    if (!app.slipUrl) {
+      return Promise.reject(new Error('Please upload the payment slip before submitting.'))
+    }
+    app.status = 1
+    return Promise.resolve({
+      odelApplicationGuid: app.odelApplicationGuid,
+      appRefNo: app.appRefNo,
+      status: 1,
+    })
+  }
+  return apiPost<OdelSubmitResponse>(`${BASE}/submit`, input)
+}
+
 
 

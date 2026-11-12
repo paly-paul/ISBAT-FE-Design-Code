@@ -7,9 +7,11 @@ import {
   OdelQualificationInput,
   OdelSaveGeneralInput,
   OdelSearchInput,
+  OdelSubmitInput,
   saveOdelGeneral,
   saveOdelQualification,
   searchOdelApplication,
+  submitOdelApplication,
   uploadOdelPaymentSlip,
   uploadOdelPhoto,
 } from '@/lib/api/admission/odelApplication'
@@ -86,5 +88,16 @@ export function useUploadOdelPaymentSlip() {
     onSuccess: (_res, v) => queryClient.invalidateQueries({ queryKey: [...ODEL_KEY, 'payment-slip', v.odelApplicationGuid] }),
   })
 }
+
+export function useSubmitOdelApplication() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (input: OdelSubmitInput) => submitOdelApplication(input),
+    onSuccess: (_res, input) => {
+      queryClient.invalidateQueries({ queryKey: [...ODEL_KEY] })
+    },
+  })
+}
+
 
 

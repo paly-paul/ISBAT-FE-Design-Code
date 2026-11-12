@@ -1,5 +1,5 @@
 'use client'
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Toast } from '@/components/Toast'
 import { SearchSelect } from '@/components/SearchSelect'
 import DatePicker from '@/components/DatePicker'
@@ -23,13 +23,14 @@ import {
   useSaveOdelGeneral,
   useSaveOdelQualification,
   useSearchOdelApplication,
+  useSubmitOdelApplication,
   useUploadOdelPaymentSlip,
   useUploadOdelPhoto,
 } from '@/hooks/admission/useOdelApplication'
 import { OdelApplication, OdelQualification, ODEL_SAVE_STATUS } from '@/lib/api/admission/odelApplication'
 import { countryPickerOptions, dialCode, phoneCountryOptions } from '@/lib/api/academic/country'
 import { DocumentPreview, resolveDocumentPreview } from '@/lib/documentViewer'
-import { sanitizePhoneInput } from '@/lib/errorMessages'
+import { extractApiErrorMessage, sanitizePhoneInput } from '@/lib/errorMessages'
 import { flattenUniquePages } from '@/lib/pagination'
 import { scrollToFirstError } from '@/lib/scrollToFirstError'
 
@@ -291,18 +292,24 @@ export default function OdelApplicationPage() {
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 
   // ── Application lookup ────────────────────────────────────────────────────
-  const [mode, setMode] = useState<'new' | 'existing'>('new')
+  type Mode = 'new' | 'existing'
+  const [mode, setMode] = useState<Mode>('new')
+
   const [lookupRef, setLookupRef] = useState('')
   const [lookupEmail, setLookupEmail] = useState('')
   const [lookupErrors, setLookupErrors] = useState<Record<string, string>>({})
   const [lookupFailed, setLookupFailed] = useState<string | null>(null)
   const searchApplication = useSearchOdelApplication()
+  const submitApplication = useSubmitOdelApplication()
 
   // ── Application state ─────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState<Tab>('general')
   const [odelGuid, setOdelGuid] = useState<string | null>(null)
   const [appRefNo, setAppRefNo] = useState('')
   const [saveStatus, setSaveStatus] = useState(0)
+  const [isSubmitted, setIsSubmitted] = useState(false)
+  const [declarationAccepted, setDeclarationAccepted] = useState(false)
+  const [declarationError, setDeclarationError] = useState<string | null>(null)
   const [form, setForm] = useState<GeneralForm>(EMPTY_FORM)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [savedLabels, setSavedLabels] = useState<SavedLabels>(EMPTY_LABELS)
@@ -326,7 +333,8 @@ export default function OdelApplicationPage() {
 
   function resetAll(nextMode: 'new' | 'existing') {
     setMode(nextMode)
-    setOdelGuid(null); setAppRefNo(''); setSaveStatus(0)
+    setOdelGuid(null); setAppRefNo(''); setSaveStatus(0); setIsSubmitted(false)
+    setDeclarationAccepted(false); setDeclarationError(null)
     setForm(EMPTY_FORM); setErrors({}); setSavedLabels(EMPTY_LABELS); setSavedDocs(new Set())
     setActiveTab('general')
     setLookupRef(''); setLookupEmail(''); setLookupErrors({}); setLookupFailed(null)
@@ -344,6 +352,9 @@ export default function OdelApplicationPage() {
     setOdelGuid(a.odelApplicationGuid)
     setAppRefNo(a.appRefNo)
     setSaveStatus(a.saveStatus)
+    setIsSubmitted(a.status === 1)
+    setDeclarationAccepted(false)
+    setDeclarationError(null)
     setSavedLabels({ campusName: a.campusName, programName: a.programName, semesterName: a.semesterName })
     setSavedDocs(new Set())
     setErrors({})
@@ -596,6 +607,7 @@ export default function OdelApplicationPage() {
         setForm(cur => ({ ...cur, nationalIdFile: null, passportFile: null, visaFile: null }))
         showToast(res.isFirstSave ? `General details saved — ODeL Ref No ${res.appRefNo}` : 'General details updated', 'success')
         setActiveTab('qualifications')
+        if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' })
       },
       onError: (error: Error) => {
         const message = error.message || 'Failed to save the General details'
@@ -682,6 +694,8 @@ export default function OdelApplicationPage() {
         bumpStatus(res.saveStatus)
         setQualForm(EMPTY_QUAL); setQualErrors({})
         showToast(res.isNew ? 'Qualification added' : 'Qualification updated', 'success')
+        setActiveTab('photo')
+        if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' })
       },
       onError: (error: Error) => {
         const message = error.message || 'Failed to save the qualification'
@@ -752,7 +766,12 @@ export default function OdelApplicationPage() {
     setPhotoError(null)
     setPhotoLocal(file)
     uploadPhoto.mutate({ odelApplicationGuid: odelGuid, photo: file }, {
-      onSuccess: res => { bumpStatus(res.saveStatus); showToast('Photo saved', 'success') },
+      onSuccess: res => {
+        bumpStatus(res.saveStatus)
+        showToast('Photo saved', 'success')
+        setActiveTab('payment')
+        if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' })
+      },
       onError: (error: Error) => {
         setPhotoLocal(null)
         setPhotoError(error.message || "Couldn't upload the photo.")
@@ -772,13 +791,55 @@ export default function OdelApplicationPage() {
     setSlipError(null)
     setSlipLocal(file)
     uploadSlip.mutate({ odelApplicationGuid: odelGuid, slip: file }, {
-      onSuccess: res => { bumpStatus(res.saveStatus); showToast('Payment slip saved', 'success') },
+      onSuccess: res => {
+        bumpStatus(res.saveStatus)
+        showToast('Payment slip saved. Please accept declaration and submit.', 'success')
+        setTimeout(() => {
+          const el = document.getElementById('declaration-section')
+          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        }, 200)
+      },
       onError: (error: Error) => {
         setSlipLocal(null)
         setSlipError(error.message || "Couldn't upload the payment slip.")
         scrollToFirstError({ slip: 'x' })
       },
     })
+  }
+
+  function handleSubmitApplication() {
+    if (!odelGuid) return
+    if (!hasSlip) {
+      showToast('Please upload the payment slip before submitting.', 'error')
+      return
+    }
+    if (qualifications.length === 0) {
+      showToast('Please add at least one Educational Qualification before submitting.', 'error')
+      return
+    }
+    if (!declarationAccepted) {
+      setDeclarationError('You must accept the declaration to submit your application.')
+      showToast('You must accept the declaration to submit your application.', 'error')
+      return
+    }
+    setDeclarationError(null)
+    submitApplication.mutate(
+      { odelApplicationGuid: odelGuid, declarationAccepted: true },
+      {
+        onSuccess: () => {
+          setIsSubmitted(true)
+          showToast('Application registration successfully done!', 'success')
+        },
+        onError: (err: any) => {
+          const msg = extractApiErrorMessage(err, 'Failed to submit application.')
+          if (BLOCKING_ERROR_RE.test(msg)) {
+            setFailure({ title: 'Application Locked', message: msg })
+          } else {
+            showToast(msg, 'error')
+          }
+        },
+      }
+    )
   }
 
   const [docPreview, setDocPreview] = useState<{ url: string; title: string } | null>(null)
@@ -795,128 +856,232 @@ export default function OdelApplicationPage() {
   const isDone = (step: number) => saveStatus >= step
 
   return (
-    <div id="page-filing">
+    <div id="page-filing" className="pt-2 pb-12">
+      {/* ── Page Header ────────────────────────────────────────────────────── */}
       <div className="pg-hdr">
         <div>
           <h1 className="text-xl font-bold text-g900">ODeL Application</h1>
-          <p className="text-sm text-g500 mt-1">Online &amp; Distance e-Learning applications — start a new application or continue an existing one with its reference number and registered email.</p>
+          <p className="text-sm text-g500 mt-1">
+            Online &amp; Distance e-Learning applications — start a new application or continue an existing one with its reference number and registered email.
+          </p>
         </div>
       </div>
 
-      {started && (
-        <div className="filing-progress">
-          <div className="prog-bar-track"><div className="prog-bar-fill" style={{ width: `${progressPct}%` }} /></div>
-          <span className="filing-progress-label">{progressPct}% complete</span>
-        </div>
-      )}
-
-      <div className="card mb-4 p-5">
-        <h2 className="font-bold text-g800 mb-3 flex items-center gap-2">
-          <span className="sec-icon-badge"><i className="lni lni-world" /></span>
-          Application
-        </h2>
-        <div className="flex gap-2 flex-wrap">
-          <button type="button" className={`btn btn-sm ${mode === 'new' ? 'btn-primary' : 'btn-neu'}`} onClick={() => switchMode('new')}>
-            <i className="lni lni-plus" /> New Application
-          </button>
-          <button type="button" className={`btn btn-sm ${mode === 'existing' ? 'btn-primary' : 'btn-neu'}`} onClick={() => switchMode('existing')}>
-            <i className="lni lni-search-alt" /> Existing Application
-          </button>
-        </div>
-
-        {mode === 'existing' && !odelGuid && (
-          <>
-            <div className="g3 mt-4">
-              <Field label="Application Reference Number" req error={lookupErrors.lookupRef}>
-                <Input placeholder="e.g. ODeL20261/75" maxLength={50} value={lookupRef} hasError={!!lookupErrors.lookupRef}
-                  onChange={v => { setLookupRef(v); setLookupErrors(p => ({ ...p, lookupRef: '' })); setLookupFailed(null) }} />
-              </Field>
-              <Field label="Registered Email" req error={lookupErrors.lookupEmail}>
-                <Input type="email" placeholder="email@example.com" maxLength={EMAIL_MAX} value={lookupEmail} hasError={!!lookupErrors.lookupEmail}
-                  onChange={v => { setLookupEmail(v); setLookupErrors(p => ({ ...p, lookupEmail: '' })); setLookupFailed(null) }} />
-              </Field>
-              <div className="fg" />
+      {/* ── Mode Selection Card (Matching Image 1 & 2) ────────────────────────── */}
+      <div className="card mb-5 p-5">
+        <div className="flex items-center justify-between flex-wrap gap-4">
+          <div className="flex items-center gap-2.5">
+            <span className="sec-icon-badge"><i className="lni lni-world" /></span>
+            <div>
+              <h2 className="font-bold text-g800 text-base leading-tight">Application</h2>
+              <p className="text-xs text-g500 mt-0.5">Start a fresh application or continue filing an existing one</p>
             </div>
-            {lookupFailed && (
-              <p className="text-clr-red mt-3 flex items-center gap-1" style={{ fontSize: 'var(--fs-sm)' }} role="alert">
-                <i className="lni lni-warning" /> {lookupFailed}
-              </p>
-            )}
-            <div className="flex justify-end mt-3">
-              <button className="btn btn-primary" disabled={searchApplication.isPending} onClick={handleLookup}>
-                <i className="lni lni-search-alt" /> {searchApplication.isPending ? 'Searching…' : 'Find Application'}
-              </button>
-            </div>
-          </>
-        )}
+          </div>
 
-        {odelGuid && (
-          <div className="applicant-profile-strip mt-4">
-            <span className="av-chip">{initials(applicantName)}</span>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-bold text-g900">{applicantName || 'Applicant'}</span>
-                <span className="badge badge-blue">{appRefNo}</span>
-                {allDone && (
-                  <span className="badge badge-green"><i className="lni lni-checkmark-circle" /> Complete</span>
-                )}
-              </div>
-              <div className="flex items-center gap-4 mt-1 flex-wrap">
-                <span className="text-xs text-g500 flex items-center gap-1"><i className="lni lni-envelope text-g400" /> {form.email || '—'}</span>
-                <span className="text-xs text-g500 flex items-center gap-1"><i className="lni lni-phone text-g400" /> {form.phone ? `+${form.phoneCode} ${form.phone}` : '—'}</span>
-              </div>
-              <p className="text-xs text-g400 mt-1">The applicant resumes this application later with this reference number and the registered email.</p>
-            </div>
-            <button type="button" className="btn btn-neu btn-sm" onClick={() => resetAll(mode)}>
-              <i className="lni lni-reload" /> Start Over
+          {/* Segmented Pill Switcher (Matches Image 2 exactly) */}
+          <div className="inline-flex items-center p-1 bg-slate-100/90 border border-slate-200/90 rounded-2xl gap-1 shadow-2xs">
+            <button
+              type="button"
+              className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all flex items-center gap-2 ${
+                mode === 'new'
+                  ? 'bg-white text-blue-600 shadow-xs'
+                  : 'bg-transparent text-slate-600 hover:text-slate-900 font-medium'
+              }`}
+              onClick={() => switchMode('new')}
+            >
+              <i className="lni lni-plus font-bold" /> New Application
+            </button>
+            <button
+              type="button"
+              className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all flex items-center gap-2 ${
+                mode === 'existing'
+                  ? 'bg-white text-blue-600 shadow-xs'
+                  : 'bg-transparent text-slate-600 hover:text-slate-900 font-medium'
+              }`}
+              onClick={() => switchMode('existing')}
+            >
+              <i className="lni lni-search-alt" /> Existing Application
             </button>
           </div>
+        </div>
+
+        {/* Existing Application Lookup Form (Shown in Card 1 when mode === 'existing' and no app loaded) */}
+        {mode === 'existing' && !odelGuid && (
+          <div className="mt-5 pt-5 border-t border-slate-100">
+            <div className="max-w-xl mx-auto">
+              <div className="mb-4 text-center">
+                <div className="w-10 h-10 mx-auto rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center text-lg mb-2 shadow-xs">
+                  <i className="lni lni-search-alt" />
+                </div>
+                <h3 className="text-base font-bold text-g900">Find Existing Application</h3>
+                <p className="text-xs text-g500 mt-1">
+                  Enter your Application Reference Number and registered email to continue filing.
+                </p>
+              </div>
+
+              <div className="g2">
+                <Field label="Application Reference Number" req error={lookupErrors.lookupRef}>
+                  <Input
+                    placeholder="e.g. ODeL20261/75"
+                    maxLength={50}
+                    value={lookupRef}
+                    hasError={!!lookupErrors.lookupRef}
+                    onChange={v => { setLookupRef(v); setLookupErrors(p => ({ ...p, lookupRef: '' })); setLookupFailed(null) }}
+                  />
+                </Field>
+                <Field label="Registered Email" req error={lookupErrors.lookupEmail}>
+                  <Input
+                    type="email"
+                    placeholder="email@example.com"
+                    maxLength={EMAIL_MAX}
+                    value={lookupEmail}
+                    hasError={!!lookupErrors.lookupEmail}
+                    onChange={v => { setLookupEmail(v); setLookupErrors(p => ({ ...p, lookupEmail: '' })); setLookupFailed(null) }}
+                  />
+                </Field>
+              </div>
+
+              {lookupFailed && (
+                <p className="text-clr-red mt-3 flex items-center justify-center gap-1.5 text-xs font-medium" role="alert">
+                  <i className="lni lni-warning" /> {lookupFailed}
+                </p>
+              )}
+
+              <div className="flex justify-end mt-4">
+                <button
+                  type="button"
+                  className="btn btn-primary px-5"
+                  disabled={searchApplication.isPending}
+                  onClick={handleLookup}
+                >
+                  <i className="lni lni-search-alt" /> {searchApplication.isPending ? 'Searching…' : 'Find Application'}
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </div>
 
-      <div className="card p-0 overflow-hidden">
-        {!started ? (
-          <div className="filing-empty-state">
-            <div className="filing-empty-icon"><i className="lni lni-search-alt" /></div>
-            <p className="text-g500 font-medium">Find an application above to continue it.</p>
-            <p className="text-xs text-g400 mt-1">Enter the reference number and the email registered on the application.</p>
-          </div>
-        ) : (
-          <>
-            <div className="filing-stepper-wrap">
-              <div className="filing-stepper">
-                {TABS.map((t, i) => {
-                  const locked = isLocked(t.step)
-                  return (
-                    <Fragment key={t.id}>
-                      <button
-                        type="button"
-                        className={`filing-step${activeTab === t.id ? ' active' : ''}${isDone(t.step) ? ' done' : ''}`}
-                        disabled={locked}
-                        title={locked ? 'Save the previous step first' : undefined}
-                        style={locked ? { opacity: 0.55, cursor: 'not-allowed' } : undefined}
-                        onClick={() => setActiveTab(t.id)}
-                      >
-                        <span className="filing-step-circle">
-                          {isDone(t.step) ? <i className="lni lni-checkmark" /> : locked ? <i className="lni lni-lock" /> : t.step}
-                        </span>
-                        <span className="filing-step-label">{t.label}</span>
-                      </button>
-                      {i < TABS.length - 1 && <span className={`filing-step-connector${i < currentIndex ? ' done' : ''}`} />}
-                    </Fragment>
-                  )
-                })}
+      {/* ── Active Application Wizard Card (New application OR Existing application that was loaded) ── */}
+      {started && (
+        <div id="odel-wizard-card" className="card p-0 overflow-hidden shadow-xs mb-6">
+          {odelGuid && (
+            <div className="px-5 pt-5 pb-1">
+              <div className="applicant-profile-strip">
+                <span className="av-chip">{initials(applicantName)}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-bold text-g900">{applicantName || 'Applicant'}</span>
+                    <span className="badge badge-blue">{appRefNo}</span>
+                    {isSubmitted ? (
+                      <span className="badge badge-green"><i className="lni lni-checkmark-circle" /> Submitted</span>
+                    ) : allDone ? (
+                      <span className="badge badge-green"><i className="lni lni-checkmark-circle" /> Complete</span>
+                    ) : null}
+                  </div>
+                  <div className="flex items-center gap-4 mt-1 flex-wrap">
+                    <span className="text-xs text-g500 flex items-center gap-1">
+                      <i className="lni lni-envelope text-g400" /> {form.email || '—'}
+                    </span>
+                    <span className="text-xs text-g500 flex items-center gap-1">
+                      <i className="lni lni-phone text-g400" /> {form.phone ? `+${form.phoneCode} ${form.phone}` : '—'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-g400 mt-1">
+                    The applicant resumes this application later with this reference number and the registered email.
+                  </p>
+                </div>
+                <button type="button" className="btn btn-neu btn-sm" onClick={() => resetAll(mode)}>
+                  <i className="lni lni-reload" /> Start Over
+                </button>
               </div>
             </div>
+          )}
 
-            <div className="p-5 tab-panel-in" key={activeTab}>
-              <div className="filing-step-hdr">
-                <i className={`lni ${activeTabDef.icon}`} />
-                <div>
-                  <div className="filing-step-hdr-title">{activeTabDef.label}</div>
-                  <div className="filing-step-hdr-desc">{activeTabDef.desc}</div>
-                </div>
+          {/* ── Wizard Tabs Navigation Bar (Modern, UX-friendly & Responsive) ── */}
+          <div className="border-b border-slate-200/80 bg-slate-50/70 px-4 py-3 flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar flex-nowrap" role="tablist">
+              {TABS.map((t, i) => {
+                const locked = isLocked(t.step)
+                const done = isDone(t.step)
+                const active = activeTab === t.id
+                return (
+                  <Fragment key={t.id}>
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={active}
+                      disabled={locked}
+                      title={locked ? 'Save previous steps to unlock' : undefined}
+                      className={`px-3 sm:px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-2 shrink-0 ${
+                        active
+                          ? 'bg-white text-blue-600 border border-blue-200 shadow-xs'
+                          : done
+                          ? 'bg-white/80 hover:bg-white text-slate-800 border border-slate-200/70 hover:border-slate-300 cursor-pointer'
+                          : locked
+                          ? 'opacity-50 cursor-not-allowed bg-transparent text-slate-400 border border-transparent'
+                          : 'bg-transparent hover:bg-white/60 text-slate-700 border border-transparent cursor-pointer'
+                      }`}
+                      onClick={() => !locked && setActiveTab(t.id)}
+                    >
+                      <span
+                        className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${
+                          active
+                            ? 'bg-blue-600 text-white shadow-2xs'
+                            : done
+                            ? 'bg-emerald-500 text-white'
+                            : locked
+                            ? 'bg-slate-200 text-slate-500'
+                            : 'bg-slate-200 text-slate-700'
+                        }`}
+                      >
+                        {done ? <i className="lni lni-checkmark font-bold" /> : locked ? <i className="lni lni-lock" /> : t.step}
+                      </span>
+                      <span>{t.label}</span>
+                      {active && (
+                        <span className="hidden lg:inline-block text-[10px] bg-blue-50 text-blue-600 px-1.5 py-0.2 rounded-full font-bold">
+                          Current
+                        </span>
+                      )}
+                      {done && !active && (
+                        <span className="hidden lg:inline-block text-[10px] bg-emerald-50 text-emerald-700 px-1.5 py-0.2 rounded-full font-semibold">
+                          Done
+                        </span>
+                      )}
+                    </button>
+                    {i < TABS.length - 1 && (
+                      <span className="text-slate-300 text-xs shrink-0 select-none hidden sm:inline-block">
+                        <i className="lni lni-chevron-right" />
+                      </span>
+                    )}
+                  </Fragment>
+                )
+              })}
+            </div>
+
+            {/* Overall Progress Indicator */}
+            <div className="flex items-center gap-2.5 bg-white border border-slate-200/90 rounded-xl px-3 py-1.5 shrink-0 shadow-2xs self-start md:self-auto">
+              <div className="text-right">
+                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Progress</div>
+                <div className="text-xs font-bold text-slate-800 tabular-nums">{progressPct}% Complete</div>
               </div>
+              <div className="w-16 sm:w-24 h-2 bg-slate-100 rounded-full overflow-hidden border border-slate-200/50">
+                <div
+                  className="h-full bg-blue-600 transition-all duration-300 rounded-full"
+                  style={{ width: `${progressPct}%` }}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="p-5 tab-panel-in" key={activeTab}>
+            <div className="filing-step-hdr">
+              <i className={`lni ${activeTabDef.icon}`} />
+              <div>
+                <div className="filing-step-hdr-title">{activeTabDef.label}</div>
+                <div className="filing-step-hdr-desc">{activeTabDef.desc}</div>
+              </div>
+            </div>
 
               {/* ── 1 · General ───────────────────────────────────────────── */}
               {activeTab === 'general' && (
@@ -1337,29 +1502,63 @@ export default function OdelApplicationPage() {
                       ))}
                     </div>
 
-                    {allDone && (
-                      <div className="applicant-profile-strip mt-4">
-                        <span className="av-chip"><i className="lni lni-checkmark" /></span>
+                    {isSubmitted ? (
+                      <div className="applicant-profile-strip mt-4" style={{ background: '#f0fdf4', border: '1px solid #bbf7d0' }}>
+                        <span className="av-chip" style={{ background: 'var(--green)', color: '#fff' }}><i className="lni lni-checkmark" /></span>
                         <div className="flex-1 min-w-0">
-                          <div className="font-bold text-g900">All four steps are saved</div>
-                          <div className="text-xs text-g500 mt-1">ODeL Ref No <strong>{appRefNo}</strong> — the applicant can resume it with this reference number and the registered email.</div>
+                          <div className="font-bold text-g900">Application Submitted!</div>
+                          <div className="text-xs text-g600 mt-1">ODeL Ref No <strong>{appRefNo}</strong> — Application registration successfully done!</div>
                         </div>
                         <button type="button" className="btn btn-primary btn-sm" onClick={() => resetAll('new')}>
                           <i className="lni lni-plus" /> New Application
                         </button>
                       </div>
-                    )}
+                    ) : (
+                      <>
+                        <div className="sec-divider mt-5">Declaration &amp; Submission</div>
+                        <div id="declaration-section" className={`mt-3 p-4 bg-slate-50 border ${declarationError ? 'border-red-300 bg-red-50/40' : 'border-slate-200'} rounded-lg transition-all`}>
+                          <label className="flex items-start gap-3 cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                              checked={declarationAccepted}
+                              onChange={e => {
+                                setDeclarationAccepted(e.target.checked)
+                                if (e.target.checked) setDeclarationError(null)
+                              }}
+                            />
+                            <div className="text-sm text-slate-700 leading-normal">
+                              <span className="font-semibold text-slate-900">Applicant Declaration:</span> I hereby declare that all the information provided in this application is true, complete, and accurate to the best of my knowledge and belief. I understand that any false statement or omission may lead to the cancellation of my admission.
+                            </div>
+                          </label>
+                          {declarationError && (
+                            <div className="mt-2 text-xs text-red-600 flex items-center gap-1 font-medium">
+                              <i className="lni lni-warning" /> {declarationError}
+                            </div>
+                          )}
+                        </div>
 
-                    <div className="flex justify-between mt-5">
-                      <button className="btn" onClick={() => setActiveTab('photo')}><i className="lni lni-arrow-left" /> Photo</button>
-                    </div>
+                        <div className="flex justify-between items-center mt-5">
+                          <button type="button" className="btn" onClick={() => setActiveTab('photo')}>
+                            <i className="lni lni-arrow-left" /> Photo
+                          </button>
+                          <button
+                            type="button"
+                            className={`btn btn-primary${!hasSlip || !declarationAccepted ? ' opacity-90' : ''}`}
+                            disabled={submitApplication.isPending || !permissions.add}
+                            onClick={handleSubmitApplication}
+                          >
+                            <i className="lni lni-checkmark-circle" /> {submitApplication.isPending ? 'Submitting…' : 'Submit Application'}
+                          </button>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
               )}
             </div>
-          </>
+          </div>
         )}
-      </div>
 
       <DocumentPreviewModal isOpen={!!docPreview} onClose={() => setDocPreview(null)} url={docPreview?.url ?? null} title={docPreview?.title} />
       <Toast toast={toast} />
@@ -1384,6 +1583,35 @@ export default function OdelApplicationPage() {
         <div className="modal-overlay open">
           <div className="modal" style={{ maxWidth: 400 }}>
             <FailurePopup title={failure.title} subtitle={failure.message} onClose={() => setFailure(null)} />
+          </div>
+        </div>
+      )}
+
+      {isSubmitted && (
+        <div className="modal-overlay open">
+          <div className="modal" style={{ maxWidth: 440 }} role="dialog" aria-modal="true" aria-labelledby="odel-submitted-title">
+            <div style={{ textAlign: 'center', padding: '32px 28px 26px' }}>
+              <div className="pc-receipt-check" style={{ fontSize: 36, marginBottom: 12, color: 'var(--green)' }}>
+                <i className="lni lni-checkmark-circle" />
+              </div>
+              <div id="odel-submitted-title" className="font-bold text-g900" style={{ fontSize: 'var(--fs-lg)' }}>
+                Application Submitted!
+              </div>
+              <p className="text-g600 mt-2 text-sm leading-relaxed">
+                ODeL Application Ref No: <strong className="text-g900">{appRefNo}</strong> has been successfully submitted.
+              </p>
+              <p className="text-xs text-g400 mt-1">
+                Application registration successfully done!
+              </p>
+              <div className="flex gap-2 justify-center mt-6 flex-wrap">
+                <button type="button" className="btn btn-primary" onClick={() => resetAll('new')}>
+                  <i className="lni lni-plus" /> Start New Application
+                </button>
+                <button type="button" className="btn btn-neu" onClick={() => setIsSubmitted(false)}>
+                  Close
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
