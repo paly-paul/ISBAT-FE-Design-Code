@@ -2372,7 +2372,7 @@ export default function PaymentConsolePage() {
                               {otherPayments.map(p => (
                                 <tr key={p.id}>
                                   <td className="font-mono">{p.code}</td>
-                                  <td>{p.payDate}</td>
+                                  <td>{p.payDate ? formatDate(`${p.payDate.slice(0, 10)}T00:00:00`) : '—'}</td>
                                   <td className="font-mono text-blue">{p.receiptNo ?? '—'}</td>
                                   <td>{p.ledgerName}</td>
                                   <td className="text-green font-bold">{parseFloat(p.amount).toLocaleString()}</td>

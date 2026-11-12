@@ -113,7 +113,7 @@ export function useEmployee(id: string | null) {
 export function useCreateEmployee() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (input: CreateEmployeeInput) => createEmployee(input),
+    mutationFn: ({ input, photo = null }: { input: CreateEmployeeInput; photo?: File | null }) => createEmployee(input, photo),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: EMPLOYEES_KEY }),
   })
 }

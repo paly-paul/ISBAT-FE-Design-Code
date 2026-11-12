@@ -6,6 +6,7 @@ import { SearchSelect } from '@/components/SearchSelect'
 import { MultiSelect } from '@/components/MultiSelect'
 import DatePicker from '@/components/DatePicker'
 import { CreateEmployeeInput } from '@/lib/api/employee/employee'
+import { PHOTO_MAX_BYTES, PHOTO_TYPES } from '@/lib/api/users/profile'
 import { useEmployee, useCreateEmployee, useUpdateEmployee } from '@/hooks/employee/useEmployees'
 import { useDepartmentsDropdown } from '@/hooks/config/useDepartments'
 import { useDesignationsDropdown } from '@/hooks/config/useDesignations'
@@ -140,6 +141,10 @@ export function EmployeeFormModal({ isOpen, onClose, showToast, mode, employeeGu
   // CreateEmployeeInput (post-employee.md/put-employee.md, 2026-09-11: "the
   // employee can be assigned to one or more campuses simultaneously").
   const [campusGuids, setCampusGuids] = useState<string[]>([])
+  // Add only: POST /employees takes an optional photo, but PUT /employees/{guid}
+  // has no photo field and the only other photo endpoint (PUT /employees/me/photo)
+  // changes the signed-in user's own photo. Edit just shows the current one.
+  const [photo, setPhoto] = useState<{ file: File; preview: string } | null>(null)
   const [errors, setErrors] = useState<Record<string, string>>({})
 
   const { data: employee } = useEmployee(isEdit ? employeeGuid : null)
@@ -234,10 +239,28 @@ export function EmployeeFormModal({ isOpen, onClose, showToast, mode, employeeGu
       setNatId(''); setNationalId(''); setEmailId(''); setReligion(''); setMaritalStatus('')
       setCampusGuids([])
     }
+    setPhoto(null)
     setErrors({})
   }, [isOpen, isEdit, employee])
 
+  // Frees the preview's object URL when the photo is replaced, removed, or the
+  // modal unmounts.
+  useEffect(() => {
+    if (!photo) return
+    return () => URL.revokeObjectURL(photo.preview)
+  }, [photo])
+
   if (!isOpen) return null
+
+  function handlePhotoPick(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    if (!PHOTO_TYPES.includes(file.type)) { setErrors(prev => ({ ...prev, photo: 'Photo must be a JPG or PNG image.' })); return }
+    if (file.size === 0 || file.size > PHOTO_MAX_BYTES) { setErrors(prev => ({ ...prev, photo: 'Photo must be 2 MB or smaller.' })); return }
+    clearError('photo')
+    setPhoto({ file, preview: URL.createObjectURL(file) })
+  }
 
   function handleClose() { setSaved(false); setErrors({}); onClose() }
 
@@ -287,7 +310,7 @@ export function EmployeeFormModal({ isOpen, onClose, showToast, mode, employeeGu
         },
       )
     } else {
-      createEmployee.mutate(input, {
+      createEmployee.mutate({ input, photo: photo?.file ?? null }, {
         onSuccess: () => { setSaved(true); showToast('Employee added successfully') },
         onError: (error: Error) => showToast(error.message || 'Failed to add employee', 'error'),
       })
@@ -322,6 +345,36 @@ export function EmployeeFormModal({ isOpen, onClose, showToast, mode, employeeGu
 
           {/* Personal Details */}
           <div className="sec-divider">Personal Details</div>
+          {isEdit ? (
+            <div className="prof-photo-row">
+              <div className={`prof-photo-zone${employee?.photoUrl ? ' has-photo' : ''}`} style={{ cursor: 'default' }}>
+                <div className="prof-photo-icon"><i className="lni lni-user"></i><small>No photo</small></div>
+                {employee?.photoUrl && <img className="prof-photo-preview" src={employee.photoUrl} alt="Employee photo" />}
+              </div>
+              <div className="prof-photo-info">
+                <div className="prof-photo-title">Profile Photo</div>
+                <div className="prof-photo-hint">The photo can&rsquo;t be changed here. The employee can update it from their own profile.</div>
+              </div>
+            </div>
+          ) : (
+            <div className="prof-photo-row">
+              <label className={`prof-photo-zone${photo ? ' has-photo' : ''}`}>
+                <input type="file" accept="image/jpeg,image/png" onChange={handlePhotoPick} aria-label="Upload profile photo" />
+                <div className="prof-photo-icon"><i className="lni lni-camera"></i><small>Photo</small></div>
+                {photo && <img className="prof-photo-preview" src={photo.preview} alt="Selected photo" />}
+              </label>
+              <div className="prof-photo-info">
+                <div className="prof-photo-title">Profile Photo <span style={{ fontWeight: 400, color: 'var(--g500)' }}>(optional)</span></div>
+                <div className="prof-photo-hint">Click the circle to {photo ? 'choose a different photo' : 'add a passport-style photo'} · JPG / PNG · max 2 MB</div>
+                {errors.photo && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.photo}</p>}
+                {photo && (
+                  <button type="button" className="btn btn-neu btn-sm" style={{ marginTop: 8 }} onClick={() => setPhoto(null)}>
+                    <i className="lni lni-trash-can"></i> Remove
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
           <div className="g3">
             <div className="fg">
               <div className="lbl">Category <span className="req">*</span></div>
