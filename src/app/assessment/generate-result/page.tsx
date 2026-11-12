@@ -1,1121 +1,586 @@
 'use client'
 
-import { usePagePermissions } from '@/hooks/users/usePagePermissions'
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { SearchSelect } from '@/components/SearchSelect'
-import { ScrollTable } from '@/components/ScrollTable'
-import { Pagination } from '@/components/Pagination'
-import { TableLoadingState } from '@/components/TableLoadingState'
-import { EmptyState } from '@/components/EmptyState'
 import { Toast } from '@/components/Toast'
-import { TableSearch, type TableSearchResult } from '@/components/TableSearch'
-import {
-  useApplyModeration,
-  useDeleteResults,
-  useExportResults,
-  useGeneratedResults,
-  useGenerateResultCourseUnits,
-  useGenerateResultInit,
-  useGenerateResults,
-  useGenerateResultSemesters,
-  usePublishResults,
-  type GenerateResultResponse,
-  type GenerateWarning,
-  type ModerationField,
-  type ResultFilters,
-  type ResultOperator,
-} from '@/hooks/assessment/useGenerateResult'
+// The previous page (whole-intake actions, marks grid, moderation, export).
+// To bring it back, uncomment these two lines and delete GenerateResultPage below.
+// import LegacyGenerateResultPage from './_legacy/LegacyGenerateResultPage'
+// export default LegacyGenerateResultPage
 
-// Generate Result (generate-result/*.md) — port of the legacy Generate Result
-// screen. The legacy page put every button in one row; here they are grouped
-// by what they act on:
-// - Intake actions (Generate, Publish, Withdraw, Delete) — the whole intake;
-//   the programme / semester / unit / total filters are not used.
-// - Show Result, Moderation, Export — exactly the rows the applied filters
-//   select (the three APIs take the same filters).
+// Generate Result — redesign from generate-result.html. Results are generated,
+// published, withdrawn and deleted per programme, semester or batch, shown as
+// a programme → semester → batch tree. UI-only for now: the API
+// (lib/api/assessment/generateResult.ts) works on a whole intake and has no
+// batches or per-batch status, so this runs on the design's sample data.
 
-const PAGE_SIZES = [10, 25, 50, 100]
+// ── Sample data ─────────────────────────────────────────────────────────────
 
-const OPERATOR_OPTIONS: { value: '' | ResultOperator; label: string }[] = [
-  { value: '', label: 'Any' },
-  { value: '=', label: '=' },
-  { value: '<>', label: '≠' },
-  { value: '<', label: '<' },
-  { value: '<=', label: '≤' },
-  { value: '>', label: '>' },
-  { value: '>=', label: '≥' },
+type Step = 'none' | 'draft' | 'pub'
+interface LogEntry { a: string; t: number; by: string; note?: string }
+interface Batch { k: string; pg: string; sm: number; bt: string; students: number; s: Step; log: LogEntry[] }
+type IntakeData = Record<string, Batch>
+
+const PROGRAMMES: Record<string, { n: string; s: Record<number, { b: string[]; u: number }> }> = {
+  BBAIBS22: { n: 'BBA International Business', s: { 1: { b: ['Batch A', 'Batch B'], u: 3 }, 2: { b: ['Batch A', 'Batch B'], u: 2 }, 3: { b: ['Batch A', 'Batch B', 'Weekend'], u: 3 } } },
+  BCS21: { n: 'BSc Computer Science', s: { 1: { b: ['Batch A', 'Batch B'], u: 2 }, 2: { b: ['Batch A', 'Batch B', 'Evening'], u: 2 }, 3: { b: ['Batch A'], u: 2 } } },
+  BAC22: { n: 'Bachelor of Accounting', s: { 2: { b: ['Batch A', 'Batch B'], u: 2 }, 4: { b: ['Batch A', 'Weekend'], u: 2 } } },
+}
+const PROG_CODES = Object.keys(PROGRAMMES)
+const semsOf = (pg: string) => Object.keys(PROGRAMMES[pg].s).map(Number)
+
+const INTAKES: { id: string; name: string }[] = [
+  { id: '20262', name: 'Fall 2026' },
+  { id: '20261', name: 'Spring 2026' },
+  { id: '20252', name: 'Fall 2025' },
 ]
+const CURRENT_INTAKE = '20262' // only the current intake can be changed
+const intakeName = (id: string) => INTAKES.find(i => i.id === id)?.name ?? id
 
-interface Draft {
-  intakeGuid: string
-  programGuid: string
-  semesterGuid: string
-  courseUnitGuid: string
-  iaOperator: '' | ResultOperator
-  iaValue: string
-  ueOperator: '' | ResultOperator
-  ueValue: string
-  studentName: string
-}
+const keyOf = (pg: string, sm: number, bt: string) => `${pg}|${sm}|${bt}`
 
-const EMPTY_DRAFT: Omit<Draft, 'intakeGuid'> = {
-  programGuid: '',
-  semesterGuid: '',
-  courseUnitGuid: '',
-  iaOperator: '',
-  iaValue: '',
-  ueOperator: '',
-  ueValue: '',
-  studentName: '',
-}
-
-type ConfirmState = { title: string; body: React.ReactNode; confirmLabel: string; danger?: boolean; onConfirm: () => void } | null
-
-function fmt(n: number | null | undefined) {
-  if (n === null || n === undefined) return '—'
-  return Number.isInteger(n) ? String(n) : n.toFixed(2)
-}
-
-// UE / UE practical are display strings: "ABS", "62.00" or null.
-function UeCell({ value }: { value: string | null }) {
-  if (value === null || value === '') return <span className="text-g400">—</span>
-  if (value.toUpperCase() === 'ABS') return <span className="badge badge-red">ABS</span>
-  const n = Number(value)
-  return <>{Number.isFinite(n) ? fmt(n) : value}</>
-}
-
-function errMsg(err: unknown, fallback: string) { return (err as { message?: string } | null)?.message || fallback }
-
-// Draft → API filters; null with a message when a total filter is half-filled.
-function toFilters(d: Draft): { filters: ResultFilters } | { error: string } {
-  if (!d.intakeGuid) return { error: 'Select an Academic Intake.' }
-  const total = (op: '' | ResultOperator, raw: string, label: string) => {
-    if (!op && raw.trim() === '') return {}
-    if (!op) return { error: `Choose an operator for the ${label} filter.` }
-    if (raw.trim() === '' || !Number.isInteger(Number(raw))) return { error: `Enter a whole number for the ${label} filter.` }
-    return { op, value: Number(raw) }
-  }
-  const ia = total(d.iaOperator, d.iaValue, 'IA Total')
-  if ('error' in ia) return { error: ia.error! }
-  const ue = total(d.ueOperator, d.ueValue, 'UE Total')
-  if ('error' in ue) return { error: ue.error! }
-  const s = d.studentName.trim() || undefined
-  return {
-    filters: {
-      intakeGuid: d.intakeGuid,
-      programGuid: d.programGuid || undefined,
-      semesterGuid: d.semesterGuid || undefined,
-      courseUnitGuid: d.courseUnitGuid || undefined,
-      iaOperator: ia.op, iaValue: ia.value,
-      ueOperator: ue.op, ueValue: ue.value,
-      studentName: s,
-      search: s,
-    },
+// Seeded so student counts are the same on every load.
+function seededRandom(seed: number) {
+  let a = seed
+  return () => {
+    a = (a + 0x6d2b79f5) | 0
+    let t = Math.imul(a ^ (a >>> 15), 1 | a)
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
   }
 }
 
-function warningText(w: GenerateWarning) {
-  if (typeof w === 'string') return { unit: null, message: w, rows: null }
-  const unit = [w.unitCode, w.unitName].filter(Boolean).join(' · ') || null
-  return { unit, message: w.message ?? '', rows: w.rowCount ?? null }
-}
-
-interface MissingWeightageUnit {
-  unitCode: string
-  unitName: string
-  detail: string
-  missingCbt: boolean
-  missingCw: boolean
-  missingUe: boolean
-  missingComponents: string[]
-}
-
-interface WeightageErrorState {
-  title: string
-  units: MissingWeightageUnit[]
-  totalCbtMissing: number
-  totalCwMissing: number
-  totalUeMissing: number
-}
-
-function parseWeightageError(msg: string): WeightageErrorState | null {
-  if (!msg || !msg.toLowerCase().includes('weightage is not configured')) return null
-
-  const colonIndex = msg.indexOf(':')
-  const title = colonIndex !== -1 ? msg.substring(0, colonIndex + 1).trim() : 'Weightage is not configured for the following course unit(s):'
-  const rest = colonIndex !== -1 ? msg.substring(colonIndex + 1) : msg
-
-  const items = rest.split(/\s*-\s+(?=[A-Za-z]{2,6}\d{3,5})/g)
-  const units: MissingWeightageUnit[] = []
-
-  for (const item of items) {
-    const trimmed = item.replace(/^-\s*/, '').trim()
-    if (!trimmed) continue
-
-    const lastColon = trimmed.lastIndexOf(':')
-    let left = trimmed
-    let detail = 'CBT, CW, UE weightage not set'
-    if (lastColon !== -1) {
-      left = trimmed.substring(0, lastColon).trim()
-      detail = trimmed.substring(lastColon + 1).trim()
+function buildSampleData(): Record<string, IntakeData> {
+  const rand = seededRandom(20262)
+  const ago = (h: number) => Date.now() - h * 3600e3
+  const data: Record<string, IntakeData> = {}
+  for (const { id } of INTAKES) {
+    const m: IntakeData = {}
+    for (const pg of PROG_CODES) for (const sm of semsOf(pg)) for (const bt of PROGRAMMES[pg].s[sm].b) {
+      m[keyOf(pg, sm, bt)] = { k: keyOf(pg, sm, bt), pg, sm, bt, students: 25 + Math.floor(rand() * 40), s: 'none', log: [] }
     }
-
-    const upper = detail.toUpperCase()
-    const missingCbt = upper.includes('CBT')
-    const missingCw = upper.includes('CW') || upper.includes('COURSEWORK')
-    const missingUe = upper.includes('UE') || upper.includes('UNIVERSITY EXAM')
-    const missingComponents: string[] = []
-    if (missingCbt) missingComponents.push('CBT')
-    if (missingCw) missingComponents.push('CW')
-    if (missingUe) missingComponents.push('UE')
-
-    const codeMatch = left.match(/^([A-Za-z0-9/_-]+)\s+(.+)$/)
-    if (codeMatch) {
-      units.push({
-        unitCode: codeMatch[1].trim(),
-        unitName: codeMatch[2].trim(),
-        detail: detail || 'Weightage not set',
-        missingCbt,
-        missingCw,
-        missingUe,
-        missingComponents,
-      })
-    } else {
-      units.push({
-        unitCode: '',
-        unitName: left,
-        detail: detail || 'Weightage not set',
-        missingCbt,
-        missingCw,
-        missingUe,
-        missingComponents,
-      })
-    }
+    data[id] = m
   }
-
-  const validUnits = units.length > 0 ? units : [{
-    unitCode: '',
-    unitName: rest.trim(),
-    detail: 'Weightage not set',
-    missingCbt: true,
-    missingCw: true,
-    missingUe: true,
-    missingComponents: ['CBT', 'CW', 'UE'],
-  }]
-
-  return {
-    title,
-    units: validUnits,
-    totalCbtMissing: validUnits.filter(u => u.missingCbt).length,
-    totalCwMissing: validUnits.filter(u => u.missingCw).length,
-    totalUeMissing: validUnits.filter(u => u.missingUe).length,
+  // Past intakes: everything published, a few withdrawn and published again.
+  for (const [id, h] of [['20261', 4300], ['20252', 8600]] as const) {
+    Object.values(data[id]).forEach((b, i) => {
+      b.s = 'pub'
+      b.log = [{ a: 'Generated', t: ago(h + 48), by: 'Registrar' }, { a: 'Published', t: ago(h), by: 'Registrar' }]
+      if (i % 5 === 2) b.log.push({ a: 'Withdrawn', t: ago(h - 30), by: 'Registrar', note: 'UE marks corrected' }, { a: 'Published', t: ago(h - 50), by: 'Registrar' })
+    })
   }
+  const seed = (pg: string, sm: number, bt: string, s: Step, log: [string, number, string, string?][]) => {
+    const b = data[CURRENT_INTAKE][keyOf(pg, sm, bt)]
+    b.s = s
+    b.log = log.map(([a, h, by, note]) => ({ a, t: ago(h), by, note }))
+  }
+  seed('BBAIBS22', 1, 'Batch A', 'pub', [['Generated', 80, 'Registrar'], ['Published', 72, 'Registrar']])
+  seed('BBAIBS22', 1, 'Batch B', 'pub', [['Generated', 80, 'Registrar'], ['Published', 72, 'Registrar']])
+  seed('BBAIBS22', 3, 'Batch A', 'pub', [['Generated', 50, 'Registrar'], ['Published', 26, 'Registrar']])
+  seed('BBAIBS22', 3, 'Batch B', 'draft', [['Generated', 5, 'Registrar']])
+  seed('BCS21', 2, 'Batch A', 'draft', [['Generated', 120, 'Registrar'], ['Published', 96, 'Registrar'], ['Withdrawn', 20, 'Registrar', 'CA marks for CSC1202 re-entered']])
+  seed('BCS21', 2, 'Batch B', 'draft', [['Generated', 3, 'Registrar']])
+  seed('BCS21', 1, 'Batch A', 'pub', [['Generated', 200, 'Registrar'], ['Published', 190, 'Registrar']])
+  seed('BCS21', 1, 'Batch B', 'pub', [['Generated', 200, 'Registrar'], ['Published', 190, 'Registrar']])
+  return data
 }
+
+// ── Helpers ─────────────────────────────────────────────────────────────────
+
+const LABEL: Record<Step, string> = { none: 'Not generated', draft: 'Generated', pub: 'Published' }
+const plural = (n: number, w: string, pl?: string) => `${n} ${n === 1 ? w : (pl ?? `${w}s`)}`
+const fmtWhen = (t: number) => new Date(t).toLocaleString('en-GB', {
+  day: 'numeric', month: 'short',
+  year: new Date(t).getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined,
+  hour: '2-digit', minute: '2-digit',
+})
+const tally = (list: Batch[]) => { const c = { none: 0, draft: 0, pub: 0 }; list.forEach(b => c[b.s]++); return c }
+const studentsOf = (list: Batch[]) => list.reduce((s, b) => s + b.students, 0)
+// A programme or semester row takes the earliest step of the batches inside it.
+const stepOf = (c: Record<Step, number>): Step => (c.none ? 'none' : c.draft ? 'draft' : 'pub')
+
+interface Filters { pg: string; sm: string; bt: string; st: '' | Step }
+const NO_FILTERS: Filters = { pg: '', sm: '', bt: '', st: '' }
+
+type Action = 'gen' | 'pub' | 'del' | 'wd'
+const NEEDS: Record<Action, Step> = { gen: 'none', pub: 'draft', del: 'draft', wd: 'pub' }
+// scope: 'a' (everything in view) | 'p:PG' | 's:PG|SM' | 'b:KEY'
+interface Confirm { action: Action; scope: string }
+
+// ── Page ────────────────────────────────────────────────────────────────────
+
 export default function GenerateResultPage() {
-  const permissions = usePagePermissions()
+  // Built after mount: the "Generated … ago" times depend on the clock, which
+  // differs between the static export and the browser.
+  const [data, setData] = useState<Record<string, IntakeData> | null>(null)
+  useEffect(() => { setData(buildSampleData()) }, [])
+
+  const [intake, setIntake] = useState(CURRENT_INTAKE)
+  const readOnly = intake !== CURRENT_INTAKE
+  const batchMap = data?.[intake] ?? {}
+
+  const [filters, setFilters] = useState<Filters>(NO_FILTERS)
+  const [panelOpen, setPanelOpen] = useState(false)
+  const [open, setOpen] = useState<Set<string>>(() => new Set(['p:BBAIBS22', 's:BBAIBS22|3']))
+  const [confirm, setConfirm] = useState<Confirm | null>(null)
+  const [reason, setReason] = useState('')
+  const [reasonError, setReasonError] = useState('')
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
-  function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 4500) }
+  function showToast(msg: string, type = 'success') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 
-  // ── Dropdowns ────────────────────────────────────────────────────────────
-  const { data: init, isLoading: initLoading } = useGenerateResultInit()
-  const intakes = useMemo(() => init?.intakes ?? [], [init])
-  const programs = init?.programs ?? []
+  const panelRef = useRef<HTMLDivElement>(null)
+  const filterBtnRef = useRef<HTMLButtonElement>(null)
+  const lastFocus = useRef<HTMLElement | null>(null)
 
-  const [draft, setDraft] = useState<Draft>({ intakeGuid: '', ...EMPTY_DRAFT })
-  const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setDraft(d => ({ ...d, [k]: v }))
+  // Close the filter panel on an outside click. SearchSelect's dropdown is
+  // portalled to <body>, so a click on one of its options counts as inside.
+  useEffect(() => {
+    if (!panelOpen) return
+    function onDown(e: MouseEvent) {
+      const t = e.target as HTMLElement
+      if (t.closest('.ss-drop') || panelRef.current?.contains(t) || filterBtnRef.current?.contains(t)) return
+      setPanelOpen(false)
+    }
+    function onKey(e: KeyboardEvent) { if (e.key === 'Escape' && !confirm) { setPanelOpen(false); filterBtnRef.current?.focus() } }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey) }
+  }, [panelOpen, confirm])
+
+  function batches(pg: string | null, sm: number | null, ignoreStep = false) {
+    return Object.values(batchMap).filter(b =>
+      (!pg || b.pg === pg) && (sm === null || b.sm === sm) &&
+      (!filters.pg || b.pg === filters.pg) && (!filters.sm || String(b.sm) === filters.sm) && (!filters.bt || b.bt === filters.bt) &&
+      (ignoreStep || !filters.st || b.s === filters.st))
+  }
+
+  const toggle = (k: string) => setOpen(prev => { const n = new Set(prev); if (n.has(k)) n.delete(k); else n.add(k); return n })
+  const allKeys = useMemo(() => PROG_CODES.flatMap(pg => [`p:${pg}`, ...semsOf(pg).map(sm => `s:${pg}|${sm}`)]), [])
+  const allOpen = allKeys.every(k => open.has(k))
+  const expandAll = () => setOpen(new Set(allKeys))
+
+  // Picking a programme / semester in the filters also opens it in the tree.
+  function setFilter<K extends keyof Filters>(k: K, v: Filters[K]) {
+    setFilters(prev => {
+      const next = { ...prev, [k]: v }
+      if (k === 'pg') { next.sm = ''; next.bt = '' }
+      if (k === 'sm') next.bt = ''
+      return next
+    })
+    if (k === 'pg' && v) setOpen(prev => new Set(prev).add(`p:${v}`))
+    if (k === 'sm' && v) setOpen(prev => new Set(prev).add(`s:${filters.pg}|${v}`))
+    if (k === 'st' && v) expandAll()
+  }
+
+  function changeIntake(id: string) {
+    if (!id || id === intake) return
+    setIntake(id)
+    showToast(`Showing ${intakeName(id)}`)
+  }
+
+  // ── Confirm dialog ──
+  function scopeOf(scope: string) {
+    const kind = scope[0], rest = scope.slice(2)
+    if (kind === 'a') {
+      const parts = [filters.pg, filters.sm && `Semester ${filters.sm}`, filters.bt].filter(Boolean).join(' · ')
+      return { label: `${intakeName(intake)} · ${parts || 'all programmes'}`, list: batches(null, null), kind: 'intake' as const }
+    }
+    if (kind === 'p') return { label: `${rest} · ${PROGRAMMES[rest].n}`, list: batches(rest, null), kind: 'programme' as const }
+    if (kind === 's') { const [pg, sm] = rest.split('|'); return { label: `${pg} · Semester ${sm}`, list: batches(pg, Number(sm)), kind: 'semester' as const } }
+    const b = batchMap[rest]
+    return { label: `${b.pg} · Semester ${b.sm} · ${b.bt}`, list: [b], kind: 'batch' as const }
+  }
+
+  function ask(action: Action, scope: string) {
+    if (readOnly) return
+    lastFocus.current = document.activeElement as HTMLElement | null
+    setReason('')
+    setReasonError('')
+    setConfirm({ action, scope })
+  }
+
+  function closeConfirm() {
+    setConfirm(null)
+    const el = lastFocus.current
+    if (el && document.body.contains(el)) setTimeout(() => el.focus(), 0)
+  }
+
+  function runConfirm() {
+    if (!confirm) return
+    const { list: all } = scopeOf(confirm.scope)
+    const list = all.filter(b => b.s === NEEDS[confirm.action])
+    let why: string | undefined
+    if (confirm.action === 'wd') {
+      why = reason.trim()
+      if (!why) { setReasonError('Add a reason so others know why it was withdrawn.'); return }
+    }
+    const [step, word]: [Step, string] = {
+      gen: ['draft', 'Generated'], pub: ['pub', 'Published'], del: ['none', 'Deleted'], wd: ['draft', 'Withdrawn'],
+    }[confirm.action] as [Step, string]
+    const now = Date.now()
+    setData(prev => {
+      if (!prev) return prev
+      const next = { ...prev[intake] }
+      list.forEach(b => { next[b.k] = { ...b, s: step, log: [...b.log, { a: word, t: now, by: 'You', note: why }] } })
+      return { ...prev, [intake]: next }
+    })
+    showToast(`${word} ${list.length === 1 ? list[0].bt : plural(list.length, 'batch', 'batches')}`)
+    closeConfirm()
+  }
 
   useEffect(() => {
-    if (draft.intakeGuid || !intakes.length) return
-    set('intakeGuid', (intakes.find(i => i.currentIntake) ?? intakes[intakes.length - 1]).intakeGuid)
-  }, [intakes, draft.intakeGuid])
+    if (!confirm) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closeConfirm() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [confirm])
 
-  const { data: semesters = [], isFetching: semLoading } = useGenerateResultSemesters(draft.programGuid)
-  const { data: units = [], isFetching: unitsLoading } = useGenerateResultCourseUnits(draft.programGuid, draft.semesterGuid)
+  // ── Derived view ──
+  const everything = batches(null, null, true)
+  const counts = tally(everything)
+  const shownCount = batches(null, null).length
+  const readyToPublish = batches(null, null).filter(b => b.s === 'draft').length
+  const filterCount = [filters.pg, filters.sm, filters.bt, filters.st].filter(Boolean).length
 
-  const intake = intakes.find(i => i.intakeGuid === draft.intakeGuid)
-  const intakeLabel = intake ? `${intake.description} (${intake.intakeCode})` : 'the selected intake'
+  const chips: { k: keyof Filters; label: string }[] = []
+  if (filters.pg) chips.push({ k: 'pg', label: filters.pg })
+  if (filters.sm) chips.push({ k: 'sm', label: `Semester ${filters.sm}` })
+  if (filters.bt) chips.push({ k: 'bt', label: filters.bt })
+  if (filters.st) chips.push({ k: 'st', label: LABEL[filters.st] })
 
-  // ── Applied filters (Show Result) ────────────────────────────────────────
-  // The grid, moderation and export use the filters applied with Show
-  // Result — never the half-edited draft — so they act on the rows shown.
-  const [applied, setApplied] = useState<ResultFilters | null>(null)
-  const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(10)
+  const programmeOptions = [{ value: '', label: 'All programmes' }, ...PROG_CODES.map(p => ({ value: p, label: `${p} · ${PROGRAMMES[p].n}` }))]
+  const semesterOptions = filters.pg
+    ? [{ value: '', label: 'All semesters' }, ...semsOf(filters.pg).map(s => ({ value: String(s), label: `Semester ${s}` }))]
+    : [{ value: '', label: 'Choose a programme first' }]
+  const batchOptions = filters.pg && filters.sm
+    ? [{ value: '', label: 'All batches' }, ...PROGRAMMES[filters.pg].s[Number(filters.sm)].b.map(b => ({ value: b, label: b }))]
+    : [{ value: '', label: 'Choose a semester first' }]
+  const statusOptions = [{ value: '', label: 'All statuses' }, ...(['none', 'draft', 'pub'] as Step[]).map(s => ({ value: s, label: LABEL[s] }))]
 
-  // ── Table Search (Results Table Filter) ──────────────────────────────────
-  const [searchInput, setSearchInput] = useState('')
-  const [search, setSearch] = useState('')
+  // ── Pieces ──
+  function statusCell(c: Record<Step, number>, n: number) {
+    if (n === 1) { const s = stepOf(c); return <span className={`gr-pill gr-pill-${s}`}>{LABEL[s]}</span> }
+    return (
+      <div className="gr-st">
+        <div className="gr-st-top">
+          <span><b className="tabular-nums">{c.pub}</b> of <span className="tabular-nums">{n}</span> published</span>
+          {c.draft > 0 && <span className="gr-st-extra tabular-nums">{c.draft} generated</span>}
+        </div>
+        <div className="gr-bar" role="img" aria-label={`${c.pub} published, ${c.draft} generated, ${c.none} not generated`}>
+          {c.pub > 0 && <i className="gr-seg-pub" style={{ width: `${(c.pub / n) * 100}%` }} />}
+          {c.draft > 0 && <i className="gr-seg-draft" style={{ width: `${(c.draft / n) * 100}%` }} />}
+        </div>
+      </div>
+    )
+  }
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      const trimmed = searchInput.trim()
-      if (trimmed !== search) {
-        setSearch(trimmed)
-        setPage(1)
-      }
-    }, 300)
-    return () => clearTimeout(timer)
-  }, [searchInput, search])
+  function actions(scope: string, c: Record<Step, number>, name: string) {
+    if (readOnly) return <div className="gr-acts" />
+    const s = stepOf(c)
+    if (s === 'none') return (
+      <div className="gr-acts">
+        <button type="button" className="btn btn-primary btn-sm" onClick={() => ask('gen', scope)} aria-label={`Generate result for ${name}`}>
+          <i className="lni lni-bolt" aria-hidden="true" /> Generate result
+        </button>
+      </div>
+    )
+    if (s === 'draft') return (
+      <div className="gr-acts">
+        <button type="button" className="btn btn-sm gr-btn-del" onClick={() => ask('del', scope)} aria-label={`Delete result for ${name}`}>
+          <i className="lni lni-trash-can" aria-hidden="true" /> Delete result
+        </button>
+        <button type="button" className="btn btn-primary btn-sm" onClick={() => ask('pub', scope)} aria-label={`Publish result for ${name}`}>
+          <i className="lni lni-eye" aria-hidden="true" /> Publish
+        </button>
+      </div>
+    )
+    return (
+      <div className="gr-acts">
+        <button type="button" className="btn btn-neu btn-sm" onClick={() => ask('wd', scope)} aria-label={`Withdraw result for ${name}`}>
+          <i className="lni lni-reply" aria-hidden="true" /> Withdraw
+        </button>
+      </div>
+    )
+  }
 
-  const draftResult = toFilters(draft)
-  const draftFilters = 'filters' in draftResult ? draftResult.filters : null
-  const filtersChanged = !!applied && (
-    draft.programGuid !== (applied.programGuid || '') ||
-    draft.semesterGuid !== (applied.semesterGuid || '') ||
-    draft.courseUnitGuid !== (applied.courseUnitGuid || '') ||
-    draft.iaOperator !== (applied.iaOperator || '') ||
-    draft.iaValue !== (applied.iaValue !== undefined ? String(applied.iaValue) : '') ||
-    draft.ueOperator !== (applied.ueOperator || '') ||
-    draft.ueValue !== (applied.ueValue !== undefined ? String(applied.ueValue) : '')
+  const toggleBtn = (k: string, label: string) => (
+    <button type="button" className="gr-tg" aria-expanded={open.has(k)} aria-label={`${open.has(k) ? 'Collapse' : 'Expand'} ${label}`} onClick={() => toggle(k)}>
+      <i className="lni lni-chevron-down" aria-hidden="true" />
+    </button>
   )
 
-  function changeIntake(v: string) {
-    set('intakeGuid', v)
-    setApplied(null) // grid belongs to one intake
-    setSearchInput('')
-    setSearch('')
-    setWeightageError(null)
-    setShowWeightageModal(false)
-    setWeightageSearch('')
-    setWeightageComponentFilter('ALL')
-  }
-
-  function showResult() {
-    const r = toFilters(draft)
-    if ('error' in r) { showToast(r.error, 'error'); return }
-    setApplied(r.filters)
-    const term = draft.studentName.trim()
-    setSearchInput(term)
-    setSearch(term)
-    setPage(1)
-  }
-
-  function resetFilters() {
-    setDraft(d => ({ ...d, ...EMPTY_DRAFT }))
-    setSearchInput('')
-    setSearch('')
-    setPage(1)
-    setWeightageError(null)
-    setShowWeightageModal(false)
-    setWeightageSearch('')
-  }
-
-  function handleTableSearchChange(val: string) {
-    setSearchInput(val)
-    setDraft(d => ({ ...d, studentName: val }))
-  }
-
-  function clearSearch() {
-    setSearchInput('')
-    setSearch('')
-    setDraft(d => ({ ...d, studentName: '' }))
-    setPage(1)
-  }
-
-  const effectiveFilters = useMemo<ResultFilters | null>(() => {
-    if (!applied) return null
-    const term = search.trim()
-    return {
-      ...applied,
-      ...(term ? { search: term, studentName: term } : { search: undefined, studentName: undefined }),
-    }
-  }, [applied, search])
-
-  // When filtering by student name, request a larger page size (max 100 allowed by backend)
-  // so that if the backend returns unfiltered rows, client-side filtering can inspect the batch.
-  const isSearchActive = !!search.trim()
-  const fetchPageSize = isSearchActive ? 100 : pageSize
-  const fetchPage = isSearchActive ? 1 : page
-  const resultsQuery = useGeneratedResults(effectiveFilters, fetchPage, fetchPageSize)
-  const rawRows = resultsQuery.data?.items ?? []
-
-  const filteredRows = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    if (!q) return rawRows
-    return rawRows.filter(r =>
-      (r.studentName && r.studentName.toLowerCase().includes(q)) ||
-      (r.studentNum && r.studentNum.toLowerCase().includes(q)) ||
-      (r.programCode && r.programCode.toLowerCase().includes(q)) ||
-      (r.unitCode && r.unitCode.toLowerCase().includes(q)) ||
-      (r.unitName && r.unitName.toLowerCase().includes(q))
-    )
-  }, [rawRows, search])
-
-  const totalCount = isSearchActive ? filteredRows.length : (resultsQuery.data?.totalCount ?? 0)
-  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize))
-
-  // Sliced page rows when client-filtering, or rawRows when server-paginated
-  const rows = useMemo(() => {
-    if (!isSearchActive) return rawRows
-    const start = (page - 1) * pageSize
-    return filteredRows.slice(start, start + pageSize)
-  }, [isSearchActive, rawRows, filteredRows, page, pageSize])
-
-  const searchResults: TableSearchResult[] = useMemo(() => {
-    const q = searchInput.trim().toLowerCase()
-    if (!q || !rawRows.length) return []
-    const seen = new Set<string>()
-    const items: TableSearchResult[] = []
-    for (const r of rawRows) {
-      const primary = r.studentName || r.studentNum || ''
-      if (!primary || seen.has(primary)) continue
-      const match =
-        (r.studentName && r.studentName.toLowerCase().includes(q)) ||
-        (r.studentNum && r.studentNum.toLowerCase().includes(q))
-      if (match) {
-        seen.add(primary)
-        items.push({
-          id: r.examResultGuid,
-          primary,
-          secondary: [r.studentNum, r.programCode, r.unitCode].filter(Boolean).join(' · '),
-        })
-        if (items.length >= 8) break
-      }
-    }
-    return items
-  }, [rawRows, searchInput])
-
-  // ── Actions ──────────────────────────────────────────────────────────────
-  const generateMut = useGenerateResults()
-  const publishMut = usePublishResults()
-  const deleteMut = useDeleteResults()
-  const moderateMut = useApplyModeration()
-  const exportMut = useExportResults()
-  const busy = generateMut.isPending || publishMut.isPending || deleteMut.isPending || moderateMut.isPending
-
-  const [confirm, setConfirm] = useState<ConfirmState>(null)
-  const [generated, setGenerated] = useState<GenerateResultResponse | null>(null)
-  const [weightageError, setWeightageError] = useState<WeightageErrorState | null>(null)
-  const [showWeightageModal, setShowWeightageModal] = useState(false)
-  const [weightageSearch, setWeightageSearch] = useState('')
-  const [weightageComponentFilter, setWeightageComponentFilter] = useState<'ALL' | 'CBT' | 'CW' | 'UE'>('ALL')
-
-  function doGenerate() {
-    if (!draft.intakeGuid) { showToast('Select an Academic Intake.', 'error'); return }
-    setConfirm({
-      title: 'Generate results?',
-      body: <>Results will be generated for <strong>every registered student</strong> of <strong>{intakeLabel}</strong>. The programme, semester and unit filters are not used. This can be done once per intake.</>,
-      confirmLabel: 'Generate',
-      onConfirm: () => generateMut.mutate(draft.intakeGuid, {
-        onSuccess: res => {
-          setWeightageError(null)
-          setShowWeightageModal(false)
-          setGenerated(res)
-          // Show the new results straight away and ensure applied state is updated
-          const term = draft.studentName?.trim() || ''
-          setApplied({
-            intakeGuid: draft.intakeGuid,
-            ...(draft.programGuid ? { programGuid: draft.programGuid } : {}),
-            ...(draft.semesterGuid ? { semesterGuid: draft.semesterGuid } : {}),
-            ...(draft.courseUnitGuid ? { courseUnitGuid: draft.courseUnitGuid } : {}),
-            ...(term ? { studentName: term, search: term } : {}),
-          })
-          setSearchInput(term)
-          setSearch(term)
-          setPage(1)
-        },
-        onError: err => {
-          const msg = errMsg(err, 'Could not generate the results.')
-          const parsed = parseWeightageError(msg)
-          if (parsed && parsed.units.length > 0) {
-            setWeightageError(parsed)
-            setShowWeightageModal(true)
-            showToast(`Weightage is not configured for ${parsed.units.length} course unit(s).`, 'error')
-          } else {
-            showToast(msg, 'error')
-          }
-        },
-      }),
-    })
-  }
-
-  function doPublish(publish: boolean) {
-    if (!draft.intakeGuid) { showToast('Select an Academic Intake.', 'error'); return }
-    setConfirm({
-      title: publish ? 'Publish results to students?' : 'Withdraw results from students?',
-      body: publish
-        ? <>Every result of <strong>{intakeLabel}</strong> becomes visible to students. Published results can&apos;t be deleted until they are withdrawn.</>
-        : <>Students of <strong>{intakeLabel}</strong> will no longer see these results.</>,
-      confirmLabel: publish ? 'Publish' : 'Withdraw',
-      onConfirm: () => publishMut.mutate({ intakeGuid: draft.intakeGuid, publish }, {
-        onSuccess: res => showToast(res.isPublished
-          ? `Result published to students (${res.rowsUpdated.toLocaleString()} rows).`
-          : `Result withdrawn from students (${res.rowsUpdated.toLocaleString()} rows).`, 'success'),
-        onError: err => showToast(errMsg(err, 'Could not update the publish state.'), 'error'),
-      }),
-    })
-  }
-
-  function doDelete() {
-    if (!draft.intakeGuid) { showToast('Select an Academic Intake.', 'error'); return }
-    setConfirm({
-      title: 'Delete generated results?',
-      body: <>All generated results of <strong>{intakeLabel}</strong> will be deleted so they can be generated again, including any moderation applied. Published results can&apos;t be deleted.</>,
-      confirmLabel: 'Delete',
-      danger: true,
-      onConfirm: () => deleteMut.mutate(draft.intakeGuid, {
-        onSuccess: res => showToast(`${res.rowsDeleted.toLocaleString()} result rows deleted.`, 'success'),
-        onError: err => showToast(errMsg(err, 'Could not delete the results.'), 'error'),
-      }),
-    })
-  }
-
-  // ── Moderation ───────────────────────────────────────────────────────────
-  const [modField, setModField] = useState<ModerationField>(1)
-  const [modValue, setModValue] = useState('')
-
-  function doModerate() {
-    if (!effectiveFilters) return
-    if (modValue.trim() === '' || !Number.isInteger(Number(modValue))) { showToast('Please enter Moderation value before proceeding!!', 'error'); return }
-    const value = Number(modValue)
-    const part = modField === 1 ? 'IA' : 'UE'
-    setConfirm({
-      title: `Add ${value} to the ${part} total?`,
-      body: <>Moderation is applied to the <strong>{totalCount.toLocaleString()} row{totalCount === 1 ? '' : 's'}</strong> the current filters show. A total is never raised above 50% of its maximum; rows already at that limit are skipped.</>,
-      confirmLabel: 'Apply moderation',
-      onConfirm: () => moderateMut.mutate({ filters: effectiveFilters, field: modField, value }, {
-        onSuccess: res => {
-          setModValue('')
-          showToast(res.rowsModerated > 0
-            ? `Moderation applied to ${res.rowsModerated.toLocaleString()} of ${res.rowsMatched.toLocaleString()} rows${res.rowsSkipped ? ` (${res.rowsSkipped.toLocaleString()} skipped at the limit)` : ''}.`
-            : 'No rows were changed.', res.rowsModerated > 0 ? 'success' : 'warn')
-        },
-        onError: err => showToast(errMsg(err, 'Could not apply the moderation.'), 'error'),
-      }),
-    })
-  }
-
-  // ── Export ───────────────────────────────────────────────────────────────
-  function doExport() {
-    if (!effectiveFilters) return
-    exportMut.mutate(effectiveFilters, {
-      onSuccess: res => {
-        const a = document.createElement('a')
-        a.href = res.url
-        a.download = `Exam_Result_${intake?.intakeCode ?? ''}.xlsx`
-        a.target = '_blank'
-        a.rel = 'noopener'
-        document.body.appendChild(a)
-        a.click()
-        a.remove()
-      },
-      onError: err => showToast(errMsg(err, 'Could not export the results.'), 'error'),
-    })
-  }
-
-  const programOptions = [{ value: '', label: 'All programmes' }, ...programs.map(p => ({ value: p.programGuid, label: `${p.programName} (${p.programCode})` }))]
-  const semesterOptions = [{ value: '', label: 'All semesters' }, ...semesters.map(s => ({ value: s.semesterGuid, label: s.semName }))]
-  const unitOptions = [{ value: '', label: 'All course units' }, ...units.map(u => ({ value: u.courseUnitGuid, label: `${u.unitCode} - ${u.unitName}` }))]
-
-  return (
-    <>
-      <div className="page active">
-        <div className="pg-hdr">
-          <div>
-            <div className="pg-title">Generate Result</div>
-            <div className="pg-sub">Generate, moderate and publish the exam results of an academic intake</div>
+  // ── Tree ──
+  const tree = PROG_CODES.map(pg => {
+    const pl = batches(pg, null)
+    if (!pl.length) return null
+    const pc = tally(pl)
+    const pOpen = open.has(`p:${pg}`)
+    const sems = semsOf(pg).filter(sm => batches(pg, sm).length)
+    return (
+      <Fragment key={pg}>
+        <div className={`gr-row gr-l0 gr-grid${pOpen ? ' is-open' : ''}`}>
+          <div className="gr-name">
+            {toggleBtn(`p:${pg}`, pg)}
+            <div className="gr-tt">
+              <div className="gr-t1"><span className="gr-code">{pg}</span>{PROGRAMMES[pg].n}</div>
+              <div className="gr-t2">{plural(sems.length, 'semester')} · {plural(pl.length, 'batch', 'batches')}</div>
+            </div>
           </div>
+          <div className="gr-stu tabular-nums">{studentsOf(pl)}</div>
+          {statusCell(pc, pl.length)}
+          {actions(`p:${pg}`, pc, pg)}
         </div>
-
-        {/* Filters */}
-        <div className="card" style={{ padding: 20 }}>
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-            <div className="fg mb-0">
-              <label className="lbl">Academic Intake <span className="req">*</span></label>
-              <SearchSelect
-                placeholder={initLoading ? 'Loading…' : 'Select academic intake'}
-                options={intakes.map(i => ({ value: i.intakeGuid, label: `${i.description} (${i.intakeCode})` }))}
-                value={draft.intakeGuid}
-                onChange={changeIntake}
-                disabled={initLoading}
-              />
-            </div>
-            <div className="fg mb-0">
-              <label className="lbl">Programme</label>
-              <SearchSelect
-                options={programOptions}
-                value={draft.programGuid}
-                onChange={v => setDraft(d => ({ ...d, programGuid: v, semesterGuid: '', courseUnitGuid: '' }))}
-                disabled={initLoading}
-              />
-            </div>
-            <div className="fg mb-0">
-              <label className="lbl">Semester</label>
-              <SearchSelect
-                options={semesterOptions}
-                value={draft.semesterGuid}
-                onChange={v => setDraft(d => ({ ...d, semesterGuid: v, courseUnitGuid: '' }))}
-                disabled={!draft.programGuid || semLoading}
-              />
-            </div>
-            <div className="fg mb-0">
-              <label className="lbl">Course Unit</label>
-              <SearchSelect
-                options={unitOptions}
-                value={draft.courseUnitGuid}
-                onChange={v => set('courseUnitGuid', v)}
-                disabled={!draft.semesterGuid || unitsLoading}
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_1.2fr_auto] gap-4 items-end mt-4">
-            {(['ia', 'ue'] as const).map(k => (
-              <div className="fg mb-0" key={k}>
-                <label className="lbl">{k === 'ia' ? 'IA Total' : 'UE Total'}</label>
-                <div className="flex gap-2">
-                  <div style={{ width: 96, flexShrink: 0 }}>
-                    <SearchSelect
-                      options={OPERATOR_OPTIONS}
-                      value={draft[`${k}Operator`]}
-                      onChange={v => setDraft(d => ({ ...d, [`${k}Operator`]: v as '' | ResultOperator, ...(v === '' ? { [`${k}Value`]: '' } : {}) }))}
-                    />
+        {pOpen && sems.map(sm => {
+          const sl = batches(pg, sm)
+          const sc = tally(sl)
+          const sKey = `s:${pg}|${sm}`
+          const sOpen = open.has(sKey)
+          return (
+            <Fragment key={sKey}>
+              <div className="gr-row gr-l1 gr-grid">
+                <div className="gr-name">
+                  {toggleBtn(sKey, `Semester ${sm}`)}
+                  <div className="gr-tt">
+                    <div className="gr-t1">Semester {sm}</div>
+                    <div className="gr-t2">{plural(sl.length, 'batch', 'batches')} · {plural(PROGRAMMES[pg].s[sm].u, 'course unit')}</div>
                   </div>
-                  <input
-                    className="ctrl"
-                    type="number"
-                    step={1}
-                    placeholder={draft[`${k}Operator`] ? 'Marks' : 'Any total'}
-                    value={draft[`${k}Value`]}
-                    disabled={!draft[`${k}Operator`]}
-                    onChange={e => set(`${k}Value`, e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') showResult() }}
-                  />
                 </div>
+                <div className="gr-stu tabular-nums">{studentsOf(sl)}</div>
+                {statusCell(sc, sl.length)}
+                {actions(sKey, sc, `${pg} semester ${sm}`)}
               </div>
-            ))}
-            <div className="fg mb-0">
-              <label className="lbl">Student Name / Number</label>
-              <input
-                className="ctrl"
-                placeholder="Search by student name or number…"
-                value={draft.studentName}
-                onChange={e => set('studentName', e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') showResult() }}
-              />
-            </div>
-            <div className="flex gap-2">
-              <button className="btn btn-neu" onClick={resetFilters}><i className="lni lni-reload"></i> Reset</button>
-              <button className="btn btn-primary" onClick={showResult} disabled={!draft.intakeGuid}><i className="lni lni-search-alt"></i> Show Result</button>
-            </div>
-          </div>
-        </div>
+              {sOpen && sl.map(b => {
+                const last = b.log[b.log.length - 1]
+                const meta = last ? `${last.a} ${fmtWhen(last.t)} · ${last.by}` : 'Marks entered, ready to generate'
+                return (
+                  <div key={b.k} className="gr-row gr-l2 gr-grid">
+                    <div className="gr-name">
+                      <div className="gr-tt">
+                        <div className="gr-t1">{b.bt}</div>
+                        <div className="gr-t2" title={last?.note ? `${meta} · “${last.note}”` : meta}>
+                          {meta}{last?.note && <> · <q>{last.note}</q></>}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="gr-stu tabular-nums">{b.students}</div>
+                    {statusCell(tally([b]), 1)}
+                    {actions(`b:${b.k}`, tally([b]), `${b.bt}, semester ${b.sm}`)}
+                  </div>
+                )
+              })}
+            </Fragment>
+          )
+        })}
+      </Fragment>
+    )
+  })
 
-        {/* Missing weightage banner */}
-{weightageError && (
-  <div className="card p-4 mb-4 border-red-200 bg-red-50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-    <div className="flex items-start gap-3">
-      <i className="lni lni-warning text-red-600 text-xl flex-shrink-0 mt-0.5" />
-      <div>
-        <span className="font-bold text-red-800 text-sm">
-          Weightage not configured for {weightageError.units.length} course unit(s)
-        </span>
-        <p className="text-xs text-red-700 mt-0.5">
-          Results cannot be generated for <strong>{intakeLabel}</strong> until CBT, Coursework, and UE weightages are configured.
-        </p>
-      </div>
-    </div>
-    <button
-      type="button"
-      className="btn btn-neu btn-sm text-red-700 border-red-300 hover:bg-red-100 flex items-center gap-1.5 flex-shrink-0 self-start sm:self-center"
-      onClick={() => setShowWeightageModal(true)}
-    >
-      <i className="lni lni-list"></i> View Course Units ({weightageError.units.length})
-    </button>
-  </div>
-)}
-
-{/* Actions */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
-          <div className="card" style={{ padding: 20, marginBottom: 0 }}>
-            <div className="card-title mb-1"><span className="ctitle-icon"><i className="lni lni-cogs"></i></span> Intake Actions</div>
-            <div className="text-xs text-g500 mb-4">
-              Applies to the whole of <strong>{intakeLabel}</strong>; the programme, semester, unit and total filters are not used.
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {permissions.generate && (
-                <button className="btn btn-primary" onClick={doGenerate} disabled={busy || !draft.intakeGuid}>
-                  <i className="lni lni-bolt"></i> {generateMut.isPending ? 'Generating…' : 'Generate Result'}
-                </button>
-              )}
-              {permissions.publish && (
-                <>
-                  <button className="btn btn-neu" onClick={() => doPublish(true)} disabled={busy || !draft.intakeGuid}>
-                    <i className="lni lni-eye"></i> Publish
-                  </button>
-                  <button className="btn btn-neu" onClick={() => doPublish(false)} disabled={busy || !draft.intakeGuid}>
-                    <i className="lni lni-close"></i> Withdraw
-                  </button>
-                </>
-              )}
-              {permissions.delete && (
-                <button className="btn btn-neu" style={{ color: 'var(--red)' }} onClick={doDelete} disabled={busy || !draft.intakeGuid}>
-                  <i className="lni lni-trash-can"></i> {deleteMut.isPending ? 'Deleting…' : 'Delete Result'}
-                </button>
-              )}
-            </div>
-          </div>
-
-          {permissions.moderate && (
-          <div className="card" style={{ padding: 20, marginBottom: 0 }}>
-            <div className="card-title mb-1"><span className="ctitle-icon"><i className="lni lni-pencil-alt"></i></span> Apply Moderation</div>
-            <div className="text-xs text-g500 mb-4">
-              Adds marks to the rows the results below show, up to 50% of the maximum. A negative value lowers the total.
-            </div>
-            <div className="flex flex-wrap items-end gap-4">
-              <div>
-                <label className="lbl">Add to</label>
-                <div className="flex gap-4 mt-2">
-                  {([1, 2] as const).map(f => (
-                    <label key={f} className="flex items-center gap-2 text-sm cursor-pointer">
-                      <input type="radio" name="modField" checked={modField === f} onChange={() => setModField(f)} />
-                      {f === 1 ? 'IA Total' : 'UE Total'}
-                    </label>
-                  ))}
-                </div>
-              </div>
-              <div style={{ width: 120 }}>
-                <label className="lbl">Marks</label>
-                <input className="ctrl" type="number" step={1} placeholder="e.g. 5" value={modValue} onChange={e => setModValue(e.target.value)} />
-              </div>
-              <span title={!applied ? 'Click Show Result first.' : filtersChanged ? 'The filters changed. Click Show Result first.' : undefined}>
-                <button className="btn btn-primary" onClick={doModerate} disabled={busy || !applied || filtersChanged || totalCount === 0}>
-                  <i className="lni lni-checkmark"></i> {moderateMut.isPending ? 'Applying…' : 'Apply Moderation'}
-                </button>
-              </span>
-            </div>
-            {filtersChanged && (
-              <div className="text-xs mt-3" style={{ color: 'var(--amber)' }}>
-                <i className="lni lni-warning"></i> The filters changed since the results were shown. Click <strong>Show Result</strong> so moderation acts on the rows you see.
-              </div>
+  // ── Confirm dialog content ──
+  let dialog: React.ReactNode = null
+  if (confirm) {
+    const { label, list: all, kind } = scopeOf(confirm.scope)
+    const list = all.filter(b => b.s === NEEDS[confirm.action])
+    const one = list.length === 1
+    const nb = plural(list.length, 'batch', 'batches')
+    const skipped = all.length - list.length
+    const T = {
+      gen: { icon: 'lni-bolt', title: one ? 'Generate result?' : `Generate results for ${nb}?`, body: 'IA and UE totals are worked out from the marks entered. Nothing is shown to students until you publish.', ok: 'Generate result' },
+      pub: { icon: 'lni-eye', title: one ? 'Publish result?' : `Publish ${nb}?`, body: 'Students will see these results on the Student Portal. To make changes later you’ll need to withdraw them.', ok: 'Publish' },
+      del: { icon: 'lni-trash-can', title: one ? 'Delete result?' : `Delete results for ${nb}?`, body: 'The generated result is removed. Marks entered by lecturers stay as they are, and you can generate again.', ok: 'Delete result' },
+      wd: { icon: 'lni-reply', title: one ? 'Withdraw result?' : `Withdraw ${nb}?`, body: 'Students will no longer see these results. Afterwards you can publish again or delete the result.', ok: 'Withdraw' },
+    }[confirm.action]
+    const danger = confirm.action === 'del'
+    dialog = (
+      <div className="modal-overlay open">
+        <div className="gr-dlg" role="dialog" aria-modal="true" aria-labelledby="gr-dlg-title">
+          <div className={`gr-dlg-ico${danger ? ' is-danger' : ''}`}><i className={`lni ${T.icon}`} aria-hidden="true" /></div>
+          <h3 id="gr-dlg-title" className="gr-dlg-title">{T.title}</h3>
+          <p className="gr-dlg-body">{T.body}</p>
+          <div className="gr-box">
+            <div className="gr-box-hdr"><b>{label}</b><span className="tabular-nums">{kind === 'batch' ? plural(list[0].students, 'student') : nb}</span></div>
+            {kind !== 'batch' && (
+              <ul>
+                {list.map(b => (
+                  <li key={b.k}>
+                    <span>{kind === 'intake' ? `${b.pg} · Sem ${b.sm} · ` : kind === 'programme' ? `Semester ${b.sm} · ` : ''}{b.bt}</span>
+                    <span className="tabular-nums">{b.students} students</span>
+                  </li>
+                ))}
+              </ul>
             )}
           </div>
-          )}
-        </div>
-
-        {/* Results */}
-        <div className="card">
-          <div className="card-hdr">
-            <div className="card-title">
-              <span className="ctitle-icon"><i className="lni lni-bar-chart"></i></span> Results
-              {applied && resultsQuery.data && <span className="badge badge-grey" style={{ marginLeft: 8 }}>{totalCount.toLocaleString()}</span>}
+          {skipped > 0 && (
+            <div className="gr-note">
+              {plural(skipped, 'other batch', 'other batches')} in this {kind === 'intake' ? 'view' : kind} {skipped === 1 ? 'is' : 'are'} at a different step and won’t change.
             </div>
-            <div className="flex gap-2 items-center flex-wrap">
-              {filtersChanged && <span className="text-xs" style={{ color: 'var(--amber)' }}>Filters changed — click Show Result</span>}
-              <div className="flex items-center gap-1.5">
-                <TableSearch
-                  className="w-56 sm:w-64"
-                  placeholder="Filter by student name…"
-                  value={searchInput}
-                  onChange={handleTableSearchChange}
-                  disabled={!applied}
-                  onEnter={() => { setSearch(searchInput.trim()); setPage(1) }}
-                  results={searchResults.length > 0 ? searchResults : undefined}
-                  onSelect={r => {
-                    handleTableSearchChange(r.primary)
-                    setSearch(r.primary)
-                    setPage(1)
-                  }}
-                />
-                {search && (
+          )}
+          {confirm.action === 'wd' && (
+            <div className="fg mb-0">
+              <label className="lbl" htmlFor="gr-reason">Reason for withdrawal <span className="req">*</span></label>
+              <textarea
+                id="gr-reason"
+                className="ctrl"
+                rows={3}
+                autoFocus
+                placeholder="e.g. CA marks re-entered for CSC1202"
+                value={reason}
+                onChange={e => { setReason(e.target.value); if (reasonError) setReasonError('') }}
+                style={reasonError ? { borderColor: 'var(--red)' } : undefined}
+              />
+              <p className="field-err" aria-live="polite" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4, minHeight: 18 }}>{reasonError}</p>
+            </div>
+          )}
+          <div className="gr-dlg-foot">
+            <button type="button" className="btn btn-neu" onClick={closeConfirm}>Cancel</button>
+            <button type="button" className={`btn ${danger ? 'btn-danger' : 'btn-primary'}`} onClick={runConfirm} autoFocus={confirm.action !== 'wd'}>{T.ok}</button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const pct = everything.length ? Math.round((counts.pub / everything.length) * 100) : 0
+  const seg = (s: Step) => counts[s] > 0 && <i className={`gr-seg-${s}`} style={{ width: `${(counts[s] / everything.length) * 100}%` }} title={`${counts[s]} ${LABEL[s].toLowerCase()}`} />
+  const tab = (v: '' | Step, label: string, n: number) => (
+    <button type="button" className="gr-tab" aria-pressed={filters.st === v} onClick={() => setFilter('st', filters.st === v && v ? '' : v)}>
+      {v && <i className={`gr-dot gr-dot-${v}`} aria-hidden="true" />}{label}<span className="gr-tab-n tabular-nums">{n}</span>
+    </button>
+  )
+
+  return (
+    <div className="page active" id="page-generate-result">
+      <div className="pg-hdr">
+        <div>
+          <div className="pg-title">Generate Result</div>
+          <div className="pg-sub">Generate, publish and withdraw exam results by programme, semester or batch.</div>
+        </div>
+        <div className="gr-intake">
+          <label className="lbl" htmlFor="gr-intake">
+            Academic intake
+            <span className={`badge ${readOnly ? 'badge-grey' : 'badge-green'}`} style={{ marginLeft: 8, padding: '1px 8px' }}>{readOnly ? 'Past' : 'Current'}</span>
+          </label>
+          <SearchSelect
+            options={INTAKES.map(i => ({ value: i.id, label: `${i.name} (${i.id})${i.id === CURRENT_INTAKE ? ' · Current' : ''}` }))}
+            value={intake}
+            onChange={changeIntake}
+          />
+        </div>
+      </div>
+
+      {!data ? (
+        <div className="card"><div className="text-g400 text-center" style={{ padding: 32 }}>Loading results…</div></div>
+      ) : (
+        <>
+          {/* Summary */}
+          <section className="card gr-sum" aria-label="Publishing progress">
+            <div>
+              <div className="gr-sum-k">Publishing progress</div>
+              <div className="gr-sum-v">
+                <b className="tabular-nums">{counts.pub}</b>
+                <span>of {plural(everything.length, 'batch', 'batches')} published</span>
+                <span className="gr-sum-pct tabular-nums">{pct}%</span>
+              </div>
+            </div>
+            <div className="gr-tabs" role="group" aria-label="Show batches by status">
+              {tab('', 'All', everything.length)}
+              {tab('none', 'Not generated', counts.none)}
+              {tab('draft', 'Generated', counts.draft)}
+              {tab('pub', 'Published', counts.pub)}
+            </div>
+            <div className="gr-sum-bar" role="img" aria-label={`${counts.pub} published, ${counts.draft} generated, ${counts.none} not generated`}>
+              {seg('pub')}{seg('draft')}{seg('none')}
+            </div>
+            <div className="gr-legend">
+              <span><i className="gr-dot gr-dot-pub" /><b className="tabular-nums">{studentsOf(everything.filter(b => b.s === 'pub'))}</b> students can see results</span>
+              <span><i className="gr-dot gr-dot-draft" /><b className="tabular-nums">{studentsOf(everything.filter(b => b.s === 'draft'))}</b> waiting on publish</span>
+              <span><i className="gr-dot gr-dot-none" /><b className="tabular-nums">{studentsOf(everything.filter(b => b.s === 'none'))}</b> waiting on generate</span>
+            </div>
+          </section>
+
+          {/* Results tree */}
+          <section className={`card gr-list${readOnly ? ' is-readonly' : ''}`} aria-labelledby="gr-list-title">
+            <div className="gr-lh">
+              <div className="gr-lh-left">
+                <h2 id="gr-list-title" className="card-title">Results <span className="badge badge-grey tabular-nums">{plural(shownCount, 'batch', 'batches')}</span></h2>
+                <button
+                  ref={filterBtnRef}
+                  type="button"
+                  className={`btn btn-neu btn-sm${panelOpen ? ' gr-on' : ''}`}
+                  aria-expanded={panelOpen}
+                  aria-controls="gr-filters"
+                  onClick={() => setPanelOpen(o => !o)}
+                >
+                  <i className="lni lni-funnel" aria-hidden="true" /> Filters
+                  {filterCount > 0 && <span className="gr-fn tabular-nums">{filterCount}</span>}
+                </button>
+              </div>
+              <div className="gr-lh-right">
+                <button type="button" className="btn btn-neu btn-sm gr-quiet" onClick={() => (allOpen ? setOpen(new Set()) : expandAll())}>
+                  {allOpen ? 'Collapse all' : 'Expand all'}
+                </button>
+                {!readOnly && (
                   <button
-                    className="btn btn-neu btn-sm"
-                    title="Clear search"
-                    onClick={clearSearch}
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    disabled={!readyToPublish}
+                    title={readyToPublish ? undefined : 'Nothing is generated and waiting to publish'}
+                    onClick={() => ask('pub', 'a:')}
                   >
-                    <i className="lni lni-close"></i>
+                    <i className="lni lni-eye" aria-hidden="true" /> Publish all
                   </button>
                 )}
               </div>
-              {permissions.export && (
-                <button className="btn btn-neu btn-sm" onClick={doExport} disabled={!applied || totalCount === 0 || exportMut.isPending}>
-                  <i className="lni lni-download"></i> {exportMut.isPending ? 'Exporting…' : 'Export to Excel'}
-                </button>
+
+              {panelOpen && (
+                <div ref={panelRef} id="gr-filters" className="gr-fpanel" role="dialog" aria-label="Filters">
+                  <h3>Filter results</h3>
+                  <div className="gr-fgrid">
+                    <div className="fg mb-0"><label className="lbl">Programme</label>
+                      <SearchSelect options={programmeOptions} value={filters.pg} onChange={v => setFilter('pg', v)} /></div>
+                    <div className="fg mb-0"><label className="lbl">Semester</label>
+                      <SearchSelect options={semesterOptions} value={filters.sm} onChange={v => setFilter('sm', v)} disabled={!filters.pg} /></div>
+                    <div className="fg mb-0"><label className="lbl">Batch</label>
+                      <SearchSelect options={batchOptions} value={filters.bt} onChange={v => setFilter('bt', v)} disabled={!filters.sm} /></div>
+                    <div className="fg mb-0"><label className="lbl">Status</label>
+                      <SearchSelect options={statusOptions} value={filters.st} onChange={v => setFilter('st', v as '' | Step)} /></div>
+                  </div>
+                  <div className="gr-pfoot">
+                    <button type="button" className="btn btn-neu btn-sm gr-quiet" onClick={() => setFilters(NO_FILTERS)}>Clear all</button>
+                    <button type="button" className="btn btn-primary btn-sm" onClick={() => { setPanelOpen(false); filterBtnRef.current?.focus() }}>Show results</button>
+                  </div>
+                </div>
               )}
             </div>
-          </div>
 
-          {!applied ? (
-            <div className="empty">
-              <div className="empty-icon"><i className="lni lni-search-alt"></i></div>
-              <div className="empty-title">No results shown</div>
-              <div className="empty-sub">Choose the filters and click <strong>Show Result</strong>.</div>
-            </div>
-          ) : resultsQuery.isError ? (
-            <div className="empty">
-              <div className="empty-icon"><i className="lni lni-warning"></i></div>
-              <div className="empty-title">Couldn&apos;t load results</div>
-              <div className="empty-sub">{errMsg(resultsQuery.error, 'Please try again.')}</div>
-              <button className="btn btn-neu btn-sm mt-3" onClick={() => resultsQuery.refetch()}><i className="lni lni-reload"></i> Retry</button>
-            </div>
-          ) : (
-            <ScrollTable className="no-sticky-col">
-              <table>
-                <thead>
-                  <tr>
-                    <th style={{ textAlign: 'left', width: 48 }}>#</th>
-                    <th>Student</th>
-                    <th>Programme</th>
-                    <th style={{ textAlign: 'center' }}>Sem</th>
-                    <th>Course Unit</th>
-                    <th style={{ textAlign: 'right' }} title="Mid-semester class test">CT</th>
-                    <th style={{ textAlign: 'right' }} title="Coursework">CW</th>
-                    <th style={{ textAlign: 'right' }} title="Continuous assessment">CA</th>
-                    <th style={{ textAlign: 'right' }} title="Last IA moderation applied">IA Mod</th>
-                    <th style={{ textAlign: 'right' }}>IA Total</th>
-                    <th style={{ textAlign: 'right' }}>UE</th>
-                    <th style={{ textAlign: 'right' }} title="UE practical">UE Pr.</th>
-                    <th style={{ textAlign: 'right' }} title="Last UE moderation applied">UE Mod</th>
-                    <th style={{ textAlign: 'right' }}>UE Total</th>
-                  </tr>
-                </thead>
-                <tbody style={{ opacity: resultsQuery.isFetching && !resultsQuery.isLoading ? 0.6 : 1 }}>
-                  {resultsQuery.isLoading ? (
-                    <TableLoadingState colSpan={14} title="Loading results..." />
-                  ) : rows.length === 0 ? (
-                    <EmptyState
-                      colSpan={14}
-                      title={isSearchActive ? 'No matching students found' : 'No results'}
-                      subtitle={
-                        isSearchActive
-                          ? `No results match the student name or number "${search}". Try adjusting the filter or clearing it.`
-                          : applied.programGuid || applied.semesterGuid || applied.courseUnitGuid || applied.iaOperator || applied.ueOperator
-                          ? 'No results match the selected filters.'
-                          : `No results have been generated for ${intakeLabel} yet. Use Generate Result.`
-                      }
-                      hasFilters={isSearchActive || !!applied.programGuid || !!applied.semesterGuid || !!applied.courseUnitGuid || !!applied.iaOperator || !!applied.ueOperator}
-                      onClearFilters={
-                        isSearchActive
-                          ? clearSearch
-                          : applied.programGuid || applied.semesterGuid || applied.courseUnitGuid || applied.iaOperator || applied.ueOperator
-                          ? () => { resetFilters(); showResult() }
-                          : undefined
-                      }
-                    />
-                  ) : (
-                    rows.map((r, i) => (
-                      <tr key={r.examResultGuid}>
-                        <td className="text-g500" style={{ textAlign: 'left' }}>{(page - 1) * pageSize + i + 1}</td>
-                        <td>
-                          <div style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{r.studentName ?? '—'}</div>
-                          <div className="font-mono" style={{ fontSize: 11.5, color: 'var(--g500)' }}>{r.studentNum ?? '—'}</div>
-                        </td>
-                        <td className="font-mono" style={{ fontSize: 12.5 }}>{r.programCode ?? '—'}</td>
-                        <td style={{ textAlign: 'center' }}>{r.semCode ?? '—'}</td>
-                        <td style={{ maxWidth: 240 }}>
-                          <div className="font-mono font-semibold" style={{ fontSize: 12.5 }}>{r.unitCode ?? '—'}</div>
-                          <div className="truncate" style={{ fontSize: 11.5, color: 'var(--g500)' }} title={r.unitName ?? undefined}>{r.unitName ?? '—'}</div>
-                        </td>
-                        <td className="font-mono" style={{ textAlign: 'right' }}>{fmt(r.midSem)}</td>
-                        <td className="font-mono" style={{ textAlign: 'right' }}>{fmt(r.cw1)}</td>
-                        <td className="font-mono" style={{ textAlign: 'right' }}>{fmt(r.cw2)}</td>
-                        <td className="font-mono" style={{ textAlign: 'right', color: r.iaMod ? 'var(--b700)' : undefined }}>{r.iaMod ? `+${fmt(r.iaMod)}` : '—'}</td>
-                        <td className="font-mono" style={{ textAlign: 'right', whiteSpace: 'nowrap' }}><strong>{fmt(r.iaTotal)}</strong><span className="text-g400"> / {fmt(r.iaMax)}</span></td>
-                        <td className="font-mono" style={{ textAlign: 'right' }}><UeCell value={r.ue} /></td>
-                        <td className="font-mono" style={{ textAlign: 'right' }}><UeCell value={r.uePractical} /></td>
-                        <td className="font-mono" style={{ textAlign: 'right', color: r.ueMod ? 'var(--b700)' : undefined }}>{r.ueMod ? `+${fmt(r.ueMod)}` : '—'}</td>
-                        <td className="font-mono" style={{ textAlign: 'right', whiteSpace: 'nowrap' }}><strong>{fmt(r.ueTotal)}</strong><span className="text-g400"> / {fmt(r.ueMax)}</span></td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </ScrollTable>
-          )}
-
-          {applied && !resultsQuery.isError && totalCount > 0 && (
-            <div className="flex items-center justify-between flex-wrap gap-2">
-              <label className="flex items-center gap-2 text-sm text-g600" style={{ paddingLeft: 16 }}>
-                Show
-                <select className="ctrl" style={{ width: 80, height: 32 }} value={pageSize} onChange={e => { setPageSize(Number(e.target.value)); setPage(1) }}>
-                  {PAGE_SIZES.map(n => <option key={n} value={n}>{n}</option>)}
-                </select>
-                rows
-              </label>
-              <div style={{ flex: 1 }}>
-                <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="results" onPageChange={setPage} />
+            {chips.length > 0 && (
+              <div className="gr-chips">
+                {chips.map(c => (
+                  <span key={c.k} className="gr-chip">{c.label}
+                    <button type="button" aria-label={`Remove filter ${c.label}`} onClick={() => setFilter(c.k, '' as never)}>&times;</button>
+                  </span>
+                ))}
+                {chips.length > 1 && <button type="button" className="btn btn-neu btn-sm gr-quiet" onClick={() => setFilters(NO_FILTERS)}>Clear all</button>}
               </div>
-            </div>
-          )}
-        </div>
-      </div>
+            )}
 
-      {/* Confirm dialog */}
-      {confirm && (
-        <div className="perm-delete-overlay" style={{ position: 'fixed', zIndex: 600 }} onClick={() => setConfirm(null)}>
-          <div className="perm-delete-card tab-panel-in" onClick={e => e.stopPropagation()}>
-            <div className="perm-delete-icon" style={confirm.danger ? undefined : { background: 'var(--b50)', color: 'var(--b700)' }}>
-              <i className={`lni ${confirm.danger ? 'lni-trash-can' : 'lni-question-circle'}`}></i>
+            <div className="gr-cols gr-grid" aria-hidden="true">
+              <span>Programme / Semester / Batch</span><span>Students</span><span>Status</span><span className="gr-r">{readOnly ? '' : 'Actions'}</span>
             </div>
-            <div className="perm-delete-title">{confirm.title}</div>
-            <div className="perm-delete-sub">{confirm.body}</div>
-            <div className="perm-delete-actions">
-              <button className="btn btn-neu" onClick={() => setConfirm(null)}>Cancel</button>
-              <button
-                className={`btn ${confirm.danger ? 'btn-danger' : 'btn-primary'}`}
-                onClick={() => { const fn = confirm.onConfirm; setConfirm(null); fn() }}
-              >
-                {confirm.confirmLabel}
-              </button>
+            <div className="gr-tree">
+              {shownCount > 0 ? tree : (
+                <div className="gr-empty">
+                  <b>No batches match these filters</b>
+                  Try removing a filter to see more results.
+                  <div><button type="button" className="btn btn-neu btn-sm" onClick={() => setFilters(NO_FILTERS)}>Clear filters</button></div>
+                </div>
+              )}
             </div>
-          </div>
-        </div>
+          </section>
+        </>
       )}
 
-      {/* Generate summary */}
-      {generated && (
-        <div className="modal-overlay open">
-          <div className="modal modal-flex" style={{ maxWidth: 620, borderRadius: 12, height: 'auto', maxHeight: '85vh' }} onClick={e => e.stopPropagation()}>
-            <div className="modal-hdr modal-hdr-blue" style={{ display: 'flex', alignItems: 'center', padding: '16px 20px' }}>
-              <div className="modal-title text-white font-medium text-base" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <i className={`lni ${generated.rowsGenerated > 0 ? 'lni-checkmark-circle' : 'lni-warning'}`} style={{ fontSize: 18 }}></i>
-                {generated.rowsGenerated > 0 ? 'Result generated successfully' : 'No results were generated'}
-              </div>
-              <button className="modal-close text-white hover:text-white/80 transition-colors" onClick={() => setGenerated(null)} style={{ marginLeft: 'auto', background: 'transparent', border: 'none', cursor: 'pointer' }}>
-                <i className="lni lni-close" style={{ fontSize: 18 }}></i>
-              </button>
-            </div>
-            <div className="modal-scroll p-6 bg-white flex-1 overflow-y-auto">
-              <div className="grid grid-cols-3 gap-3 mb-5">
-                {[['Rows generated', generated.rowsGenerated], ['Students', generated.studentCount], ['Course units', generated.unitCount]].map(([label, n]) => (
-                  <div key={label} className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-center">
-                    <div className="text-2xl font-bold text-slate-900">{Number(n).toLocaleString()}</div>
-                    <div className="text-xs text-g500 mt-1">{label}</div>
-                  </div>
-                ))}
-              </div>
-              {generated.warnings.length > 0 ? (
-                <>
-                  <div className="text-sm font-semibold text-slate-800 mb-2 flex items-center gap-2">
-                    <i className="lni lni-warning" style={{ color: 'var(--amber)' }}></i> {generated.warnings.length} warning{generated.warnings.length === 1 ? '' : 's'}
-                  </div>
-                  <div className="text-xs text-g500 mb-3">These did not stop the generation. Check the affected units&apos; settings.</div>
-                  <div className="flex flex-col gap-2">
-                    {generated.warnings.map((w, i) => {
-                      const t = warningText(w)
-                      return (
-                        <div key={i} className="rounded-lg px-4 py-3 text-sm" style={{ background: 'var(--amber-bg)', border: '1px solid var(--amber-bd)' }}>
-                          {t.unit && <div className="font-semibold text-slate-800">{t.unit}{t.rows !== null && <span className="font-normal text-g500"> · {t.rows} row{t.rows === 1 ? '' : 's'}</span>}</div>}
-                          <div className="text-slate-700">{t.message}</div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </>
-              ) : (
-                <div className="info-box"><i className="lni lni-checkmark-circle"></i><span>No warnings. Review the results, apply any moderation, then publish them to students.</span></div>
-              )}
-              <div className="flex justify-end mt-6 pt-5 border-t border-slate-200">
-                <button className="btn btn-primary" onClick={() => setGenerated(null)}>Done</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Weightage validation modal */}
-{showWeightageModal && weightageError && (
-  <div className="modal-overlay open" onClick={() => setShowWeightageModal(false)} style={{ zIndex: 600 }}>
-    <div
-      className="modal modal-flex"
-      style={{ maxWidth: 720, borderRadius: 12, height: 'auto', maxHeight: '88vh' }}
-      onClick={e => e.stopPropagation()}
-    >
-            <div
-        className="modal-hdr"
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          padding: '16px 20px',
-          background: '#fef2f2',
-          borderBottom: '1px solid #fee2e2',
-          borderTopLeftRadius: 12,
-          borderTopRightRadius: 12,
-        }}
-      >
-        <div className="modal-title font-semibold text-base flex items-center gap-2.5" style={{ color: "#991b1b" }}>
-          <span style={{ width: 28, height: 28, borderRadius: "50%", background: "#fee2e2", display: "flex", alignItems: "center", justifyContent: "center", color: "#dc2626" }}>
-            <i className="lni lni-warning" style={{ fontSize: 16 }}></i>
-          </span>
-          <span>Weightage Configuration Required (CBT, CW, UE)</span>
-        </div>
-        <button
-          type="button"
-          className="modal-close transition-colors ml-auto text-slate-400 hover:text-slate-600"
-          onClick={() => setShowWeightageModal(false)}
-          style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 18 }}
-          aria-label="Close"
-        >
-          <i className="lni lni-close"></i>
-        </button>
-      </div>
-
-      <div className="p-6 bg-white flex-1 overflow-y-auto">
-        {/* Guidance and Component Count Chips */}
-        <div className="p-3.5 mb-4 rounded-lg bg-red-50 border border-red-200 text-red-800 text-xs flex items-start gap-2.5">
-          <i className="lni lni-information text-red-600 text-base mt-0.5 flex-shrink-0" />
-          <div className="flex-1">
-            <p className="font-semibold mb-1">
-              Weightage missing for {weightageError.units.length} course unit(s) in {intakeLabel}
-            </p>
-            <p className="text-red-700 leading-relaxed mb-2">
-              Results cannot be generated until each course unit has its <strong>CBT</strong>, <strong>CW (Coursework)</strong>, and <strong>UE (University Exam)</strong> weightage set (totaling 100%).
-            </p>
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-[11px] text-red-900 font-medium">Missing across units:</span>
-              {weightageError.totalCbtMissing > 0 && (
-                <span className="badge badge-red font-bold text-[11px] px-2 py-0.5">
-                  CBT: {weightageError.totalCbtMissing} unit(s)
-                </span>
-              )}
-              {weightageError.totalCwMissing > 0 && (
-                <span className="badge badge-amber font-bold text-[11px] px-2 py-0.5" style={{ background: "#fef3c7", color: "#92400e", border: "1px solid #fde68a" }}>
-                  CW: {weightageError.totalCwMissing} unit(s)
-                </span>
-              )}
-              {weightageError.totalUeMissing > 0 && (
-                <span className="badge badge-indigo font-bold text-[11px] px-2 py-0.5" style={{ background: "#ede9fe", color: "#5b21b6", border: "1px solid #ddd6fe" }}>
-                  UE: {weightageError.totalUeMissing} unit(s)
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Filter Bar: Search + Component Tabs */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mb-3">
-          <div className="flex-1">
-            <input
-              type="text"
-              className="ctrl text-xs w-full"
-              placeholder="Filter by course code or name…"
-              value={weightageSearch}
-              onChange={e => setWeightageSearch(e.target.value)}
-            />
-          </div>
-          <div className="pc-tabs flex-shrink-0" style={{ marginBottom: 0, padding: 3 }}>
-            <button
-              type="button"
-              className={`pc-tab-btn ${weightageComponentFilter === "ALL" ? "active" : ""}`}
-              style={{ padding: "4px 10px", fontSize: 11 }}
-              onClick={() => setWeightageComponentFilter("ALL")}
-            >
-              All ({weightageError.units.length})
-            </button>
-            <button
-              type="button"
-              className={`pc-tab-btn ${weightageComponentFilter === "CBT" ? "active" : ""}`}
-              style={{ padding: "4px 10px", fontSize: 11 }}
-              onClick={() => setWeightageComponentFilter("CBT")}
-            >
-              CBT ({weightageError.totalCbtMissing})
-            </button>
-            <button
-              type="button"
-              className={`pc-tab-btn ${weightageComponentFilter === "CW" ? "active" : ""}`}
-              style={{ padding: "4px 10px", fontSize: 11 }}
-              onClick={() => setWeightageComponentFilter("CW")}
-            >
-              CW ({weightageError.totalCwMissing})
-            </button>
-            <button
-              type="button"
-              className={`pc-tab-btn ${weightageComponentFilter === "UE" ? "active" : ""}`}
-              style={{ padding: "4px 10px", fontSize: 11 }}
-              onClick={() => setWeightageComponentFilter("UE")}
-            >
-              UE ({weightageError.totalUeMissing})
-            </button>
-          </div>
-        </div>
-
-        {/* Table with explicitly highlighted CBT, CW, UE pills */}
-        <div className="border border-slate-200 rounded-lg max-h-[340px] overflow-auto">
-          <table className="tbl w-full text-xs" style={{ width: "100%", minWidth: 620, tableLayout: "fixed" }}>
-            <thead className="bg-slate-50 sticky top-0 z-10">
-              <tr>
-                <th style={{ width: 44, textAlign: "center" }}>#</th>
-                <th style={{ width: 115 }}>Course Code</th>
-                <th style={{ width: "auto" }}>Course Unit Name</th>
-                <th style={{ width: 160, textAlign: "right" }}>Missing Components</th>
-              </tr>
-            </thead>
-            <tbody>
-              {weightageError.units
-                .filter(u => {
-                  if (weightageComponentFilter === "CBT" && !u.missingCbt) return false
-                  if (weightageComponentFilter === "CW" && !u.missingCw) return false
-                  if (weightageComponentFilter === "UE" && !u.missingUe) return false
-                  if (weightageSearch.trim()) {
-                    const s = weightageSearch.toLowerCase().trim()
-                    return u.unitCode.toLowerCase().includes(s) || u.unitName.toLowerCase().includes(s)
-                  }
-                  return true
-                })
-                .map((u, idx) => (
-                  <tr key={idx} className="hover:bg-slate-50">
-                    <td style={{ textAlign: "center", color: "var(--g400)" }}>{idx + 1}</td>
-                    <td>
-                      <span className="font-mono font-semibold text-slate-800 bg-slate-100 px-1.5 py-0.5 rounded text-[11px]">
-                        {u.unitCode || "—"}
-                      </span>
-                    </td>
-                    <td className="font-medium text-slate-700" style={{ whiteSpace: "normal", wordBreak: "break-word", lineHeight: 1.4 }}>{u.unitName}</td>
-                    <td style={{ textAlign: "right" }}>
-                      <div className="flex items-center justify-end gap-1 flex-wrap">
-                        {u.missingCbt && (
-                          <span className="badge badge-red text-[10px] font-bold px-1.5 py-0.5" title="CBT weightage not set">
-                            CBT
-                          </span>
-                        )}
-                        {u.missingCw && (
-                          <span
-                            className="badge badge-amber text-[10px] font-bold px-1.5 py-0.5"
-                            style={{ background: "#fef3c7", color: "#92400e", border: "1px solid #fde68a" }}
-                            title="CW (Coursework) weightage not set"
-                          >
-                            CW
-                          </span>
-                        )}
-                        {u.missingUe && (
-                          <span
-                            className="badge badge-indigo text-[10px] font-bold px-1.5 py-0.5"
-                            style={{ background: "#ede9fe", color: "#5b21b6", border: "1px solid #ddd6fe" }}
-                            title="UE (University Exam) weightage not set"
-                          >
-                            UE
-                          </span>
-                        )}
-                        {u.missingComponents.length === 0 && (
-                          <span className="badge badge-red text-[10px]">{u.detail}</span>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Modal Footer */}
-        <div className="flex items-center justify-between mt-5 pt-4 border-t border-slate-200 text-xs">
-          <span className="text-slate-500">
-            Total affected course units: <strong>{weightageError.units.length}</strong>
-          </span>
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={() => setShowWeightageModal(false)}
-          >
-            Understood, Close
-          </button>
-        </div>
-      </div>
+      {dialog}
+      <Toast toast={toast} />
     </div>
-  </div>
-)}
-
-<Toast toast={toast} />
-    </>
   )
 }
