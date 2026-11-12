@@ -368,31 +368,47 @@ export default function IaCreationPage() {
                         )}
                       </td>
 
-                      {/* Uni. Exam: a Theory line always; a Practical line only when practicalExamGuid is set. */}
+                      {/* Uni. Exam: Combined (Theory + Practical), Theory-only, or Practical-only */}
                       <td className="px-4 py-3 text-left">
-                        {row.universityExamGuid ? (
+                        {row.universityExamGuid && row.practicalExamGuid ? (
                           <div className="flex flex-col gap-1.5">
                             <ScheduleCell
-                              label={row.practicalExamGuid ? 'Theory' : undefined}
+                              label="Theory"
                               range={examRange(row.examDate, row.examStartTime, row.examEndTime)}
                               rowEditable={row.canEdit}
                               canAdd={permissions.add}
                               canEditPerm={permissions.edit}
-                              addText={row.practicalExamGuid ? 'Add Theory Exam' : 'Add University Exam'}
+                              addText="Add Theory Exam"
                               onOpen={() => setSelectedUeData({ examGuid: row.universityExamGuid!, unitCode: row.unitCode ?? '', unitName: row.unitName ?? '' })}
                             />
-                            {row.practicalExamGuid && (
-                              <ScheduleCell
-                                label="Practical"
-                                range={examRange(row.practicalExamDate, row.practicalExamStartTime, row.practicalExamEndTime)}
-                                rowEditable={row.canEdit}
-                                canAdd={permissions.add}
-                                canEditPerm={permissions.edit}
-                                addText="Add Practical Exam"
-                                onOpen={() => setSelectedUeData({ examGuid: row.practicalExamGuid!, unitCode: row.unitCode ?? '', unitName: row.unitName ?? '' })}
-                              />
-                            )}
+                            <ScheduleCell
+                              label="Practical"
+                              range={examRange(row.practicalExamDate, row.practicalExamStartTime, row.practicalExamEndTime)}
+                              rowEditable={row.canEdit}
+                              canAdd={permissions.add}
+                              canEditPerm={permissions.edit}
+                              addText="Add Practical Exam"
+                              onOpen={() => setSelectedUeData({ examGuid: row.practicalExamGuid!, unitCode: row.unitCode ?? '', unitName: row.unitName ?? '' })}
+                            />
                           </div>
+                        ) : row.universityExamGuid ? (
+                          <ScheduleCell
+                            range={examRange(row.examDate, row.examStartTime, row.examEndTime)}
+                            rowEditable={row.canEdit}
+                            canAdd={permissions.add}
+                            canEditPerm={permissions.edit}
+                            addText="Add University Exam"
+                            onOpen={() => setSelectedUeData({ examGuid: row.universityExamGuid!, unitCode: row.unitCode ?? '', unitName: row.unitName ?? '' })}
+                          />
+                        ) : row.practicalExamGuid ? (
+                          <ScheduleCell
+                            range={examRange(row.practicalExamDate, row.practicalExamStartTime, row.practicalExamEndTime)}
+                            rowEditable={row.canEdit}
+                            canAdd={permissions.add}
+                            canEditPerm={permissions.edit}
+                            addText="Add Practical Exam"
+                            onOpen={() => setSelectedUeData({ examGuid: row.practicalExamGuid!, unitCode: row.unitCode ?? '', unitName: row.unitName ?? '' })}
+                          />
                         ) : (
                           <span className="text-g400 text-xs">—</span>
                         )}

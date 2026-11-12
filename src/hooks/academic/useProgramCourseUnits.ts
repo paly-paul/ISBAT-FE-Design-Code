@@ -2,11 +2,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   addProgramCourseUnitsBulk,
   getProgramCourseUnits,
+  getProgramCourseUnitsDropdown,
   updateProgramCourseUnits,
   ProgramCourseUnitBulkInput,
   ProgramCourseUnitBulkItem,
   ProgramCourseUnitBulkResult,
   ProgramCourseUnitDto,
+  ProgramCourseUnitDropdownItem,
   ProgramCourseUnitsUpdateInput,
 } from '@/lib/api/academic/programCourseUnits'
 
@@ -19,6 +21,17 @@ export function useProgramCourseUnits(programGuid: string | null, enabled: boole
     queryKey: [...PROGRAM_COURSE_UNITS_KEY, programGuid],
     queryFn: () => getProgramCourseUnits(programGuid as string),
     enabled: enabled && !!programGuid,
+  })
+}
+
+// Open dropdown for any signed-in user — returns course units assigned to a program
+export function useProgramCourseUnitsDropdown(programGuid: string | null, enabled = true) {
+  return useQuery({
+    queryKey: [...PROGRAM_COURSE_UNITS_KEY, 'dropdown', programGuid],
+    queryFn: () => getProgramCourseUnitsDropdown(programGuid as string),
+    enabled: enabled && !!programGuid,
+    staleTime: Infinity,
+    gcTime: Infinity,
   })
 }
 
@@ -48,4 +61,4 @@ export function useUpdateProgramCourseUnits() {
   })
 }
 
-export type { ProgramCourseUnitDto, ProgramCourseUnitBulkInput, ProgramCourseUnitBulkItem, ProgramCourseUnitBulkResult, ProgramCourseUnitsUpdateInput }
+export type { ProgramCourseUnitDto, ProgramCourseUnitDropdownItem, ProgramCourseUnitBulkInput, ProgramCourseUnitBulkItem, ProgramCourseUnitBulkResult, ProgramCourseUnitsUpdateInput }

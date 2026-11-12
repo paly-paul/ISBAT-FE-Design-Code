@@ -59,6 +59,7 @@ export interface ResultFilters {
 
 export interface ExamResultRow {
   examResultGuid: string
+  studentGuid?: string | null
   studentNum: string | null
   studentName: string | null
   programCode: string | null
@@ -100,10 +101,22 @@ export interface GenerateResultResponse {
 // 1 IA total · 2 UE total (ResultModerationField)
 export type ModerationField = 1 | 2
 
+export interface ModerationSkippedItem {
+  examResultGuid?: string | null
+  studentName?: string | null
+  studentRegNo?: string | null
+  registrationNumber?: string | null
+  studentNum?: string | null
+  unitCode?: string | null
+  unitName?: string | null
+  reason?: string | null
+}
+
 export interface ModerationResponse {
   rowsMatched: number
   rowsModerated: number
   rowsSkipped: number
+  skipped?: ModerationSkippedItem[]
 }
 
 export interface PublishResponse {
@@ -123,10 +136,9 @@ function filterQuery(f: ResultFilters, extra?: Record<string, string>) {
   if (f.courseUnitGuid) qs.set('courseUnitGuid', f.courseUnitGuid)
   if (f.iaOperator && f.iaValue !== undefined) { qs.set('iaOperator', f.iaOperator); qs.set('iaValue', String(f.iaValue)) }
   if (f.ueOperator && f.ueValue !== undefined) { qs.set('ueOperator', f.ueOperator); qs.set('ueValue', String(f.ueValue)) }
-  const term = (f.studentName || f.search)?.trim()
-  if (term) {
+  const term = (f.search || f.studentName)?.trim()
+  if (term && term.length >= 3) {
     qs.set('search', term)
-    qs.set('studentName', term)
   }
   return qs
 }

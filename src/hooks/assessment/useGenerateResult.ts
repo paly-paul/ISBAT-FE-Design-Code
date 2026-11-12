@@ -88,6 +88,8 @@ export type {
   GenerateWarning,
   GenerateResultResponse,
   ModerationField,
+  ModerationResponse,
+  ModerationSkippedItem,
   ResultFilters,
   ResultOperator,
 } from '@/lib/api/assessment/generateResult'
