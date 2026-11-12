@@ -22,6 +22,8 @@ export interface StudentStatementSearchResultDto {
   applicationGuid: string | null
   studentRegNo: string | null
   studentName: string | null
+  email?: string | null
+  phone?: string | null
   programName: string | null
   semesterName: string | null
   batchCode: string | null
@@ -168,6 +170,27 @@ export interface StudentStatementSearchFilters {
   studentGuid?: string
   studentRegNo?: string
   studentName?: string
+  email?: string
+  phone?: string
+}
+
+// The page has one search box; this sends what was typed as the one filter
+// it looks like, since each filter narrows the search on its own:
+// - contains "@" → email
+// - a Ugandan phone number (+256 / 256…, 07…, or 7… as stored, e.g.
+//   778643270) → phone
+// - other digits (a reg no, e.g. 027240104) → studentRegNo
+// - anything else → studentName
+export function statementSearchFilters(term: string): StudentStatementSearchFilters {
+  const t = term.trim()
+  if (!t) return {}
+  if (t.includes('@')) return { email: t }
+  const digits = t.replace(/[\s\-()]/g, '')
+  if (/^\+?\d+$/.test(digits)) {
+    const isPhone = digits.startsWith('+') || digits.startsWith('256') || digits.startsWith('07') || digits.startsWith('7')
+    return isPhone ? { phone: digits } : { studentRegNo: digits }
+  }
+  return { studentName: t }
 }
 
 const mockSearchResults: StudentStatementSearchResultDto[] = [
@@ -194,7 +217,7 @@ const mockStatement: StudentStatementDto = {
 
 export function searchStudentStatement(filters: StudentStatementSearchFilters, page = 1, pageSize = 10): Promise<PagedResult<StudentStatementSearchResultDto>> {
   if (MOCK_AUTH) {
-    const term = (filters.studentName ?? filters.studentRegNo ?? '').trim().toLowerCase()
+    const term = (filters.studentName ?? filters.studentRegNo ?? filters.email ?? filters.phone ?? '').trim().toLowerCase()
     const items = filters.studentGuid
       ? mockSearchResults.filter(s => s.studentGuid === filters.studentGuid)
       : term
@@ -206,6 +229,8 @@ export function searchStudentStatement(filters: StudentStatementSearchFilters, p
   if (filters.studentGuid) params.set('studentGuid', filters.studentGuid)
   if (filters.studentRegNo?.trim()) params.set('studentRegNo', filters.studentRegNo.trim())
   if (filters.studentName?.trim()) params.set('studentName', filters.studentName.trim())
+  if (filters.email?.trim()) params.set('email', filters.email.trim())
+  if (filters.phone?.trim()) params.set('phone', filters.phone.trim())
   params.set('pageNumber', String(page))
   params.set('pageSize', String(pageSize))
   return apiGet<PagedResult<StudentStatementSearchResultDto> | null>(`/api/v1/students/studentstatement/search?${params.toString()}`)

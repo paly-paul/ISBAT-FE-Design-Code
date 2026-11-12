@@ -5,6 +5,7 @@ import { formatDate } from '@/lib/date'
 import { useVettingApplicationDetail } from '@/hooks/admission/useVetting'
 import { documentTitle, genderText, orDash } from '@/lib/admission/applicantDisplay'
 import { DocumentPreviewModal } from '@/components/modals/shared/DocumentPreviewModal'
+import { QualificationCard } from '@/components/admission/QualificationCard'
 
 // Read-only profile opened from "View Full Profile" (Vetting Desk review, View
 // Applicant, Complete Registration). Everything comes from
@@ -148,23 +149,8 @@ function ApplicantProfileContent() {
               <>
                 <p className="text-sm text-g500 mb-3">{withProof} of {detail.qualifications.length} with proof</p>
                 <div className="vd-list">
-                  {detail.qualifications.map(q => (
-                    <div key={q.applicationQualGuid} className={`vd-doc${q.proofUrl ? '' : ' missing'}`}>
-                      <span className="vd-doc-icon"><i className={`lni ${q.proofUrl ? 'lni-book' : 'lni-question-circle'}`} aria-hidden="true" /></span>
-                      <div className="vd-doc-body">
-                        {/* institution is free text by convention (e.g. "O Level" / "A Level"); there is no structured type. */}
-                        <div className="vd-doc-name">{orDash(q.institution)} &middot; {orDash(q.university)}</div>
-                        <div className="vd-doc-sub">
-                          Grade {orDash(q.grade)} &middot; {q.passYear ?? '—'} &middot; {q.yearsTaken != null ? `${q.yearsTaken} yrs` : '—'}
-                          {!q.proofUrl && <> &middot; No proof</>}
-                        </div>
-                      </div>
-                      {q.proofUrl && (
-                        <button type="button" className="btn btn-neu btn-sm" onClick={() => setPreview({ url: q.proofUrl!, title: `Proof — ${q.institution} · ${q.university}` })} aria-label={`View proof for ${q.institution}`}>
-                          <i className="lni lni-eye" aria-hidden="true" /> View Proof
-                        </button>
-                      )}
-                    </div>
+                  {detail.qualifications.map((q, i) => (
+                    <QualificationCard key={q.applicationQualGuid} q={q} index={i} onViewProof={(url, title) => setPreview({ url, title })} />
                   ))}
                 </div>
               </>
