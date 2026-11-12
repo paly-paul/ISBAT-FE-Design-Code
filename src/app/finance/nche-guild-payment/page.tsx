@@ -696,7 +696,7 @@ export default function NcheGuildPaymentPage() {
                             <tfoot>
                               {historyTotalPaid.map((t, i) => (
                                 <tr key={t.currency?.currencyGuid ?? i}>
-                                  <td colSpan={3}>{i === 0 && <>Total paid{historyTotalPages > 1 && <span className="text-g500" style={{ fontWeight: 400 }}> · all pages</span>}</>}</td>
+                                  <td colSpan={3} className="tfoot-label">{i === 0 && <>Total paid{historyTotalPages > 1 && <span className="text-g500" style={{ fontWeight: 400 }}> · all pages</span>}</>}</td>
                                   <td className="text-green font-bold tabular-nums">{t.currency?.currencyCode} {formatTotalAmount(t.totalAmount)}</td>
                                   {category === 'nche' && <td />}
                                 </tr>
