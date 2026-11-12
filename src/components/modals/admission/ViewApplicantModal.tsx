@@ -1,7 +1,7 @@
 'use client'
 import { useLayoutEffect, useRef, useState } from 'react'
 import { ModalProps } from '../types'
-import { ApplicationListItem, useApplicationByGuid } from '@/hooks/admission/useApplicationFiling'
+import { ApplicationListItem, useApplicationAllDetail } from '@/hooks/admission/useApplicationFiling'
 import { useProgramDropdown } from '@/hooks/academic/useProgramMaster'
 import { applicantProfileHref } from '@/lib/applicantProfileLink'
 import { formatDate } from '@/lib/date'
@@ -61,10 +61,10 @@ const PANEL_PADDING = '20px clamp(14px, 4vw, 24px)'
 export function ViewApplicantModal({ isOpen, onClose, applicant: listRow }: ViewApplicantModalProps) {
   const [activeTab, setActiveTab] = useState<Tab>('personal')
 
-  // Full record (get-application-by-guid.md). Completed applications only —
-  // an in-progress one 400s, and then the list row is all there is to show.
+  // Full record at any stage (get-all-applicant-detail-by-guid.md). If it
+  // can't be loaded, the list row is all there is to show.
   const { data: detail, isLoading: detailLoading, isError: detailUnavailable } =
-    useApplicationByGuid(listRow?.applicationGuid, isOpen && !!listRow)
+    useApplicationAllDetail(listRow?.applicationGuid, isOpen && !!listRow)
   const { data: programs = [] } = useProgramDropdown(undefined, isOpen && !!listRow)
 
   // Same sliding underline as ViewProgrammeModal.
@@ -115,22 +115,7 @@ export function ViewApplicantModal({ isOpen, onClose, applicant: listRow }: View
   const countryName = applicant.countryName || applicant.countryGuid || '—'
   const spCountryName = applicant.spCountryName || applicant.spCountryGuid || '—'
 
-  const profileUrl = applicantProfileHref({
-    ref: applicant.appRefNo,
-    name: fullName !== '—' ? fullName : applicant.appRefNo,
-    programme: programName !== '—' ? programName : undefined,
-    dob: applicant.dob ?? undefined,
-    // Backend gender codes: 0 = Male, 1 = Female, 2 = Other. The raw code
-    // used to be passed, so the profile page showed "0" / "1".
-    gender: applicant.gender != null ? (['Male', 'Female', 'Other'][applicant.gender] ?? String(applicant.gender)) : undefined,
-    nationality: countryName !== '—' ? countryName : undefined,
-    nationalId: applicant.nationalId ?? undefined,
-    phone: applicant.phone ?? undefined,
-    email: applicant.emailId ?? undefined,
-    intake: applicant.intakeCode ?? undefined,
-    campus: campusName !== '—' ? campusName : undefined,
-    submitted: applicant.createdDate ?? undefined,
-  })
+  const profileUrl = applicantProfileHref(applicant.applicationGuid)
 
   const documents = [
     { label: 'National ID Document', icon: 'lni-id-card', file: applicant.idUserFileName },
@@ -173,11 +158,10 @@ export function ViewApplicantModal({ isOpen, onClose, applicant: listRow }: View
           <span className="tab-indicator" style={{ left: indicator.left, width: indicator.width }} />
         </div>
 
-        {/* The by-guid endpoint only returns completed applications. */}
         {detailUnavailable && (
           <div role="status" style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8, padding: '8px clamp(14px, 4vw, 24px)', background: 'var(--amber-bg)', borderBottom: '1px solid var(--amber-bd)', color: 'var(--g700)', fontSize: 12.5 }}>
             <i className="lni lni-information" style={{ color: 'var(--amber)' }} aria-hidden="true" />
-            The full record is only available once the application is completed. Showing the details from the applicants list.
+            The full record couldn&rsquo;t be loaded. Showing the details from the applicants list.
           </div>
         )}
 
@@ -186,8 +170,7 @@ export function ViewApplicantModal({ isOpen, onClose, applicant: listRow }: View
           <div key="personal" className="modal-scroll tab-panel-in" style={{ padding: PANEL_PADDING }}>
             <div style={GRID}>
               <SectionTitle>Identity Details</SectionTitle>
-              <Field label="First Name" value={applicant.firstName} />
-              <Field label="Last Name" value={applicant.lastName} />
+              <Field label="Name" value={fullName} />
               <Field label="Date of Birth" value={formatDate(applicant.dob)} />
               <Field label="Gender" value={applicant.genderLabel || genderLabel(applicant.gender)} />
               <Field label="Country / Nationality" value={countryName} />
@@ -217,25 +200,17 @@ export function ViewApplicantModal({ isOpen, onClose, applicant: listRow }: View
               <Field label="Application Reference No." value={<span className="font-mono">{applicant.appRefNo}</span>} />
               <Field label="Programme" value={programName} />
               <Field label="Intake Code" value={applicant.intakeCode} />
-              <Field label="Year Code" value={applicant.yearCode} />
               <Field label="Campus" value={campusName} />
               <Field
                 label="Application Status"
                 value={applicant.actionLabel ? <span className="badge badge-blue">{applicant.actionLabel}</span> : '—'}
               />
-              <Field
-                label="Save Status"
-                value={applicant.saveStatusLabel
-                  ? <span className="badge badge-grey">{applicant.saveStatusLabel}</span>
-                  : applicant.saveStatus != null ? <span className="badge badge-grey">Status {applicant.saveStatus}</span> : '—'}
-              />
 
-              <SectionTitle>Timeline &amp; Verification</SectionTitle>
-              <Field label="Created Date" value={formatDate(applicant.createdDate)} />
-              <Field label="Modified Date" value={formatDate(applicant.modifiedDate)} />
+              <SectionTitle>Verification</SectionTitle>
+              {/* all-detail hides the raw docVerified flag and sends docVerifiedLabel instead. */}
               <Field
                 label="Documents Verified"
-                value={applicant.docVerified
+                value={(applicant.docVerifiedLabel ? applicant.docVerifiedLabel === 'Verified' : applicant.docVerified)
                   ? <span className="badge badge-green"><i className="lni lni-checkmark" aria-hidden="true" /> Verified{applicant.verifiedDate ? ` · ${formatDate(applicant.verifiedDate)}` : ''}</span>
                   : <span className="badge badge-amber">Pending</span>}
               />

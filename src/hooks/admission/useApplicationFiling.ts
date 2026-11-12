@@ -3,7 +3,7 @@ import {
   deleteQualification,
   exportApplicationsCsv,
   getApplicants,
-  getApplicationByGuid,
+  getApplicationAllDetail,
   getApplicationByPaymentGuid,
   getApplications,
   getFilingApplicationsPage,
@@ -99,10 +99,10 @@ export function useApplicationByPaymentGuid(paymentGuid: string | null | undefin
 
 // Backs All Applicants' View modal. A 400 here means "not completed yet", so
 // callers keep showing the list row instead of an error screen.
-export function useApplicationByGuid(applicationGuid: string | null | undefined, enabled: boolean) {
+export function useApplicationAllDetail(applicationGuid: string | null | undefined, enabled: boolean) {
   return useQuery({
-    queryKey: [...FILING_KEY, 'by-guid', applicationGuid],
-    queryFn: () => getApplicationByGuid(applicationGuid as string),
+    queryKey: [...FILING_KEY, 'all-detail', applicationGuid],
+    queryFn: () => getApplicationAllDetail(applicationGuid as string),
     enabled: enabled && !!applicationGuid,
   })
 }

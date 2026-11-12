@@ -238,14 +238,17 @@ export function getApplicationByPaymentGuid(paymentGuid: string): Promise<Applic
   return apiGet<ApplicationDetailDto>(`/api/v1/admissions/application-filling/by-payment/${paymentGuid}`)
 }
 
-// GET /api/v1/admissions/application-filling/{applicationGuid} — the full
-// record behind All Applicants' View modal (get-application-by-guid.md).
-// Completed applications only: one still being filled in is a 400 "Application
-// not found or not completed.", so the modal falls back to the list row it
-// already has rather than treating that as a hard failure.
-export function getApplicationByGuid(applicationGuid: string): Promise<ApplicationDetailDto> {
-  if (MOCK_AUTH) return Promise.reject(new Error('Application not found or not completed.'))
-  return apiGet<ApplicationDetailDto>(`/api/v1/admissions/application-filling/${applicationGuid}`)
+// GET /api/v1/admissions/application-filling/{applicationGuid}/all-detail —
+// the full record behind the View Applicant modal
+// (get-all-applicant-detail-by-guid.md, 2026-11-12). Unlike the base
+// /{applicationGuid} route it has no Action filter, so it works for every
+// stage: waiting, submitted, vetted, rejected and registered. `action`,
+// `saveStatus` and `docVerified` are hidden from the JSON; use `actionLabel`,
+// `saveStatusLabel` and `docVerifiedLabel`. 404 only when there's neither an
+// application row nor a payment for the guid.
+export function getApplicationAllDetail(applicationGuid: string): Promise<ApplicationDetailDto> {
+  if (MOCK_AUTH) return Promise.reject(new Error('Application not found.'))
+  return apiGet<ApplicationDetailDto>(`/api/v1/admissions/application-filling/${applicationGuid}/all-detail`)
 }
 
 // Confirmed via Application-Filling/SaveGeneral.bru — countryGuid/

@@ -1,4 +1,4 @@
-import { apiGet, apiPost, apiPut } from '../client'
+import { apiGet, apiPost, apiPostForm, apiPut } from '../client'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
@@ -69,6 +69,9 @@ export interface Employee {
   // GUIDs of campuses assigned to this employee (T_USER_CAMPUS) — confirmed
   // via post-employee.md/put-employee.md's "UI notes: Campus field" section.
   campusGuids?: string[]
+  // Signed link to the employee's photo, or null when none was uploaded
+  // (get-employee-by-guid.md, 2026-11-09). Expires after about 1 hour.
+  photoUrl?: string | null
 }
 
 // Payload used when creating/updating an employee — confirmed field-for-
@@ -222,8 +225,25 @@ export function getEmployee(id: string): Promise<Employee> {
   return apiGet<Employee>(`/api/v1/users/employees/${id}`)
 }
 
-// Create a new employee and return the saved record.
-export function createEmployee(input: CreateEmployeeInput): Promise<Employee> {
+// POST /employees is multipart/form-data since 2026-11-09 (post-employee.md):
+// each SaveEmployeeRequest key is its own form field, campusGuids repeats once
+// per campus, and empty values (a form can't send null) are left out.
+function employeeFormData(input: CreateEmployeeInput, photo: File | null): FormData {
+  const fd = new FormData()
+  for (const [key, value] of Object.entries(input)) {
+    if (key === 'campusGuids') continue
+    if (value === null || value === undefined || value === '') continue
+    fd.append(key, String(value))
+  }
+  for (const guid of input.campusGuids) fd.append('campusGuids', guid)
+  if (photo) fd.append('photo', photo)
+  return fd
+}
+
+// Create a new employee and return the saved record. The optional photo is
+// saved with the employee (JPG/PNG, up to 2 MB); if the employee can't be
+// created, no photo is kept.
+export function createEmployee(input: CreateEmployeeInput, photo: File | null = null): Promise<Employee> {
   if (MOCK_AUTH) {
     const employee: Employee = {
       employeeGuid: crypto.randomUUID(),
@@ -248,6 +268,7 @@ export function createEmployee(input: CreateEmployeeInput): Promise<Employee> {
       deptGuid: input.deptGuid,
       designationGuid: input.designationGuid,
       campusGuids: input.campusGuids,
+      photoUrl: photo ? URL.createObjectURL(photo) : null,
     }
     mockEmployees.push({
       employeeGuid: employee.employeeGuid,
@@ -261,7 +282,7 @@ export function createEmployee(input: CreateEmployeeInput): Promise<Employee> {
     })
     return Promise.resolve(employee)
   }
-  return apiPost<Employee>('/api/v1/users/employees', input)
+  return apiPostForm<Employee>('/api/v1/users/employees', employeeFormData(input, photo))
 }
 
 export interface AssignPermissionGroupsInput {

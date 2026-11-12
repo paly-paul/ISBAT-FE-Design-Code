@@ -10,15 +10,7 @@ import { NO_CURRENT_INTAKE_MESSAGE, NOT_CURRENT_INTAKE_MESSAGE, VetApplicationIn
 import { useCurrentAdmissionIntake } from '@/hooks/academic/useIntakes'
 import { AuthError } from '@/lib/api/client'
 import { formatDate } from '@/lib/date'
-
-// A friendlier label than the raw documentType string from the wire
-// ("NationalId" → "National ID").
-const DOCUMENT_LABELS: Record<string, string> = {
-  NationalId: 'National ID',
-  Passport: 'Passport',
-  Visa: 'Visa',
-  Photo: 'Passport Photo',
-}
+import { documentTitle, genderText, orDash } from '@/lib/admission/applicantDisplay'
 
 // Read-only value, same label/value treatment as ViewApplicantModal — the
 // old read-only inputs looked editable.
@@ -29,22 +21,6 @@ function Field({ label, value }: { label: string; value: string }) {
       <div className="vd-field-val tabular-nums">{value}</div>
     </div>
   )
-}
-
-// Display value for an optional text field: "—" for null, blank, or the
-// literal string "null" some admission endpoints send.
-// The API sends either the label ("Male") or the backend code — 0 = Male,
-// 1 = Female, 2 = Other. Codes used to be shown raw ("0", "1").
-const GENDER_LABELS = ['Male', 'Female', 'Other']
-function genderText(g: number | string | null | undefined): string {
-  if (g == null || g === '') return ''
-  const code = typeof g === 'number' ? g : /^\d+$/.test(g.trim()) ? +g : null
-  return code != null ? (GENDER_LABELS[code] ?? String(g)) : String(g).trim()
-}
-
-function orDash(value: string | null | undefined): string {
-  const v = value?.trim()
-  return v && v.toLowerCase() !== 'null' ? v : '—'
 }
 
 interface Props extends ModalProps {
@@ -192,7 +168,7 @@ export function VettingReviewModal({ isOpen, onClose, showToast, applicationGuid
   const uploadedDocs = detail.documents.length - missingDocs.length
   const withProof = detail.qualifications.filter(q => q.proofUrl).length
   const fullName = orDash(`${detail.firstName ?? ''} ${detail.lastName ?? ''}`)
-  const docTitle = (type: string) => DOCUMENT_LABELS[type] ?? type
+  const docTitle = documentTitle
 
   // What the registrar weighs before deciding, summarised up front so it
   // doesn't have to be pieced together from the panels below.
@@ -256,21 +232,7 @@ export function VettingReviewModal({ isOpen, onClose, showToast, applicationGuid
                 ))}
               </div>
               <a
-                href={applicantProfileHref({
-                  ref: detail.appRefNo,
-                  name: `${detail.firstName} ${detail.lastName}`,
-                  programme: detail.programName,
-                  type: detail.admissionType,
-                  dob: detail.dob ?? undefined,
-                  gender: genderText(detail.gender) || undefined,
-                  nationality: orDash(detail.nationality) !== '—' ? orDash(detail.nationality) : undefined,
-                  nationalId: detail.nationalId ?? undefined,
-                  phone: detail.phone ?? undefined,
-                  email: detail.emailId ?? undefined,
-                  intake: intakeDisplay !== '—' ? intakeDisplay : undefined,
-                  campus: detail.campusName,
-                  submitted: detail.submittedDate,
-                })}
+                href={applicantProfileHref(detail.applicationGuid)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-1"
