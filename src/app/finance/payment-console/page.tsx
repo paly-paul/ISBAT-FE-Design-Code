@@ -1001,6 +1001,19 @@ export default function PaymentConsolePage() {
   useEffect(() => setHistoryPage(1), [selectedApplicationGuid])
   const historyTotalPages = Math.max(1, Math.ceil(tuitionPaymentHistory.length / HISTORY_PAGE_SIZE))
   const pagedPaymentHistory = tuitionPaymentHistory.slice((historyPage - 1) * HISTORY_PAGE_SIZE, historyPage * HISTORY_PAGE_SIZE)
+  // payment-history/{applicationGuid} has no totalPaid (MR !137 didn't cover
+  // it), but it returns every payment at once, so the semester total is
+  // summed here: one entry per currency, never converted or added together.
+  const tuitionTotalPaid = useMemo(() => {
+    const byCurrency = new Map<string, { currencyName: string; totalAmount: number }>()
+    tuitionPaymentHistory.forEach(h => {
+      const key = h.currencyGuid ?? h.currencyName ?? ''
+      const entry = byCurrency.get(key) ?? { currencyName: h.currencyName ?? '—', totalAmount: 0 }
+      entry.totalAmount += h.amount ?? 0
+      byCurrency.set(key, entry)
+    })
+    return [...byCurrency.entries()].map(([key, v]) => ({ key, ...v }))
+  }, [tuitionPaymentHistory])
 
   // View/Edit (get-payments.md/put-payment.md) — this table's own
   // ActionMenu, Tuition rows only (this is already the Tuition tab's own
@@ -1957,6 +1970,18 @@ export default function PaymentConsolePage() {
                               )
                             })}
                           </tbody>
+                          {tuitionTotalPaid.length > 0 && (
+                            <tfoot>
+                              {tuitionTotalPaid.map((t, i) => (
+                                <tr key={t.key}>
+                                  <td colSpan={5} className="tfoot-label">{i === 0 && <>Total paid{historyTotalPages > 1 && <span className="text-g500" style={{ fontWeight: 400 }}> · all pages</span>}</>}</td>
+                                  <td className="text-green font-bold tabular-nums">{formatTotalAmount(t.totalAmount)}</td>
+                                  <td>{t.currencyName}</td>
+                                  <td />
+                                </tr>
+                              ))}
+                            </tfoot>
+                          )}
                         </table>
                       </ScrollTable>
                       <Pagination page={historyPage} totalPages={historyTotalPages} totalCount={tuitionPaymentHistory.length} itemLabel="payments" onPageChange={setHistoryPage} />
@@ -2020,7 +2045,7 @@ export default function PaymentConsolePage() {
                             <tfoot>
                               {otherHistoryTotalPaid.map((t, i) => (
                                 <tr key={t.currency?.currencyGuid ?? i}>
-                                  <td colSpan={5}>{i === 0 && <>Total paid{otherHistoryTotalPages > 1 && <span className="text-g500" style={{ fontWeight: 400 }}> · all pages</span>}</>}</td>
+                                  <td colSpan={5} className="tfoot-label">{i === 0 && <>Total paid{otherHistoryTotalPages > 1 && <span className="text-g500" style={{ fontWeight: 400 }}> · all pages</span>}</>}</td>
                                   <td className="text-green font-bold tabular-nums">{formatTotalAmount(t.totalAmount)}</td>
                                   <td>{t.currency?.currencyCode ?? '—'}</td>
                                   <td />

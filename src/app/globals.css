@@ -4240,8 +4240,18 @@ tfoot tr + tr td {
   border-top: none
 }
 
-tfoot tr:hover td {
+/* The first cell holds the label; the sticky-column rules (.tbl-wrap table
+   td:first-child) would otherwise paint it white. Right-aligned so the label
+   sits next to the amount it names. */
+tfoot tr:hover td,
+.tbl-wrap table tfoot td:first-child,
+.tbl-wrap table tfoot tr:hover td:first-child {
   background: var(--surface)
+}
+
+tfoot td.tfoot-label {
+  text-align: right;
+  color: var(--g700)
 }
 
 /* ── SEARCHABLE SELECT ── */
