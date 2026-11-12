@@ -2,15 +2,16 @@
 
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { SearchSelect } from '@/components/SearchSelect'
-import { Toast } from '@/components/Toast'
 // The previous page (whole-intake actions, marks grid, moderation, export).
 // To bring it back, uncomment these two lines and delete GenerateResultPage below.
 // import LegacyGenerateResultPage from './_legacy/LegacyGenerateResultPage'
 // export default LegacyGenerateResultPage
 
-// Generate Result — redesign from generate-result.html. Results are generated,
-// published, withdrawn and deleted per programme, semester or batch, shown as
-// a programme → semester → batch tree. UI-only for now: the API
+// Generate Result — a port of generate-result.html, kept visually identical to
+// it: its own palette, controls and icons, scoped under .gr in globals.css so
+// nothing else in the app changes. Results are generated, published,
+// withdrawn and deleted per programme, semester or batch, shown as a
+// programme → semester → batch tree. UI-only for now: the API
 // (lib/api/assessment/generateResult.ts) works on a whole intake and has no
 // batches or per-batch status, so this runs on the design's sample data.
 
@@ -104,8 +105,27 @@ const NO_FILTERS: Filters = { pg: '', sm: '', bt: '', st: '' }
 
 type Action = 'gen' | 'pub' | 'del' | 'wd'
 const NEEDS: Record<Action, Step> = { gen: 'none', pub: 'draft', del: 'draft', wd: 'pub' }
-// scope: 'a' (everything in view) | 'p:PG' | 's:PG|SM' | 'b:KEY'
+// scope: 'a:' (everything in view) | 'p:PG' | 's:PG|SM' | 'b:KEY'
 interface Confirm { action: Action; scope: string }
+
+// ── Icons (the design's own line icons) ─────────────────────────────────────
+
+const PATHS = {
+  chev: <path d="m6 9 6 6 6-6" />,
+  gen: <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z" />,
+  pub: <path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7z" />,
+  del: <path d="M3 6h18M8 6V4h8v2m-9 0 1 14h8l1-14" />,
+  wd: <><path d="M9 14 4 9l5-5" /><path d="M4 9h11a5 5 0 0 1 0 10h-3" /></>,
+  ok: <path d="M20 6 9 17l-5-5" />,
+}
+function Icon({ name, size = 15 }: { name: keyof typeof PATHS; size?: number }) {
+  const w = name === 'del' ? 2 : name === 'ok' ? 2.5 : 2.2
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={w} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      {PATHS[name]}
+    </svg>
+  )
+}
 
 // ── Page ────────────────────────────────────────────────────────────────────
 
@@ -125,15 +145,25 @@ export default function GenerateResultPage() {
   const [confirm, setConfirm] = useState<Confirm | null>(null)
   const [reason, setReason] = useState('')
   const [reasonError, setReasonError] = useState('')
-  const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
-  function showToast(msg: string, type = 'success') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
+
+  // The design's own toast: dark, bottom centre, with a check.
+  const [toast, setToast] = useState<{ msg: string; on: boolean }>({ msg: '', on: false })
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  function showToast(msg: string) {
+    setToast({ msg, on: true })
+    if (toastTimer.current) clearTimeout(toastTimer.current)
+    toastTimer.current = setTimeout(() => setToast(t => ({ ...t, on: false })), 2600)
+  }
 
   const panelRef = useRef<HTMLDivElement>(null)
   const filterBtnRef = useRef<HTMLButtonElement>(null)
   const lastFocus = useRef<HTMLElement | null>(null)
 
-  // Close the filter panel on an outside click. SearchSelect's dropdown is
-  // portalled to <body>, so a click on one of its options counts as inside.
+  // Move focus into the panel when it opens (its first dropdown's trigger).
+  useEffect(() => { if (panelOpen) panelRef.current?.querySelector<HTMLElement>('.ss-trigger')?.focus() }, [panelOpen])
+
+  // Close the filter panel on an outside click or Escape. SearchSelect's list
+  // is portalled to <body>, so a click on one of its options counts as inside.
   useEffect(() => {
     if (!panelOpen) return
     function onDown(e: MouseEvent) {
@@ -171,6 +201,8 @@ export default function GenerateResultPage() {
     if (k === 'sm' && v) setOpen(prev => new Set(prev).add(`s:${filters.pg}|${v}`))
     if (k === 'st' && v) expandAll()
   }
+  // Clear all keeps the batch filter's parents cleared too, like the design.
+  const clearFilters = () => setFilters(NO_FILTERS)
 
   function changeIntake(id: string) {
     if (!id || id === intake) return
@@ -193,6 +225,7 @@ export default function GenerateResultPage() {
 
   function ask(action: Action, scope: string) {
     if (readOnly) return
+    if (!scopeOf(scope).list.some(b => b.s === NEEDS[action])) return
     lastFocus.current = document.activeElement as HTMLElement | null
     setReason('')
     setReasonError('')
@@ -207,16 +240,15 @@ export default function GenerateResultPage() {
 
   function runConfirm() {
     if (!confirm) return
-    const { list: all } = scopeOf(confirm.scope)
-    const list = all.filter(b => b.s === NEEDS[confirm.action])
+    const list = scopeOf(confirm.scope).list.filter(b => b.s === NEEDS[confirm.action])
     let why: string | undefined
     if (confirm.action === 'wd') {
       why = reason.trim()
       if (!why) { setReasonError('Add a reason so others know why it was withdrawn.'); return }
     }
-    const [step, word]: [Step, string] = {
+    const [step, word] = ({
       gen: ['draft', 'Generated'], pub: ['pub', 'Published'], del: ['none', 'Deleted'], wd: ['draft', 'Withdrawn'],
-    }[confirm.action] as [Step, string]
+    } as Record<Action, [Step, string]>)[confirm.action]
     const now = Date.now()
     setData(prev => {
       if (!prev) return prev
@@ -248,64 +280,48 @@ export default function GenerateResultPage() {
   if (filters.bt) chips.push({ k: 'bt', label: filters.bt })
   if (filters.st) chips.push({ k: 'st', label: LABEL[filters.st] })
 
-  const programmeOptions = [{ value: '', label: 'All programmes' }, ...PROG_CODES.map(p => ({ value: p, label: `${p} · ${PROGRAMMES[p].n}` }))]
-  const semesterOptions = filters.pg
-    ? [{ value: '', label: 'All semesters' }, ...semsOf(filters.pg).map(s => ({ value: String(s), label: `Semester ${s}` }))]
-    : [{ value: '', label: 'Choose a programme first' }]
-  const batchOptions = filters.pg && filters.sm
-    ? [{ value: '', label: 'All batches' }, ...PROGRAMMES[filters.pg].s[Number(filters.sm)].b.map(b => ({ value: b, label: b }))]
-    : [{ value: '', label: 'Choose a semester first' }]
-  const statusOptions = [{ value: '', label: 'All statuses' }, ...(['none', 'draft', 'pub'] as Step[]).map(s => ({ value: s, label: LABEL[s] }))]
-
   // ── Pieces ──
   function statusCell(c: Record<Step, number>, n: number) {
-    if (n === 1) { const s = stepOf(c); return <span className={`gr-pill gr-pill-${s}`}>{LABEL[s]}</span> }
+    if (n === 1) { const s = stepOf(c); return <span className={`gr-pill gr-p-${s}`}>{LABEL[s]}</span> }
+    const seg = (s: Step) => c[s] > 0 && <i className={`gr-c-${s}`} style={{ width: `${(c[s] / n) * 100}%` }} title={`${c[s]} ${LABEL[s].toLowerCase()}`} />
     return (
       <div className="gr-st">
         <div className="gr-st-top">
-          <span><b className="tabular-nums">{c.pub}</b> of <span className="tabular-nums">{n}</span> published</span>
-          {c.draft > 0 && <span className="gr-st-extra tabular-nums">{c.draft} generated</span>}
+          <span><b className="gr-num">{c.pub}</b> of <span className="gr-num">{n}</span> published</span>
+          {c.draft > 0 && <span className="gr-num gr-stx">{c.draft} generated</span>}
         </div>
         <div className="gr-bar" role="img" aria-label={`${c.pub} published, ${c.draft} generated, ${c.none} not generated`}>
-          {c.pub > 0 && <i className="gr-seg-pub" style={{ width: `${(c.pub / n) * 100}%` }} />}
-          {c.draft > 0 && <i className="gr-seg-draft" style={{ width: `${(c.draft / n) * 100}%` }} />}
+          {seg('pub')}{seg('draft')}
         </div>
       </div>
     )
   }
 
   function actions(scope: string, c: Record<Step, number>, name: string) {
-    if (readOnly) return <div className="gr-acts" />
+    if (readOnly) return null
     const s = stepOf(c)
+    const lab = `for ${name}`
     if (s === 'none') return (
       <div className="gr-acts">
-        <button type="button" className="btn btn-primary btn-sm" onClick={() => ask('gen', scope)} aria-label={`Generate result for ${name}`}>
-          <i className="lni lni-bolt" aria-hidden="true" /> Generate result
-        </button>
+        <button type="button" className="gr-btn gr-sm gr-primary" onClick={() => ask('gen', scope)} aria-label={`Generate result ${lab}`}><Icon name="gen" />Generate result</button>
       </div>
     )
     if (s === 'draft') return (
       <div className="gr-acts">
-        <button type="button" className="btn btn-sm gr-btn-del" onClick={() => ask('del', scope)} aria-label={`Delete result for ${name}`}>
-          <i className="lni lni-trash-can" aria-hidden="true" /> Delete result
-        </button>
-        <button type="button" className="btn btn-primary btn-sm" onClick={() => ask('pub', scope)} aria-label={`Publish result for ${name}`}>
-          <i className="lni lni-eye" aria-hidden="true" /> Publish
-        </button>
+        <button type="button" className="gr-btn gr-sm gr-del" onClick={() => ask('del', scope)} aria-label={`Delete result ${lab}`}><Icon name="del" />Delete result</button>
+        <button type="button" className="gr-btn gr-sm gr-primary" onClick={() => ask('pub', scope)} aria-label={`Publish ${lab}`}><Icon name="pub" />Publish</button>
       </div>
     )
     return (
       <div className="gr-acts">
-        <button type="button" className="btn btn-neu btn-sm" onClick={() => ask('wd', scope)} aria-label={`Withdraw result for ${name}`}>
-          <i className="lni lni-reply" aria-hidden="true" /> Withdraw
-        </button>
+        <button type="button" className="gr-btn gr-sm" onClick={() => ask('wd', scope)} aria-label={`Withdraw ${lab}`}><Icon name="wd" />Withdraw</button>
       </div>
     )
   }
 
   const toggleBtn = (k: string, label: string) => (
-    <button type="button" className="gr-tg" aria-expanded={open.has(k)} aria-label={`${open.has(k) ? 'Collapse' : 'Expand'} ${label}`} onClick={() => toggle(k)}>
-      <i className="lni lni-chevron-down" aria-hidden="true" />
+    <button type="button" className="gr-btn gr-tg" aria-expanded={open.has(k)} aria-label={`${open.has(k) ? 'Collapse' : 'Expand'} ${label}`} onClick={() => toggle(k)}>
+      <Icon name="chev" />
     </button>
   )
 
@@ -318,7 +334,7 @@ export default function GenerateResultPage() {
     const sems = semsOf(pg).filter(sm => batches(pg, sm).length)
     return (
       <Fragment key={pg}>
-        <div className={`gr-row gr-l0 gr-grid${pOpen ? ' is-open' : ''}`}>
+        <div className={`gr-row gr-l0 gr-grid${pOpen ? ' gr-open' : ''}`}>
           <div className="gr-name">
             {toggleBtn(`p:${pg}`, pg)}
             <div className="gr-tt">
@@ -326,7 +342,7 @@ export default function GenerateResultPage() {
               <div className="gr-t2">{plural(sems.length, 'semester')} · {plural(pl.length, 'batch', 'batches')}</div>
             </div>
           </div>
-          <div className="gr-stu tabular-nums">{studentsOf(pl)}</div>
+          <div className="gr-stu gr-num">{studentsOf(pl)}</div>
           {statusCell(pc, pl.length)}
           {actions(`p:${pg}`, pc, pg)}
         </div>
@@ -345,7 +361,7 @@ export default function GenerateResultPage() {
                     <div className="gr-t2">{plural(sl.length, 'batch', 'batches')} · {plural(PROGRAMMES[pg].s[sm].u, 'course unit')}</div>
                   </div>
                 </div>
-                <div className="gr-stu tabular-nums">{studentsOf(sl)}</div>
+                <div className="gr-stu gr-num">{studentsOf(sl)}</div>
                 {statusCell(sc, sl.length)}
                 {actions(sKey, sc, `${pg} semester ${sm}`)}
               </div>
@@ -362,7 +378,7 @@ export default function GenerateResultPage() {
                         </div>
                       </div>
                     </div>
-                    <div className="gr-stu tabular-nums">{b.students}</div>
+                    <div className="gr-stu gr-num">{b.students}</div>
                     {statusCell(tally([b]), 1)}
                     {actions(`b:${b.k}`, tally([b]), `${b.bt}, semester ${b.sm}`)}
                   </div>
@@ -375,7 +391,7 @@ export default function GenerateResultPage() {
     )
   })
 
-  // ── Confirm dialog content ──
+  // ── Confirm dialog ──
   let dialog: React.ReactNode = null
   if (confirm) {
     const { label, list: all, kind } = scopeOf(confirm.scope)
@@ -384,26 +400,28 @@ export default function GenerateResultPage() {
     const nb = plural(list.length, 'batch', 'batches')
     const skipped = all.length - list.length
     const T = {
-      gen: { icon: 'lni-bolt', title: one ? 'Generate result?' : `Generate results for ${nb}?`, body: 'IA and UE totals are worked out from the marks entered. Nothing is shown to students until you publish.', ok: 'Generate result' },
-      pub: { icon: 'lni-eye', title: one ? 'Publish result?' : `Publish ${nb}?`, body: 'Students will see these results on the Student Portal. To make changes later you’ll need to withdraw them.', ok: 'Publish' },
-      del: { icon: 'lni-trash-can', title: one ? 'Delete result?' : `Delete results for ${nb}?`, body: 'The generated result is removed. Marks entered by lecturers stay as they are, and you can generate again.', ok: 'Delete result' },
-      wd: { icon: 'lni-reply', title: one ? 'Withdraw result?' : `Withdraw ${nb}?`, body: 'Students will no longer see these results. Afterwards you can publish again or delete the result.', ok: 'Withdraw' },
+      gen: { icon: 'gen' as const, title: one ? 'Generate result?' : `Generate results for ${nb}?`, body: 'IA and UE totals are worked out from the marks entered. Nothing is shown to students until you publish.', ok: 'Generate result' },
+      pub: { icon: 'pub' as const, title: one ? 'Publish result?' : `Publish ${nb}?`, body: 'Students will see these results on the Student Portal. To make changes later you’ll need to withdraw them.', ok: 'Publish' },
+      del: { icon: 'del' as const, title: one ? 'Delete result?' : `Delete results for ${nb}?`, body: 'The generated result is removed. Marks entered by lecturers stay as they are, and you can generate again.', ok: 'Delete result' },
+      wd: { icon: 'wd' as const, title: one ? 'Withdraw result?' : `Withdraw ${nb}?`, body: 'Students will no longer see these results. Afterwards you can publish again or delete the result.', ok: 'Withdraw' },
     }[confirm.action]
     const danger = confirm.action === 'del'
+    // No onClick on the overlay: only Cancel / Escape close it (project rule),
+    // so a half-typed withdrawal reason can't be lost to a stray click.
     dialog = (
-      <div className="modal-overlay open">
-        <div className="gr-dlg" role="dialog" aria-modal="true" aria-labelledby="gr-dlg-title">
-          <div className={`gr-dlg-ico${danger ? ' is-danger' : ''}`}><i className={`lni ${T.icon}`} aria-hidden="true" /></div>
-          <h3 id="gr-dlg-title" className="gr-dlg-title">{T.title}</h3>
-          <p className="gr-dlg-body">{T.body}</p>
+      <div className="gr-modal">
+        <div className="gr-dlg" role="dialog" aria-modal="true" aria-labelledby="gr-mt">
+          <div className={`gr-ico${danger ? ' gr-d' : ''}`}><Icon name={T.icon} size={20} /></div>
+          <h3 id="gr-mt">{T.title}</h3>
+          <p>{T.body}</p>
           <div className="gr-box">
-            <div className="gr-box-hdr"><b>{label}</b><span className="tabular-nums">{kind === 'batch' ? plural(list[0].students, 'student') : nb}</span></div>
+            <div className="gr-bh"><b>{label}</b><span className="gr-num">{kind === 'batch' ? plural(list[0].students, 'student') : nb}</span></div>
             {kind !== 'batch' && (
               <ul>
                 {list.map(b => (
                   <li key={b.k}>
-                    <span>{kind === 'intake' ? `${b.pg} · Sem ${b.sm} · ` : kind === 'programme' ? `Semester ${b.sm} · ` : ''}{b.bt}</span>
-                    <span className="tabular-nums">{b.students} students</span>
+                    {kind === 'intake' ? `${b.pg} · Sem ${b.sm} · ` : kind === 'programme' ? `Semester ${b.sm} · ` : ''}{b.bt}
+                    <span className="gr-num">{b.students} students</span>
                   </li>
                 ))}
               </ul>
@@ -415,24 +433,23 @@ export default function GenerateResultPage() {
             </div>
           )}
           {confirm.action === 'wd' && (
-            <div className="fg mb-0">
-              <label className="lbl" htmlFor="gr-reason">Reason for withdrawal <span className="req">*</span></label>
-              <textarea
-                id="gr-reason"
-                className="ctrl"
-                rows={3}
-                autoFocus
-                placeholder="e.g. CA marks re-entered for CSC1202"
-                value={reason}
-                onChange={e => { setReason(e.target.value); if (reasonError) setReasonError('') }}
-                style={reasonError ? { borderColor: 'var(--red)' } : undefined}
-              />
-              <p className="field-err" aria-live="polite" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4, minHeight: 18 }}>{reasonError}</p>
-            </div>
+            <>
+              <div className="gr-mf">
+                <label htmlFor="gr-wr">Reason for withdrawal</label>
+                <textarea
+                  id="gr-wr"
+                  autoFocus
+                  placeholder="e.g. CA marks re-entered for CSC1202"
+                  value={reason}
+                  onChange={e => { setReason(e.target.value); if (reasonError) setReasonError('') }}
+                />
+              </div>
+              <div className="gr-msg" aria-live="polite">{reasonError}</div>
+            </>
           )}
-          <div className="gr-dlg-foot">
-            <button type="button" className="btn btn-neu" onClick={closeConfirm}>Cancel</button>
-            <button type="button" className={`btn ${danger ? 'btn-danger' : 'btn-primary'}`} onClick={runConfirm} autoFocus={confirm.action !== 'wd'}>{T.ok}</button>
+          <div className="gr-dfoot">
+            <button type="button" className="gr-btn" onClick={closeConfirm}>Cancel</button>
+            <button type="button" className={`gr-btn ${danger ? 'gr-danger' : 'gr-primary'}`} onClick={runConfirm} autoFocus={confirm.action !== 'wd'}>{T.ok}</button>
           </div>
         </div>
       </div>
@@ -440,45 +457,44 @@ export default function GenerateResultPage() {
   }
 
   const pct = everything.length ? Math.round((counts.pub / everything.length) * 100) : 0
-  const seg = (s: Step) => counts[s] > 0 && <i className={`gr-seg-${s}`} style={{ width: `${(counts[s] / everything.length) * 100}%` }} title={`${counts[s]} ${LABEL[s].toLowerCase()}`} />
+  const sumSeg = (s: Step) => counts[s] > 0 && <i className={`gr-c-${s}`} style={{ width: `${(counts[s] / everything.length) * 100}%` }} title={`${counts[s]} ${LABEL[s].toLowerCase()}`} />
   const tab = (v: '' | Step, label: string, n: number) => (
-    <button type="button" className="gr-tab" aria-pressed={filters.st === v} onClick={() => setFilter('st', filters.st === v && v ? '' : v)}>
-      {v && <i className={`gr-dot gr-dot-${v}`} aria-hidden="true" />}{label}<span className="gr-tab-n tabular-nums">{n}</span>
+    <button type="button" className="gr-btn gr-tab" aria-pressed={filters.st === v} onClick={() => setFilter('st', filters.st === v && v ? '' : v)}>
+      {v && <i className={`gr-c-${v}`} />}{label}<span className="gr-tc gr-num">{n}</span>
     </button>
   )
 
   return (
-    <div className="page active" id="page-generate-result">
-      <div className="pg-hdr">
+    <div className="page active gr" id="page-generate-result">
+      <div className="gr-top">
         <div>
-          <div className="pg-title">Generate Result</div>
-          <div className="pg-sub">Generate, publish and withdraw exam results by programme, semester or batch.</div>
+          <h1>Generate Result</h1>
+          <p className="gr-sub">Generate, publish and withdraw exam results by programme, semester or batch.</p>
         </div>
-        <div className="gr-intake">
-          <label className="lbl" htmlFor="gr-intake">
-            Academic intake
-            <span className={`badge ${readOnly ? 'badge-grey' : 'badge-green'}`} style={{ marginLeft: 8, padding: '1px 8px' }}>{readOnly ? 'Past' : 'Current'}</span>
-          </label>
-          <SearchSelect
-            options={INTAKES.map(i => ({ value: i.id, label: `${i.name} (${i.id})${i.id === CURRENT_INTAKE ? ' · Current' : ''}` }))}
-            value={intake}
-            onChange={changeIntake}
-          />
+        <div className="gr-intk">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></svg>
+          <div>
+            <small>Academic intake</small>
+            <b>{intakeName(intake)} ({intake})<span className={`gr-tagc ${readOnly ? 'gr-old' : 'gr-cur'}`}>{readOnly ? 'Past' : 'Current'}</span></b>
+          </div>
+          <svg className="gr-cv" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+          <select aria-label="Academic intake" value={intake} onChange={e => changeIntake(e.target.value)}>
+            {INTAKES.map(i => <option key={i.id} value={i.id}>{i.name} ({i.id}){i.id === CURRENT_INTAKE ? ' · Current' : ''}</option>)}
+          </select>
         </div>
       </div>
 
       {!data ? (
-        <div className="card"><div className="text-g400 text-center" style={{ padding: 32 }}>Loading results…</div></div>
+        <section className="gr-card"><div className="gr-empty">Loading results…</div></section>
       ) : (
         <>
-          {/* Summary */}
-          <section className="card gr-sum" aria-label="Publishing progress">
+          <section className="gr-card gr-sum" aria-label="Summary">
             <div>
               <div className="gr-sum-k">Publishing progress</div>
               <div className="gr-sum-v">
-                <b className="tabular-nums">{counts.pub}</b>
+                <b className="gr-num">{counts.pub}</b>
                 <span>of {plural(everything.length, 'batch', 'batches')} published</span>
-                <span className="gr-sum-pct tabular-nums">{pct}%</span>
+                <span className="gr-pc gr-num">{pct}%</span>
               </div>
             </div>
             <div className="gr-tabs" role="group" aria-label="Show batches by status">
@@ -488,65 +504,96 @@ export default function GenerateResultPage() {
               {tab('pub', 'Published', counts.pub)}
             </div>
             <div className="gr-sum-bar" role="img" aria-label={`${counts.pub} published, ${counts.draft} generated, ${counts.none} not generated`}>
-              {seg('pub')}{seg('draft')}{seg('none')}
+              {sumSeg('pub')}{sumSeg('draft')}{sumSeg('none')}
             </div>
-            <div className="gr-legend">
-              <span><i className="gr-dot gr-dot-pub" /><b className="tabular-nums">{studentsOf(everything.filter(b => b.s === 'pub'))}</b> students can see results</span>
-              <span><i className="gr-dot gr-dot-draft" /><b className="tabular-nums">{studentsOf(everything.filter(b => b.s === 'draft'))}</b> waiting on publish</span>
-              <span><i className="gr-dot gr-dot-none" /><b className="tabular-nums">{studentsOf(everything.filter(b => b.s === 'none'))}</b> waiting on generate</span>
+            <div className="gr-sum-f">
+              <span><i className="gr-c-pub" /><b className="gr-num">{studentsOf(everything.filter(b => b.s === 'pub'))}</b> students can see results</span>
+              <span><i className="gr-c-draft" /><b className="gr-num">{studentsOf(everything.filter(b => b.s === 'draft'))}</b> waiting on publish</span>
+              <span><i className="gr-c-none" /><b className="gr-num">{studentsOf(everything.filter(b => b.s === 'none'))}</b> waiting on generate</span>
             </div>
           </section>
 
-          {/* Results tree */}
-          <section className={`card gr-list${readOnly ? ' is-readonly' : ''}`} aria-labelledby="gr-list-title">
+          <section className={`gr-card${readOnly ? ' gr-ro' : ''}`} aria-labelledby="gr-lh">
             <div className="gr-lh">
-              <div className="gr-lh-left">
-                <h2 id="gr-list-title" className="card-title">Results <span className="badge badge-grey tabular-nums">{plural(shownCount, 'batch', 'batches')}</span></h2>
+              <div className="gr-lhl">
+                <h2 id="gr-lh">Results <span className="gr-cnt gr-num">{plural(shownCount, 'batch', 'batches')}</span></h2>
                 <button
                   ref={filterBtnRef}
                   type="button"
-                  className={`btn btn-neu btn-sm${panelOpen ? ' gr-on' : ''}`}
+                  className="gr-btn gr-sm gr-ftoggle"
                   aria-expanded={panelOpen}
-                  aria-controls="gr-filters"
+                  aria-controls="gr-fpanel"
                   onClick={() => setPanelOpen(o => !o)}
                 >
-                  <i className="lni lni-funnel" aria-hidden="true" /> Filters
-                  {filterCount > 0 && <span className="gr-fn tabular-nums">{filterCount}</span>}
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4" /></svg>
+                  Filters {filterCount > 0 && <span className="gr-fn">{filterCount}</span>}
                 </button>
               </div>
-              <div className="gr-lh-right">
-                <button type="button" className="btn btn-neu btn-sm gr-quiet" onClick={() => (allOpen ? setOpen(new Set()) : expandAll())}>
+              <div className="gr-lhr">
+                <button type="button" className="gr-btn gr-sm gr-quiet" onClick={() => (allOpen ? setOpen(new Set()) : expandAll())}>
                   {allOpen ? 'Collapse all' : 'Expand all'}
                 </button>
                 {!readOnly && (
                   <button
                     type="button"
-                    className="btn btn-primary btn-sm"
+                    className="gr-btn gr-sm gr-primary"
                     disabled={!readyToPublish}
-                    title={readyToPublish ? undefined : 'Nothing is generated and waiting to publish'}
+                    title={readyToPublish ? '' : 'Nothing is generated and waiting to publish'}
                     onClick={() => ask('pub', 'a:')}
                   >
-                    <i className="lni lni-eye" aria-hidden="true" /> Publish all
+                    <Icon name="pub" />Publish all
                   </button>
                 )}
               </div>
 
               {panelOpen && (
-                <div ref={panelRef} id="gr-filters" className="gr-fpanel" role="dialog" aria-label="Filters">
+                <div ref={panelRef} id="gr-fpanel" className="gr-fpanel" role="dialog" aria-label="Filters">
                   <h3>Filter results</h3>
                   <div className="gr-fgrid">
-                    <div className="fg mb-0"><label className="lbl">Programme</label>
-                      <SearchSelect options={programmeOptions} value={filters.pg} onChange={v => setFilter('pg', v)} /></div>
-                    <div className="fg mb-0"><label className="lbl">Semester</label>
-                      <SearchSelect options={semesterOptions} value={filters.sm} onChange={v => setFilter('sm', v)} disabled={!filters.pg} /></div>
-                    <div className="fg mb-0"><label className="lbl">Batch</label>
-                      <SearchSelect options={batchOptions} value={filters.bt} onChange={v => setFilter('bt', v)} disabled={!filters.sm} /></div>
-                    <div className="fg mb-0"><label className="lbl">Status</label>
-                      <SearchSelect options={statusOptions} value={filters.st} onChange={v => setFilter('st', v as '' | Step)} /></div>
+                    <div className="gr-f">
+                      <label>Programme</label>
+                      <SearchSelect
+                        options={[{ value: '', label: 'All programmes' }, ...PROG_CODES.map(p => ({ value: p, label: `${p} · ${PROGRAMMES[p].n}` }))]}
+                        value={filters.pg}
+                        onChange={v => setFilter('pg', v)}
+                      />
+                    </div>
+                    <div className="gr-f">
+                      <label>Semester</label>
+                      <SearchSelect
+                        options={[
+                          { value: '', label: filters.pg ? 'All semesters' : 'Choose a programme first' },
+                          ...(filters.pg ? semsOf(filters.pg).map(s => ({ value: String(s), label: `Semester ${s}` })) : []),
+                        ]}
+                        value={filters.sm}
+                        onChange={v => setFilter('sm', v)}
+                        disabled={!filters.pg}
+                      />
+                    </div>
+                    <div className="gr-f">
+                      <label>Batch</label>
+                      <SearchSelect
+                        options={[
+                          { value: '', label: filters.sm ? 'All batches' : 'Choose a semester first' },
+                          ...(filters.pg && filters.sm ? PROGRAMMES[filters.pg].s[Number(filters.sm)].b.map(b => ({ value: b, label: b })) : []),
+                        ]}
+                        value={filters.bt}
+                        onChange={v => setFilter('bt', v)}
+                        disabled={!filters.sm}
+                      />
+                    </div>
+                    <div className="gr-f">
+                      <label>Status</label>
+                      <SearchSelect
+                        options={[{ value: '', label: 'All statuses' }, ...(['none', 'draft', 'pub'] as Step[]).map(s => ({ value: s, label: LABEL[s] }))]}
+                        value={filters.st}
+                        onChange={v => setFilter('st', v as '' | Step)}
+                      />
+                    </div>
                   </div>
                   <div className="gr-pfoot">
-                    <button type="button" className="btn btn-neu btn-sm gr-quiet" onClick={() => setFilters(NO_FILTERS)}>Clear all</button>
-                    <button type="button" className="btn btn-primary btn-sm" onClick={() => { setPanelOpen(false); filterBtnRef.current?.focus() }}>Show results</button>
+                    <button type="button" className="gr-btn gr-quiet" onClick={clearFilters}>Clear all</button>
+                    <button type="button" className="gr-btn gr-primary" onClick={() => { setPanelOpen(false); filterBtnRef.current?.focus() }}>Show results</button>
                   </div>
                 </div>
               )}
@@ -559,19 +606,16 @@ export default function GenerateResultPage() {
                     <button type="button" aria-label={`Remove filter ${c.label}`} onClick={() => setFilter(c.k, '' as never)}>&times;</button>
                   </span>
                 ))}
-                {chips.length > 1 && <button type="button" className="btn btn-neu btn-sm gr-quiet" onClick={() => setFilters(NO_FILTERS)}>Clear all</button>}
+                {chips.length > 1 && <button type="button" className="gr-btn gr-sm gr-quiet gr-chip-clear" onClick={clearFilters}>Clear all</button>}
               </div>
             )}
 
-            <div className="gr-cols gr-grid" aria-hidden="true">
-              <span>Programme / Semester / Batch</span><span>Students</span><span>Status</span><span className="gr-r">{readOnly ? '' : 'Actions'}</span>
-            </div>
+            <div className="gr-cols gr-grid"><span>Programme / Semester / Batch</span><span>Students</span><span>Status</span>{!readOnly && <span className="gr-r">Actions</span>}</div>
             <div className="gr-tree">
               {shownCount > 0 ? tree : (
                 <div className="gr-empty">
-                  <b>No batches match these filters</b>
-                  Try removing a filter to see more results.
-                  <div><button type="button" className="btn btn-neu btn-sm" onClick={() => setFilters(NO_FILTERS)}>Clear filters</button></div>
+                  <b>No batches match these filters</b>Try removing a filter to see more results.<br />
+                  <button type="button" className="gr-btn gr-sm" onClick={clearFilters}>Clear filters</button>
                 </div>
               )}
             </div>
@@ -580,7 +624,7 @@ export default function GenerateResultPage() {
       )}
 
       {dialog}
-      <Toast toast={toast} />
+      <div className={`gr-toast${toast.on ? ' gr-on' : ''}`} role="status" aria-live="polite"><Icon name="ok" />{toast.msg}</div>
     </div>
   )
 }

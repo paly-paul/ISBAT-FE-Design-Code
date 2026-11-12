@@ -30,6 +30,7 @@ import {
   useUploadPhoto,
 } from '@/hooks/admission/useApplicationFiling'
 import { filingResultFromNewPayment } from '@/lib/api/admission/applicationFiling'
+import { useVettingApplicationDetail } from '@/hooks/admission/useVetting'
 
 // Family Details tab removed per the Application Filling requirements doc
 // (req. 10) — sponsorship fields already live in Personal Info.
@@ -84,10 +85,13 @@ interface QualRow {
   yearsTaken: string
   proofFile: File | null
   savedId: number | null
+  // A qualification loaded from the server: its proof is already on file.
+  savedProofName: string | null
+  proofUrl: string | null
 }
 
 function emptyQualRow(id: number): QualRow {
-  return { id, institution: '', university: '', passYear: '', grade: '', yearsTaken: '', proofFile: null, savedId: null }
+  return { id, institution: '', university: '', passYear: '', grade: '', yearsTaken: '', proofFile: null, savedId: null, savedProofName: null, proofUrl: null }
 }
 
 // Qualification duration (yearsTaken) — whole years, per the API.
@@ -827,6 +831,50 @@ export default function FilingPage() {
   // Inline field errors per qualification row, keyed by row id then field.
   const [qualErrors, setQualErrors] = useState<Record<number, Record<string, string>>>({})
 
+  // Saved qualifications of an existing application. There's no
+  // application-filling read endpoint for them; GET /vetting/applications/
+  // {guid} returns them (any status, including in progress) with the fields
+  // this form saves plus intApplicationQual, the id the delete call takes.
+  // It needs the real application guid: selectedApplication.applicationGuid
+  // is the payment's guid, so it's taken from the by-payment detail, which
+  // 400s (no application row yet, so nothing saved) for a new filing.
+  const realApplicationGuid = applicationDetail?.applicationGuid ?? null
+  const { data: savedApplication } = useVettingApplicationDetail(realApplicationGuid, !!realApplicationGuid)
+  const [qualsLoadedFor, setQualsLoadedFor] = useState<string | null>(null)
+
+  // A different applicant starts from a blank form, not the last one's rows.
+  useEffect(() => {
+    setQualRows([emptyQualRow(1)])
+    setQualErrors({})
+    setQualsLoadedFor(null)
+  }, [selectedApplication?.applicationGuid])
+
+  useEffect(() => {
+    if (!savedApplication || !realApplicationGuid || savedApplication.applicationGuid !== realApplicationGuid) return
+    if (qualsLoadedFor === realApplicationGuid) return
+    setQualsLoadedFor(realApplicationGuid)
+    const saved = savedApplication.qualifications ?? []
+    if (!saved.length) return
+    const text = (s: string | null | undefined) => (s && s !== 'null' ? s : '')
+    const loaded: QualRow[] = saved.map(q => ({
+      id: q.intApplicationQual,
+      institution: text(q.institution),
+      university: text(q.university),
+      passYear: q.passYear != null ? String(q.passYear) : '',
+      grade: text(q.grade),
+      yearsTaken: q.yearsTaken != null ? String(q.yearsTaken) : '',
+      proofFile: null,
+      savedId: q.intApplicationQual,
+      savedProofName: q.proofUserFileName || (q.proofUrl ? 'Proof document' : null),
+      proofUrl: q.proofUrl,
+    }))
+    // Keep anything already typed into an unsaved row.
+    setQualRows(rows => {
+      const typed = rows.filter(r => r.savedId == null && (r.institution || r.university || r.passYear || r.grade || r.yearsTaken || r.proofFile))
+      return [...loaded, ...typed]
+    })
+  }, [savedApplication, realApplicationGuid, qualsLoadedFor])
+
   function updateQualRow(id: number, patch: Partial<QualRow>) {
     setQualRows(rows => rows.map(r => (r.id === id ? { ...r, ...patch } : r)))
     // Editing a field clears its own message, like the academic forms.
@@ -905,9 +953,11 @@ export default function FilingPage() {
   }
 
   function handleDeleteQualRow(row: QualRow) {
-    if (row.savedId == null) { setQualRows(rows => rows.filter(r => r.id !== row.id)); return }
+    // Always leave one row: the tab renders qualRows[0] as the highest qualification.
+    const without = (rows: QualRow[]) => { const rest = rows.filter(r => r.id !== row.id); return rest.length ? rest : [emptyQualRow(Date.now())] }
+    if (row.savedId == null) { setQualRows(without); return }
     deleteQualification.mutate(row.savedId, {
-      onSuccess: () => { setQualRows(rows => rows.filter(r => r.id !== row.id)); showToast('Qualification removed', 'success') },
+      onSuccess: () => { setQualRows(without); showToast('Qualification removed', 'success') },
       onError: (error: Error) => showToast(error.message || 'Failed to delete qualification', 'error'),
     })
   }
@@ -1018,7 +1068,16 @@ export default function FilingPage() {
           </Field>
           <Field label="Proof Document" req error={err.proofFile}>
             {saved
-              ? <p className="text-sm text-g500 mt-1">{row.proofFile?.name ?? 'Uploaded'}</p>
+              ? (
+                <p className="text-sm text-g500 mt-1 flex items-center gap-2">
+                  <span className="truncate">{row.proofFile?.name ?? row.savedProofName ?? 'Uploaded'}</span>
+                  {!row.proofFile && row.proofUrl && (
+                    <button type="button" className="btn btn-neu btn-sm" onClick={() => setDocPreview({ url: row.proofUrl!, title: `Qualification Proof #${index + 1}` })}>
+                      <i className="lni lni-eye" aria-hidden="true" /> View
+                    </button>
+                  )}
+                </p>
+              )
               : <FileZone file={row.proofFile} onChange={f => updateQualRow(row.id, { proofFile: f })} hasError={!!err.proofFile} />}
           </Field>
         </div>
@@ -1670,7 +1729,7 @@ export default function FilingPage() {
                         <DocRow label="Refugee Certificate" file={refugeeFile} savedName={null} onView={viewDocument} onAdd={() => setActiveTab('personal')} addLabel="Add in Personal Info" />
                       )}
                       {qualRows.map((row, i) => (
-                        <DocRow key={row.id} label={`Qualification Proof #${i + 1}`} file={row.proofFile} savedName={null} onView={viewDocument} onAdd={() => setActiveTab('qualifications')} addLabel="Add in Qualifications" />
+                        <DocRow key={row.id} label={`Qualification Proof #${i + 1}`} file={row.proofFile} savedName={row.savedProofName} onView={viewDocument} onAdd={() => setActiveTab('qualifications')} addLabel="Add in Qualifications" />
                       ))}
                     </div>
 
