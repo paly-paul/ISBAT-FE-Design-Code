@@ -2856,6 +2856,15 @@ input[type="number"] {
   }
 }
 
+/* The viewport rule above ignores the sidebar: with the menu panel open, a
+   1300–1500px window still leaves each half too narrow for Fee Breakdown's
+   five-column table, which then clipped its Outstanding column and totals.
+   Stack on the space the two panels actually have instead. */
+.pc-split-host { container: pc-split / inline-size; }
+@container pc-split (max-width: 1080px) {
+  .pc-tuition-split { grid-template-columns: minmax(0, 1fr); }
+}
+
 /* The side panel stays in view beside a long list. Two columns only: stacked,
    it would cover the list. */
 @media(min-width:1201px) {
@@ -14084,6 +14093,13 @@ body:has(.drawer-overlay) {
   color: var(--tone); letter-spacing: -0.03em; font-variant-numeric: tabular-nums; white-space: nowrap;
 }
 .fd-kpi-num .fd-cur { font-size: .5em; font-weight: 700; letter-spacing: 0; opacity: .75; vertical-align: .35em; }
+/* What a count is counting ("822 students"): small and quiet beside the
+   figure, on its baseline, so the number still leads. */
+.fd-kpi-unit { margin-left: 6px; font-size: clamp(13px, .56em, 16px); font-weight: 600; letter-spacing: 0; color: var(--g600); }
+/* Spelled-out scale ("57.4 million"). Inline text everywhere; on a big
+   headline figure it drops to the same small, quiet size as .fd-kpi-unit,
+   so the number leads and the cell doesn't overflow. */
+.fd-kpi-num .fd-mag, .fd-hero-num .fd-mag { font-size: clamp(13px, .56em, 16px); font-weight: 600; letter-spacing: 0; color: var(--g600); }
 .fd-kpi-foot { margin-top: 6px; font-size: var(--fs-sm); color: var(--g500); font-variant-numeric: tabular-nums; }
 .fd-kpi-foot .fd-cur { font-size: 1em; vertical-align: 0; opacity: 1; font-weight: 600; }
 .fd-chg { display: inline-flex; align-items: center; padding: 1px 6px; margin-right: 3px; border-radius: 999px; font-weight: 700; }
@@ -14106,6 +14122,26 @@ body:has(.drawer-overlay) {
   .fd-kpis { grid-template-columns: minmax(0, 1fr); }
   .fd-kpi:nth-child(n), .fd-kpi-btn:nth-child(n) { border-right: 0; border-bottom: 1px solid var(--g100); }
   .fd-kpi:last-child { border-bottom: 0; }
+}
+
+/* The Finance Dashboard's panel sits beside Needs attention, so its width
+   depends on the sidebar and that card, not just the viewport. It answers to
+   its own width: labels wrap rather than truncate, context lines avoid
+   orphaned words, and cells tighten when the panel is narrow. (Stacking to
+   one column stays with the 460px media query above: a container can't
+   change its own grid from its own query.) */
+.fd-top > .fd-kpis { container: fd-kpis / inline-size; }
+.fd-top > .fd-kpis .fd-kpi-lbl {
+  white-space: normal; line-height: 1.25;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2;
+}
+.fd-top > .fd-kpis .fd-kpi-foot { text-wrap: pretty; }
+.fd-nw { white-space: nowrap; }
+@container fd-kpis (max-width: 460px) {
+  .fd-kpi { padding: 16px 16px; }
+  .fd-kpi-top { gap: 8px; align-items: flex-start; }
+  .fd-kpi-ic { width: 28px; height: 28px; font-size: 13px; }
+  .fd-kpi-num { margin-top: 10px; }
 }
 
 /* Fee-type bars beside Needs attention. The attention card takes the fee
@@ -14348,6 +14384,68 @@ body:has(.drawer-overlay) {
 .fd-state-err > i { color: var(--red); }
 .fd-none { margin: 0; padding: 20px 0; font-size: var(--fs-base); color: var(--g500); }
 .fd-busy { opacity: .55; transition: opacity .2s; }
+
+/* Cleared / blocked student lists (StudentListModal). Toolbar (search +
+   folding filters), one summary strip with the totals, a full-bleed table
+   that scrolls inside the modal with pinned headings and student column,
+   and one footer (freshness + paging). */
+.fd-sl-hdr-note { margin-left: 8px; font-size: var(--fs-sm); font-weight: 500; opacity: .85; }
+.fd-sl-toolbar { flex-shrink: 0; display: flex; align-items: center; gap: 10px; padding: 14px 22px; border-bottom: 1px solid var(--g200); }
+.fd-sl-search-box { position: relative; flex: 1; min-width: 0; }
+.fd-sl-search-box > i { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: var(--g400); font-size: 14px; pointer-events: none; }
+.fd-sl-search-box .ctrl { padding-left: 32px; width: 100%; }
+.fd-sl-filter-btn { flex-shrink: 0; gap: 7px; }
+.fd-sl-filter-btn .badge { padding: 1px 7px; }
+.fd-sl-chev { font-size: 10px; color: var(--g400); transition: transform .2s cubic-bezier(.22, 1, .36, 1); }
+.fd-sl-filter-btn.open .fd-sl-chev { transform: rotate(180deg); }
+.fd-sl-filter-btn.open { color: var(--b700); background: var(--b50); }
+.fd-sl-filters { flex-shrink: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px 14px; padding: 14px 22px 16px; border-bottom: 1px solid var(--g200); background: var(--surface); animation: fd-sl-reveal .22s cubic-bezier(.22, 1, .36, 1); }
+@keyframes fd-sl-reveal { from { opacity: 0; transform: translateY(-4px); } }
+.fd-sl-field { min-width: 0; }
+.fd-sl-field .lbl { margin-bottom: 4px; }
+.fd-sl-summary { flex-shrink: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 8px 24px; padding: 12px 22px; border-bottom: 1px solid var(--g200); }
+.fd-sl-count { display: flex; flex-direction: column; gap: 2px; font-size: var(--fs-base); color: var(--g700); }
+.fd-sl-count-main strong { color: var(--g900); font-variant-numeric: tabular-nums; }
+.fd-sl-count-sub { font-size: var(--fs-xs); color: var(--g500); }
+.fd-sl-stats { margin: 0 0 0 auto; display: flex; align-items: flex-end; flex-wrap: wrap; gap: 4px 22px; font-variant-numeric: tabular-nums; }
+.fd-sl-stats > div { display: flex; flex-direction: column; align-items: flex-end; }
+.fd-sl-stats dt { font-size: var(--fs-xs); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--g500); }
+.fd-sl-stats dd { margin: 0; font-size: var(--fs-base); font-weight: 700; color: var(--g900); }
+.fd-sl-stats-cur { align-self: flex-end; margin-left: -14px; font-size: var(--fs-xs); font-weight: 600; color: var(--g500); }
+.fd-sl-owed dd, .fd-sl-owed dt { color: var(--red); }
+.fd-sl-warn { flex-shrink: 0; margin: 10px 22px 0; padding: 8px 12px; border-radius: var(--rxs); background: var(--amber-bg); border: 1px solid var(--amber-bd); color: var(--g800); font-size: var(--fs-sm); }
+.fd-sl-warn i { color: var(--amber); margin-right: 4px; }
+/* Body fills the rest of the modal; the table (standard .tbl-wrap card) is the
+   scroller, so its heading row and student column pin against it. */
+.fd-sl-body { flex: 1 1 auto; min-height: 220px; display: flex; flex-direction: column; overflow: hidden; padding: 14px 22px 16px; }
+.fd-sl-body > .fd-state { flex: 1; }
+.fd-sl-list { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.fd-sl-list > .tbl-scroll-host { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.tbl-wrap.fd-sl-table { flex: 1; min-height: 0; overflow: auto; }
+/* The blue lives on `thead tr`, so pin the whole row (as .fd-scroll does)
+   rather than each th, or the headings lose their background. */
+.tbl-wrap.fd-sl-table thead { position: sticky; top: 0; z-index: 12; }
+.tbl-wrap.fd-sl-table thead th { position: static; }
+.tbl-wrap.fd-sl-table td { vertical-align: top; padding-top: 10px; padding-bottom: 10px; }
+.tbl-wrap.fd-sl-table td:nth-child(2) { min-width: 200px; max-width: 280px; white-space: normal; }
+/* The global sticky first column is centred for action menus; here it's the
+   student's name: left-aligned, and allowed to wrap so long names don't
+   push the amounts out of view. */
+.tbl-wrap.fd-sl-table table th:first-child,
+.tbl-wrap.fd-sl-table table td:first-child { text-align: left; }
+.tbl-wrap.fd-sl-table thead th:first-child { position: sticky; left: 0; }
+.tbl-wrap.fd-sl-table td:first-child { min-width: 180px; max-width: 240px; white-space: normal; }
+.fd-sl-clr { display: flex; align-items: center; gap: 8px; min-width: 96px; font-weight: 600; color: var(--red); }
+.fd-sl-clr-track { flex: 1; height: 5px; border-radius: 3px; background: var(--g100); overflow: hidden; }
+.fd-sl-clr-track > span { display: block; height: 100%; background: var(--red); border-radius: 3px; }
+.fd-sl-footer { flex-shrink: 0; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.fd-sl-asof { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-sm); color: var(--g500); }
+@media (prefers-reduced-motion: reduce) { .fd-sl-filters { animation: none; } .fd-sl-chev { transition: none; } }
+@media (max-width: 640px) {
+  .fd-sl-toolbar, .fd-sl-filters, .fd-sl-summary { padding-left: 16px; padding-right: 16px; }
+  .fd-sl-stats { margin-left: 0; }
+  .fd-sl-stats > div { align-items: flex-start; }
+}
 .fd-kpi-err { color: var(--red); }
 .fd-toolbar-err { color: var(--red); }
 .fd-skel {
@@ -15177,6 +15275,24 @@ button.mp-avatar { padding: 0; font-family: inherit; }
 @media (max-width: 760px) {
   .mp-sec-strip { grid-template-columns: 1fr; }
   .mp-sec-item + .mp-sec-item { border-left: 0; border-top: 1px solid var(--g100); }
+}
+
+/* Timetable & Course Units tab (MyTeachingTab): one shared Session + Term
+   bar, the summary strip above, the week grid, then the allocation table. */
+.mp-teach-filters { display: grid; grid-template-columns: minmax(200px, 280px) minmax(140px, 180px) 1fr; align-items: end; gap: 14px 18px; }
+.mp-teach-filters .fg { margin-bottom: 0; }
+.mp-teach-note { margin: 0 0 9px; font-size: var(--fs-sm); color: var(--g500); }
+.mp-teach-note strong { color: var(--g800); font-weight: 600; }
+.mp-teach-legend { margin: 10px 2px 0; font-size: var(--fs-xs); color: var(--g500); }
+.mp-teach-units-hdr { flex-wrap: wrap; gap: 12px; }
+.mp-teach-search { width: min(320px, 100%); }
+.mp-teach-search .ctrl { width: 100%; }
+/* The global sticky first column is centred for action menus; here it's the unit code. */
+.tbl-wrap.mp-teach-table table th:first-child,
+.tbl-wrap.mp-teach-table table td:first-child { text-align: left; }
+@media (max-width: 760px) {
+  .mp-teach-filters { grid-template-columns: 1fr 1fr; }
+  .mp-teach-note { grid-column: 1 / -1; margin: 0; }
 }
 
 /* Live password rules under New Password */
@@ -17035,6 +17151,9 @@ button.sp-link:hover .sp-link-go { color: var(--b700); transform: translateX(3px
 
 /* Ledger grid — lighter skin over the shared .recgrid */
 .pcx-ledgers.recgrid { border: 1px solid var(--g200); border-radius: 12px; margin-bottom: 0 }
+/* Never clip the ledger table: if it's still wider than its panel, it
+   scrolls sideways instead of hiding Outstanding and the totals. */
+.recgrid.pcx-ledgers { overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; }
 .pcx-ledgers .recgrid-hdr { background: var(--surface) }
 .pcx-ledgers .recgrid-hdr > span {
   color: var(--g500); text-transform: none; letter-spacing: 0; font-size: var(--fs-sm); font-weight: 600;
@@ -17049,6 +17168,21 @@ button.sp-link:hover .sp-link-go { color: var(--b700); transform: translateX(3px
 .pcx-ledger-name { font-weight: 600; color: var(--g900) }
 .pcx-ledger-sub { font-size: var(--fs-sm); color: var(--g500) }
 .pcx-ledgers .recgrid-total > span:first-child { text-transform: none; letter-spacing: 0; font-size: var(--fs-base); color: var(--g700) }
+/* Discount section breakdown: one lighter row per discount under the
+   Discount total — name and rule, the ledgers it covers, then the
+   backend's condition / warning, with that discount's own amount. */
+.pcx-ledgers .pcx-disc-row { background: var(--white); border-top: 1px dashed var(--g100) }
+.pcx-ledgers .pcx-disc-row > span:first-child { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; padding-top: 8px; padding-bottom: 8px }
+.pcx-ledgers .pcx-disc-row > span:last-child { font-weight: 600; font-size: var(--fs-sm); color: var(--green); padding-top: 8px; padding-bottom: 8px }
+.pcx-disc-name { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; color: var(--g800); font-size: var(--fs-sm) }
+.pcx-disc-name > i { color: var(--green) }
+.pcx-disc-rule { padding: 1px 6px; border-radius: 999px; background: var(--green-bg); color: var(--green); font-size: var(--fs-xs); font-weight: 700 }
+.pcx-disc-meta { font-size: var(--fs-xs); color: var(--g500); text-align: right }
+.pcx-disc-warn { color: var(--amber) }
+@media (max-width: 640px) {
+  .pcx-ledgers .pcx-disc-row > span:first-child { align-items: flex-start }
+  .pcx-disc-meta { text-align: left }
+}
 .pcx-ledgers .recgrid-total:last-child { background: var(--surface) }
 .pcx-ledgers .recgrid-total:last-child > span { padding-top: 13px; padding-bottom: 13px }
 .pcx-ledgers .recgrid-total:last-child > span:first-child { color: var(--g900); font-size: var(--fs-md) }
@@ -17681,11 +17815,16 @@ button.sp-link:hover .sp-link-go { color: var(--b700); transform: translateX(3px
    span.rte-math, so the .rte-math rules also style saved questions wherever
    RichTextDisplay shows them.
    ═══════════════════════════════════════ */
-/* Exam text is small (the editor is 12px), so equations run larger than the
-   words around them, and inline ones use display style (math-style: normal)
-   so fractions, limits and integrals stay full size instead of shrinking to fit
-   the line. */
-.rte-math { display: inline-block; vertical-align: middle; margin: 2px 2px; font-size: 1.4em; line-height: 1.3; }
+/* Exam text is small (the editor is 12px), so equations run a little larger
+   than the words around them, and inline ones use display style
+   (math-style: normal) so fractions, limits and integrals stay full size
+   instead of shrinking to fit the line.
+   vertical-align: baseline puts the equation's own baseline (the line "y = 3"
+   sits on) on the text's baseline, so a label typed before it ("1)", "(a)")
+   lines up; superscripts and fractions then extend above/below it. `middle`
+   centred the whole box instead, which dropped a tall equation (x² in an
+   exponent) below the text and left the label looking raised. */
+.rte-math { display: inline-block; vertical-align: baseline; margin: 2px 2px; font-size: 1.25em; line-height: 1.3; }
 .rte-math math { font-family: 'Cambria Math', 'STIX Two Math', 'Latin Modern Math', math, serif; math-style: normal; }
 .rte-math-block { display: block; margin: 8px 0; text-align: center; }
 [contenteditable="true"] .rte-math { cursor: pointer; border-radius: 4px; padding: 1px 3px; transition: background var(--tr), box-shadow var(--tr); }

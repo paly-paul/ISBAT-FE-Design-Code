@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import DatePicker from '@/components/DatePicker'
 import {
   useCreateProjectReview,
   useUpdateProjectReview,
@@ -113,12 +114,7 @@ export function ProjectReviewFormModal({ isOpen, onClose, proposalGuid, reviewGu
             <div className="grid grid-cols-1 gap-4" style={{ maxHeight: '60vh', overflowY: 'auto', paddingRight: '10px' }}>
               <div className="fg mb-0">
                 <div className="lbl">Review Date <span className="req">*</span></div>
-                <input 
-                  type="date" 
-                  className="ctrl"
-                  value={reviewDate}
-                  onChange={e => setReviewDate(e.target.value)}
-                />
+                <DatePicker value={reviewDate} onChange={setReviewDate} />
               </div>
 
               <div className="fg mb-0">

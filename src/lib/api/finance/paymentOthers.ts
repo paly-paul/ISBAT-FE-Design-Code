@@ -73,9 +73,50 @@ export function getPaymentOthers(params: PaymentOtherListParams): Promise<Paymen
 // POST re-verifies the amount server-side, so this is a preview only.
 // 404 (application not found) / 400 (no intake, or Assessment's fee call
 // failed) surface as thrown errors with the backend message.
-export function getResitFee(studentGuid: string, applicationGuid: string): Promise<number> {
-  if (MOCK_AUTH) return Promise.resolve(1130000)
+//
+// Besides amount it lists the unpaid units the student applied to resit and a
+// per-semester breakdown. Each semester's fee is capped (250,000), so unit
+// amounts can add up to more than amount: group units under their semester
+// and show semesters[].amount; never sum unit amounts. amount always equals
+// the sum of semesters[].amount. "Applied to resit", not "has an exam date".
+export interface ResitFeeUnit {
+  courseUnitGuid: string
+  unitName: string
+  unitCode: string
+  semesterGuid: string | null   // null when the semester couldn't be resolved
+  feeType: 'UE' | 'IA' | string // UE = resit exam, IA = coursework only; a unit applied for both is charged as UE
+  amount: number                // before the per-semester cap
+}
+
+export interface ResitFeeSemester {
+  semesterGuid: string | null
+  semesterName: string
+  subtotal: number              // the semester's units added up
+  amount: number                // subtotal capped at 250,000
+}
+
+export interface ResitFee {
+  amount: number                // total owed, UGX: the locked amount field
+  units: ResitFeeUnit[]
+  semesters: ResitFeeSemester[]
+}
+
+const MOCK_RESIT_FEE: ResitFee = {
+  amount: 400000,
+  units: [
+    { courseUnitGuid: 'cu-1', unitName: 'Artificial Intelligence an Overview', unitCode: 'BNCS2117', semesterGuid: 'sem-1', feeType: 'UE', amount: 150000 },
+    { courseUnitGuid: 'cu-2', unitName: 'Database Systems', unitCode: 'BNCS2118', semesterGuid: 'sem-1', feeType: 'UE', amount: 150000 },
+    { courseUnitGuid: 'cu-3', unitName: 'Web Programming', unitCode: 'BNCS2201', semesterGuid: 'sem-2', feeType: 'IA', amount: 150000 },
+  ],
+  semesters: [
+    { semesterGuid: 'sem-1', semesterName: 'Year Two - Semester One', subtotal: 300000, amount: 250000 },
+    { semesterGuid: 'sem-2', semesterName: 'Year Two - Semester Two', subtotal: 150000, amount: 150000 },
+  ],
+}
+
+export function getResitFee(studentGuid: string, applicationGuid: string): Promise<ResitFee> {
+  if (MOCK_AUTH) return Promise.resolve(MOCK_RESIT_FEE)
   const qs = new URLSearchParams({ studentGuid, applicationGuid })
-  return apiGet<{ amount: number } | null>(`/api/v1/finance/other-payment/resit-fee?${qs.toString()}`)
-    .then(data => data?.amount ?? 0)
+  return apiGet<Partial<ResitFee> | null>(`/api/v1/finance/other-payment/resit-fee?${qs.toString()}`)
+    .then(data => ({ amount: data?.amount ?? 0, units: data?.units ?? [], semesters: data?.semesters ?? [] }))
 }

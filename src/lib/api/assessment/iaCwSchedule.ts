@@ -27,7 +27,7 @@ export interface UpdateCwScheduleRequest {
   maxMark: number
   courseworkType: number
   publishStatus: number
-  examRuleGuid: string | null
+  examRuleGuid: string // required
 }
 
 export async function getIaCwSchedule(courseworkGuid: string): Promise<CwScheduleDto> {

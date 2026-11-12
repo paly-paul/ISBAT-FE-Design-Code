@@ -25,7 +25,9 @@ export interface HallTicketEligibilityDto {
   cwOk: boolean
   ctOk: boolean
   feeOk: boolean
-  // null for Term 1 (not checked).
+  // Checked only for Term 2 of an even semester (code 2, 4, 6, 8); null
+  // (not applicable) for Term 1 and for Term 2 of an odd semester. canIssue
+  // ignores them when null.
   guildOk: boolean | null
   ncheOk: boolean | null
   // The only gate the UI should use; POST / re-checks it server-side.

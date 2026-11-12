@@ -28,6 +28,20 @@ interface FormatState {
 }
 
 /**
+ * Trims leading/trailing blank space and empty trailing lines from editor HTML
+ * before it's saved, keeping all formatting (equations, alignment, bold…).
+ * Shared by the question forms that store rich text.
+ */
+export function sanitizeRichContent(html: string): string {
+  if (!html) return ''
+  return html
+    .replace(/^((?:<p>|<div>|<span>)?)(&amp;#160;|&amp;nbsp;|&#160;|&nbsp;|\s)+/gi, '$1')
+    .replace(/(&amp;#160;|&amp;nbsp;|&#160;|&nbsp;|\s)+(<\/(?:p|div|li|span)>|$)/gi, '$2')
+    .replace(/(<p><br\s*\/?><\/p>|<br\s*\/?>)+$/gi, '')
+    .trim()
+}
+
+/**
  * Checks if HTML is effectively empty (e.g. `<p><br></p>` or `<br>` or whitespace)
  */
 export function isHtmlEmpty(html: string | null | undefined): boolean {

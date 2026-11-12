@@ -84,7 +84,8 @@ const FINANCE_PAYMENT_SECTIONS: MenuNode[] = [
     leaf('Advanced Payments', 'wallet', 'advanced-payments'),
   ]),
   section('Reports & Statements', [
-    leaf('Financial Reports', 'bar-chart', 'financial-reports'),
+    // 'Financial Reports' (financial-reports) removed 2026-11-11: the page
+    // was static mock figures with no API, and has been deleted.
     // discount-report-page.md, 2026-10-11 — no backend page registration
     // yet, so real mode shows it only once /me/menu returns it.
     leaf('Discount Report', 'tag', 'reports/discount'),
@@ -547,6 +548,10 @@ function stripUnintegratedPages(menu: MenuNode[]): MenuNode[] {
     '/assessment/schedule',
     // Hidden from the sidebar per request, 2026-10-29 — page still exists.
     '/academic/student-lookup',
+    // Page deleted 2026-11-11 (static mock figures, no API). The backend's
+    // /me/menu still sends it, so strip it until the menu API drops it —
+    // otherwise the sidebar would link to a 404.
+    '/finance/financial-reports',
   ]
   // The real /me/menu may send bare slugs ("weight-config"), so match on
   // the last path segment too — but only within the hidden URL's own module,

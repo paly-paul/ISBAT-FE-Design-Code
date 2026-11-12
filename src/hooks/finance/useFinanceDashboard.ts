@@ -1,7 +1,10 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import {
   DashboardGranularity,
+  DashboardStudentListParams,
   getDashboardAttention,
+  getDashboardBlockedStudents,
+  getDashboardClearedStudents,
   getDashboardCollectionByFeeType,
   getDashboardCollections,
   getDashboardDiscounts,
@@ -81,6 +84,27 @@ export function useDashboardCollections(intakeGuid: string, fromDate: string, to
     queryKey: [...DASHBOARD_KEY, 'collections', intakeGuid, fromDate, toDate, granularity],
     queryFn: () => getDashboardCollections({ intakeGuid, fromDate, toDate, granularity }),
     enabled: enabled && !!intakeGuid && !!fromDate && !!toDate,
+    placeholderData: keepPreviousData,
+  })
+}
+
+// Cleared / blocked drill-down lists. No polling: they load when opened and
+// when the filters or page change, and only the list re-fetches (the cards
+// don't). The current page stays on screen while the next one loads.
+export function useDashboardClearedStudents(params: DashboardStudentListParams, enabled: boolean) {
+  return useQuery({
+    queryKey: [...DASHBOARD_KEY, 'cleared-students', params],
+    queryFn: () => getDashboardClearedStudents(params),
+    enabled: enabled && !!params.intakeGuid,
+    placeholderData: keepPreviousData,
+  })
+}
+
+export function useDashboardBlockedStudents(params: DashboardStudentListParams, enabled: boolean) {
+  return useQuery({
+    queryKey: [...DASHBOARD_KEY, 'blocked-students', params],
+    queryFn: () => getDashboardBlockedStudents(params),
+    enabled: enabled && !!params.intakeGuid,
     placeholderData: keepPreviousData,
   })
 }

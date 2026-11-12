@@ -1,6 +1,16 @@
 'use client'
 import { Suspense, useLayoutEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
+import { formatDate } from '@/lib/date'
+import { useVettingApplicationDetail } from '@/hooks/admission/useVetting'
+import { documentTitle, genderText, orDash } from '@/lib/admission/applicantDisplay'
+import { DocumentPreviewModal } from '@/components/modals/shared/DocumentPreviewModal'
+
+// Read-only profile opened from "View Full Profile" (Vetting Desk review, View
+// Applicant, Complete Registration). Everything comes from
+// GET /admissions/vetting/applications/{applicationGuid}
+// (get-vetting-application-detail.md): the applicant's details plus their
+// qualifications and documents. The link only carries the guid.
 
 type Tab = 'personal' | 'application' | 'qualification' | 'documents'
 const TABS: { id: Tab; label: string; icon: string }[] = [
@@ -10,62 +20,69 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'documents',    label: 'Documents',            icon: 'lni-folder-2' },
 ]
 
-const MOCK_QUALIFICATION = {
-  type: 'A-Level (UACE)',
-  institution: 'Kampala S.S.',
-  year: '2023',
-  indexNo: 'U1234/056',
-  percentage: '14 Points',
-  duration: '2 Years',
+function ReadOnly({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+  return <div className="fg"><label className="lbl">{label}</label><input className={`ctrl${mono ? ' font-mono' : ''}`} readOnly value={value} /></div>
 }
 
-const MOCK_DOCUMENTS = [
-  { label: 'O-Level Certificate', icon: 'lni-certificate', status: 'Uploaded' },
-  { label: 'A-Level Certificate', icon: 'lni-certificate', status: 'Uploaded' },
-  { label: 'Passport Photo',      icon: 'lni-image',       status: 'Uploaded' },
-  { label: 'National ID',         icon: 'lni-id-card',     status: 'Pending'  },
-]
-
-function getParam(searchParams: URLSearchParams, key: string, fallback = '—') {
-  return searchParams.get(key) || fallback
+function PageState({ icon, title, sub, spin }: { icon: string; title: string; sub?: string; spin?: boolean }) {
+  return (
+    <div className="card">
+      <div className="rpt-empty" role="status" style={{ padding: '40px 0' }}>
+        <i className={`lni ${icon}${spin ? ' spin' : ''}`} aria-hidden="true" />
+        <div className="rpt-empty-title">{title}</div>
+        {sub && <div className="text-sm text-g500">{sub}</div>}
+      </div>
+    </div>
+  )
 }
 
 function ApplicantProfileContent() {
   const searchParams = useSearchParams()
+  const applicationGuid = searchParams.get('applicationGuid')
+  const { data: detail, isLoading, isError, error } = useVettingApplicationDetail(applicationGuid, !!applicationGuid)
+
   const [activeTab, setActiveTab] = useState<Tab>('personal')
+  const [preview, setPreview] = useState<{ url: string; title: string } | null>(null)
   const tabRefs = useRef<Partial<Record<Tab, HTMLButtonElement>>>({})
   const [indicator, setIndicator] = useState({ left: 0, width: 0 })
 
+  // The tab bar only mounts once the record has loaded, so re-measure then too.
   useLayoutEffect(() => {
     const el = tabRefs.current[activeTab]
     if (el) setIndicator({ left: el.offsetLeft, width: el.offsetWidth })
-  }, [activeTab])
+  }, [activeTab, detail])
 
-  const name        = getParam(searchParams, 'name', 'Unknown Applicant')
-  const ref         = getParam(searchParams, 'ref')
-  const programme   = getParam(searchParams, 'programme')
-  const type        = getParam(searchParams, 'type')
-  const dob         = getParam(searchParams, 'dob')
-  const gender      = getParam(searchParams, 'gender')
-  const nationality = getParam(searchParams, 'nationality')
-  const nationalId  = getParam(searchParams, 'nationalId')
-  const phone       = getParam(searchParams, 'phone')
-  const email       = getParam(searchParams, 'email')
-  const intake      = getParam(searchParams, 'intake')
-  const campus      = getParam(searchParams, 'campus')
-  const submitted   = getParam(searchParams, 'submitted')
+  const header = (
+    <div className="pg-hdr">
+      <div>
+        <div className="pg-title">Applicant Profile</div>
+        <div className="pg-sub">Read-only view &middot; captured during Application Filing</div>
+      </div>
+    </div>
+  )
 
-  const [firstName, ...rest] = name.split(' ')
-  const lastName = rest.join(' ')
-  const initials = `${firstName?.[0] ?? ''}${lastName?.[0] ?? ''}`.toUpperCase() || '—'
+  if (!applicationGuid) {
+    return <div id="page-applicant-profile">{header}<PageState icon="lni-user" title="No applicant selected" sub="Open this page from View Full Profile on an application." /></div>
+  }
+  if (isLoading) {
+    return <div id="page-applicant-profile">{header}<PageState icon="lni-spinner-arrow" spin title="Loading applicant profile…" /></div>
+  }
+  if (isError || !detail) {
+    return <div id="page-applicant-profile">{header}<PageState icon="lni-warning" title="Couldn’t load this applicant" sub={(error as Error | null)?.message || 'Please try again later.'} /></div>
+  }
+
+  const firstName = orDash(detail.firstName)
+  const lastName = orDash(detail.lastName)
+  const fullName = [detail.firstName, detail.lastName].map(v => orDash(v)).filter(v => v !== '—').join(' ') || '—'
+  const initials = fullName !== '—' ? fullName.split(' ').slice(0, 2).map(p => p[0]).join('').toUpperCase() : '—'
+  const intake = orDash(String(detail.intakeName || detail.intakeCode || detail.intake || ''))
+  const admissionType = orDash(detail.admissionType)
+  const uploadedDocs = detail.documents.filter(d => d.uploaded).length
+  const withProof = detail.qualifications.filter(q => q.proofUrl).length
 
   return (
     <div id="page-applicant-profile">
-      <div className="pg-hdr">
-        <div>
-          <div className="pg-title">Applicant Profile</div>
-          <div className="pg-sub">Read-only view &middot; captured during Application Filing</div>
-        </div>      </div>
+      {header}
 
       <div className="card mb-6">
         <div className="flex items-center gap-4">
@@ -73,12 +90,12 @@ function ApplicantProfileContent() {
             {initials}
           </div>
           <div className="flex-1 min-w-0">
-            <div className="font-semibold text-lg text-g900">{name}</div>
-            <div className="text-sm text-g500">{programme}{type !== '—' && ` · ${type}`}</div>
+            <div className="font-semibold text-lg text-g900">{fullName}</div>
+            <div className="text-sm text-g500">{orDash(detail.programName)}{admissionType !== '—' && ` · ${admissionType}`}</div>
           </div>
           <div className="flex flex-wrap gap-2">
-            {ref !== '—' && <span className="badge badge-blue font-mono">{ref}</span>}
-            {campus !== '—' && <span className="badge badge-grey">{campus}</span>}
+            {orDash(detail.appRefNo) !== '—' && <span className="badge badge-blue font-mono">{detail.appRefNo}</span>}
+            {orDash(detail.campusName) !== '—' && <span className="badge badge-grey">{detail.campusName}</span>}
           </div>
         </div>
       </div>
@@ -101,56 +118,93 @@ function ApplicantProfileContent() {
         <div key={activeTab} className="p-5 tab-panel-in">
           {activeTab === 'personal' && (
             <div className="g3">
-              <div className="fg"><label className="lbl">First Name</label><input className="ctrl" readOnly value={firstName || ''} /></div>
-              <div className="fg"><label className="lbl">Last Name</label><input className="ctrl" readOnly value={lastName || '—'} /></div>
-              <div className="fg"><label className="lbl">Date of Birth</label><input className="ctrl" readOnly value={dob} /></div>
-              <div className="fg"><label className="lbl">Gender</label><input className="ctrl" readOnly value={gender} /></div>
-              <div className="fg"><label className="lbl">Nationality</label><input className="ctrl" readOnly value={nationality} /></div>
-              <div className="fg"><label className="lbl">National ID</label><input className="ctrl" readOnly value={nationalId} /></div>
-              <div className="fg"><label className="lbl">Phone</label><input className="ctrl" readOnly value={phone} /></div>
-              <div className="fg"><label className="lbl">Email</label><input className="ctrl" readOnly value={email} /></div>
+              <ReadOnly label="First Name" value={firstName} />
+              <ReadOnly label="Last Name" value={lastName} />
+              <ReadOnly label="Date of Birth" value={detail.dob ? formatDate(detail.dob) : '—'} />
+              <ReadOnly label="Gender" value={genderText(detail.gender) || '—'} />
+              <ReadOnly label="Nationality" value={orDash(detail.nationality)} />
+              <ReadOnly label="Country" value={orDash(detail.countryName)} />
+              <ReadOnly label="National ID" value={orDash(detail.nationalId)} />
+              <ReadOnly label="Phone" value={orDash(detail.phone)} />
+              <ReadOnly label="Email" value={orDash(detail.emailId)} />
             </div>
           )}
 
           {activeTab === 'application' && (
             <div className="g3">
-              <div className="fg"><label className="lbl">App. Ref</label><input className="ctrl font-mono" readOnly value={ref} /></div>
-              <div className="fg"><label className="lbl">Admission Type</label><input className="ctrl" readOnly value={type} /></div>
-              <div className="fg"><label className="lbl">Programme</label><input className="ctrl" readOnly value={programme} /></div>
-              <div className="fg"><label className="lbl">Intake</label><input className="ctrl" readOnly value={intake} /></div>
-              <div className="fg"><label className="lbl">Campus</label><input className="ctrl" readOnly value={campus} /></div>
-              <div className="fg"><label className="lbl">Submitted</label><input className="ctrl" readOnly value={submitted} /></div>
+              <ReadOnly label="App. Ref" value={orDash(detail.appRefNo)} mono />
+              <ReadOnly label="Admission Type" value={admissionType} />
+              <ReadOnly label="Programme" value={orDash(detail.programName)} />
+              <ReadOnly label="Intake" value={intake} />
+              <ReadOnly label="Campus" value={orDash(detail.campusName)} />
+              <ReadOnly label="Submitted" value={detail.submittedDate ? formatDate(detail.submittedDate) : '—'} />
             </div>
           )}
 
           {activeTab === 'qualification' && (
-            <div className="g3">
-              <div className="fg"><label className="lbl">Type</label><input className="ctrl" readOnly value={MOCK_QUALIFICATION.type} /></div>
-              <div className="fg"><label className="lbl">Institution</label><input className="ctrl" readOnly value={MOCK_QUALIFICATION.institution} /></div>
-              <div className="fg"><label className="lbl">Year</label><input className="ctrl" readOnly value={MOCK_QUALIFICATION.year} /></div>
-              <div className="fg"><label className="lbl">Index No.</label><input className="ctrl" readOnly value={MOCK_QUALIFICATION.indexNo} /></div>
-              <div className="fg"><label className="lbl">Percentage / GPA</label><input className="ctrl" readOnly value={MOCK_QUALIFICATION.percentage} /></div>
-              <div className="fg"><label className="lbl">Duration</label><input className="ctrl" readOnly value={MOCK_QUALIFICATION.duration} /></div>
-            </div>
+            detail.qualifications.length === 0 ? (
+              <p className="text-sm text-g500">No qualifications submitted yet.</p>
+            ) : (
+              <>
+                <p className="text-sm text-g500 mb-3">{withProof} of {detail.qualifications.length} with proof</p>
+                <div className="vd-list">
+                  {detail.qualifications.map(q => (
+                    <div key={q.applicationQualGuid} className={`vd-doc${q.proofUrl ? '' : ' missing'}`}>
+                      <span className="vd-doc-icon"><i className={`lni ${q.proofUrl ? 'lni-book' : 'lni-question-circle'}`} aria-hidden="true" /></span>
+                      <div className="vd-doc-body">
+                        {/* institution is free text by convention (e.g. "O Level" / "A Level"); there is no structured type. */}
+                        <div className="vd-doc-name">{orDash(q.institution)} &middot; {orDash(q.university)}</div>
+                        <div className="vd-doc-sub">
+                          Grade {orDash(q.grade)} &middot; {q.passYear ?? '—'} &middot; {q.yearsTaken != null ? `${q.yearsTaken} yrs` : '—'}
+                          {!q.proofUrl && <> &middot; No proof</>}
+                        </div>
+                      </div>
+                      {q.proofUrl && (
+                        <button type="button" className="btn btn-neu btn-sm" onClick={() => setPreview({ url: q.proofUrl!, title: `Proof — ${q.institution} · ${q.university}` })} aria-label={`View proof for ${q.institution}`}>
+                          <i className="lni lni-eye" aria-hidden="true" /> View Proof
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </>
+            )
           )}
 
           {activeTab === 'documents' && (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              {MOCK_DOCUMENTS.map(doc => (
-                <div key={doc.label} className="border border-g200 bg-white rounded-[10px] overflow-hidden">
-                  <div className="h-20 flex items-center justify-center bg-b50">
-                    <i className={`lni ${doc.icon} text-b500 text-2xl`} />
-                  </div>
-                  <div className="p-3">
-                    <p className="text-sm font-medium text-g800 mb-1">{doc.label}</p>
-                    <span className={`badge ${doc.status === 'Uploaded' ? 'badge-green' : 'badge-amber'}`}>{doc.status}</span>
-                  </div>
+            detail.documents.length === 0 ? (
+              <p className="text-sm text-g500">No documents required for this application.</p>
+            ) : (
+              <>
+                <p className="text-sm text-g500 mb-3">{uploadedDocs} of {detail.documents.length} uploaded</p>
+                <div className="vd-list">
+                  {detail.documents.map(doc => (
+                    <div key={doc.documentType} className={`vd-doc${doc.uploaded ? '' : ' missing'}`}>
+                      <span className="vd-doc-icon"><i className={`lni ${doc.uploaded ? 'lni-folder' : 'lni-question-circle'}`} aria-hidden="true" /></span>
+                      <div className="vd-doc-body">
+                        <div className="vd-doc-name">{documentTitle(doc.documentType)}</div>
+                        <div className="vd-doc-sub">{doc.uploaded ? 'Uploaded' : 'Missing'}</div>
+                      </div>
+                      {doc.uploaded && doc.url && (
+                        <button type="button" className="btn btn-neu btn-sm" onClick={() => setPreview({ url: doc.url!, title: documentTitle(doc.documentType) })} aria-label={`View ${documentTitle(doc.documentType)}`}>
+                          <i className="lni lni-eye" aria-hidden="true" /> View
+                        </button>
+                      )}
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </>
+            )
           )}
         </div>
       </div>
+
+      <DocumentPreviewModal
+        isOpen={!!preview}
+        onClose={() => setPreview(null)}
+        url={preview?.url ?? null}
+        title={preview?.title}
+      />
     </div>
   )
 }

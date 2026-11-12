@@ -10,6 +10,7 @@ import { EmptyState } from '@/components/EmptyState'
 import { ActionMenu } from '@/components/ActionMenu'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { Toast } from '@/components/Toast'
+import { formatDate } from '@/lib/date'
 import { useProgramDropdown } from '@/hooks/academic/useProgramMaster'
 import { useIntakesDropdown } from '@/hooks/academic/useIntakes'
 import { 
@@ -286,7 +287,7 @@ export default function UeAttendancePage() {
                     <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1.5">
                       <i className="lni lni-calendar text-blue-500"></i> Exam Date
                     </div>
-                    <div className="font-bold text-slate-800 text-[16px]">{schedule.examDate}</div>
+                    <div className="font-bold text-slate-800 text-[16px]">{schedule.examDate ? formatDate(`${schedule.examDate.slice(0, 10)}T00:00:00`) : '—'}</div>
                   </div>
                   <div>
                     <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1.5">

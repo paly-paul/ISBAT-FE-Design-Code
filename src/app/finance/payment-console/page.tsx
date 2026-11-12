@@ -46,7 +46,7 @@ import {
   CurrentSemesterPayableTotal,
   PaymentHistoryEntry,
 } from '@/hooks/finance/usePaymentConsole'
-import { usePaymentOthersList, useResitFee } from '@/hooks/finance/usePaymentOthers'
+import { usePaymentOthersList, useResitFee, type ResitFee, type ResitFeeSemester } from '@/hooks/finance/usePaymentOthers'
 import { getPaymentReceiptPdf, isResitLedger, refugeeLabel, studCategoryLabel } from '@/lib/api/finance/paymentConsole'
 import { downloadBlob } from '@/lib/downloadBlob'
 import { formatDate, formatDateTime } from '@/lib/date'
@@ -108,6 +108,84 @@ function OutstandingCategoryTable({ items, isLoading, isError }: { items: AllOut
 // of "500.00"), which reads as imprecise next to a currency figure.
 function fmtAmt(n: number) {
   return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
+// The units behind the locked resit amount (get-resit-fee.md): grouped by
+// semester, each semester showing its capped amount. Unit amounts are before
+// the cap, so they're never summed here; the total is the API's amount, which
+// always equals the sum of the semester amounts. "Applied to resit", not
+// "scheduled": these units have no exam date yet.
+const RESIT_FEE_TYPE: Record<string, { label: string; badge: string; title: string }> = {
+  UE: { label: 'Resit exam', badge: 'badge-blue', title: 'University exam resit (a unit applied for both is charged as UE)' },
+  IA: { label: 'Coursework', badge: 'badge-purple', title: 'Coursework (IA) resit only' },
+}
+
+function ResitUnitsBreakdown({ fee, isLoading }: { fee: ResitFee | undefined; isLoading: boolean }) {
+  if (isLoading || !fee) return <div className="text-g400 text-center" style={{ padding: 12, fontSize: 12.5 }}>Loading resit units…</div>
+  if (fee.amount === 0 && fee.units.length === 0) {
+    return (
+      <div className="pc-ledger-item">
+        <span className="pc-ledger-icon"><i className="lni lni-checkmark-circle"></i></span>
+        <div className="flex-1 min-w-0">
+          <div className="pc-ledger-name">No resit exams to pay</div>
+          <div className="pc-ledger-sub">Nothing applied to resit is unpaid for this student.</div>
+        </div>
+      </div>
+    )
+  }
+  // Semesters in the API's order; a unit whose semester isn't listed (or is
+  // null and unlisted) goes in a trailing "Semester not resolved" group.
+  const listed = new Set(fee.semesters.map(s => s.semesterGuid))
+  const groups = fee.semesters.map(s => ({ key: s.semesterGuid ?? 'none', name: s.semesterName || 'Semester not resolved', semester: s as ResitFeeSemester | null, units: fee.units.filter(u => u.semesterGuid === s.semesterGuid) }))
+  const orphans = fee.units.filter(u => !listed.has(u.semesterGuid))
+  if (orphans.length) groups.push({ key: 'orphans', name: 'Semester not resolved', semester: null, units: orphans })
+
+  return (
+    <div className="flex flex-col gap-2" aria-label="Resit units included in the resit fee">
+      <div className="pc-ledger-sub" style={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.04em' }}>
+        Resit units applied for · {fee.units.length} {fee.units.length === 1 ? 'unit' : 'units'}
+      </div>
+      {groups.map(g => {
+        const capped = !!g.semester && g.semester.subtotal > g.semester.amount
+        return (
+          <div key={g.key} style={{ border: '1.5px solid var(--g200)', borderRadius: 'var(--rsm)', overflow: 'hidden' }}>
+            <div className="flex items-center gap-2" style={{ padding: '8px 12px', background: 'var(--surface)', borderBottom: '1px solid var(--g200)' }}>
+              <span className="font-semibold text-g800 flex-1 min-w-0 truncate" style={{ fontSize: 13 }}>{semesterLabel(g.name)}</span>
+              {g.semester && (
+                <span className="flex items-baseline gap-1.5 shrink-0">
+                  <span className="text-g400 font-semibold" style={{ fontSize: 11 }}>UGX</span>
+                  <span className="font-bold text-amber">{fmtAmt(g.semester.amount)}</span>
+                </span>
+              )}
+            </div>
+            {capped && (
+              <div style={{ padding: '6px 12px', fontSize: 'var(--fs-xs)', color: 'var(--g600)', background: 'var(--amber-bg)', borderBottom: '1px solid var(--amber-bd)' }}>
+                <i className="lni lni-information" aria-hidden="true"></i> Units add up to UGX {fmtAmt(g.semester!.subtotal)}; this semester is capped at UGX {fmtAmt(g.semester!.amount)}.
+              </div>
+            )}
+            {g.units.map(u => {
+              const t = RESIT_FEE_TYPE[u.feeType] ?? { label: u.feeType, badge: 'badge-grey', title: u.feeType }
+              return (
+                <div key={u.courseUnitGuid} className="flex items-center gap-3" style={{ padding: '8px 12px', borderTop: '1px solid var(--g100)' }}>
+                  <div className="flex-1 min-w-0">
+                    <div className="truncate text-g900" style={{ fontSize: 13, fontWeight: 500 }} title={u.unitName}>{u.unitName}</div>
+                    <div className="font-mono text-g500" style={{ fontSize: 11.5 }}>{u.unitCode}</div>
+                  </div>
+                  <span className={`badge ${t.badge} shrink-0`} title={t.title}>{t.label}</span>
+                  <span className="tabular-nums text-g700 shrink-0" style={{ fontSize: 13, minWidth: 90, textAlign: 'right' }}
+                    title={capped ? 'Unit fee before the semester cap' : undefined}>{fmtAmt(u.amount)}</span>
+                </div>
+              )
+            })}
+          </div>
+        )
+      })}
+      <div className="pc-total-due">
+        <span className="text-muted" style={{ fontSize: 12 }}>Resit fee (UGX)</span>
+        <span className="font-bold text-amber" style={{ fontSize: 15 }}>{fmtAmt(fee.amount)}</span>
+      </div>
+    </div>
+  )
 }
 
 // Icons for Record Payment's method choice, keyed like PAY_TYPE_LABELS.
@@ -815,7 +893,26 @@ export default function PaymentConsolePage() {
     ...l,
     convScheduled: convertAmount(l.ledgerAmount, l.currencyGuid, targetCurrencyGuid, baseCurrency?.currencyGuid ?? null, ratesByGuid),
     convOutstanding: convertAmount(l.outstanding, l.currencyGuid, targetCurrencyGuid, baseCurrency?.currencyGuid ?? null, ratesByGuid),
+    convDiscount: convertAmount(l.discountAmount, l.currencyGuid, targetCurrencyGuid, baseCurrency?.currencyGuid ?? null, ratesByGuid),
   }))
+  // The Discount section's breakdown: one entry per discount (a discount can
+  // cover several ledgers, e.g. Tuition Fee and Semester Fee), with the
+  // ledgers it applies to, its rule (amount or %), its converted amount and
+  // the backend's condition / warning text. Shown under the Discount total,
+  // not under each ledger row.
+  const discountDetails = (() => {
+    const byGuid = new Map<string, { name: string; calcType: number | null; amtPer: number | null; ledgerNames: string[]; amount: number; unconverted: boolean; message: string | null; warnings: string[] }>()
+    for (const l of convertedLedgers) {
+      if (!l.discountGuid || l.discountAmount <= 0) continue
+      const d = byGuid.get(l.discountGuid) ?? { name: l.discountName ?? 'Discount', calcType: l.discountCalcType, amtPer: l.discountAmtPer, ledgerNames: [], amount: 0, unconverted: false, message: l.discountMessage, warnings: [] }
+      if (!d.ledgerNames.includes(l.ledgerName)) d.ledgerNames.push(l.ledgerName)
+      if (l.convDiscount == null) d.unconverted = true
+      else d.amount += l.convDiscount
+      if (l.discountWarning && !d.warnings.includes(l.discountWarning)) d.warnings.push(l.discountWarning)
+      byGuid.set(l.discountGuid, d)
+    }
+    return [...byGuid.values()]
+  })()
   const convertedTotalDiscount = ledgerTotals.reduce((sum, t) => {
     const conv = convertAmount(t.totalDiscount, t.currencyGuid, targetCurrencyGuid, baseCurrency?.currencyGuid ?? null, ratesByGuid)
     return sum + (conv ?? 0)
@@ -874,7 +971,21 @@ export default function PaymentConsolePage() {
   // paymentAdvanceGuid) — advanceNativeByGuid below cross-references it so
   // the picker can show what the cashier actually deposited, not just its
   // base-currency equivalent.
-  const { data: paymentHistory = [], isLoading: isHistoryLoading, isError: isHistoryError } = usePaymentHistory(selectedApplicationGuid, !!selectedApplicationGuid && (activePayTab === 'tuition' || hasAdvanceDeposits))
+  //
+  // Payment History (2026-09-11, per request) — a popup opened from the
+  // page header's button (only there; the copies inside the two Record
+  // Payment panels were removed 2026-11-11). It lists both Semester (tuition)
+  // and Other payments in its own two tabs whichever pay tab is active, so
+  // both lists also load while it's open; it opens on the matching tab.
+  // Kept inline here since it reads a long list of page-scoped state (both
+  // history queries/pagination, advanceByPayment, the View/Edit setters).
+  const [showPaymentHistory, setShowPaymentHistory] = useState(false)
+  const [historyTab, setHistoryTab] = useState<'tuition' | 'other'>('tuition')
+  function openPaymentHistory() {
+    setHistoryTab(activePayTab === 'other' ? 'other' : 'tuition')
+    setShowPaymentHistory(true)
+  }
+  const { data: paymentHistory = [], isLoading: isHistoryLoading, isError: isHistoryError } = usePaymentHistory(selectedApplicationGuid, !!selectedApplicationGuid && (activePayTab === 'tuition' || hasAdvanceDeposits || showPaymentHistory))
   const tuitionPaymentHistory = useMemo(() => paymentHistory.filter(h => h.category === 1), [paymentHistory])
   const advanceNativeByGuid = useMemo(() => {
     const map = new Map<string, { amount: number; currencyName: string }>()
@@ -897,15 +1008,6 @@ export default function PaymentConsolePage() {
   const [viewEntry, setViewEntry] = useState<PaymentHistoryEntry | null>(null)
   const [editTarget, setEditTarget] = useState<EditablePaymentTarget | null>(null)
   const [showUpcomingSemesters, setShowUpcomingSemesters] = useState(false)
-  // Payment History (2026-09-11, per request) — back to a popup, opened
-  // from a button on the student card, instead of its own permanent card in
-  // the body below. Kept inline in this component (not its own modal
-  // component/file) since its content reads straight off a long list of
-  // page-scoped state (activePayTab, both tabs' history queries/pagination,
-  // advanceByPayment, setViewEntry/setEditTarget/setEditOtherTarget) that a
-  // separate component would otherwise need passed through as a wall of
-  // props for no real benefit — see its own render further down.
-  const [showPaymentHistory, setShowPaymentHistory] = useState(false)
   // Other Payment tab's own Edit target (put-payment-other.md) — a
   // genuinely different shape/endpoint from Tuition's editTarget above, so
   // kept as its own state rather than reused.
@@ -915,7 +1017,7 @@ export default function PaymentConsolePage() {
   // and the fee-line row itself has no `advance` field to check ahead of
   // time (see useAdvanceStatusByPayment's own comment). Only fetched while
   // the Tuition tab is actually active, matching this table's own gating.
-  const advanceByPayment = useAdvanceStatusByPayment(selectedApplicationGuid, !!selectedApplicationGuid && activePayTab === 'tuition')
+  const advanceByPayment = useAdvanceStatusByPayment(selectedApplicationGuid, !!selectedApplicationGuid && (activePayTab === 'tuition' || showPaymentHistory))
 
   // Other Payment tab's own Payment History — genuinely server-paginated
   // (get-payment-others.md), unlike Tuition's own fetch-whole-then-slice
@@ -929,7 +1031,7 @@ export default function PaymentConsolePage() {
     data: otherPaymentHistory, isLoading: isOtherHistoryLoading, isError: isOtherHistoryError,
   } = usePaymentOthersList(
     { applicationGuid: studentGuid ? undefined : selectedApplicationGuid, studentGuid, page: otherHistoryPage, pageSize: HISTORY_PAGE_SIZE },
-    !!selectedApplicationGuid && activePayTab === 'other',
+    !!selectedApplicationGuid && (activePayTab === 'other' || showPaymentHistory),
   )
   const otherHistoryItems = otherPaymentHistory?.items ?? []
   const otherHistoryTotalPages = Math.max(1, Math.ceil((otherPaymentHistory?.totalCount ?? 0) / HISTORY_PAGE_SIZE))
@@ -990,8 +1092,10 @@ export default function PaymentConsolePage() {
   const resitLedgerGuid = ledgerOthers.find(isResitLedger)?.ledgerOthersGuid ?? null
   const hasResitRow = !!resitLedgerGuid && otherLedgerRows.some(r => r.ledgerOthersGuid === resitLedgerGuid)
   const {
-    data: resitFee, isFetching: isResitFeeLoading, isError: isResitFeeError, error: resitFeeError,
+    data: resitFeeData, isFetching: isResitFeeLoading, isError: isResitFeeError, error: resitFeeError,
   } = useResitFee(studentGuid, selectedApplicationGuid, activePayTab === 'other' && hasResitRow)
+  // The locked amount stays the API's total; units/semesters only explain it.
+  const resitFee = resitFeeData?.amount
   const resitFeeErrorMsg = resitFeeError instanceof Error ? resitFeeError.message : 'Could not fetch the resit fee.'
   useEffect(() => {
     if (!resitLedgerGuid || resitFee === undefined) return
@@ -1421,7 +1525,7 @@ export default function PaymentConsolePage() {
                 search box with it focused. */}
             {profile && selectedApplicationGuid && (
               <>
-                <button className="btn btn-neu btn-sm" onClick={() => setShowPaymentHistory(true)}>
+                <button className="btn btn-neu btn-sm" onClick={openPaymentHistory}>
                   <i className="lni lni-folder"></i> Payment History
                 </button>
                 <button
@@ -1752,6 +1856,22 @@ export default function PaymentConsolePage() {
                   <div className="modal-title"><i className="lni lni-folder"></i> Payment History</div>
                   <button className="modal-close" onClick={() => setShowPaymentHistory(false)}><i className="lni lni-close"></i></button>
                 </div>
+                {/* Both kinds of payment, whichever pay tab is active: one
+                    tab each, with its count once loaded. */}
+                <div className="tab-bar" role="tablist" aria-label="Payment history" style={{ flexShrink: 0, padding: '0 12px', background: 'var(--surface)' }}>
+                  {([
+                    { id: 'tuition', label: 'Semester Payments', icon: 'lni-graduation', count: isHistoryLoading || isHistoryError ? null : tuitionPaymentHistory.length },
+                    { id: 'other', label: 'Other Payments', icon: 'lni-wallet', count: isOtherHistoryLoading || isOtherHistoryError ? null : (otherPaymentHistory?.totalCount ?? null) },
+                  ] as const).map(t => {
+                    const active = historyTab === t.id
+                    return (
+                      <button key={t.id} type="button" role="tab" aria-selected={active} className={`tab-btn${active ? ' active' : ''}`} onClick={() => setHistoryTab(t.id)}>
+                        <i className={`lni ${t.icon}`} aria-hidden="true"></i> {t.label}
+                        {t.count !== null && <span className={`badge ${active ? 'badge-blue' : 'badge-grey'}`}>{t.count}</span>}
+                      </button>
+                    )
+                  })}
+                </div>
                 <div style={{ padding: 20, overflowY: 'auto', flex: '1 1 auto', minHeight: 0 }}>
                   {/* Semester Payment tab: Tuition-only rows sliced client-side
                       out of the whole-application payment-history fetch (see
@@ -1761,7 +1881,7 @@ export default function PaymentConsolePage() {
                       server-paginated — replaces what used to be the same
                       cross-category fetch shown UNFILTERED (every category,
                       not just Other) while this tab was active. */}
-                  {activePayTab === 'tuition' ? (
+                  {historyTab === 'tuition' ? (
                     isHistoryLoading ? (
                       <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>Loading payment history…</div>
                     ) : isHistoryError ? (
@@ -1910,7 +2030,7 @@ export default function PaymentConsolePage() {
               Payment History moved into the popup above and the hero moved
               to its own full-width card, so the .pc-body 2-column grid no
               longer has a second column to balance against. */}
-          <div className="flex flex-col gap-5 min-w-0">
+          <div className="flex flex-col gap-5 min-w-0 pc-split-host">
 
             {/* Other Payment tab (2026-11-02 redesign, same panels as Semester
                 Payment, per Main.dc.html). Left: what's outstanding plus the
@@ -1964,7 +2084,7 @@ export default function PaymentConsolePage() {
                         : !studentGuid ? { text: 'Resit fee needs a registered student.', color: 'var(--amber)' }
                         : isResitFeeLoading ? { text: 'Fetching resit fee…', color: 'var(--g400)' }
                         : isResitFeeError ? { text: resitFeeErrorMsg, color: 'var(--red)' }
-                        : resitFee === 0 ? { text: 'No resit fee owed.', color: 'var(--amber)' }
+                        : resitFee === 0 ? { text: 'No resit exams to pay.', color: 'var(--amber)' }
                         : null
                       return (
                       <div className="recgrid-row recgrid-body" key={row.id}>
@@ -2017,6 +2137,12 @@ export default function PaymentConsolePage() {
                       <span style={{ color: 'var(--gold)' }}>{fmtAmt(otherLedgerRowsTotal)}</span>
                     </div>
                   </div>
+
+                  {/* What the locked resit amount is for: the units applied to
+                      resit, grouped by semester, each semester capped. */}
+                  {hasResitRow && !!studentGuid && !isResitFeeError && (
+                    <ResitUnitsBreakdown fee={resitFeeData} isLoading={isResitFeeLoading && !resitFeeData} />
+                  )}
 
                   {/* Advance Payment deposit picker — revealed by the
                       checkbox above; a row click selects (or deselects) the
@@ -2132,11 +2258,6 @@ export default function PaymentConsolePage() {
                       <h3 className="pcx-panel-title">Record Payment</h3>
                       <p className="pcx-panel-sub">Fields marked <span className="req">*</span> are required</p>
                     </div>
-                    {/* Same popup as the page header's button — here so a
-                        saved payment can be checked without scrolling up. */}
-                    <button type="button" className="btn btn-neu btn-sm" onClick={() => setShowPaymentHistory(true)}>
-                      <i className="lni lni-folder"></i> Payment History
-                    </button>
                   </div>
 
                   {/* The amount is the rows' total on the left — there's no
@@ -2251,7 +2372,7 @@ export default function PaymentConsolePage() {
                               {otherPayments.map(p => (
                                 <tr key={p.id}>
                                   <td className="font-mono">{p.code}</td>
-                                  <td>{p.payDate}</td>
+                                  <td>{p.payDate ? formatDate(`${p.payDate.slice(0, 10)}T00:00:00`) : '—'}</td>
                                   <td className="font-mono text-blue">{p.receiptNo ?? '—'}</td>
                                   <td>{p.ledgerName}</td>
                                   <td className="text-green font-bold">{parseFloat(p.amount).toLocaleString()}</td>
@@ -2415,11 +2536,7 @@ export default function PaymentConsolePage() {
                                   {isPaid && <span className="badge badge-green" style={{ marginLeft: 6 }}>Paid</span>}
                                 </span>
                                 {l.ledgerNum && <span className="pcx-ledger-sub">Ledger {l.ledgerNum}</span>}
-                                {l.discountName && (
-                                  <span className="pcx-ledger-sub text-green">
-                                    <i className="lni lni-tag" aria-hidden="true"></i> {l.discountName}
-                                  </span>
-                                )}
+                                {/* Discount details live in the Discount section below, not here. */}
                               </span>
                               {/* Native — the raw fee-line amount, not run
                                   through convertAmount, with the ledger's
@@ -2492,6 +2609,31 @@ export default function PaymentConsolePage() {
                             {convertedTotalDiscount > 0 ? `− ${fmtAmt(convertedTotalDiscount)}` : fmtAmt(convertedTotalDiscount)}
                           </span>
                         </div>
+                        {/* One row per discount under the Discount total:
+                            name, rule, the ledgers it covers, the backend's
+                            condition and any warning, and its own amount. */}
+                        {discountDetails.map(d => (
+                          <div className="recgrid-foot pcx-disc-row" key={d.name + d.ledgerNames.join()}>
+                            <span>
+                              <span className="pcx-disc-name">
+                                <i className="lni lni-tag" aria-hidden="true"></i> {d.name}
+                                {d.amtPer != null && (
+                                  <span className="pcx-disc-rule">
+                                    {d.calcType === 2 ? `${d.amtPer}%` : fmtAmt(d.amtPer)}
+                                  </span>
+                                )}
+                              </span>
+                              <span className="pcx-disc-meta">On {d.ledgerNames.join(', ')}</span>
+                              {d.message && <span className="pcx-disc-meta">{d.message}</span>}
+                              {d.warnings.map(w => (
+                                <span key={w} className="pcx-disc-meta pcx-disc-warn"><i className="lni lni-warning" aria-hidden="true"></i> {w}</span>
+                              ))}
+                            </span>
+                            <span title={d.unconverted ? 'Part of this discount is in a currency with no exchange rate today' : undefined}>
+                              − {fmtAmt(d.amount)}{d.unconverted ? ' *' : ''}
+                            </span>
+                          </div>
+                        ))}
                         <div className="recgrid-foot recgrid-total">
                           {/* Net of the Discount row above it — was
                               convertedTotalOutstanding (the raw, pre-
@@ -2647,9 +2789,6 @@ export default function PaymentConsolePage() {
                               <h3 className="pcx-panel-title">Record Payment</h3>
                               <p className="pcx-panel-sub">Fields marked <span className="req">*</span> are required</p>
                             </div>
-                            <button type="button" className="btn btn-neu btn-sm" onClick={() => setShowPaymentHistory(true)}>
-                              <i className="lni lni-folder"></i> Payment History
-                            </button>
                           </div>
 
                           <div className="pcx-collect" aria-live="polite">

@@ -190,20 +190,7 @@ export function CompleteRegistrationModal({ isOpen, onClose, showToast, applicat
                 ))}
               </div>
               <a
-                href={applicantProfileHref({
-                  ref: detail.appRefNo,
-                  name: detail.studentName,
-                  programme: detail.programName ?? undefined,
-                  dob: detail.dob ?? undefined,
-                  gender: detail.gender ?? undefined,
-                  nationality: detail.nationality ?? undefined,
-                  nationalId: detail.nationalId ?? undefined,
-                  phone: detail.phone ?? undefined,
-                  email: detail.emailId ?? undefined,
-                  intake: detail.intakeCode ?? undefined,
-                  campus: detail.campusName ?? undefined,
-                  submitted: detail.submitted,
-                })}
+                href={applicantProfileHref(applicationGuid)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-1"

@@ -40,6 +40,43 @@ function formatDateRange(start: string | null, end: string | null) {
   return `${startStr} - ${formatPart(e)}`
 }
 
+// "Nov 10 2026 10:02AM - Nov 10 2026 1:00PM" from a UE date + times (date may carry T00:00:00).
+function examRange(date: string | null, start: string | null, end: string | null) {
+  if (!date || !start) return null
+  const day = date.split('T')[0]
+  return formatDateRange(`${day}T${start}`, end ? `${day}T${end}` : null)
+}
+
+// One schedule entry in the grid (class test, course work, theory or practical exam).
+// Rows with canEdit false (past intakes) are read-only: greyed text, no links. The save
+// APIs don't check canEdit, so this is where it's enforced.
+function ScheduleCell({ label, range, rowEditable, canAdd, canEditPerm, addText, onOpen }: {
+  label?: string
+  range: string | null
+  rowEditable: boolean
+  canAdd: boolean
+  canEditPerm: boolean
+  addText: string
+  onOpen: () => void
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {label && <span className="text-g500 text-[10.5px] font-semibold uppercase">{label}</span>}
+      {range ? (
+        rowEditable && canEditPerm ? (
+          <span className="text-g900 font-medium text-[11px] leading-tight" style={{ cursor: 'pointer', borderBottom: '1px dashed #9ca3af' }} onClick={onOpen}>{range}</span>
+        ) : (
+          <span className={`font-medium text-[11px] leading-tight ${rowEditable ? 'text-g900' : 'text-g400'}`}>{range}</span>
+        )
+      ) : rowEditable && canAdd ? (
+        <button onClick={onOpen} className="text-[#3a6bc9] hover:underline">{addText}</button>
+      ) : (
+        <span className="text-g400 text-xs">Not scheduled</span>
+      )}
+    </div>
+  )
+}
+
 function formatDate(dateString: string | null) {
   if (!dateString) return <span className="text-g300">—</span>
   return <span>{new Date(dateString).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: '2-digit' })}</span>
@@ -302,32 +339,14 @@ export default function IaCreationPage() {
                       {/* Class Test */}
                       <td className="border-r border-slate-200 px-4 py-3 text-left">
                         {row.classTestGuid ? (
-                          <div className="flex flex-wrap items-center gap-2">
-                            {row.classTestStartDateTime ? (
-                              permissions.edit ? (
-                                <span
-                                  className="text-g900 font-medium text-[11px] leading-tight"
-                                  style={{ cursor: 'pointer', borderBottom: '1px dashed #9ca3af' }}
-                                  onClick={() => setSelectedCbtData({ testGuid: row.classTestGuid!, unitCode: row.unitCode ?? '', unitName: row.unitName ?? '' })}
-                                >
-                                  {formatDateRange(row.classTestStartDateTime, row.classTestEndDateTime)}
-                                </span>
-                              ) : (
-                                <span className="text-g900 font-medium text-[11px] leading-tight">
-                                  {formatDateRange(row.classTestStartDateTime, row.classTestEndDateTime)}
-                                </span>
-                              )
-                            ) : permissions.add ? (
-                              <button
-                                onClick={() => setSelectedCbtData({ testGuid: row.classTestGuid!, unitCode: row.unitCode ?? '', unitName: row.unitName ?? '' })}
-                                className="text-[#3a6bc9] hover:underline"
-                              >
-                                Add Class Test
-                              </button>
-                            ) : (
-                              <span className="text-g400 text-xs">—</span>
-                            )}
-                          </div>
+                          <ScheduleCell
+                            range={formatDateRange(row.classTestStartDateTime, row.classTestEndDateTime)}
+                            rowEditable={row.canEdit}
+                            canAdd={permissions.add}
+                            canEditPerm={permissions.edit}
+                            addText="Add Class Test"
+                            onOpen={() => setSelectedCbtData({ testGuid: row.classTestGuid!, unitCode: row.unitCode ?? '', unitName: row.unitName ?? '' })}
+                          />
                         ) : (
                           <span className="text-g400 text-xs">—</span>
                         )}
@@ -336,56 +355,42 @@ export default function IaCreationPage() {
                       {/* Course Work */}
                       <td className="border-r border-slate-200 px-4 py-3 text-left">
                         {row.courseworkGuid ? (
-                          <div className="flex flex-wrap items-center gap-2">
-                            {row.courseworkStartDateTime ? (
-                              permissions.edit ? (
-                                <span
-                                  className="text-g900 font-medium text-[11px] leading-tight"
-                                  style={{ cursor: 'pointer', borderBottom: '1px dashed #9ca3af' }}
-                                  onClick={() => setSelectedCwGuid(row.courseworkGuid)}
-                                >
-                                  {formatDateRange(row.courseworkStartDateTime, row.courseworkEndDateTime)}
-                                </span>
-                              ) : (
-                                <span className="text-g900 font-medium text-[11px] leading-tight">
-                                  {formatDateRange(row.courseworkStartDateTime, row.courseworkEndDateTime)}
-                                </span>
-                              )
-                            ) : permissions.add ? (
-                              <button
-                                onClick={() => setSelectedCwGuid(row.courseworkGuid)}
-                                className="text-[#3a6bc9] hover:underline"
-                              >
-                                Add Course work
-                              </button>
-                            ) : (
-                              <span className="text-g400 text-xs">—</span>
-                            )}
-                          </div>
+                          <ScheduleCell
+                            range={formatDateRange(row.courseworkStartDateTime, row.courseworkEndDateTime)}
+                            rowEditable={row.canEdit}
+                            canAdd={permissions.add}
+                            canEditPerm={permissions.edit}
+                            addText="Add Course work"
+                            onOpen={() => setSelectedCwGuid(row.courseworkGuid)}
+                          />
                         ) : (
                           <span className="text-g400 text-xs">—</span>
                         )}
                       </td>
 
-                      {/* Uni. Exam */}
+                      {/* Uni. Exam: a Theory line always; a Practical line only when practicalExamGuid is set. */}
                       <td className="px-4 py-3 text-left">
                         {row.universityExamGuid ? (
-                          <div className="flex flex-wrap items-center gap-2">
-                            {/* Max mark removed as requested */}
-                            {row.examDate && row.examStartTime ? (
-                              permissions.edit ? (
-                                <span className="text-g900 font-medium text-[11px] leading-tight" style={{ cursor: 'pointer', borderBottom: '1px dashed #9ca3af' }} onClick={() => setSelectedUeData({ examGuid: row.universityExamGuid!, unitCode: row.unitCode ?? '', unitName: row.unitName ?? '' })}>
-                                  {formatDateRange(`${row.examDate.split('T')[0]}T${row.examStartTime}`, row.examEndTime ? `${row.examDate.split('T')[0]}T${row.examEndTime}` : null)}
-                                </span>
-                              ) : (
-                                <span className="text-g900 font-medium text-[11px] leading-tight">
-                                  {formatDateRange(`${row.examDate.split('T')[0]}T${row.examStartTime}`, row.examEndTime ? `${row.examDate.split('T')[0]}T${row.examEndTime}` : null)}
-                                </span>
-                              )
-                            ) : permissions.add ? (
-                              <button onClick={() => setSelectedUeData({ examGuid: row.universityExamGuid!, unitCode: row.unitCode ?? '', unitName: row.unitName ?? '' })} className="text-[#3a6bc9] hover:underline">Add University Exam</button>
-                            ) : (
-                              <span className="text-g400 text-xs">—</span>
+                          <div className="flex flex-col gap-1.5">
+                            <ScheduleCell
+                              label={row.practicalExamGuid ? 'Theory' : undefined}
+                              range={examRange(row.examDate, row.examStartTime, row.examEndTime)}
+                              rowEditable={row.canEdit}
+                              canAdd={permissions.add}
+                              canEditPerm={permissions.edit}
+                              addText={row.practicalExamGuid ? 'Add Theory Exam' : 'Add University Exam'}
+                              onOpen={() => setSelectedUeData({ examGuid: row.universityExamGuid!, unitCode: row.unitCode ?? '', unitName: row.unitName ?? '' })}
+                            />
+                            {row.practicalExamGuid && (
+                              <ScheduleCell
+                                label="Practical"
+                                range={examRange(row.practicalExamDate, row.practicalExamStartTime, row.practicalExamEndTime)}
+                                rowEditable={row.canEdit}
+                                canAdd={permissions.add}
+                                canEditPerm={permissions.edit}
+                                addText="Add Practical Exam"
+                                onOpen={() => setSelectedUeData({ examGuid: row.practicalExamGuid!, unitCode: row.unitCode ?? '', unitName: row.unitName ?? '' })}
+                              />
                             )}
                           </div>
                         ) : (
