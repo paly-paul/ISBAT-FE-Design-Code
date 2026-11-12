@@ -72,15 +72,41 @@ export function getSingleQuestionCategories(): Promise<QuestionBankCategory[]> {
     ])
 }
 
+function parseAllowedUeTypes(val: any): number[] | null {
+  if (Array.isArray(val)) {
+    const nums = val.map(Number).filter(n => !isNaN(n))
+    return nums.length > 0 ? nums : null
+  }
+  if (typeof val === 'number') {
+    return [val]
+  }
+  if (typeof val === 'string' && val.trim() !== '') {
+    const nums = val.split(',').map(s => Number(s.trim())).filter(n => !isNaN(n))
+    return nums.length > 0 ? nums : null
+  }
+  return null
+}
+
 function normalizeCourseUnits(data: any): QuestionBankCourseUnit[] {
   const items = Array.isArray(data) ? data : data?.items ?? []
   return items
-    .map((item: any) => ({
-      courseUnitGuid: item.courseUnitGuid || item.guid || item.unitGuid || item.id || '',
-      courseUnitCode: item.courseUnitCode || item.code || item.unitCode || '',
-      courseUnitName: item.courseUnitName || item.name || item.unitName || item.title || 'Untitled Unit',
-      allowedUeTypes: Array.isArray(item.allowedUeTypes) ? item.allowedUeTypes : null,
-    }))
+    .map((item: any) => {
+      const rawTypes =
+        item.allowedUeTypes ??
+        item.AllowedUeTypes ??
+        item.allowedUETypes ??
+        item.allowedTypes ??
+        item.universityExamType ??
+        item.UniversityExamType ??
+        null
+
+      return {
+        courseUnitGuid: item.courseUnitGuid || item.guid || item.unitGuid || item.id || '',
+        courseUnitCode: item.courseUnitCode || item.code || item.unitCode || '',
+        courseUnitName: item.courseUnitName || item.name || item.unitName || item.title || 'Untitled Unit',
+        allowedUeTypes: parseAllowedUeTypes(rawTypes),
+      }
+    })
     .filter((u: QuestionBankCourseUnit) => Boolean(u.courseUnitGuid))
 }
 

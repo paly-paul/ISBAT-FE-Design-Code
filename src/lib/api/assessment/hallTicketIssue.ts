@@ -30,6 +30,9 @@ export interface HallTicketEligibilityDto {
   // ignores them when null.
   guildOk: boolean | null
   ncheOk: boolean | null
+  // true when the latest exam date of the term's units is before today; blocks
+  // issuing. false on alreadyIssued or when no exam dates exist.
+  examOver?: boolean
   // The only gate the UI should use; POST / re-checks it server-side.
   canIssue: boolean
 }
@@ -61,6 +64,7 @@ export async function issueHallTicket(payload: { studentGuid: string; intakeGuid
 
 // alreadyIssued students are skipped and their issue date is NOT refreshed
 // (unlike single issue). ineligible = a clearance came back not cleared;
+// examOver = the term's exams are already over (counted separately from ineligible);
 // failed = the check itself couldn't run, including a Finance fee status
 // that couldn't be loaded (post-bulk-issue.md).
 export interface BulkIssueResponseDto {
@@ -68,6 +72,7 @@ export interface BulkIssueResponseDto {
   issued: number
   alreadyIssued: number
   ineligible: number
+  examOver: number
   failed: number
 }
 
