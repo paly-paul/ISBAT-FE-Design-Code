@@ -2,15 +2,38 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import {
   applyModeration,
   deleteResults,
+  deleteResultsScope,
   exportResults,
   generateResults,
+  generateResultsScope,
   getGeneratedResults,
   getGenerateResultCourseUnits,
   getGenerateResultInit,
   getGenerateResultSemesters,
+  getGenerateResultStatus,
   publishResults,
+  publishResultsScope,
+  withdrawResultsScope,
+  BatchActionResponse,
+  BatchResultStatus,
+  BatchSkippedItem,
+  BatchStatusItem,
+  BatchStatusSummaryCounts,
+  GenerateBatchResponse,
+  GenerateResultResponse,
+  GenerateResultStatusParams,
+  GenerateResultStatusResponse,
+  GenerateResultSummary,
+  GenerateResultsScopeBody,
+  GenerateWarning,
   ModerationField,
+  ModerationResponse,
+  ModerationSkippedItem,
+  ProgramStatusNode,
   ResultFilters,
+  ResultOperator,
+  ScopeQueryParams,
+  SemesterStatusNode,
 } from '@/lib/api/assessment/generateResult'
 
 export const GENERATE_RESULT_KEYS = {
@@ -20,6 +43,7 @@ export const GENERATE_RESULT_KEYS = {
   units: (programGuid: string, semesterGuid: string) => [...GENERATE_RESULT_KEYS.all, 'units', programGuid, semesterGuid] as const,
   results: () => [...GENERATE_RESULT_KEYS.all, 'results'] as const,
   list: (filters: ResultFilters, page: number, pageSize: number) => [...GENERATE_RESULT_KEYS.results(), filters, page, pageSize] as const,
+  status: (params: GenerateResultStatusParams) => [...GENERATE_RESULT_KEYS.all, 'status', params] as const,
 }
 
 export function useGenerateResultInit() {
@@ -54,12 +78,22 @@ export function useGeneratedResults(filters: ResultFilters | null, page: number,
   })
 }
 
-// Every write changes the grid, so they all reload it.
+// Per-Batch Status Query
+export function useGenerateResultStatus(params: GenerateResultStatusParams | null, enabled = true) {
+  return useQuery({
+    queryKey: params ? GENERATE_RESULT_KEYS.status(params) : [...GENERATE_RESULT_KEYS.all, 'status', 'null'],
+    queryFn: () => getGenerateResultStatus(params as GenerateResultStatusParams),
+    enabled: enabled && !!params?.intakeGuid,
+    placeholderData: keepPreviousData,
+  })
+}
+
+// Every write changes the grid/tree, so they all reload it.
 function useResultsMutation<TVars, TData>(fn: (v: TVars) => Promise<TData>) {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: fn,
-    onSettled: () => queryClient.invalidateQueries({ queryKey: GENERATE_RESULT_KEYS.results() }),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: GENERATE_RESULT_KEYS.all }),
   })
 }
 
@@ -83,13 +117,43 @@ export function useExportResults() {
   return useMutation({ mutationFn: (filters: ResultFilters) => exportResults(filters) })
 }
 
+// Per-Batch Mutations
+export function useGenerateResultsScope() {
+  return useResultsMutation((body: GenerateResultsScopeBody) => generateResultsScope(body))
+}
+
+export function usePublishResultsScope() {
+  return useResultsMutation((params: ScopeQueryParams) => publishResultsScope(params))
+}
+
+export function useWithdrawResultsScope() {
+  return useResultsMutation((params: ScopeQueryParams) => withdrawResultsScope(params))
+}
+
+export function useDeleteResultsScope() {
+  return useResultsMutation((params: ScopeQueryParams) => deleteResultsScope(params))
+}
+
 export type {
+  BatchActionResponse,
+  BatchResultStatus,
+  BatchSkippedItem,
+  BatchStatusItem,
+  BatchStatusSummaryCounts,
   ExamResultRow,
-  GenerateWarning,
+  GenerateBatchResponse,
   GenerateResultResponse,
+  GenerateResultStatusParams,
+  GenerateResultStatusResponse,
+  GenerateResultSummary,
+  GenerateResultsScopeBody,
+  GenerateWarning,
   ModerationField,
   ModerationResponse,
   ModerationSkippedItem,
+  ProgramStatusNode,
   ResultFilters,
   ResultOperator,
+  ScopeQueryParams,
+  SemesterStatusNode,
 } from '@/lib/api/assessment/generateResult'

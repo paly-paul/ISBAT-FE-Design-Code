@@ -30,6 +30,7 @@ const FULL_ACCESS: MenuPermissions = {
   verify: true,
   generate: true,
   publish: true,
+  withdraw: true,
   moderate: true,
   push: true,
   save: true,

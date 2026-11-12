@@ -1,4 +1,4 @@
-import { apiDeleteWithMessage, apiGet, apiPost, apiPut } from '@/lib/api/client'
+import { apiDelete, apiDeleteWithMessage, apiGet, apiPost, apiPut } from '@/lib/api/client'
 import { writeWorkbook } from '@/lib/xlsx'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
@@ -127,6 +127,109 @@ export interface PublishResponse {
 export interface ExportResponse {
   url: string
   expiresAtUtc: string
+}
+
+// ── Per-Batch Generate Result Types (GET /status, POST /, PUT /publish, PUT /withdraw, DELETE /) ──
+
+export type BatchResultStatus = 'NotGenerated' | 'Generated' | 'Published'
+
+export interface BatchStatusSummaryCounts {
+  notGenerated: number
+  generated: number
+  published: number
+}
+
+export interface GenerateResultSummary {
+  totalBatches: number
+  batches: BatchStatusSummaryCounts
+  students: BatchStatusSummaryCounts
+}
+
+export interface BatchStatusItem {
+  batchGuid: string
+  batchCode: string
+  studentCount: number
+  status: BatchResultStatus
+}
+
+export interface SemesterStatusNode {
+  semesterGuid: string
+  semesterName: string
+  semesterCode: number
+  courseUnitCount: number
+  studentCount: number
+  batches: BatchStatusSummaryCounts
+  status: BatchResultStatus
+  batchItems: BatchStatusItem[]
+}
+
+export interface ProgramStatusNode {
+  programGuid: string
+  programCode: string
+  programName: string
+  studentCount: number
+  batches: BatchStatusSummaryCounts
+  status: BatchResultStatus
+  semesters: SemesterStatusNode[]
+}
+
+export interface GenerateResultStatusResponse {
+  intakeGuid: string
+  intakeName: string
+  isCurrentIntake: boolean
+  summary: GenerateResultSummary
+  programs: ProgramStatusNode[]
+}
+
+export interface GenerateResultStatusParams {
+  intakeGuid: string
+  programGuid?: string
+  semesterGuid?: string
+  batchGuid?: string
+  status?: BatchResultStatus | ''
+}
+
+export interface GenerateResultsScopeBody {
+  intakeGuid: string
+  programGuid?: string
+  semesterGuid?: string
+  batchGuid?: string
+}
+
+export interface ScopeQueryParams {
+  intakeGuid: string
+  programGuid?: string
+  semesterGuid?: string
+  batchGuid?: string
+}
+
+export interface BatchSkippedItem {
+  programGuid?: string
+  programCode?: string
+  programName?: string
+  semesterGuid?: string
+  semesterName?: string
+  batchGuid?: string
+  batchCode?: string
+  reason?: string
+}
+
+export interface BatchActionResponse {
+  batchesChanged: number
+  batchesSkipped: number
+  rowsAffected: number
+  skipped: BatchSkippedItem[]
+}
+
+export interface GenerateBatchResponse {
+  intakeGuid: string
+  studentCount: number
+  unitCount: number
+  rowsGenerated: number
+  batchesChanged: number
+  batchesSkipped: number
+  skipped: BatchSkippedItem[]
+  warnings: GenerateWarning[]
 }
 
 function filterQuery(f: ResultFilters, extra?: Record<string, string>) {
@@ -409,4 +512,395 @@ export function exportResults(filters: ResultFilters): Promise<ExportResponse> {
     return delay({ url, expiresAtUtc: new Date(Date.now() + 15 * 60000).toISOString() })
   }
   return apiGet<ExportResponse>(`/api/v1/assessment/generate-results/export?${filterQuery(filters)}`)
+}
+
+// ── Per-Batch Tree & Actions Mock Store & API ──────────────────────────────
+
+interface MockTreeBatchItem {
+  batchGuid: string
+  batchCode: string
+  studentCount: number
+  status: BatchResultStatus
+  programGuid: string
+  programCode: string
+  programName: string
+  semesterGuid: string
+  semesterName: string
+  semesterCode: number
+  courseUnitCount: number
+}
+
+const mockTreeBatches = new Map<string, MockTreeBatchItem[]>()
+
+function getMockBatches(intakeGuid: string): MockTreeBatchItem[] {
+  let list = mockTreeBatches.get(intakeGuid)
+  if (!list) {
+    const isCurrent = intakeGuid === 'gr-intake-20261'
+    list = [
+      // Program 1: BBA
+      {
+        batchGuid: 'gr-batch-bba1-a', batchCode: 'Batch A', studentCount: 30, status: isCurrent ? 'Published' : 'Published',
+        programGuid: 'gr-prog-bba', programCode: 'BBAIBS22', programName: 'BBA International Business',
+        semesterGuid: 'gr-sem-bba-1', semesterName: 'Year One - Semester One', semesterCode: 1, courseUnitCount: 2,
+      },
+      {
+        batchGuid: 'gr-batch-bba1-b', batchCode: 'Batch B', studentCount: 25, status: isCurrent ? 'Generated' : 'Published',
+        programGuid: 'gr-prog-bba', programCode: 'BBAIBS22', programName: 'BBA International Business',
+        semesterGuid: 'gr-sem-bba-1', semesterName: 'Year One - Semester One', semesterCode: 1, courseUnitCount: 2,
+      },
+      {
+        batchGuid: 'gr-batch-bba1-c', batchCode: 'Batch C', studentCount: 28, status: isCurrent ? 'NotGenerated' : 'Published',
+        programGuid: 'gr-prog-bba', programCode: 'BBAIBS22', programName: 'BBA International Business',
+        semesterGuid: 'gr-sem-bba-1', semesterName: 'Year One - Semester One', semesterCode: 1, courseUnitCount: 2,
+      },
+      {
+        batchGuid: 'gr-batch-bba2-a', batchCode: 'Batch A', studentCount: 26, status: isCurrent ? 'NotGenerated' : 'Published',
+        programGuid: 'gr-prog-bba', programCode: 'BBAIBS22', programName: 'BBA International Business',
+        semesterGuid: 'gr-sem-bba-2', semesterName: 'Year One - Semester Two', semesterCode: 2, courseUnitCount: 2,
+      },
+      {
+        batchGuid: 'gr-batch-bba2-b', batchCode: 'Batch B', studentCount: 29, status: isCurrent ? 'NotGenerated' : 'Published',
+        programGuid: 'gr-prog-bba', programCode: 'BBAIBS22', programName: 'BBA International Business',
+        semesterGuid: 'gr-sem-bba-2', semesterName: 'Year One - Semester Two', semesterCode: 2, courseUnitCount: 2,
+      },
+      // Program 2: BIT
+      {
+        batchGuid: 'gr-batch-bit1-a', batchCode: 'Batch A', studentCount: 24, status: isCurrent ? 'Generated' : 'Published',
+        programGuid: 'gr-prog-bit', programCode: 'BIT-SEP23', programName: 'Bachelor of Information Technology',
+        semesterGuid: 'gr-sem-bit-1', semesterName: 'Year One - Semester One', semesterCode: 1, courseUnitCount: 2,
+      },
+      {
+        batchGuid: 'gr-batch-bit1-b', batchCode: 'Batch B', studentCount: 26, status: isCurrent ? 'Generated' : 'Published',
+        programGuid: 'gr-prog-bit', programCode: 'BIT-SEP23', programName: 'Bachelor of Information Technology',
+        semesterGuid: 'gr-sem-bit-1', semesterName: 'Year One - Semester One', semesterCode: 1, courseUnitCount: 2,
+      },
+      {
+        batchGuid: 'gr-batch-bit3-a', batchCode: 'Batch A', studentCount: 32, status: isCurrent ? 'Published' : 'Published',
+        programGuid: 'gr-prog-bit', programCode: 'BIT-SEP23', programName: 'Bachelor of Information Technology',
+        semesterGuid: 'gr-sem-bit-3', semesterName: 'Year Two - Semester One', semesterCode: 3, courseUnitCount: 2,
+      },
+      // Program 3: BNCS
+      {
+        batchGuid: 'gr-batch-bncs5-a', batchCode: 'Batch A', studentCount: 20, status: isCurrent ? 'Published' : 'Published',
+        programGuid: 'gr-prog-bncs', programCode: 'BSc.NCSF22', programName: 'BSc Networks and Cyber Security',
+        semesterGuid: 'gr-sem-bncs-5', semesterName: 'Year Three - Semester One', semesterCode: 5, courseUnitCount: 2,
+      },
+    ]
+    mockTreeBatches.set(intakeGuid, list)
+  }
+  return list
+}
+
+function computeEarliestStatus(counts: BatchStatusSummaryCounts): BatchResultStatus {
+  if (counts.notGenerated > 0) return 'NotGenerated'
+  if (counts.generated > 0) return 'Generated'
+  return 'Published'
+}
+
+function buildMockTreeResponse(params: GenerateResultStatusParams): GenerateResultStatusResponse {
+  const intake = MOCK_INTAKES.find(i => i.intakeGuid === params.intakeGuid) ?? {
+    intakeGuid: params.intakeGuid,
+    intakeCode: 20261,
+    description: 'Spring 2026',
+    currentIntake: true,
+  }
+  const allBatches = getMockBatches(params.intakeGuid)
+
+  // Scope filter: program, semester, batch (affects summary AND tree)
+  const scopedBatches = allBatches.filter(b => {
+    if (params.programGuid && b.programGuid !== params.programGuid) return false
+    if (params.semesterGuid && b.semesterGuid !== params.semesterGuid) return false
+    if (params.batchGuid && b.batchGuid !== params.batchGuid) return false
+    return true
+  })
+
+  // Summary counts the scoped batches without the status filter
+  const summary: GenerateResultSummary = {
+    totalBatches: scopedBatches.length,
+    batches: { notGenerated: 0, generated: 0, published: 0 },
+    students: { notGenerated: 0, generated: 0, published: 0 },
+  }
+  for (const b of scopedBatches) {
+    if (b.status === 'NotGenerated') {
+      summary.batches.notGenerated++
+      summary.students.notGenerated += b.studentCount
+    } else if (b.status === 'Generated') {
+      summary.batches.generated++
+      summary.students.generated += b.studentCount
+    } else if (b.status === 'Published') {
+      summary.batches.published++
+      summary.students.published += b.studentCount
+    }
+  }
+
+  // Tree filter: status narrows only the tree
+  const treeBatches = scopedBatches.filter(b => {
+    if (params.status && b.status !== params.status) return false
+    return true
+  })
+
+  // Group treeBatches into ProgramStatusNode[]
+  const progMap = new Map<string, ProgramStatusNode>()
+  for (const b of treeBatches) {
+    let pNode = progMap.get(b.programGuid)
+    if (!pNode) {
+      pNode = {
+        programGuid: b.programGuid,
+        programCode: b.programCode,
+        programName: b.programName,
+        studentCount: 0,
+        batches: { notGenerated: 0, generated: 0, published: 0 },
+        status: 'NotGenerated',
+        semesters: [],
+      }
+      progMap.set(b.programGuid, pNode)
+    }
+
+    let sNode = pNode.semesters.find(s => s.semesterGuid === b.semesterGuid)
+    if (!sNode) {
+      sNode = {
+        semesterGuid: b.semesterGuid,
+        semesterName: b.semesterName,
+        semesterCode: b.semesterCode,
+        courseUnitCount: b.courseUnitCount,
+        studentCount: 0,
+        batches: { notGenerated: 0, generated: 0, published: 0 },
+        status: 'NotGenerated',
+        batchItems: [],
+      }
+      pNode.semesters.push(sNode)
+    }
+
+    sNode.batchItems.push({
+      batchGuid: b.batchGuid,
+      batchCode: b.batchCode,
+      studentCount: b.studentCount,
+      status: b.status,
+    })
+    sNode.studentCount += b.studentCount
+    pNode.studentCount += b.studentCount
+
+    if (b.status === 'NotGenerated') {
+      sNode.batches.notGenerated++
+      pNode.batches.notGenerated++
+    } else if (b.status === 'Generated') {
+      sNode.batches.generated++
+      pNode.batches.generated++
+    } else {
+      sNode.batches.published++
+      pNode.batches.published++
+    }
+  }
+
+  const programs = Array.from(progMap.values()).map(p => {
+    p.status = computeEarliestStatus(p.batches)
+    p.semesters.forEach(s => {
+      s.status = computeEarliestStatus(s.batches)
+    })
+    return p
+  })
+
+  return {
+    intakeGuid: intake.intakeGuid,
+    intakeName: `${intake.description} (${intake.intakeCode})`,
+    isCurrentIntake: intake.currentIntake,
+    summary,
+    programs,
+  }
+}
+
+function buildScopeQs(params: ScopeQueryParams, extra?: Record<string, string>): URLSearchParams {
+  const qs = new URLSearchParams({ intakeGuid: params.intakeGuid, ...extra })
+  if (params.programGuid) qs.set('programGuid', params.programGuid)
+  if (params.semesterGuid) qs.set('semesterGuid', params.semesterGuid)
+  if (params.batchGuid) qs.set('batchGuid', params.batchGuid)
+  return qs
+}
+
+// GET /api/v1/assessment/generate-results/status
+export function getGenerateResultStatus(params: GenerateResultStatusParams): Promise<GenerateResultStatusResponse> {
+  if (MOCK_AUTH) {
+    return delay(buildMockTreeResponse(params), 200)
+  }
+  const qs = new URLSearchParams({ intakeGuid: params.intakeGuid })
+  if (params.programGuid) qs.set('programGuid', params.programGuid)
+  if (params.semesterGuid) qs.set('semesterGuid', params.semesterGuid)
+  if (params.batchGuid) qs.set('batchGuid', params.batchGuid)
+  if (params.status) qs.set('status', params.status)
+  return apiGet<GenerateResultStatusResponse | null>(`/api/v1/assessment/generate-results/status?${qs}`)
+    .then(data => data ?? {
+      intakeGuid: params.intakeGuid,
+      intakeName: '',
+      isCurrentIntake: false,
+      summary: {
+        totalBatches: 0,
+        batches: { notGenerated: 0, generated: 0, published: 0 },
+        students: { notGenerated: 0, generated: 0, published: 0 },
+      },
+      programs: [],
+    })
+}
+
+// POST /api/v1/assessment/generate-results
+export function generateResultsScope(body: GenerateResultsScopeBody): Promise<GenerateBatchResponse> {
+  if (MOCK_AUTH) {
+    const batches = getMockBatches(body.intakeGuid).filter(b => {
+      if (body.programGuid && b.programGuid !== body.programGuid) return false
+      if (body.semesterGuid && b.semesterGuid !== body.semesterGuid) return false
+      if (body.batchGuid && b.batchGuid !== body.batchGuid) return false
+      return true
+    })
+    let changed = 0
+    let skipped = 0
+    const skippedItems: BatchSkippedItem[] = []
+    let stuCount = 0
+    for (const b of batches) {
+      if (b.status === 'NotGenerated') {
+        b.status = 'Generated'
+        changed++
+        stuCount += b.studentCount
+      } else {
+        skipped++
+        skippedItems.push({
+          programGuid: b.programGuid,
+          programCode: b.programCode,
+          programName: b.programName,
+          semesterGuid: b.semesterGuid,
+          semesterName: b.semesterName,
+          batchGuid: b.batchGuid,
+          batchCode: b.batchCode,
+          reason: b.status === 'Published' ? 'Already published' : 'Already generated',
+        })
+      }
+    }
+    return delay({
+      intakeGuid: body.intakeGuid,
+      studentCount: stuCount,
+      unitCount: changed * 2,
+      rowsGenerated: stuCount * 2,
+      batchesChanged: changed,
+      batchesSkipped: skipped,
+      skipped: skippedItems,
+      warnings: [],
+    }, 400)
+  }
+  const payload: Record<string, string> = { intakeGuid: body.intakeGuid }
+  if (body.programGuid) payload.programGuid = body.programGuid
+  if (body.semesterGuid) payload.semesterGuid = body.semesterGuid
+  if (body.batchGuid) payload.batchGuid = body.batchGuid
+  return apiPost<GenerateBatchResponse>('/api/v1/assessment/generate-results', payload)
+}
+
+// PUT /api/v1/assessment/generate-results/publish
+export function publishResultsScope(params: ScopeQueryParams): Promise<BatchActionResponse> {
+  if (MOCK_AUTH) {
+    const batches = getMockBatches(params.intakeGuid).filter(b => {
+      if (params.programGuid && b.programGuid !== params.programGuid) return false
+      if (params.semesterGuid && b.semesterGuid !== params.semesterGuid) return false
+      if (params.batchGuid && b.batchGuid !== params.batchGuid) return false
+      return true
+    })
+    let changed = 0
+    let skipped = 0
+    let rowsAffected = 0
+    const skippedItems: BatchSkippedItem[] = []
+    for (const b of batches) {
+      if (b.status === 'Generated') {
+        b.status = 'Published'
+        changed++
+        rowsAffected += b.studentCount * 2
+      } else {
+        skipped++
+        skippedItems.push({
+          programGuid: b.programGuid,
+          programCode: b.programCode,
+          programName: b.programName,
+          semesterGuid: b.semesterGuid,
+          semesterName: b.semesterName,
+          batchGuid: b.batchGuid,
+          batchCode: b.batchCode,
+          reason: b.status === 'Published' ? 'Already published' : 'Not generated yet',
+        })
+      }
+    }
+    return delay({ batchesChanged: changed, batchesSkipped: skipped, rowsAffected, skipped: skippedItems }, 300)
+  }
+  const qs = buildScopeQs(params)
+  return apiPut<BatchActionResponse>(`/api/v1/assessment/generate-results/publish?${qs}`, {})
+}
+
+// PUT /api/v1/assessment/generate-results/withdraw
+export function withdrawResultsScope(params: ScopeQueryParams): Promise<BatchActionResponse> {
+  if (MOCK_AUTH) {
+    const batches = getMockBatches(params.intakeGuid).filter(b => {
+      if (params.programGuid && b.programGuid !== params.programGuid) return false
+      if (params.semesterGuid && b.semesterGuid !== params.semesterGuid) return false
+      if (params.batchGuid && b.batchGuid !== params.batchGuid) return false
+      return true
+    })
+    let changed = 0
+    let skipped = 0
+    let rowsAffected = 0
+    const skippedItems: BatchSkippedItem[] = []
+    for (const b of batches) {
+      if (b.status === 'Published') {
+        b.status = 'Generated'
+        changed++
+        rowsAffected += b.studentCount * 2
+      } else {
+        skipped++
+        skippedItems.push({
+          programGuid: b.programGuid,
+          programCode: b.programCode,
+          programName: b.programName,
+          semesterGuid: b.semesterGuid,
+          semesterName: b.semesterName,
+          batchGuid: b.batchGuid,
+          batchCode: b.batchCode,
+          reason: b.status === 'Generated' ? 'Not published' : 'Not generated yet',
+        })
+      }
+    }
+    return delay({ batchesChanged: changed, batchesSkipped: skipped, rowsAffected, skipped: skippedItems }, 300)
+  }
+  const qs = buildScopeQs(params)
+  return apiPut<BatchActionResponse>(`/api/v1/assessment/generate-results/withdraw?${qs}`, {})
+}
+
+// DELETE /api/v1/assessment/generate-results
+export function deleteResultsScope(params: ScopeQueryParams): Promise<BatchActionResponse> {
+  if (MOCK_AUTH) {
+    const batches = getMockBatches(params.intakeGuid).filter(b => {
+      if (params.programGuid && b.programGuid !== params.programGuid) return false
+      if (params.semesterGuid && b.semesterGuid !== params.semesterGuid) return false
+      if (params.batchGuid && b.batchGuid !== params.batchGuid) return false
+      return true
+    })
+    let changed = 0
+    let skipped = 0
+    let rowsAffected = 0
+    const skippedItems: BatchSkippedItem[] = []
+    for (const b of batches) {
+      if (b.status === 'Generated') {
+        b.status = 'NotGenerated'
+        changed++
+        rowsAffected += b.studentCount * 2
+      } else {
+        skipped++
+        skippedItems.push({
+          programGuid: b.programGuid,
+          programCode: b.programCode,
+          programName: b.programName,
+          semesterGuid: b.semesterGuid,
+          semesterName: b.semesterName,
+          batchGuid: b.batchGuid,
+          batchCode: b.batchCode,
+          reason: b.status === 'Published' ? 'Published. Withdraw it first' : 'Not generated yet',
+        })
+      }
+    }
+    return delay({ batchesChanged: changed, batchesSkipped: skipped, rowsAffected, skipped: skippedItems }, 300)
+  }
+  const qs = buildScopeQs(params)
+  return apiDelete<BatchActionResponse>(`/api/v1/assessment/generate-results?${qs}`)
 }
