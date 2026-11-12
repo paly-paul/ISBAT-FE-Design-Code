@@ -11,6 +11,7 @@ export interface QuestionBankCourseUnit {
   courseUnitGuid: string
   courseUnitName: string | null
   courseUnitCode: string | null
+  allowedUeTypes?: number[] | null
 }
 
 export interface QuestionBankTemplateResponse {
@@ -37,6 +38,7 @@ export interface QuestionBankFileParams {
   courseUnitGuid: string
   category: number
   intakeGuid: string
+  universityExamType?: number | null
 }
 
 export interface QuestionBankImportResult {
@@ -53,9 +55,9 @@ const mockCategories: QuestionBankCategory[] = [
 ]
 
 const mockCourseUnits: QuestionBankCourseUnit[] = [
-  { courseUnitGuid: '017749e8-a325-4560-b8db-2230721d838f', courseUnitCode: 'BCS3127', courseUnitName: 'Compiler Design' },
-  { courseUnitGuid: '18bc91be-6665-411e-9b27-fba637d2e761', courseUnitCode: 'CSE1212', courseUnitName: 'Data Structures & Algorithms' },
-  { courseUnitGuid: '29cd02cf-7776-522f-ac38-0cb748e3f872', courseUnitCode: 'BIT2104', courseUnitName: 'Database Management Systems' },
+  { courseUnitGuid: '017749e8-a325-4560-b8db-2230721d838f', courseUnitCode: 'BCS3127', courseUnitName: 'Compiler Design', allowedUeTypes: [0] },
+  { courseUnitGuid: '18bc91be-6665-411e-9b27-fba637d2e761', courseUnitCode: 'CSE1212', courseUnitName: 'Data Structures & Algorithms', allowedUeTypes: [0, 1] },
+  { courseUnitGuid: '29cd02cf-7776-522f-ac38-0cb748e3f872', courseUnitCode: 'BIT2104', courseUnitName: 'Database Management Systems', allowedUeTypes: [1] },
 ]
 
 const mockPreviewQuestions: QuestionPreviewItem[] = [
@@ -134,6 +136,7 @@ export function getQuestionBankCourseUnits(intakeGuid: string, lecturerGuid: str
           courseUnitGuid: item.courseUnitGuid || item.guid || item.unitGuid || item.id || '',
           courseUnitCode: item.courseUnitCode || item.code || item.unitCode || '',
           courseUnitName: item.courseUnitName || item.name || item.unitName || item.title || 'Untitled Unit',
+          allowedUeTypes: Array.isArray(item.allowedUeTypes) ? item.allowedUeTypes : null,
         }))
         .filter((u: QuestionBankCourseUnit) => Boolean(u.courseUnitGuid))
     })
@@ -178,6 +181,9 @@ export function postQuestionBankPreview(params: QuestionBankFileParams): Promise
   formData.append('CourseUnitGuid', params.courseUnitGuid)
   formData.append('Category', String(params.category))
   formData.append('IntakeGuid', params.intakeGuid)
+  if (params.category === 5 && params.universityExamType !== undefined && params.universityExamType !== null) {
+    formData.append('UniversityExamType', String(params.universityExamType))
+  }
 
   return apiPostForm<QuestionPreviewItem[]>('/api/v1/assessment/question-bank/preview', formData)
     .then(data => data ?? [])
@@ -199,6 +205,9 @@ export function postQuestionBankImport(params: QuestionBankFileParams): Promise<
   formData.append('CourseUnitGuid', params.courseUnitGuid)
   formData.append('Category', String(params.category))
   formData.append('IntakeGuid', params.intakeGuid)
+  if (params.category === 5 && params.universityExamType !== undefined && params.universityExamType !== null) {
+    formData.append('UniversityExamType', String(params.universityExamType))
+  }
 
   return apiPostForm<boolean>('/api/v1/assessment/question-bank/import', formData)
     .then(data => ({

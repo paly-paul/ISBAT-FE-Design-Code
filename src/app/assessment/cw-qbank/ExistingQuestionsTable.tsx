@@ -42,6 +42,9 @@ export function ExistingQuestionsTable({
 
   const mcqCount = useMemo(() => questions.filter(q => q.questionType === 1).length, [questions])
   const dqCount = useMemo(() => questions.filter(q => q.questionType === 2).length, [questions])
+  const hasUeTypes = useMemo(() => questions.some(q => q.universityExamType !== null && q.universityExamType !== undefined), [questions])
+  const theoryCount = useMemo(() => questions.filter(q => q.universityExamType === 0).length, [questions])
+  const practicalCount = useMemo(() => questions.filter(q => q.universityExamType === 1).length, [questions])
 
   const filteredQuestions = useMemo(() => {
     return questions.filter(q => {
@@ -82,6 +85,12 @@ export function ExistingQuestionsTable({
             Category: <strong className="text-slate-800">{categoryName || 'Category'}</strong>
             {' • '}
             Intake: <strong className="text-slate-800">{intakeCode || 'Active Intake'}</strong>
+            {hasUeTypes && (
+              <>
+                {' • '}
+                <span>UE Banks: <strong className="text-cyan-700 font-semibold">{theoryCount} Theory</strong>, <strong className="text-amber-700 font-semibold">{practicalCount} Practical</strong></span>
+              </>
+            )}
           </div>
         </div>
 
@@ -234,9 +243,16 @@ export function ExistingQuestionsTable({
 
                   {/* Type */}
                   <td style={{ textAlign: 'center' }}>
-                    <span className={`badge ${q.questionType === 1 ? 'badge-purple' : 'badge-blue'} text-xs font-bold`}>
-                      {q.questionType === 1 ? 'MCQ' : 'DQ'}
-                    </span>
+                    <div className="flex flex-col items-center gap-1">
+                      <span className={`badge ${q.questionType === 1 ? 'badge-purple' : 'badge-blue'} text-xs font-bold`}>
+                        {q.questionType === 1 ? 'MCQ' : 'DQ'}
+                      </span>
+                      {q.universityExamType !== undefined && q.universityExamType !== null && (
+                        <span className={`badge ${q.universityExamType === 1 ? 'badge-amber' : 'badge-cyan'} text-[10px] font-bold`}>
+                          {q.universityExamType === 1 ? 'Practical' : 'Theory'}
+                        </span>
+                      )}
+                    </div>
                   </td>
 
                   {/* Question */}
