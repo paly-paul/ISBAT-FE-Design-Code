@@ -219,13 +219,17 @@ function DocRow({ label, file, savedName, onView, onAdd, addLabel }: {
   addLabel?: string
 }) {
   const name = file?.name ?? savedName ?? null
+  // Same row as the Vetting Desk's Uploaded Documents panel: a folder icon
+  // when there's a file, the red "missing" row when there isn't. (The class
+  // used to be `empty`, which picked up the app's global .empty empty-state
+  // layout and stretched each row into a tall centred card.)
   return (
-    <div className={`vd-doc${name ? '' : ' empty'}`}>
-      <span className="vd-doc-icon"><i className={`lni ${name ? 'lni-files' : 'lni-cloud-upload'}`} aria-hidden="true" /></span>
+    <div className={`vd-doc${name ? '' : ' missing'}`}>
+      <span className="vd-doc-icon"><i className={`lni ${name ? 'lni-folder' : 'lni-question-circle'}`} aria-hidden="true" /></span>
       <div className="vd-doc-body">
         <div className="vd-doc-name">{label}</div>
         <div className="vd-doc-sub">
-          {file ? <>Attached &middot; {file.name}</> : savedName ? <>On file &middot; {savedName}</> : 'Not uploaded'}
+          {file ? <>Attached &middot; {file.name}</> : savedName ? <>Uploaded &middot; {savedName}</> : 'Missing'}
         </div>
       </div>
       {file ? (
