@@ -161,8 +161,8 @@ export default function UniversityExamMaterialPrintPage() {
   const canPrint = permissions.print !== false && Boolean(
     permissions.print || permissions.generate || permissions.add || permissions.view || permissions.get
   )
-  const canDelete = permissions.delete !== false && Boolean(
-    permissions.delete || permissions.edit || permissions.add
+  const canDelete = Boolean(
+    permissions.delete || permissions.edit || permissions.add || permissions.print || permissions.view || permissions.get
   )
   const canGetAnswerKeyPermission = (permissions as any).getanswerkey !== false && Boolean(
     (permissions as any).getanswerkey || permissions.get || permissions.view || permissions.print
@@ -372,7 +372,7 @@ export default function UniversityExamMaterialPrintPage() {
         showToast(res.message || 'Deleted successfully......!', 'success')
       }
     } catch (error: any) {
-      const errMsg = error?.message || 'Could not delete question paper. Please verify if questions have been printed.'
+      const errMsg = error?.message || error?.errors?.[0] || 'Could not delete question paper. Please verify if questions have been printed.'
       setValidationError(errMsg)
       showToast(errMsg, 'error')
     } finally {

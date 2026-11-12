@@ -133,11 +133,14 @@ export function updateModeration(studentGuid: string, examResultGuid: string, da
   if (MOCK_AUTH) {
     return Promise.resolve({ success: true })
   }
+  if (!studentGuid || !examResultGuid) {
+    return Promise.reject(new Error('Cannot update moderation: missing studentGuid or examResultGuid'))
+  }
   const payload = {
     iaModeration: data.iaModeration ?? data.iaMod ?? 0,
     ueModeration: data.ueModeration ?? data.ueMod ?? 0,
     iaMod: data.iaMod ?? data.iaModeration ?? 0,
     ueMod: data.ueMod ?? data.ueModeration ?? 0,
   }
-  return apiPut<{ success: boolean }>(`/api/v1/assessment/exam-results/students/${studentGuid}/${examResultGuid}/moderation`, payload)
+  return apiPut<{ success: boolean }>(`/api/v1/assessment/exam-results/students/${encodeURIComponent(studentGuid)}/${encodeURIComponent(examResultGuid)}/moderation`, payload)
 }

@@ -74,6 +74,10 @@ export default function HallTicketIssuancePage() {
   const { data: elig, isFetching: checking, isError: eligError, error: eligErr } = useHallTicketEligibility(selected?.studentGuid ?? null, intakeGuid || null, term)
   const issue = useIssueHallTicket()
 
+  useEffect(() => {
+    issue.reset()
+  }, [selected, term])
+
   function handleIssue() {
     if (!selected || !elig?.canIssue) return
     issue.mutate({ studentGuid: selected.studentGuid, intakeGuid, term }, {
@@ -87,7 +91,10 @@ export default function HallTicketIssuancePage() {
       },
       // A 400 here means a clearance changed since the check, or Finance
       // couldn't be reached on the server's re-check.
-      onError: (e: Error) => showToast(e.message || 'Could not issue the hall ticket.', 'error'),
+      onError: (e: any) => {
+        const errorMsg = e?.errors?.[0] || e?.message || 'Could not issue the hall ticket.'
+        showToast(errorMsg, 'error')
+      },
     })
   }
 
@@ -150,6 +157,7 @@ export default function HallTicketIssuancePage() {
             { label: 'Class test', ok: elig.ctOk, note: 'First class test submitted on every unit with a mid-semester test' },
             ...(elig.guildOk !== null ? [{ label: 'Guild fee', ok: elig.guildOk, note: 'Current-semester Guild fee paid' }] : []),
             ...(elig.ncheOk !== null ? [{ label: 'NCHE', ok: elig.ncheOk, note: 'NCHE status for the semester is Paid' }] : []),
+            ...(elig.examOver ? [{ label: 'Exam schedule', ok: false, note: 'Exam is over — hall ticket cannot be issued' }] : []),
           ] : []
           const failing = checks.filter(c => !c.ok).map(c => c.label.toLowerCase())
           const showChecks = !checking && !eligError && !!elig && !elig.alreadyIssued
@@ -201,9 +209,24 @@ export default function HallTicketIssuancePage() {
                     <i className="lni lni-warning" aria-hidden="true"></i> {eligErr instanceof Error && eligErr.message ? eligErr.message : 'Couldn’t check eligibility. Please try again.'}
                   </div>
                 ) : (
-                  <ul className="ht-checks">
-                    {checks.map(c => <ClearanceLine key={c.label} {...c} />)}
-                  </ul>
+                  <>
+                    {elig.examOver && (
+                      <div className="info-box mb-3" style={{ borderColor: 'var(--red-bd)', background: 'var(--red-bg)', color: 'var(--red)', display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <i className="lni lni-ban" style={{ fontSize: 18, flexShrink: 0, color: 'var(--red)' }}></i>
+                        <div style={{ fontSize: 12.5, fontWeight: 600 }}>
+                          Exam is over — hall ticket cannot be issued
+                        </div>
+                      </div>
+                    )}
+                    <ul className="ht-checks">
+                      {checks.map(c => <ClearanceLine key={c.label} {...c} />)}
+                    </ul>
+                    {issue.isError && (
+                      <div className="ht-state err" role="alert" style={{ marginTop: 12 }}>
+                        <i className="lni lni-warning" aria-hidden="true"></i> {(issue.error as any)?.errors?.[0] || issue.error?.message || 'Could not issue the hall ticket.'}
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
               )}
@@ -226,6 +249,16 @@ export default function HallTicketIssuancePage() {
                         q: selected.studentRegNo ?? selected.studentName ?? '',
                       })}`}
                     ><i className="lni lni-printer"></i> Go to Hall Ticket Print</Link>
+                  </footer>
+                ) : elig.examOver ? (
+                  <footer className="ht-verdict bad">
+                    <div className="ht-verdict-msg">
+                      <i className="lni lni-ban" aria-hidden="true"></i>
+                      <div>
+                        <div className="ht-verdict-title">Exam is over</div>
+                        <div className="ht-verdict-sub">Exam is over — hall ticket cannot be issued</div>
+                      </div>
+                    </div>
                   </footer>
                 ) : elig.canIssue ? (
                   <footer className="ht-verdict ok">
@@ -374,7 +407,10 @@ function BulkIssueModal({ isOpen, onClose, intakeGuid, intakeLabel, term, showTo
     setSummary(null)
     bulk.mutate(scope, {
       onSuccess: res => { setSummary(res); setPage(1) },
-      onError: (e: Error) => showToast(e.message || 'Bulk issue failed.', 'error'),
+      onError: (e: any) => {
+        const errorMsg = e?.errors?.[0] || e?.message || 'Bulk issue failed.'
+        showToast(errorMsg, 'error')
+      },
     })
   }
 
@@ -415,9 +451,11 @@ function BulkIssueModal({ isOpen, onClose, intakeGuid, intakeLabel, term, showTo
               <div style={{ fontSize: 12.5 }}>
                 <strong>{summary.totalConsidered}</strong> considered — <strong style={{ color: 'var(--green)' }}>{summary.issued}</strong> issued,{' '}
                 <strong>{summary.alreadyIssued}</strong> already issued, <strong style={{ color: 'var(--amber)' }}>{summary.ineligible}</strong> ineligible,{' '}
+                <strong style={{ color: 'var(--purple)' }}>{summary.examOver ?? 0}</strong> exam over,{' '}
                 <strong style={{ color: 'var(--red)' }}>{summary.failed}</strong> failed.
                 {summary.alreadyIssued > 0 && ' Students who already had a ticket were skipped (their issue date is unchanged).'}
                 {summary.ineligible > 0 && ' Ineligible means a clearance came back not cleared — select the student on the main page to see which one.'}
+                {(summary.examOver ?? 0) > 0 && ' Exam over means the term’s exams are already over, so no new ticket can be issued.'}
                 {summary.failed > 0 && ' Failed means the check couldn’t be completed — for example a fee status could not be loaded from Finance — not that the student is ineligible. Select one on the main page to see the error, and retry once it’s fixed.'}
               </div>
             </div>
