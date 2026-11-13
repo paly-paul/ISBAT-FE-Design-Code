@@ -389,7 +389,7 @@ export default function UeMarkImportPage() {
             {previewMut.isPending ? 'Previewing...' : 'Preview'}
           </button>
 
-          {permissions.add && (
+          {(permissions.import || permissions.add) && (
           <button
             type="button"
             className="btn btn-success"
