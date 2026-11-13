@@ -1222,7 +1222,11 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
           return
         }
 
-        const feeHdGuid = s.feeHdGuid || fullDetails?.feeStructures?.[0]?.feeHdGuid
+        // Only a structure loaded from the server carries a feeHdGuid, so only
+        // that one is updated. A structure added in this session has none and
+        // must be created; falling back to the first saved structure's guid
+        // sent it as an update to that one, overwriting it.
+        const feeHdGuid = s.feeHdGuid
         if (feeHdGuid) {
           const input: ProgramFeeStructureUpdateInput = {
             feeHdGuid,
