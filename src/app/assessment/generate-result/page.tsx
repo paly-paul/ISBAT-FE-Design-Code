@@ -258,18 +258,6 @@ export default function GenerateResultPage() {
   const expandAll = () => setOpen(new Set(allKeys))
   const collapseAll = () => setOpen(new Set())
 
-  // Default expand first programme when newly loaded
-  useEffect(() => {
-    if (programs.length > 0 && open.size === 0) {
-      const first = programs[0]
-      const initial = new Set<string>([`p:${first.programGuid}`])
-      if (first.semesters[0]) {
-        initial.add(`s:${first.programGuid}|${first.semesters[0].semesterGuid}`)
-      }
-      setOpen(initial)
-    }
-  }, [programs, open.size])
-
   const toggle = (k: string) => setOpen(prev => {
     const n = new Set(prev)
     if (n.has(k)) n.delete(k)
