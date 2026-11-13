@@ -1,4 +1,5 @@
 import { useQuery, useMutation } from '@tanstack/react-query'
+import { downloadBlob } from '@/lib/downloadBlob'
 import {
   getUeMarkImportUnits,
   getUeMarkImportExam,
@@ -38,17 +39,15 @@ export function useDownloadUeMarkImportTemplate() {
   return useMutation({
     mutationFn: (universityExamGuid: string) => getUeMarkImportTemplate(universityExamGuid),
     onSuccess: (data) => {
-      if (data?.url) {
-        window.open(data.url, '_blank')
-      } else if (data?.blob) {
-        const objectUrl = window.URL.createObjectURL(data.blob)
+      if (data?.blob) {
+        downloadBlob(data.blob, data.filename || 'UE_Mark_Import_Template.xlsx')
+      } else if (data?.url) {
         const a = document.createElement('a')
-        a.href = objectUrl
+        a.href = data.url
         a.download = data.filename || 'UE_Mark_Import_Template.xlsx'
         document.body.appendChild(a)
         a.click()
         document.body.removeChild(a)
-        window.URL.revokeObjectURL(objectUrl)
       }
     }
   })
