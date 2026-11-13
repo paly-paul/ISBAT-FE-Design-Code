@@ -301,7 +301,7 @@ function DropoutRejoinPanel({ showToast }: { showToast: (msg: string, type?: str
             </div>
           </div>
 
-          {activeTab === 'academic' && <StudentAcademicRecord studentGuid={candidate.studentGuid} />}
+          {activeTab === 'academic' && <StudentAcademicRecord studentGuid={candidate.studentGuid} source="dropout-rejoin" />}
 
           {activeTab === 'financial' && <StudentFinancialRecord studentGuid={candidate.studentGuid} />}
 

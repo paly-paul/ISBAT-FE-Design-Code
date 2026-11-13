@@ -5,6 +5,7 @@ import { Toast } from '@/components/Toast'
 import { ActionMenu } from '@/components/ActionMenu'
 import { StudentLookup } from '@/components/student/StudentLookup'
 import { StudentTimeline } from '@/components/student/StudentTimeline'
+import { StudentAcademicRecord } from '@/components/student/StudentAcademicRecord'
 import { useStudent, useStudentTimeline } from '@/hooks/student/useStudents'
 import { StudentDto, StudentDetailDto, normalizeStudentDetail } from '@/lib/api/student/student'
 import { oneSemesterDiscountInForce } from '@/lib/api/student/studentDiscount'
@@ -51,6 +52,7 @@ const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 const PROFICIENCY_TABS = [
   { id: 'info', label: 'Profile Info', icon: 'lni-user' },
   { id: 'timeline', label: 'Timeline', icon: 'lni-calendar' },
+  { id: 'academic', label: 'Academic Record', icon: 'lni-book' },
   { id: 'idcard', label: 'ID Card', icon: 'lni-credit-cards' },
   { id: 'comms', label: 'Communication & Access', icon: 'lni-envelope' },
 ] as const
@@ -641,6 +643,8 @@ function StudentProfileContent() {
             )}
 
             {tab === 'timeline' && <StudentTimeline studentGuid={student.studentGuid} />}
+
+            {tab === 'academic' && <StudentAcademicRecord studentGuid={student.studentGuid} source="profile" />}
 
             {tab === 'idcard' && (
               <div className="mp-panel">
