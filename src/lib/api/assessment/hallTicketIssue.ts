@@ -35,13 +35,18 @@ export interface HallTicketEligibilityDto {
   examOver?: boolean
   // The only gate the UI should use; POST / re-checks it server-side.
   canIssue: boolean
+  // The term the checks ran for (get-eligibility.md 2026-11-13) — the term
+  // sent by caller, or the one the server automatically picked when omitted.
+  term?: HallTicketTerm
 }
 
 // The query param must be `academicIntakeGuid` (get-eligibility.md,
 // 2026-10-30) — the API rejects `intakeGuid` with a 400. It must also be the
 // current intake; any other returns 400 "only available for the current intake".
-export function getHallTicketEligibility(studentGuid: string, intakeGuid: string, term: HallTicketTerm): Promise<HallTicketEligibilityDto> {
-  const params = new URLSearchParams({ studentGuid, academicIntakeGuid: intakeGuid, term: String(term) })
+// `term` is optional — when omitted the server picks the term of next exam / calendar.
+export function getHallTicketEligibility(studentGuid: string, intakeGuid: string, term?: HallTicketTerm | null): Promise<HallTicketEligibilityDto> {
+  const params = new URLSearchParams({ studentGuid, academicIntakeGuid: intakeGuid })
+  if (term) params.set('term', String(term))
   return apiGet<HallTicketEligibilityDto>(`/api/v1/assessment/hall-ticket-issue/eligibility?${params.toString()}`)
 }
 
@@ -53,12 +58,15 @@ export function getHallTicketEligibility(studentGuid: string, intakeGuid: string
 // Every hall-ticket-issue endpoint names the intake `academicIntakeGuid`
 // (query or body, 2026-10-30 docs); `intakeGuid` is a 400. Only the academic
 // service's student search still takes `intakeGuid`.
-export async function issueHallTicket(payload: { studentGuid: string; intakeGuid: string; term: HallTicketTerm }): Promise<{ alreadyIssued: boolean }> {
-  const { message } = await apiPostWithMessage<boolean>('/api/v1/assessment/hall-ticket-issue', {
+// `term` is optional — when omitted the server picks it (post-issue.md 2026-11-13).
+export async function issueHallTicket(payload: { studentGuid: string; intakeGuid: string; term?: HallTicketTerm | null }): Promise<{ alreadyIssued: boolean }> {
+  const body: Record<string, any> = {
     studentGuid: payload.studentGuid,
     academicIntakeGuid: payload.intakeGuid,
-    term: payload.term,
-  })
+  }
+  if (payload.term) body.term = payload.term
+
+  const { message } = await apiPostWithMessage<boolean>('/api/v1/assessment/hall-ticket-issue', body)
   return { alreadyIssued: /already issued/i.test(message ?? '') }
 }
 
@@ -78,20 +86,23 @@ export interface BulkIssueResponseDto {
 
 // Program + semester together scope it to one class; omit both for the
 // whole intake (post-bulk-issue.md).
+// `term` is optional — when omitted the server uses intake calendar term.
 export interface HallTicketScope {
   intakeGuid: string
-  term: HallTicketTerm
+  term?: HallTicketTerm | null
   programGuid?: string | null
   semesterGuid?: string | null
 }
 
 export function issueBulkHallTickets(scope: HallTicketScope): Promise<BulkIssueResponseDto> {
-  return apiPost<BulkIssueResponseDto>('/api/v1/assessment/hall-ticket-issue/bulk', {
+  const body: Record<string, any> = {
     academicIntakeGuid: scope.intakeGuid,
-    term: scope.term,
     programGuid: scope.programGuid || null,
     semesterGuid: scope.semesterGuid || null,
-  })
+  }
+  if (scope.term) body.term = scope.term
+
+  return apiPost<BulkIssueResponseDto>('/api/v1/assessment/hall-ticket-issue/bulk', body)
 }
 
 // Exact casing — the backend binds it as an enum and 400s/500s anything else (get-bulk-issued.md).
@@ -123,7 +134,8 @@ export interface HallTicketScopeFilterOptions {
 }
 
 function scopeParams(scope: HallTicketScope) {
-  const params = new URLSearchParams({ academicIntakeGuid: scope.intakeGuid, term: String(scope.term) })
+  const params = new URLSearchParams({ academicIntakeGuid: scope.intakeGuid })
+  if (scope.term) params.set('term', String(scope.term))
   if (scope.programGuid) params.set('programGuid', scope.programGuid)
   if (scope.semesterGuid) params.set('semesterGuid', scope.semesterGuid)
   return params
@@ -133,6 +145,7 @@ function scopeParams(scope: HallTicketScope) {
 // with an Issued/NotIssued status; `status` narrows to one group.
 // includeEligibility adds eligibility and blocker reasons to NotIssued students.
 // eligibility filter narrows to students with that exact eligibility state. Unpaged.
+// `term` is optional — when omitted the server uses intake calendar term.
 export function getHallTicketScopeStudents(
   scope: HallTicketScope,
   status?: HallTicketIssueStatus | null,
@@ -155,8 +168,11 @@ export function getHallTicketScopeStudents(
 // rather than window.open'd so a 404 "not issued" shows as a toast instead
 // of a JSON page in a new tab. Both record the print audit server-side as a
 // side effect — the pages never call POST /print themselves.
-export async function downloadHallTicketPdf(studentGuid: string, intakeGuid: string, term: HallTicketTerm) {
-  const params = new URLSearchParams({ academicIntakeGuid: intakeGuid, term: String(term) })
+// `term` is optional — when omitted the server picks the term of next exam / calendar.
+// Returns 400 "Hall ticket cannot be printed after the exam." once exams are over.
+export async function downloadHallTicketPdf(studentGuid: string, intakeGuid: string, term?: HallTicketTerm | null) {
+  const params = new URLSearchParams({ academicIntakeGuid: intakeGuid })
+  if (term) params.set('term', String(term))
   const { blob, filename } = await apiGetBlob(`/api/v1/assessment/hall-ticket-issue/${studentGuid}/pdf?${params.toString()}`)
   return { blob, filename: filename ?? `hallticket_${studentGuid}.pdf` }
 }
@@ -168,7 +184,9 @@ export async function downloadBulkHallTicketPdf(scope: HallTicketScope) {
 
 // image/png. intakeGuid is required (get-qr-image.md) — a student can hold
 // tickets in several intakes.
-export function getHallTicketQrImageUrl(studentGuid: string, intakeGuid: string, term: HallTicketTerm): string {
-  const params = new URLSearchParams({ academicIntakeGuid: intakeGuid, term: String(term) })
+// `term` is optional — when omitted the server picks the term of next exam / calendar.
+export function getHallTicketQrImageUrl(studentGuid: string, intakeGuid: string, term?: HallTicketTerm | null): string {
+  const params = new URLSearchParams({ academicIntakeGuid: intakeGuid })
+  if (term) params.set('term', String(term))
   return `/api/v1/assessment/hall-ticket-issue/${studentGuid}/qr-image?${params.toString()}`
 }
