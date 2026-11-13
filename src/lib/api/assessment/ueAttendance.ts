@@ -45,6 +45,9 @@ export interface UeAttendanceSavePayload {
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
+// Temporary: see saveUeAttendance.
+const UE_ATTENDANCE_TERM = 1
+
 export function getUeAttendanceInit() {
   if (MOCK_AUTH) {
     return Promise.resolve({
@@ -108,5 +111,8 @@ export function saveUeAttendance(payload: UeAttendanceSavePayload) {
   if (MOCK_AUTH) {
     return Promise.resolve({ savedCount: payload.students.length })
   }
-  return apiPost<{ savedCount: number }>('/api/v1/assessment/ue-attendance', payload)
+  // The backend requires Term (it rejects anything outside its allowed range),
+  // but the page has no term picker or source for it yet, so it's fixed at 1
+  // for now. Replace with the real value once the term is available.
+  return apiPost<{ savedCount: number }>('/api/v1/assessment/ue-attendance', { ...payload, term: UE_ATTENDANCE_TERM })
 }

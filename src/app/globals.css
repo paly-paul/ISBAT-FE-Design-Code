@@ -15607,6 +15607,76 @@ button.sp-link:hover .sp-link-go { color: var(--b700); transform: translateX(3px
 }
 @media (prefers-reduced-motion: reduce) { .sp-tl-body { transition: none; } }
 
+/* Academic Record tab: the Timeline's navy strip (.sp-tl-summary) carrying
+   credit progress, then one disclosure row per semester with its units. */
+.sp-ar-meter { position: relative; height: 6px; margin-top: 9px; border-radius: 3px; background: rgba(255, 255, 255, .16); overflow: hidden; }
+.sp-ar-meter > span { position: absolute; inset: 0 auto 0 0; border-radius: inherit; background: var(--b200); transition: width .6s cubic-bezier(.16, 1, .3, 1); }
+.sp-ar-stat-of { font-size: var(--fs-sm); font-weight: 600; color: var(--b200); }
+.sp-ar-stat-note { margin-top: 5px; font-size: var(--fs-xs); color: var(--b200); }
+
+.sp-ar-sems { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.sp-ar-sem {
+  border: 1px solid var(--g100); border-radius: var(--rsm); background: var(--white); overflow: hidden;
+  transition: border-color var(--tr), box-shadow var(--tr);
+}
+.sp-ar-sem.is-open { border-color: var(--b100); box-shadow: 0 10px 22px -18px rgba(45, 68, 143, .55); }
+.sp-ar-sem.is-current { border-color: var(--b200); }
+.sp-ar-sem h3 { margin: 0; font: inherit; }
+.sp-ar-head {
+  display: flex; align-items: center; gap: 12px; width: 100%; padding: 13px 16px; border: 0; background: transparent;
+  font: inherit; text-align: left; color: var(--g900); cursor: pointer; transition: background var(--tr);
+}
+@media (hover: hover) { .sp-ar-head:hover { background: var(--surface); } }
+.sp-ar-head:focus-visible { outline: 2px solid var(--b500); outline-offset: -2px; border-radius: var(--rsm); }
+.sp-ar-sem.is-current .sp-ar-head { background: var(--b50); }
+.sp-ar-chev { flex-shrink: 0; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; font-size: 10px; color: var(--g500); background: var(--surface); border: 1px solid var(--g100); transition: transform var(--tr), color var(--tr), background var(--tr); }
+.sp-ar-sem.is-open .sp-ar-chev { transform: rotate(90deg); color: var(--white); background: var(--b800); border-color: var(--b800); }
+.sp-ar-title { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; flex: 1; min-width: 0; }
+.sp-ar-name { font-size: var(--fs-md); font-weight: 700; overflow-wrap: anywhere; }
+.sp-ar-meta { margin-left: auto; display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 6px 14px; }
+.sp-ar-tally { display: flex; gap: 6px; }
+.sp-ar-tally span { display: inline-flex; align-items: center; gap: 5px; font-size: var(--fs-xs); font-weight: 600; color: var(--g500); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sp-ar-tally span::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.sp-ar-tally .is-pass { color: var(--green); }
+.sp-ar-tally .is-fail { color: var(--red); }
+.sp-ar-tally .is-late { color: var(--amber); }
+.sp-ar-size { font-size: var(--fs-sm); font-weight: 600; color: var(--g500); white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+.sp-ar-body { border-top: 1px solid var(--g100); animation: mp-in .3s cubic-bezier(.16, 1, .3, 1) both; }
+.sp-ar-body .tbl-scroll-host { margin: 0; }
+/* A quiet header: the blue table band belongs to page-level lists, not a nested record.
+   The unit code stays the sticky first column, left-aligned like the rest. */
+.tbl-wrap.sp-ar-tbl thead tr { background: var(--surface); }
+.tbl-wrap.sp-ar-tbl thead th,
+.tbl-wrap.sp-ar-tbl table th:first-child { background: var(--surface); color: var(--g500); text-align: left; border-bottom: 1px solid var(--g100); box-shadow: none; }
+.tbl-wrap.sp-ar-tbl table td:first-child { text-align: left; box-shadow: inset -1px 0 0 var(--g100); }
+.tbl-wrap.sp-ar-tbl td { white-space: normal; vertical-align: middle; }
+.tbl-wrap.sp-ar-tbl tbody tr:last-child td { border-bottom: 0; }
+@media (hover: hover) { .tbl-wrap.sp-ar-tbl tbody tr:hover td { background: var(--surface); } }
+.tbl-wrap.sp-ar-tbl .is-num { text-align: right; font-variant-numeric: tabular-nums; }
+.sp-ar-code { font-family: var(--font-mono), monospace; font-size: var(--fs-sm); font-weight: 600; color: var(--b700); white-space: nowrap; }
+.sp-ar-unit { min-width: 200px; font-weight: 600; color: var(--g900); }
+
+/* Marks: the score over its max, and a hairline bar with a tick at the 50% pass line. */
+.sp-ar-mark { display: inline-flex; flex-direction: column; align-items: flex-end; gap: 5px; min-width: 76px; }
+.sp-ar-mark-val { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sp-ar-mark-val b { font-weight: 700; color: var(--g900); }
+.sp-ar-mark-val small { font-size: var(--fs-xs); color: var(--g400); }
+.sp-ar-mark-bar { position: relative; width: 76px; height: 4px; border-radius: 2px; background: var(--g100); }
+.sp-ar-mark-bar::after { content: ''; position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: var(--g300); }
+.sp-ar-mark-bar > span { position: absolute; inset: 0 auto 0 0; border-radius: inherit; background: var(--green); }
+.sp-ar-mark-bar.is-low > span { background: var(--red); }
+.sp-ar-none { color: var(--g300); }
+
+@container sp (max-width: 759px) {
+  .sp-ar-head { flex-wrap: wrap; padding: 12px 14px; }
+  .sp-ar-meta { width: 100%; margin-left: 36px; justify-content: flex-start; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sp-ar-sem, .sp-ar-head, .sp-ar-chev, .sp-ar-meter > span { transition: none; }
+  .sp-ar-body { animation: none; }
+}
+
 /* Responsive: every rule keys off .sp-body's own width, not the viewport —
    the sidebar panel takes 294px when open, so the same window can give this
    page 850px or 1140px. These override the viewport rules .mp-* and .g2 carry

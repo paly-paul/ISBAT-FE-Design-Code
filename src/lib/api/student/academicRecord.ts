@@ -2,14 +2,29 @@ import { apiGet } from '../client'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
-// Student academic record — shown on Dropout Rejoin's Academic Record tab,
-// modelled on the student portal's own "My Academic Record" page. Two
-// admin-facing endpoints (students/dropout-rejoin/*.md, 2026-09-29), each the
-// staff equivalent of a student-portal call but keyed by studentGuid instead
-// of the logged-in session:
-//   GET .../{studentGuid}/credit-accumulation — credits summary ring
-//   GET .../{studentGuid}/program-units       — full curriculum by semester
+// Student academic record, modelled on the student portal's own "My Academic
+// Record" page. Two endpoint families return the same shapes, each the staff
+// equivalent of a student-portal call keyed by studentGuid instead of the
+// logged-in session:
+//   'dropout-rejoin' (Dropout Rejoin's tab; students/dropout-rejoin/*.md)
+//     GET /students/dropout-rejoin/{guid}/credit-accumulation
+//     GET /students/dropout-rejoin/{guid}/program-units
+//   'profile' (Student Profile's tab; students/academic-record/*.md,
+//   permission student.academicrecord.get)
+//     GET /students/{guid}/academic-record/credit-accumulation
+//     GET /students/{guid}/academic-record
 // Both 400 (`failure`) when the student has no program/semester/batch.
+
+export type AcademicRecordSource = 'dropout-rejoin' | 'profile'
+
+const CREDITS_PATH: Record<AcademicRecordSource, (guid: string) => string> = {
+  'dropout-rejoin': g => `/api/v1/students/dropout-rejoin/${g}/credit-accumulation`,
+  profile: g => `/api/v1/students/${g}/academic-record/credit-accumulation`,
+}
+const UNITS_PATH: Record<AcademicRecordSource, (guid: string) => string> = {
+  'dropout-rejoin': g => `/api/v1/students/dropout-rejoin/${g}/program-units`,
+  profile: g => `/api/v1/students/${g}/academic-record`,
+}
 
 export interface CreditAccumulationDto {
   totalCredit: number
@@ -79,13 +94,13 @@ const mockProgramUnits: ProgramUnitsDto = {
   ],
 }
 
-export function getCreditAccumulation(studentGuid: string): Promise<CreditAccumulationDto> {
+export function getCreditAccumulation(studentGuid: string, source: AcademicRecordSource): Promise<CreditAccumulationDto> {
   if (MOCK_AUTH) return Promise.resolve({ totalCredit: 120, earnedCredit: 63, creditPercentage: 53 })
-  return apiGet<CreditAccumulationDto>(`/api/v1/students/dropout-rejoin/${studentGuid}/credit-accumulation`)
+  return apiGet<CreditAccumulationDto>(CREDITS_PATH[source](studentGuid))
 }
 
-export function getProgramUnits(studentGuid: string): Promise<ProgramUnitsDto> {
+export function getProgramUnits(studentGuid: string, source: AcademicRecordSource): Promise<ProgramUnitsDto> {
   if (MOCK_AUTH) return Promise.resolve(mockProgramUnits)
-  return apiGet<ProgramUnitsDto>(`/api/v1/students/dropout-rejoin/${studentGuid}/program-units`)
+  return apiGet<ProgramUnitsDto>(UNITS_PATH[source](studentGuid))
     .then(data => ({ ...data, semesters: data?.semesters ?? [] }))
 }
