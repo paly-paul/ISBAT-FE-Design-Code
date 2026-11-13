@@ -7,6 +7,7 @@ import { ScrollTable } from '@/components/ScrollTable'
 import { Toast } from '@/components/Toast'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
+import { Pagination } from '@/components/Pagination'
 import { SearchSelect } from '@/components/SearchSelect'
 import { TableSearch, type TableSearchResult } from '@/components/TableSearch'
 import { useIntakesDropdown } from '@/hooks/academic/useIntakes'
@@ -213,7 +214,7 @@ export default function ResultModerationPage() {
 
   // ── Results Grid & Infinite Scroll ──────────────────────────────
   const [page, setPage] = useState(1)
-  const pageSize = 50
+  const pageSize = 15
   const [loadedRows, setLoadedRows] = useState<ExamResultRow[]>([])
 
   const apiFilters = useMemo<ResultFilters | null>(() => {
@@ -251,54 +252,19 @@ export default function ResultModerationPage() {
 
   const resultsQ = useGeneratedResults(canGetGrid ? apiFilters : null, page, pageSize)
   const totalCount = resultsQ.data?.totalCount ?? 0
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize))
 
-  // Accumulate rows for infinite scroll
+  // Sync loaded rows with current page results
   useEffect(() => {
     if (!resultsQ.data) return
-    const newItems = resultsQ.data.items ?? []
-    if (page === 1) {
-      setLoadedRows(newItems)
-    } else {
-      setLoadedRows((prev) => {
-        const existingIds = new Set(prev.map((r) => r.examResultGuid))
-        const fresh = newItems.filter((r) => !existingIds.has(r.examResultGuid))
-        return [...prev, ...fresh]
-      })
-    }
-  }, [resultsQ.data, page])
+    setLoadedRows(resultsQ.data.items ?? [])
+  }, [resultsQ.data])
 
   // Clear loaded rows and reset page on filter/search/intake changes
   useEffect(() => {
     setPage(1)
     setLoadedRows([])
   }, [apiFilters])
-
-  // Scroll to fetch next page
-  const fetchNextPage = useCallback(() => {
-    if (resultsQ.isFetching) return
-    if (loadedRows.length >= totalCount) return
-    setPage((prev) => prev + 1)
-  }, [resultsQ.isFetching, loadedRows.length, totalCount])
-
-  const handleTableScroll = useCallback(
-    (e: React.UIEvent<HTMLDivElement>) => {
-      const el = e.currentTarget
-      if (el.scrollHeight - el.scrollTop - el.clientHeight < 120) {
-        fetchNextPage()
-      }
-    },
-    [fetchNextPage]
-  )
-
-  useEffect(() => {
-    const handleWindowScroll = () => {
-      if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 250) {
-        fetchNextPage()
-      }
-    }
-    window.addEventListener('scroll', handleWindowScroll)
-    return () => window.removeEventListener('scroll', handleWindowScroll)
-  }, [fetchNextPage])
 
   // Autocomplete items derived from loaded rows
   const searchResults: TableSearchResult[] = useMemo(() => {
@@ -630,9 +596,9 @@ export default function ResultModerationPage() {
   }
 
   return (
-    <div className="page active">
+    <div className="page active moderation-page">
       {/* ── Page Header ────────────────────────────────────────── */}
-      <div className="pg-hdr flex flex-col md:flex-row md:items-end justify-between gap-4 mb-4">
+      <div className="pg-hdr flex flex-col md:flex-row md:items-end justify-between gap-4 mb-3 shrink-0">
         <div>
           <div className="flex items-center gap-2.5">
             <h1 className="pg-title text-2xl font-bold tracking-tight text-slate-900">
@@ -670,7 +636,7 @@ export default function ResultModerationPage() {
       </div>
 
       {/* ── Main Action Bar & Drawers ──────────────────────────── */}
-      <div ref={stackRef} className="relative z-30 mb-4">
+      <div ref={stackRef} className="relative z-30 mb-3 shrink-0">
         {/* Toolbar */}
         <div className="card shadow-xs border border-slate-200 rounded-xl bg-white p-3 sm:p-4 flex flex-wrap items-center gap-2.5">
           {/* Reusable TableSearch Component */}
@@ -982,9 +948,12 @@ export default function ResultModerationPage() {
         )}
       </div>
 
-      {/* ── Table Container (ScrollTable with infinite scroll) ── */}
-      <div className="card shadow-xs border border-slate-200 rounded-xl overflow-hidden bg-white mb-3">
-        <ScrollTable onScroll={handleTableScroll} maxHeight="calc(100vh - 290px)">
+      {/* ── Table Container (ScrollTable) ── */}
+      <div className="card shadow-xs border border-slate-200 rounded-xl overflow-hidden bg-white mb-2 moderation-table-card">
+        <ScrollTable
+          className="flex-1 min-h-0"
+          style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}
+        >
           <table>
             <thead>
               <tr>
@@ -1042,7 +1011,7 @@ export default function ResultModerationPage() {
                     >
                       {/* # */}
                       <td className="text-slate-500 font-mono text-xs" style={{ textAlign: 'left' }}>
-                        {idx + 1}
+                        {(page - 1) * pageSize + idx + 1}
                       </td>
 
                       {/* Student */}
@@ -1229,16 +1198,15 @@ export default function ResultModerationPage() {
         </ScrollTable>
       </div>
 
-      {/* ── Table Footer & Infinite Scroll Progress ───────────── */}
-      <div className="flex flex-col sm:flex-row justify-between items-center text-xs text-slate-500 px-1 py-1 gap-2">
-        <span>
-          Showing {loadedRows.length} of {totalCount} records
-        </span>
-        {resultsQ.isFetching && loadedRows.length > 0 && (
-          <span className="text-blue-600 font-medium flex items-center gap-1.5">
-            <i className="lni lni-reload animate-spin text-xs"></i> Loading more records...
-          </span>
-        )}
+      {/* ── Table Footer / Pagination ────────────────────────── */}
+      <div className="shrink-0">
+        <Pagination
+          page={page}
+          totalPages={totalPages}
+          totalCount={totalCount}
+          itemLabel="records"
+          onPageChange={setPage}
+        />
       </div>
 
       {/* ── Batch Moderation Confirmation Dialog ───────────────── */}
