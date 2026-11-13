@@ -1,4 +1,4 @@
-import { apiGet, apiPostForm } from '../client'
+import { apiGet, apiPostForm, apiGetBlob } from '../client'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
@@ -142,12 +142,43 @@ export async function getUeMarkImportTemplate(universityExamGuid: string): Promi
       const errMsg = json?.message || (Array.isArray(json?.errors) ? json.errors[0] : null) || json?.title || `Error ${res.status}`
       throw new Error(errMsg)
     }
-    const downloadUrl = json?.data?.url || json?.url || (typeof json?.data === 'string' ? json.data : null)
+    const downloadUrl = json?.data?.url || json?.url || (typeof json?.data === 'string' ? json.data : null) || json?.data?.downloadUrl
     if (downloadUrl) {
+      // Backend files (e.g. /api/v1/assessment/files/...) answer 401 without
+      // the login cookie, so window.open or navigating to the remote domain fails
+      // (localhost cookies are not sent to erp-dev). Fetch through the app's own
+      // origin proxy with credentials via apiGetBlob.
+      let relativePath: string | null = null
+      if (typeof downloadUrl === 'string') {
+        if (downloadUrl.startsWith('/api/')) {
+          relativePath = downloadUrl
+        } else {
+          try {
+            const u = new URL(downloadUrl)
+            if (u.pathname.startsWith('/api/')) {
+              relativePath = u.pathname + u.search
+            }
+          } catch {}
+        }
+      }
+
+      if (relativePath) {
+        const { blob, filename } = await apiGetBlob(relativePath)
+        return { blob, filename: filename || 'UE_Mark_Import_Template.xlsx' }
+      }
+
+      try {
+        const fileRes = await fetch(downloadUrl)
+        if (fileRes.ok) {
+          const blob = await fileRes.blob()
+          const disposition = fileRes.headers.get('content-disposition') ?? ''
+          const match = disposition.match(/filename\*?=(?:UTF-8''|")?([^";]+)"?/i)
+          const filename = match ? decodeURIComponent(match[1]) : 'UE_Mark_Import_Template.xlsx'
+          return { blob, filename }
+        }
+      } catch {}
+
       return { url: downloadUrl, expiresAtUtc: json?.data?.expiresAtUtc || json?.expiresAtUtc || '' }
-    }
-    if (json?.data && typeof json.data === 'object' && json.data.downloadUrl) {
-      return { url: json.data.downloadUrl, expiresAtUtc: json.data.expiresAtUtc || '' }
     }
   }
 
