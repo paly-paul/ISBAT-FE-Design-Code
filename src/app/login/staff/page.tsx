@@ -23,8 +23,6 @@ export default function StaffLoginPage() {
   const [idError, setIdError] = useState<string | null>(null)
   const [passwordError, setPasswordError] = useState<string | null>(null)
 
-  const disabled = loading || !staffId.trim() || !password
-
   // A ?next= link (the page the user was trying to open) is where login
   // lands afterwards — see lib/postLoginRedirect.ts.
   const queryClient = useQueryClient()
@@ -40,18 +38,29 @@ export default function StaffLoginPage() {
     if (params.get('reset') === '1') setResetDone(true)
   }, [])
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
-    // const idErr = validateStaffId(staffId)
+    // Read the inputs directly: browser/password-manager autofill can fill the
+    // fields without firing an input event, leaving React state empty. The
+    // button stays enabled for that reason, and emptiness is checked here.
+    const idInput = e.currentTarget.elements.namedItem('staff-id') as HTMLInputElement
+    const passwordInput = e.currentTarget.elements.namedItem('password') as HTMLInputElement
+    const id = idInput.value
+    const pw = passwordInput.value
+    setStaffId(id)
+    setPassword(pw)
+    if (!id.trim()) { setIdError('Enter your Staff ID.'); idInput.focus(); return }
+    if (!pw) { setPasswordError('Enter your password.'); passwordInput.focus(); return }
+    // const idErr = validateStaffId(id)
     // if (idErr) { setIdError(idErr); return }
-    const pwErr = validatePassword(password)
+    const pwErr = validatePassword(pw)
     if (pwErr) { setPasswordError(pwErr); return }
     setIdError(null)
     setPasswordError(null)
     setLoading(true)
 
     try {
-      const result = await staffLogin(staffId, password, trust)
+      const result = await staffLogin(id, pw, trust)
       if ('challengeId' in result) {
         setFlowState({
           challengeId: result.challengeId,
@@ -77,11 +86,11 @@ export default function StaffLoginPage() {
     } catch (err) {
       if (err instanceof AuthError && (err.code === 'password_expired' || /password.*expired/i.test(err.code || err.message))) {
         setFlowState({
-          username: staffId.trim(),
-          currentPassword: password,
+          username: id.trim(),
+          currentPassword: pw,
           returnTo: '/login/staff',
         })
-        router.push(`/login/reset-expired-password?username=${encodeURIComponent(staffId.trim())}`)
+        router.push(`/login/reset-expired-password?username=${encodeURIComponent(id.trim())}`)
         return
       }
       setPasswordError(err instanceof AuthError ? authErrorMessage(err.code) : authErrorMessage('unknown'))
@@ -114,6 +123,7 @@ export default function StaffLoginPage() {
           <label className="isb-label" htmlFor="staff-id">Staff ID</label>
           <input
             id="staff-id"
+            name="staff-id"
             className="isb-input"
             value={staffId}
             onChange={e => { setStaffId(e.target.value); setIdError(null) }}
@@ -143,6 +153,7 @@ export default function StaffLoginPage() {
           <div className="isb-pw-wrap">
             <input
               id="password"
+              name="password"
               className="isb-input"
               type={show ? 'text' : 'password'}
               value={password}
@@ -177,7 +188,7 @@ export default function StaffLoginPage() {
         <button
           type="submit"
           className="isb-btn primary full"
-          disabled={disabled}
+          disabled={loading}
         >
           {loading
             ? <>
