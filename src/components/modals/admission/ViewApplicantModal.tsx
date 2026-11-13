@@ -3,8 +3,11 @@ import { useLayoutEffect, useRef, useState } from 'react'
 import { ModalProps } from '../types'
 import { ApplicationListItem, useApplicationAllDetail } from '@/hooks/admission/useApplicationFiling'
 import { useProgramDropdown } from '@/hooks/academic/useProgramMaster'
+import { useVettingApplicationDetail } from '@/hooks/admission/useVetting'
 import { applicantProfileHref } from '@/lib/applicantProfileLink'
+import { documentTitle } from '@/lib/admission/applicantDisplay'
 import { formatDate } from '@/lib/date'
+import { DocumentPreviewModal } from '@/components/modals/shared/DocumentPreviewModal'
 
 interface ViewApplicantModalProps extends Partial<ModalProps> {
   isOpen: boolean
@@ -40,6 +43,28 @@ function withoutNullText(a: ApplicationListItem): ApplicationListItem {
   return out as unknown as ApplicationListItem
 }
 
+// Documents Verified: the backend's label when it sends one, otherwise the
+// raw flag from the list row; no label and no flag means not yet verified.
+function verificationBadge(label: string | null | undefined, flag: boolean | null | undefined, verifiedDate: string | null | undefined) {
+  const text = label?.trim() || (flag ? 'Verified' : '')
+  if (!text) return <span className="badge badge-amber">Pending</span>
+  if (text.toLowerCase() === 'verified') {
+    return <span className="badge badge-green"><i className="lni lni-checkmark" aria-hidden="true" /> Verified{verifiedDate ? ` · ${formatDate(verifiedDate)}` : ''}</span>
+  }
+  return <span className="badge badge-amber">{text}</span>
+}
+
+// Refugee Status: all-detail hides the raw refugee flag and sends
+// refugeeLabel ("Yes"/"No"); the list row's flag is only a fallback, and an
+// unknown value shows as "—" rather than a guessed "No".
+function refugeeStatus(label: string | null | undefined, flag: number | null | undefined, refugeeId: string | null | undefined) {
+  const text = label?.trim()
+  const isRefugee = text ? text.toLowerCase() === 'yes' : flag === 1
+  if (isRefugee) return <span className="badge badge-amber">Refugee · ID {refugeeId || '—'}</span>
+  if (text) return text
+  return flag === 0 ? 'No' : '—'
+}
+
 // Layout, tabs, fields and footer mirror ViewProgrammeModal /
 // ViewCourseUnitModal so the View modals read as one family.
 function Field({ label, value, wide }: { label: string; value: React.ReactNode; wide?: boolean }) {
@@ -67,6 +92,14 @@ export function ViewApplicantModal({ isOpen, onClose, applicant: listRow }: View
     useApplicationAllDetail(listRow?.applicationGuid, isOpen && !!listRow)
   const { data: programs = [] } = useProgramDropdown(undefined, isOpen && !!listRow)
 
+  // Documents with viewable URLs come from the vetting detail
+  // (GET /admissions/vetting/applications/{guid}), the same source as the
+  // Applicant Profile page and Vetting Desk. all-detail only carries the
+  // upload filenames, which can't be opened.
+  const { data: vetting, isLoading: docsLoading, isError: docsError, error: docsErrorObj } =
+    useVettingApplicationDetail(listRow?.applicationGuid ?? null, isOpen && !!listRow)
+  const [preview, setPreview] = useState<{ url: string; title: string } | null>(null)
+
   // Same sliding underline as ViewProgrammeModal.
   const tabRefs = useRef<Partial<Record<Tab, HTMLButtonElement>>>({})
   const [indicator, setIndicator] = useState({ left: 0, width: 0 })
@@ -79,6 +112,7 @@ export function ViewApplicantModal({ isOpen, onClose, applicant: listRow }: View
 
   function handleClose() {
     setActiveTab('personal')
+    setPreview(null)
     onClose()
   }
 
@@ -117,13 +151,8 @@ export function ViewApplicantModal({ isOpen, onClose, applicant: listRow }: View
 
   const profileUrl = applicantProfileHref(applicant.applicationGuid)
 
-  const documents = [
-    { label: 'National ID Document', icon: 'lni-id-card', file: applicant.idUserFileName },
-    { label: 'Passport Document', icon: 'lni-passport', file: applicant.passUserFileName },
-    { label: 'Visa Document', icon: 'lni-files', file: applicant.visaUserFileName },
-    { label: 'Student Photo', icon: 'lni-image', file: applicant.studUserFileName },
-  ]
-  const uploadedCount = documents.filter(d => d.file).length
+  const documents = vetting?.documents ?? []
+  const uploadedCount = documents.filter(d => d.uploaded).length
 
   const reference = (name: string | null, phone: string | null, org: string | null) =>
     `${name}${phone ? ` (${phone})` : ''}${org ? ` · ${org}` : ''}`
@@ -176,12 +205,7 @@ export function ViewApplicantModal({ isOpen, onClose, applicant: listRow }: View
               <Field label="Country / Nationality" value={countryName} />
               <Field label="National ID" value={applicant.nationalId && <span className="font-mono">{applicant.nationalId}</span>} />
               <Field label="Passport Number" value={applicant.passportNo && <span className="font-mono">{applicant.passportNo}</span>} />
-              <Field
-                label="Refugee Status"
-                value={applicant.refugee === 1
-                  ? <span className="badge badge-amber">Refugee · ID {applicant.refugeeId || '—'}</span>
-                  : 'No'}
-              />
+              <Field label="Refugee Status" value={refugeeStatus(applicant.refugeeLabel, applicant.refugee, applicant.refugeeId)} />
 
               <SectionTitle>Contact Information</SectionTitle>
               <Field label="Phone Number" value={applicant.phone} />
@@ -207,13 +231,10 @@ export function ViewApplicantModal({ isOpen, onClose, applicant: listRow }: View
               />
 
               <SectionTitle>Verification</SectionTitle>
-              {/* all-detail hides the raw docVerified flag and sends docVerifiedLabel instead. */}
-              <Field
-                label="Documents Verified"
-                value={(applicant.docVerifiedLabel ? applicant.docVerifiedLabel === 'Verified' : applicant.docVerified)
-                  ? <span className="badge badge-green"><i className="lni lni-checkmark" aria-hidden="true" /> Verified{applicant.verifiedDate ? ` · ${formatDate(applicant.verifiedDate)}` : ''}</span>
-                  : <span className="badge badge-amber">Pending</span>}
-              />
+              {/* all-detail hides the raw docVerified flag and sends docVerifiedLabel
+                  instead. The backend's own label is shown as-is, so a state other than
+                  Verified isn't collapsed into "Pending"; Pending only means no label. */}
+              <Field label="Documents Verified" value={verificationBadge(applicant.docVerifiedLabel, applicant.docVerified, applicant.verifiedDate)} />
               {applicant.docRemarks && <Field label="Document Remarks" value={applicant.docRemarks} wide />}
             </div>
           </div>
@@ -223,19 +244,38 @@ export function ViewApplicantModal({ isOpen, onClose, applicant: listRow }: View
         {activeTab === 'documents' && (
           <div key="documents" className="modal-scroll tab-panel-in" style={{ padding: PANEL_PADDING }}>
             <div style={GRID}>
-              <SectionTitle>Uploaded Document Files</SectionTitle>
-              <ul style={{ gridColumn: '1 / -1', listStyle: 'none', margin: 0, padding: 0, border: '1px solid var(--g200)', borderRadius: 'var(--rsm)' }}>
-                {documents.map((d, idx) => (
-                  <li key={d.label} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderBottom: idx < documents.length - 1 ? '1px solid var(--g100)' : 'none', fontSize: 13 }}>
-                    <i className={`lni ${d.icon}`} style={{ fontSize: 16, color: d.file ? 'var(--b600)' : 'var(--g300)' }} aria-hidden="true" />
-                    <span style={{ fontWeight: 600, color: 'var(--g800)', flexShrink: 0 }}>{d.label}</span>
-                    <span style={{ flex: 1 }} />
-                    {d.file
-                      ? <span className="font-mono" style={{ color: 'var(--b700)', fontSize: 12, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={d.file}>{d.file}</span>
-                      : <span className="badge badge-grey">Not uploaded</span>}
-                  </li>
-                ))}
-              </ul>
+              <SectionTitle>Uploaded Documents</SectionTitle>
+              <div style={{ gridColumn: '1 / -1' }}>
+                {docsLoading ? (
+                  <p className="text-sm text-g500" style={{ margin: 0 }}><i className="lni lni-spinner-arrow spin" aria-hidden="true" /> Loading documents…</p>
+                ) : docsError ? (
+                  <p className="text-sm" style={{ margin: 0, color: 'var(--g600)' }}>
+                    <i className="lni lni-warning" style={{ color: 'var(--amber)' }} aria-hidden="true" /> Couldn&rsquo;t load this applicant&rsquo;s documents{docsErrorObj instanceof Error && docsErrorObj.message ? ` — ${docsErrorObj.message}` : ''}.
+                  </p>
+                ) : documents.length === 0 ? (
+                  <p className="text-sm text-g500" style={{ margin: 0 }}>No documents required for this application.</p>
+                ) : (
+                  <div className="vd-list">
+                    {documents.map(doc => {
+                      const title = documentTitle(doc.documentType)
+                      return (
+                        <div key={doc.documentType} className={`vd-doc${doc.uploaded ? '' : ' missing'}`}>
+                          <span className="vd-doc-icon"><i className={`lni ${doc.uploaded ? 'lni-folder' : 'lni-question-circle'}`} aria-hidden="true" /></span>
+                          <div className="vd-doc-body">
+                            <div className="vd-doc-name">{title}</div>
+                            <div className="vd-doc-sub">{doc.uploaded ? 'Uploaded' : 'Missing'}</div>
+                          </div>
+                          {doc.uploaded && doc.url && (
+                            <button type="button" className="btn btn-neu btn-sm" onClick={() => setPreview({ url: doc.url!, title })} aria-label={`View ${title}`}>
+                              <i className="lni lni-eye" aria-hidden="true" /> View
+                            </button>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
 
               <SectionTitle>Sponsor Details</SectionTitle>
               <Field label="Sponsor Name" value={applicant.spName} />
@@ -256,7 +296,8 @@ export function ViewApplicantModal({ isOpen, onClose, applicant: listRow }: View
 
         <div className="modal-footer">
           <span className="text-sm" style={{ color: 'var(--g500)' }}>
-            {fullName} · {applicant.intakeCode || 'No intake'} · {uploadedCount} of {documents.length} documents uploaded
+            {fullName} · {applicant.intakeCode || 'No intake'}
+            {vetting && ` · ${uploadedCount} of ${documents.length} documents uploaded`}
           </span>
           <span className="flex-1"></span>
           <a className="btn btn-neu" href={profileUrl} target="_blank" rel="noopener noreferrer">
@@ -265,6 +306,13 @@ export function ViewApplicantModal({ isOpen, onClose, applicant: listRow }: View
           <button className="btn btn-primary" onClick={handleClose}>Close</button>
         </div>
       </div>
+
+      <DocumentPreviewModal
+        isOpen={!!preview}
+        onClose={() => setPreview(null)}
+        url={preview?.url ?? null}
+        title={preview?.title}
+      />
     </div>
   )
 }
