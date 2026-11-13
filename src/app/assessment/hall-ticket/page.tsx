@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import Link from 'next/link'
 import { ScrollTable } from '@/components/ScrollTable'
 import { SearchSelect } from '@/components/SearchSelect'
@@ -18,6 +18,8 @@ import {
   useBulkIssueHallTickets,
   BulkIssueResponseDto,
   HallTicketIssueStatus,
+  HallTicketEligibilityState,
+  HallTicketEligibilityReasonDto,
   HallTicketTerm,
 } from '@/hooks/assessment/useHallTicket'
 import type { HallTicketSearchResultDto } from '@/lib/api/student/hallTicketSearch'
@@ -36,10 +38,42 @@ import type { HallTicketSearchResultDto } from '@/lib/api/student/hallTicketSear
 const PAGE_SIZE = 10
 const TERM_OPTIONS = [{ value: '1', label: 'Term 1' }, { value: '2', label: 'Term 2' }]
 const STATUS_OPTIONS = [
-  { value: '', label: 'All students' },
   { value: 'NotIssued', label: 'Not issued' },
   { value: 'Issued', label: 'Issued' },
+  { value: '', label: 'All students' },
 ]
+
+const ELIGIBILITY_OPTIONS = [
+  { value: '', label: 'All clearances' },
+  { value: 'Eligible', label: 'Eligible only (Ready to issue)' },
+  { value: 'NotEligible', label: 'Ineligible only (Has blockers)' },
+  { value: 'Unknown', label: 'Could not verify (Errors)' },
+]
+
+function getReasonIcon(code: string): string {
+  switch (code) {
+    case 'FEE_NOT_CLEARED':
+      return 'lni lni-coin'
+    case 'COURSEWORK_INCOMPLETE':
+      return 'lni lni-book'
+    case 'CLASS_TEST_INCOMPLETE':
+      return 'lni lni-pencil'
+    case 'GUILD_UNPAID':
+      return 'lni lni-wallet'
+    case 'NCHE_UNPAID':
+      return 'lni lni-certificate'
+    case 'EXAM_OVER':
+      return 'lni lni-timer'
+    case 'PROFILE_UNAVAILABLE':
+    case 'UNITS_UNAVAILABLE':
+    case 'FEE_CHECK_UNAVAILABLE':
+    case 'GUILD_CHECK_UNAVAILABLE':
+    case 'NCHE_CHECK_UNAVAILABLE':
+      return 'lni lni-unlink'
+    default:
+      return 'lni lni-warning'
+  }
+}
 
 export default function HallTicketIssuancePage() {
   const permissions = usePagePermissions()
@@ -377,19 +411,42 @@ function BulkIssueModal({ isOpen, onClose, intakeGuid, intakeLabel, term, showTo
   const [programGuid, setProgramGuid] = useState('')
   const [semesterGuid, setSemesterGuid] = useState('')
   const [status, setStatus] = useState<HallTicketIssueStatus | ''>('NotIssued')
+  const [eligibilityFilter, setEligibilityFilter] = useState<HallTicketEligibilityState | ''>('')
+  const [includeEligibility, setIncludeEligibility] = useState(true)
   const [summary, setSummary] = useState<BulkIssueResponseDto | null>(null)
   const [page, setPage] = useState(1)
   const [showConfirmModal, setShowConfirmModal] = useState(false)
-  useEffect(() => { if (isOpen) { setSummary(null); setPage(1); setShowConfirmModal(false) } }, [isOpen])
+
+  useEffect(() => {
+    if (isOpen) {
+      setSummary(null)
+      setPage(1)
+      setShowConfirmModal(false)
+      setEligibilityFilter('')
+    }
+  }, [isOpen])
 
   const { data: programs = [] } = useProgramDropdown(undefined, isOpen)
   const { data: semesters = [] } = useSemestersForProgram(programGuid || null, isOpen)
   // The API needs program and semester together — a program alone isn't a scope.
   const scopeIncomplete = !!programGuid && !semesterGuid
   const scope = { intakeGuid, term, programGuid: programGuid || null, semesterGuid: semesterGuid || null }
-  const { data: rows = [], isFetching, isError } = useHallTicketScopeStudents(scope, status || null, isOpen && !scopeIncomplete)
+  const { data: rows = [], isFetching, isError } = useHallTicketScopeStudents(
+    scope,
+    status || null,
+    {
+      enabled: isOpen && !scopeIncomplete,
+      includeEligibility: includeEligibility && status !== 'Issued',
+      eligibility: eligibilityFilter || undefined,
+    }
+  )
   const bulk = useBulkIssueHallTickets()
   const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE))
+
+  const eligibleCount = useMemo(() => rows.filter(r => r.eligibility === 'Eligible').length, [rows])
+  const ineligibleCount = useMemo(() => rows.filter(r => r.eligibility === 'NotEligible').length, [rows])
+  const unknownCount = useMemo(() => rows.filter(r => r.eligibility === 'Unknown').length, [rows])
+  const issuedCount = useMemo(() => rows.filter(r => r.status === 'Issued').length, [rows])
 
   if (!isOpen) return null
 
@@ -419,8 +476,8 @@ function BulkIssueModal({ isOpen, onClose, intakeGuid, intakeLabel, term, showTo
       <div className="modal modal-xl" style={{ display: 'flex', flexDirection: 'column', maxHeight: '88vh' }} onClick={e => e.stopPropagation()}>
         <div className="modal-hdr"><div className="modal-title"><i className="lni lni-ticket"></i> Bulk Issue &amp; Status — Term {term}</div><button className="modal-close" onClick={onClose}>✕</button></div>
         <div style={{ overflowY: 'auto', flex: '1 1 auto', minHeight: 0 }}>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div className="fg">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-2">
+            <div className="fg mb-0">
               <label className="lbl">Programme</label>
               <SearchSelect
                 placeholder="All programmes"
@@ -429,7 +486,7 @@ function BulkIssueModal({ isOpen, onClose, intakeGuid, intakeLabel, term, showTo
                 onChange={v => { setProgramGuid(v); setSemesterGuid(''); setPage(1) }}
               />
             </div>
-            <div className="fg">
+            <div className="fg mb-0">
               <label className="lbl">Semester {programGuid && <span className="req">*</span>}</label>
               <SearchSelect
                 placeholder={programGuid ? '— Select Semester —' : 'Pick a programme first'}
@@ -439,10 +496,54 @@ function BulkIssueModal({ isOpen, onClose, intakeGuid, intakeLabel, term, showTo
                 disabled={!programGuid}
               />
             </div>
-            <div className="fg">
-              <label className="lbl">Show</label>
-              <SearchSelect options={STATUS_OPTIONS} value={status} onChange={v => { setStatus(v as HallTicketIssueStatus | ''); setPage(1) }} />
+            <div className="fg mb-0">
+              <label className="lbl">Status</label>
+              <SearchSelect
+                options={STATUS_OPTIONS}
+                value={status}
+                onChange={v => {
+                  setStatus(v as HallTicketIssueStatus | '')
+                  setPage(1)
+                  if (v === 'Issued') setEligibilityFilter('')
+                }}
+              />
             </div>
+            <div className="fg mb-0">
+              <label className="lbl">Clearance Filter</label>
+              <SearchSelect
+                options={ELIGIBILITY_OPTIONS}
+                value={eligibilityFilter}
+                onChange={v => {
+                  setEligibilityFilter(v as HallTicketEligibilityState | '')
+                  setPage(1)
+                  if (v && status === 'Issued') setStatus('NotIssued')
+                }}
+                disabled={status === 'Issued'}
+                placeholder={status === 'Issued' ? 'N/A for Issued' : 'All clearances'}
+              />
+            </div>
+          </div>
+
+          {/* Eligibility Toggle */}
+          <div className="flex items-center justify-between mb-3 px-0.5">
+            <label className="flex items-center gap-2 text-xs text-slate-600 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={includeEligibility}
+                onChange={e => {
+                  setIncludeEligibility(e.target.checked)
+                  if (!e.target.checked) setEligibilityFilter('')
+                  setPage(1)
+                }}
+                className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+              />
+              <span className="font-medium text-slate-700">Check clearance eligibility &amp; reasons (Batch Check)</span>
+            </label>
+            {isFetching && (
+              <span className="text-xs text-blue-600 font-medium flex items-center gap-1.5">
+                <i className="lni lni-reload animate-spin text-xs" /> Evaluating batch data…
+              </span>
+            )}
           </div>
 
           {summary && (
@@ -465,24 +566,112 @@ function BulkIssueModal({ isOpen, onClose, intakeGuid, intakeLabel, term, showTo
             <div className="text-g400 text-center" style={{ padding: 24, fontSize: 12.5 }}>Pick a semester to scope to this programme.</div>
           ) : (
             <>
+              {/* Scope KPI Breakdown Pill Bar */}
+              {rows.length > 0 && includeEligibility && status !== 'Issued' && (
+                <div className="flex flex-wrap items-center gap-2 mb-3 px-1 text-xs">
+                  <span className="text-slate-500 font-medium">Clearance Overview:</span>
+                  <span className="badge badge-green font-semibold flex items-center gap-1">
+                    <i className="lni lni-checkmark-circle" /> {eligibleCount} Ready to issue
+                  </span>
+                  <span className="badge badge-red font-semibold flex items-center gap-1">
+                    <i className="lni lni-cross-circle" /> {ineligibleCount} Ineligible
+                  </span>
+                  {unknownCount > 0 && (
+                    <span className="badge badge-neu text-slate-700 border border-slate-300 font-semibold flex items-center gap-1">
+                      <i className="lni lni-warning" /> {unknownCount} Could not verify
+                    </span>
+                  )}
+                  {issuedCount > 0 && (
+                    <span className="badge badge-cyan font-semibold flex items-center gap-1">
+                      <i className="lni lni-ticket" /> {issuedCount} Issued
+                    </span>
+                  )}
+                </div>
+              )}
+
               <ScrollTable>
                 <table>
-                  <thead><tr><th>Reg No.</th><th>Name</th><th>Status</th><th>Programme</th><th>Sem</th><th>Batch</th></tr></thead>
+                  <thead>
+                    <tr>
+                      <th style={{ width: 110 }}>Reg No.</th>
+                      <th style={{ minWidth: 160 }}>Name</th>
+                      <th style={{ width: 95 }}>Status</th>
+                      <th style={{ minWidth: 200 }}>Clearance / Reasons</th>
+                      <th style={{ minWidth: 150 }}>Programme</th>
+                      <th style={{ width: 60, textAlign: 'center' }}>Sem</th>
+                      <th style={{ width: 100 }}>Batch</th>
+                    </tr>
+                  </thead>
                   <tbody>
                     {isFetching && rows.length === 0 ? (
-                      <TableLoadingState colSpan={6} />
+                      <TableLoadingState colSpan={7} />
                     ) : isError ? (
-                      <tr><td colSpan={6} className="text-clr-red text-center" style={{ padding: 24 }}><i className="lni lni-warning"></i> Couldn&apos;t load students. Please try again.</td></tr>
+                      <tr><td colSpan={7} className="text-clr-red text-center" style={{ padding: 24 }}><i className="lni lni-warning"></i> Couldn&apos;t load students. Please try again.</td></tr>
                     ) : rows.length === 0 ? (
-                      <tr><td colSpan={6} className="text-g400 text-center" style={{ padding: 24 }}>No students {status === 'Issued' ? 'with an issued ticket' : status === 'NotIssued' ? 'left without a ticket' : ''} in this scope.</td></tr>
+                      <tr><td colSpan={7} className="text-g400 text-center" style={{ padding: 24 }}>No students {status === 'Issued' ? 'with an issued ticket' : status === 'NotIssued' ? 'left without a ticket' : ''} in this scope.</td></tr>
                     ) : rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map(r => (
                       <tr key={r.studentGuid}>
-                        <td className="font-mono">{r.studentRegNo ?? '—'}</td>
-                        <td>{r.studentName ?? '—'}</td>
-                        <td><span className={`badge ${r.status === 'Issued' ? 'badge-green' : 'badge-amber'}`}>{r.status === 'Issued' ? 'Issued' : 'Not issued'}</span></td>
+                        <td className="font-mono text-xs">{r.studentRegNo ?? '—'}</td>
+                        <td className="font-semibold text-slate-900 text-[13px]">{r.studentName ?? '—'}</td>
+                        <td>
+                          <span className={`badge ${r.status === 'Issued' ? 'badge-green' : 'badge-amber'}`}>
+                            {r.status === 'Issued' ? 'Issued' : 'Not issued'}
+                          </span>
+                        </td>
+                        <td>
+                          {r.status === 'Issued' ? (
+                            <span className="text-slate-400 text-xs">Ticket issued</span>
+                          ) : r.eligibility === 'Eligible' ? (
+                            <span className="badge badge-green font-semibold inline-flex items-center gap-1 text-[11px] py-0.5">
+                              <i className="lni lni-checkmark-circle" /> Ready to issue
+                            </span>
+                          ) : r.eligibility === 'NotEligible' ? (
+                            <div className="flex flex-col gap-1 py-0.5">
+                              <span className="badge badge-red font-semibold inline-flex items-center gap-1 text-[11px] py-0.5 w-fit">
+                                <i className="lni lni-cross-circle" /> Ineligible
+                              </span>
+                              {r.reasons && r.reasons.length > 0 && (
+                                <div className="flex flex-wrap gap-1 mt-0.5 max-w-[300px]">
+                                  {r.reasons.map((rs, i) => (
+                                    <span
+                                      key={rs.code || i}
+                                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10.5px] font-medium bg-red-50 text-red-700 border border-red-200"
+                                      title={rs.code}
+                                    >
+                                      <i className={getReasonIcon(rs.code)} />
+                                      <span>{rs.message}</span>
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          ) : r.eligibility === 'Unknown' ? (
+                            <div className="flex flex-col gap-1 py-0.5">
+                              <span className="badge badge-neu text-slate-700 font-semibold inline-flex items-center gap-1 text-[11px] py-0.5 w-fit border border-slate-300">
+                                <i className="lni lni-warning" /> Could not verify
+                              </span>
+                              {r.reasons && r.reasons.length > 0 && (
+                                <div className="flex flex-wrap gap-1 mt-0.5 max-w-[300px]">
+                                  {r.reasons.map((rs, i) => (
+                                    <span
+                                      key={rs.code || i}
+                                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10.5px] font-medium bg-amber-50 text-amber-800 border border-amber-200"
+                                      title={rs.code}
+                                    >
+                                      <i className={getReasonIcon(rs.code)} />
+                                      <span>{rs.message}</span>
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-slate-400 text-xs">—</span>
+                          )}
+                        </td>
                         <td>{r.programName || '—'}</td>
-                        <td>{r.semCode || '—'}</td>
-                        <td>{r.batchCode || '—'}</td>
+                        <td className="text-center font-mono text-xs">{r.semCode || '—'}</td>
+                        <td className="font-mono text-xs">{r.batchCode || '—'}</td>
                       </tr>
                     ))}
                   </tbody>

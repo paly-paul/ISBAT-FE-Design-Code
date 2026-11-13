@@ -94,8 +94,16 @@ export function issueBulkHallTickets(scope: HallTicketScope): Promise<BulkIssueR
   })
 }
 
-// Exact casing — the backend binds it as an enum and 400s anything else.
+// Exact casing — the backend binds it as an enum and 400s/500s anything else (get-bulk-issued.md).
 export type HallTicketIssueStatus = 'Issued' | 'NotIssued'
+
+// Exact casing — Eligible, NotEligible, Unknown.
+export type HallTicketEligibilityState = 'Eligible' | 'NotEligible' | 'Unknown'
+
+export interface HallTicketEligibilityReasonDto {
+  code: string
+  message: string
+}
 
 export interface HallTicketScopeStudentDto {
   studentGuid: string
@@ -105,6 +113,13 @@ export interface HallTicketScopeStudentDto {
   semCode: string
   batchCode: string
   status: HallTicketIssueStatus
+  eligibility?: HallTicketEligibilityState | null
+  reasons?: HallTicketEligibilityReasonDto[] | null
+}
+
+export interface HallTicketScopeFilterOptions {
+  includeEligibility?: boolean
+  eligibility?: HallTicketEligibilityState | null
 }
 
 function scopeParams(scope: HallTicketScope) {
@@ -115,10 +130,22 @@ function scopeParams(scope: HallTicketScope) {
 }
 
 // GET /bulk (get-bulk-issued.md) — every registered student in the scope
-// with an Issued/NotIssued status; `status` narrows to one group. Unpaged.
-export function getHallTicketScopeStudents(scope: HallTicketScope, status?: HallTicketIssueStatus | null): Promise<HallTicketScopeStudentDto[]> {
+// with an Issued/NotIssued status; `status` narrows to one group.
+// includeEligibility adds eligibility and blocker reasons to NotIssued students.
+// eligibility filter narrows to students with that exact eligibility state. Unpaged.
+export function getHallTicketScopeStudents(
+  scope: HallTicketScope,
+  status?: HallTicketIssueStatus | null,
+  options?: HallTicketScopeFilterOptions
+): Promise<HallTicketScopeStudentDto[]> {
   const params = scopeParams(scope)
   if (status) params.set('status', status)
+  if (options?.eligibility) {
+    // Exact PascalCase is required. Setting eligibility switches includeEligibility on server-side.
+    params.set('eligibility', options.eligibility)
+  } else if (options?.includeEligibility) {
+    params.set('includeEligibility', 'true')
+  }
   return apiGet<HallTicketScopeStudentDto[] | null>(`/api/v1/assessment/hall-ticket-issue/bulk?${params.toString()}`)
     .then(data => data ?? [])
 }
