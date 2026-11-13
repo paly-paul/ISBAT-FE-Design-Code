@@ -152,7 +152,7 @@ export default function QuestionBankUploadPage() {
   const effectiveImportUeType = useMemo(() => {
     if (!isImportUniversityExam) return null
     if (importUeOptions.length === 1) return importUeOptions[0]
-    return importUeType
+    return importUeType !== null ? importUeType : (importUeOptions.includes(UE_TYPE.Theory) ? UE_TYPE.Theory : (importUeOptions[0] ?? null))
   }, [isImportUniversityExam, importUeOptions, importUeType])
 
   // ── Tab 2: Query already uploaded questions for selected course unit & category ──
@@ -168,9 +168,31 @@ export default function QuestionBankUploadPage() {
     Boolean(activeTab === 'import' && importCourseUnitGuid && importCategory && intakeGuid)
   )
 
+  const importTheoryCount = useMemo(
+    () => importExistingQuestions?.filter(q => q.universityExamType === 0 || q.universityExamType === null || q.universityExamType === undefined).length ?? 0,
+    [importExistingQuestions],
+  )
+  const importPracticalCount = useMemo(
+    () => importExistingQuestions?.filter(q => q.universityExamType === 1).length ?? 0,
+    [importExistingQuestions],
+  )
+
+  // Filter existing questions by selected exam type (Theory / Practical) when category is University Exam
+  const currentImportQuestions = useMemo(() => {
+    if (!importExistingQuestions) return []
+    if (isImportUniversityExam && effectiveImportUeType !== null) {
+      if (effectiveImportUeType === 1) {
+        return importExistingQuestions.filter((q) => q.universityExamType === 1)
+      } else {
+        return importExistingQuestions.filter((q) => q.universityExamType === 0 || q.universityExamType === null || q.universityExamType === undefined)
+      }
+    }
+    return importExistingQuestions
+  }, [importExistingQuestions, isImportUniversityExam, effectiveImportUeType])
+
   useEffect(() => {
     setShowUploadBox(false)
-  }, [importCourseUnitGuid, importCategory])
+  }, [importCourseUnitGuid, importCategory, effectiveImportUeType])
 
   // ── Mutations ───────────────────────────────────────────────────────────────
   const downloadTemplateMut = useDownloadQuestionBankTemplate()
@@ -1004,7 +1026,7 @@ export default function QuestionBankUploadPage() {
                     <button
                       type="button"
                       className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
-                        importUeType === UE_TYPE.Theory
+                        effectiveImportUeType === UE_TYPE.Theory
                           ? 'bg-blue-600 text-white shadow-xs font-bold'
                           : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
                       }`}
@@ -1012,16 +1034,24 @@ export default function QuestionBankUploadPage() {
                         setImportUeType(UE_TYPE.Theory)
                         setPreviewRows(null)
                         setValidationError(null)
+                        setShowUploadBox(false)
                       }}
                     >
                       <i className="lni lni-book text-xs" />
                       <span>Theory</span>
+                      {importTheoryCount > 0 && (
+                        <span className={`text-[10px] px-1.5 py-0.2 rounded font-bold ${
+                          effectiveImportUeType === UE_TYPE.Theory ? 'bg-blue-800 text-white' : 'bg-slate-100 text-slate-700 border border-slate-200'
+                        }`}>
+                          {importTheoryCount}
+                        </span>
+                      )}
                     </button>
 
                     <button
                       type="button"
                       className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
-                        importUeType === UE_TYPE.Practical
+                        effectiveImportUeType === UE_TYPE.Practical
                           ? 'bg-blue-600 text-white shadow-xs font-bold'
                           : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
                       }`}
@@ -1029,10 +1059,18 @@ export default function QuestionBankUploadPage() {
                         setImportUeType(UE_TYPE.Practical)
                         setPreviewRows(null)
                         setValidationError(null)
+                        setShowUploadBox(false)
                       }}
                     >
                       <i className="lni lni-cog text-xs" />
                       <span>Practical</span>
+                      {importPracticalCount > 0 && (
+                        <span className={`text-[10px] px-1.5 py-0.2 rounded font-bold ${
+                          effectiveImportUeType === UE_TYPE.Practical ? 'bg-blue-800 text-white' : 'bg-slate-100 text-slate-700 border border-slate-200'
+                        }`}>
+                          {importPracticalCount}
+                        </span>
+                      )}
                     </button>
                   </div>
                 </div>
@@ -1412,12 +1450,14 @@ export default function QuestionBankUploadPage() {
           {activeTab === 'import' && (
             <div className="space-y-4">
 
-              {/* If questions already exist and user has not toggled upload box: Show Existing Questions */}
-              {importExistingQuestions && importExistingQuestions.length > 0 && !showUploadBox ? (
+              {/* If questions already exist for current type and user has not toggled upload box: Show Existing Questions */}
+              {currentImportQuestions && currentImportQuestions.length > 0 && !showUploadBox ? (
                 <ExistingQuestionsTable
                   canAdd={permissions.add}
                   canDelete={permissions.delete}
-                  questions={importExistingQuestions}
+                  questions={currentImportQuestions}
+                  allQuestions={importExistingQuestions ?? []}
+                  selectedUeType={isImportUniversityExam ? effectiveImportUeType : undefined}
                   isLoading={isLoadingImportExistingQuestions}
                   isFetching={isFetchingImportExistingQuestions}
                   onRefresh={refetchImportExistingQuestions}
@@ -1443,19 +1483,27 @@ export default function QuestionBankUploadPage() {
                           Target: <strong className="text-slate-800 font-mono">{selectedImportUnit?.courseUnitCode || 'Select Course Unit'}</strong>
                           {' • '}
                           Category: <strong className="text-slate-800">{selectedImportCategoryObj?.name || 'Select Category'}</strong>
+                          {isImportUniversityExam && effectiveImportUeType !== null && (
+                            <>
+                              {' • '}
+                              <span>Exam Type: <strong className={effectiveImportUeType === 1 ? 'text-amber-700 font-semibold' : 'text-cyan-700 font-semibold'}>
+                                {effectiveImportUeType === 1 ? 'Practical' : 'Theory'}
+                              </strong></span>
+                            </>
+                          )}
                         </div>
                       </div>
                     </div>
 
-                    {/* Back to existing questions toggle if bank already has questions */}
-                    {importExistingQuestions && importExistingQuestions.length > 0 && (
+                    {/* Back to existing questions toggle if bank already has questions for current type */}
+                    {currentImportQuestions && currentImportQuestions.length > 0 && (
                       <button
                         type="button"
                         className="btn btn-neu btn-sm flex items-center gap-1.5"
                         onClick={() => setShowUploadBox(false)}
                       >
                         <i className="lni lni-arrow-left"></i>
-                        <span>Back to Existing Questions ({importExistingQuestions.length})</span>
+                        <span>Back to Existing Questions ({currentImportQuestions.length})</span>
                       </button>
                     )}
                   </div>
@@ -2144,12 +2192,16 @@ export default function QuestionBankUploadPage() {
                 <div className="flex justify-between">
                   <span className="text-slate-500">Course Unit:</span>
                   <strong className="text-slate-800 font-mono">
-                    {selectedRepoUnit ? `${selectedRepoUnit.courseUnitCode} — ${selectedRepoUnit.courseUnitName}` : repoCourseUnitGuid}
+                    {activeTab === 'import'
+                      ? (selectedImportUnit ? `${selectedImportUnit.courseUnitCode} — ${selectedImportUnit.courseUnitName}` : importCourseUnitGuid)
+                      : (selectedRepoUnit ? `${selectedRepoUnit.courseUnitCode} — ${selectedRepoUnit.courseUnitName}` : repoCourseUnitGuid)}
                   </strong>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-500">Assessment Category:</span>
-                  <strong className="text-slate-800">{selectedRepoCategoryObj?.name || repoCategory}</strong>
+                  <strong className="text-slate-800">
+                    {activeTab === 'import' ? (selectedImportCategoryObj?.name || importCategory) : (selectedRepoCategoryObj?.name || repoCategory)}
+                  </strong>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-500">Academic Intake:</span>
