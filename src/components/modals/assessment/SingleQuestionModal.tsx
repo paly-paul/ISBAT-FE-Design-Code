@@ -21,6 +21,7 @@ interface SingleQuestionModalProps {
   courseUnitName?: string
   categoryName?: string
   allowedUeTypes?: number[] | null
+  initialUeType?: number | null
   onSuccess: () => void
   showToast: (msg: string, type?: string) => void
 }
@@ -36,6 +37,7 @@ export function SingleQuestionModal({
   courseUnitName,
   categoryName,
   allowedUeTypes,
+  initialUeType,
   onSuccess,
   showToast,
 }: SingleQuestionModalProps) {
@@ -47,6 +49,9 @@ export function SingleQuestionModal({
   const [ueType, setUeType] = useState<number | null>(() => {
     if (question?.universityExamType !== undefined && question?.universityExamType !== null) {
       return question.universityExamType
+    }
+    if (initialUeType !== undefined && initialUeType !== null) {
+      return initialUeType
     }
     if (category === 5 && ueOptions.length === 1) {
       return ueOptions[0]
