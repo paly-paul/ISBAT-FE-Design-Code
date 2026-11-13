@@ -5,6 +5,9 @@ import {
   issueBulkHallTickets,
   issueHallTicket,
   HallTicketIssueStatus,
+  HallTicketEligibilityState,
+  HallTicketEligibilityReasonDto,
+  HallTicketScopeFilterOptions,
   HallTicketScope,
   HallTicketTerm,
 } from '@/lib/api/assessment/hallTicketIssue'
@@ -32,12 +35,37 @@ export function useHallTicketEligibility(studentGuid: string | null, intakeGuid:
   })
 }
 
-// GET /bulk — every student in the scope with Issued/NotIssued. Unpaged,
-// can be a whole intake, so only enabled once the page asks for it.
-export function useHallTicketScopeStudents(scope: HallTicketScope | null, status: HallTicketIssueStatus | null, enabled = true) {
+export interface UseHallTicketScopeOptions extends HallTicketScopeFilterOptions {
+  enabled?: boolean
+}
+
+// GET /bulk — every student in the scope with Issued/NotIssued.
+// Supports includeEligibility and eligibility filtering options.
+// Unpaged, can be a whole intake, so only enabled once the page asks for it.
+export function useHallTicketScopeStudents(
+  scope: HallTicketScope | null,
+  status: HallTicketIssueStatus | null,
+  enabledOrOptions: boolean | UseHallTicketScopeOptions = true
+) {
+  const isBool = typeof enabledOrOptions === 'boolean'
+  const enabled = isBool ? enabledOrOptions : (enabledOrOptions?.enabled ?? true)
+  const options: HallTicketScopeFilterOptions | undefined = isBool
+    ? undefined
+    : {
+        includeEligibility: enabledOrOptions?.includeEligibility,
+        eligibility: enabledOrOptions?.eligibility,
+      }
+
   return useQuery({
-    queryKey: [...HALL_TICKET_KEY, 'scope', scope, status],
-    queryFn: () => getHallTicketScopeStudents(scope as HallTicketScope, status),
+    queryKey: [
+      ...HALL_TICKET_KEY,
+      'scope',
+      scope,
+      status,
+      options?.includeEligibility,
+      options?.eligibility,
+    ],
+    queryFn: () => getHallTicketScopeStudents(scope as HallTicketScope, status, options),
     enabled: enabled && !!scope?.intakeGuid,
     staleTime: 0,
   })
@@ -66,4 +94,14 @@ export function useBulkIssueHallTickets() {
   })
 }
 
-export type { HallTicketEligibilityDto, HallTicketScopeStudentDto, HallTicketIssueStatus, HallTicketScope, HallTicketTerm, BulkIssueResponseDto } from '@/lib/api/assessment/hallTicketIssue'
+export type {
+  HallTicketEligibilityDto,
+  HallTicketScopeStudentDto,
+  HallTicketIssueStatus,
+  HallTicketEligibilityState,
+  HallTicketEligibilityReasonDto,
+  HallTicketScopeFilterOptions,
+  HallTicketScope,
+  HallTicketTerm,
+  BulkIssueResponseDto,
+} from '@/lib/api/assessment/hallTicketIssue'
