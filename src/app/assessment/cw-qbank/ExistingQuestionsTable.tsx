@@ -8,6 +8,8 @@ import { QuestionDto } from '@/lib/api/assessment/questions'
 
 interface ExistingQuestionsTableProps {
   questions: QuestionDto[]
+  allQuestions?: QuestionDto[]
+  selectedUeType?: number | null
   isLoading: boolean
   isFetching: boolean
   onRefresh: () => void
@@ -24,6 +26,8 @@ interface ExistingQuestionsTableProps {
 
 export function ExistingQuestionsTable({
   questions,
+  allQuestions,
+  selectedUeType,
   isLoading,
   isFetching,
   onRefresh,
@@ -40,11 +44,12 @@ export function ExistingQuestionsTable({
   const [filterType, setFilterType] = useState<'ALL' | 'MCQ' | 'DQ'>('ALL')
   const [search, setSearch] = useState('')
 
+  const targetAllQuestions = allQuestions && allQuestions.length > 0 ? allQuestions : questions
   const mcqCount = useMemo(() => questions.filter(q => q.questionType === 1).length, [questions])
   const dqCount = useMemo(() => questions.filter(q => q.questionType === 2).length, [questions])
-  const hasUeTypes = useMemo(() => questions.some(q => q.universityExamType !== null && q.universityExamType !== undefined), [questions])
-  const theoryCount = useMemo(() => questions.filter(q => q.universityExamType === 0).length, [questions])
-  const practicalCount = useMemo(() => questions.filter(q => q.universityExamType === 1).length, [questions])
+  const hasUeTypes = useMemo(() => targetAllQuestions.some(q => q.universityExamType !== null && q.universityExamType !== undefined), [targetAllQuestions])
+  const theoryCount = useMemo(() => targetAllQuestions.filter(q => q.universityExamType === 0 || q.universityExamType === null || q.universityExamType === undefined).length, [targetAllQuestions])
+  const practicalCount = useMemo(() => targetAllQuestions.filter(q => q.universityExamType === 1).length, [targetAllQuestions])
 
   const filteredQuestions = useMemo(() => {
     return questions.filter(q => {
@@ -74,8 +79,8 @@ export function ExistingQuestionsTable({
               <i className="lni lni-library"></i>
             </span>
             <span>Questions Already Uploaded in Bank</span>
-            <span className="badge badge-green ml-2 font-bold">
-              {questions.length} Questions
+            <span className={`badge ${selectedUeType === 1 ? 'badge-amber' : selectedUeType === 0 ? 'badge-cyan' : 'badge-green'} ml-2 font-bold`}>
+              {questions.length} {selectedUeType === 1 ? 'Practical ' : selectedUeType === 0 ? 'Theory ' : ''}Questions
             </span>
           </div>
           <div className="text-xs text-slate-500">
@@ -89,6 +94,12 @@ export function ExistingQuestionsTable({
               <>
                 {' • '}
                 <span>UE Banks: <strong className="text-cyan-700 font-semibold">{theoryCount} Theory</strong>, <strong className="text-amber-700 font-semibold">{practicalCount} Practical</strong></span>
+                {selectedUeType !== undefined && selectedUeType !== null && (
+                  <>
+                    {' • '}
+                    <span>Viewing: <strong className={selectedUeType === 1 ? 'text-amber-700 font-semibold' : 'text-cyan-700 font-semibold'}>{selectedUeType === 1 ? 'Practical' : 'Theory'}</strong></span>
+                  </>
+                )}
               </>
             )}
           </div>
