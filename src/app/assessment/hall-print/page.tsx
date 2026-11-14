@@ -27,7 +27,11 @@ import { downloadBlob } from '@/lib/downloadBlob'
 // whether a ticket was printed before, so there's no reprint prompt.
 
 const PAGE_SIZE = 15
-const TERM_OPTIONS = [{ value: '1', label: 'Term 1' }, { value: '2', label: 'Term 2' }]
+const TERM_OPTIONS = [
+  { value: '', label: 'Auto' },
+  { value: '1', label: 'Term 1' },
+  { value: '2', label: 'Term 2' },
+]
 const STATUS_OPTIONS = [
   { value: '', label: 'All students' },
   { value: 'Issued', label: 'Issued (printable)' },
@@ -47,7 +51,7 @@ export default function HallTicketPrintPage() {
   }, [intakes, intakeGuid])
   const [programGuid, setProgramGuid] = useState('')
   const [semesterGuid, setSemesterGuid] = useState('')
-  const [term, setTerm] = useState<HallTicketTerm>(1)
+  const [termOverride, setTermOverride] = useState<string>('')
   const [status, setStatus] = useState<HallTicketIssueStatus | ''>('')
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
@@ -63,7 +67,8 @@ export default function HallTicketPrintPage() {
   // useSearchParams without Suspense).
   useEffect(() => {
     const p = new URLSearchParams(window.location.search)
-    if (p.get('term') === '2') setTerm(2)
+    const t = p.get('term')
+    if (t === '1' || t === '2') setTermOverride(t)
     const q = p.get('q')
     if (q) setSearch(q)
     const semCode = p.get('semCode')
@@ -80,8 +85,9 @@ export default function HallTicketPrintPage() {
   }, [])
 
   const ready = !!intakeGuid && !!programGuid && !!semesterGuid
+  const termParam = termOverride ? (Number(termOverride) as HallTicketTerm) : undefined
   const { data: rows = [], isFetching, isError } = useHallTicketScopeStudents(
-    ready ? { intakeGuid, term, programGuid, semesterGuid } : null,
+    ready ? { intakeGuid, term: termParam, programGuid, semesterGuid } : null,
     status || null,
     ready,
   )
@@ -94,11 +100,18 @@ export default function HallTicketPrintPage() {
   async function handlePrint(studentGuid: string, name: string | null) {
     setPrintingGuid(studentGuid)
     try {
-      const { blob, filename } = await downloadHallTicketPdf(studentGuid, intakeGuid, term)
+      const { blob, filename } = await downloadHallTicketPdf(studentGuid, intakeGuid, termParam)
       downloadBlob(blob, filename)
       showToast(`Hall ticket downloaded for ${name ?? 'the student'}.`, 'ok')
-    } catch (e) {
-      showToast(e instanceof Error && e.message ? e.message : 'Could not generate the hall ticket.', 'error')
+    } catch (e: any) {
+      const msg = e?.message || ''
+      if (/cannot be printed after the exam/i.test(msg)) {
+        showToast('Hall ticket cannot be printed after the exam.', 'error')
+      } else if (/Could not determine the hall ticket term/i.test(msg)) {
+        showToast('Could not determine the hall ticket term. Please select a Term override.', 'error')
+      } else {
+        showToast(msg || 'Could not generate the hall ticket.', 'error')
+      }
     } finally {
       setPrintingGuid(null)
     }
@@ -143,8 +156,13 @@ export default function HallTicketPrintPage() {
               />
             </div>
             <div className="fg">
-              <label className="lbl">Term <span className="req">*</span></label>
-              <SearchSelect options={TERM_OPTIONS} value={String(term)} onChange={v => { setTerm(v === '2' ? 2 : 1); setPage(1) }} />
+              <label className="lbl">Term Override <span className="text-slate-400 font-normal text-xs">(Optional)</span></label>
+              <SearchSelect
+                placeholder="Auto"
+                options={TERM_OPTIONS}
+                value={termOverride}
+                onChange={v => { setTermOverride(v); setPage(1) }}
+              />
             </div>
           </div>
           <div className="info-box">
@@ -179,6 +197,7 @@ export default function HallTicketPrintPage() {
                   <tr><td colSpan={5} className="text-g400 text-center" style={{ padding: 24 }}>No students match.</td></tr>
                 ) : filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map(r => {
                   const issued = r.status === 'Issued'
+                  const isExamOver = r.reasons?.some(rs => rs.code === 'EXAM_OVER')
                   return (
                     <tr key={r.studentGuid}>
                       <td>
@@ -186,8 +205,14 @@ export default function HallTicketPrintPage() {
                         <button
                           className="btn btn-neu btn-sm"
                           onClick={() => handlePrint(r.studentGuid, r.studentName)}
-                          disabled={!issued || printingGuid !== null}
-                          title={issued ? undefined : 'No hall ticket issued yet — issue it on Hall Ticket Issuance first'}
+                          disabled={!issued || printingGuid !== null || isExamOver}
+                          title={
+                            isExamOver
+                              ? 'Exam is over — hall ticket cannot be printed'
+                              : !issued
+                              ? 'No hall ticket issued yet — issue it on Hall Ticket Issuance first'
+                              : undefined
+                          }
                         >
                           <i className="lni lni-printer"></i> {printingGuid === r.studentGuid ? 'Generating…' : 'Print'}
                         </button>

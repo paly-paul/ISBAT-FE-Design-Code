@@ -20,7 +20,11 @@ import { downloadBlob } from '@/lib/downloadBlob'
 //     separate "save QR codes" step like the legacy page had.
 // A whole intake can take a long time and produce a very large file.
 
-const TERM_OPTIONS = [{ value: '1', label: 'Term 1' }, { value: '2', label: 'Term 2' }]
+const TERM_OPTIONS = [
+  { value: '', label: 'Auto' },
+  { value: '1', label: 'Term 1' },
+  { value: '2', label: 'Term 2' },
+]
 
 export default function HallTicketPrintAllPage() {
   const permissions = usePagePermissions()
@@ -37,10 +41,11 @@ export default function HallTicketPrintAllPage() {
     const i = intakes.find(x => x.intakeGuid === intakeGuid)
     return i ? (i.description ? `${i.description} (${i.intakeCode})` : String(i.intakeCode)) : ''
   })()
-  const [term, setTerm] = useState<HallTicketTerm>(1)
+  const [termOverride, setTermOverride] = useState<string>('')
+  const termParam = termOverride ? (Number(termOverride) as HallTicketTerm) : undefined
 
   const { data: issued = [], isFetching: previewLoading, isError: previewError } = useHallTicketScopeStudents(
-    intakeGuid ? { intakeGuid, term } : null,
+    intakeGuid ? { intakeGuid, term: termParam } : null,
     'Issued',
   )
   const programCount = new Set(issued.map(r => r.programName)).size
@@ -50,13 +55,19 @@ export default function HallTicketPrintAllPage() {
     if (!intakeGuid || issued.length === 0) return
     setPrinting(true)
     try {
-      const { blob, filename } = await downloadBulkHallTicketPdf({ intakeGuid, term })
+      const { blob, filename } = await downloadBulkHallTicketPdf({ intakeGuid, term: termParam })
       downloadBlob(blob, filename)
-      showToast(`Downloaded ${issued.length} Term ${term} hall tickets for ${intakeLabel}.`, 'ok')
-    } catch (e) {
-      // e.g. "No issued hall tickets found for the given scope." or
-      // "No student profiles could be resolved for this batch."
-      showToast(e instanceof Error && e.message ? e.message : 'Could not generate the hall tickets.', 'error')
+      const termLabel = termOverride ? `Term ${termOverride} ` : ''
+      showToast(`Downloaded ${issued.length} ${termLabel}hall tickets for ${intakeLabel}.`, 'ok')
+    } catch (e: any) {
+      const msg = e?.message || ''
+      if (/cannot be printed after the exam/i.test(msg)) {
+        showToast('Hall ticket cannot be printed after the exam.', 'error')
+      } else if (/Could not determine the hall ticket term/i.test(msg)) {
+        showToast('Could not determine the hall ticket term. Please specify the term.', 'error')
+      } else {
+        showToast(msg || 'Could not generate the hall tickets.', 'error')
+      }
     } finally {
       setPrinting(false)
     }
@@ -83,8 +94,14 @@ export default function HallTicketPrintAllPage() {
               />
             </div>
             <div className="fg">
-              <label className="lbl">Term <span className="req">*</span></label>
-              <SearchSelect options={TERM_OPTIONS} value={String(term)} onChange={v => setTerm(v === '2' ? 2 : 1)} disabled={printing} />
+              <label className="lbl">Term Override <span className="text-slate-400 font-normal text-xs">(Optional)</span></label>
+              <SearchSelect
+                placeholder="Auto"
+                options={TERM_OPTIONS}
+                value={termOverride}
+                onChange={setTermOverride}
+                disabled={printing}
+              />
             </div>
           </div>
 
@@ -95,7 +112,7 @@ export default function HallTicketPrintAllPage() {
           ) : issued.length === 0 ? (
             <div className="info-box mb-3" style={{ borderColor: 'var(--amber-bd)', background: 'var(--amber-bg)' }}>
               <i className="lni lni-warning" style={{ color: 'var(--amber)', fontSize: 15, flexShrink: 0 }}></i>
-              <div style={{ fontSize: 12.5 }}>No Term {term} hall tickets have been issued in this intake yet. Issue them on <Link href="/assessment/hall-ticket" style={{ color: 'var(--b700)', fontWeight: 600 }}>Hall Ticket Issuance</Link> first.</div>
+              <div style={{ fontSize: 12.5 }}>No {termOverride ? `Term ${termOverride} ` : ''}hall tickets have been issued in this intake yet. Issue them on <Link href="/assessment/hall-ticket" style={{ color: 'var(--b700)', fontWeight: 600 }}>Hall Ticket Issuance</Link> first.</div>
             </div>
           ) : (
             <div className="info-box mb-3">

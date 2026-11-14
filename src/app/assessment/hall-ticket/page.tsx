@@ -20,6 +20,7 @@ import {
   HallTicketIssueStatus,
   HallTicketEligibilityState,
   HallTicketEligibilityReasonDto,
+  HallTicketScope,
   HallTicketTerm,
 } from '@/hooks/assessment/useHallTicket'
 import type { HallTicketSearchResultDto } from '@/lib/api/student/hallTicketSearch'
@@ -36,7 +37,11 @@ import type { HallTicketSearchResultDto } from '@/lib/api/student/hallTicketSear
 //     scoped to the intake or one program/semester.
 
 const PAGE_SIZE = 10
-const TERM_OPTIONS = [{ value: '1', label: 'Term 1' }, { value: '2', label: 'Term 2' }]
+const TERM_OPTIONS = [
+  { value: '', label: 'Auto' },
+  { value: '1', label: 'Term 1' },
+  { value: '2', label: 'Term 2' },
+]
 const STATUS_OPTIONS = [
   { value: 'NotIssued', label: 'Not issued' },
   { value: 'Issued', label: 'Issued' },
@@ -87,7 +92,8 @@ export default function HallTicketIssuancePage() {
   const currentIntake = intakes.find(i => i.currentIntake)
   const intakeGuid = currentIntake?.intakeGuid ?? ''
   const intakeLabel = currentIntake ? (currentIntake.description ? `${currentIntake.description} (${currentIntake.intakeCode})` : String(currentIntake.intakeCode)) : ''
-  const [term, setTerm] = useState<HallTicketTerm>(1)
+  const [termOverride, setTermOverride] = useState<string>('')
+  const termParam = termOverride ? (Number(termOverride) as HallTicketTerm) : null
 
   // ---- Search --------------------------------------------------------------
   const [searchInput, setSearchInput] = useState('')
@@ -105,21 +111,26 @@ export default function HallTicketIssuancePage() {
   // Kept across term changes — eligibility is keyed by term, so the
   // clearance card re-checks the same student.
   const [selected, setSelected] = useState<HallTicketSearchResultDto | null>(null)
-  const { data: elig, isFetching: checking, isError: eligError, error: eligErr } = useHallTicketEligibility(selected?.studentGuid ?? null, intakeGuid || null, term)
+  const { data: elig, isFetching: checking, isError: eligError, error: eligErr } = useHallTicketEligibility(selected?.studentGuid ?? null, intakeGuid || null, termParam)
   const issue = useIssueHallTicket()
 
   useEffect(() => {
     issue.reset()
-  }, [selected, term])
+  }, [selected, termOverride])
+
+  // Term returned from eligibility (auto-picked by server when term is omitted)
+  const effectiveTerm = termOverride ? (Number(termOverride) as HallTicketTerm) : elig?.term
+  const isAutoTerm = !termOverride && !!elig?.term
+  const termDisplayLabel = effectiveTerm ? `Term ${effectiveTerm}${isAutoTerm ? ' (auto)' : ''}` : 'Term (auto)'
 
   function handleIssue() {
     if (!selected || !elig?.canIssue) return
-    issue.mutate({ studentGuid: selected.studentGuid, intakeGuid, term }, {
+    issue.mutate({ studentGuid: selected.studentGuid, intakeGuid, term: termParam }, {
       // "Already issued" is a success too — the server refreshed the
       // existing ticket's issue date rather than creating a new one.
       onSuccess: ({ alreadyIssued }) => {
         const who = selected.studentName ?? 'the student'
-        showToast(alreadyIssued ? `${who} already had a Term ${term} hall ticket — its issue date has been updated to today.` : `Hall ticket issued to ${who}.`, 'ok')
+        showToast(alreadyIssued ? `${who} already had a ${termDisplayLabel} hall ticket — its issue date has been updated to today.` : `Hall ticket issued to ${who}.`, 'ok')
         // Per the page doc: clear the selection and the search box.
         setSelected(null); setSearchInput(''); setSearch('')
       },
@@ -167,8 +178,13 @@ export default function HallTicketIssuancePage() {
               )}
             </div>
             <div className="fg">
-              <label className="lbl">Term <span className="req">*</span></label>
-              <SearchSelect options={TERM_OPTIONS} value={String(term)} onChange={v => setTerm(v === '2' ? 2 : 1)} />
+              <label className="lbl">Term Override <span className="text-slate-400 font-normal text-xs">(Optional)</span></label>
+              <SearchSelect
+                placeholder="Auto"
+                options={TERM_OPTIONS}
+                value={termOverride}
+                onChange={v => setTermOverride(v)}
+              />
             </div>
             <div className="fg">
               <label className="lbl">Search Student</label>
@@ -186,7 +202,7 @@ export default function HallTicketIssuancePage() {
           // (2, 4, 6, 8); otherwise both are null (not applicable) and their
           // rows are hidden. Decided by the value, never by the term alone.
           const checks = elig ? [
-            { label: 'Fee clearance', ok: elig.feeOk, note: elig.isFeeExcepted ? 'No fee clearance needed' : elig.isExempted ? 'Exemption student' : `Needs ${term === 1 ? '50%' : '100%'} of fees paid` },
+            { label: 'Fee clearance', ok: elig.feeOk, note: elig.isFeeExcepted ? 'No fee clearance needed' : elig.isExempted ? 'Exemption student' : `Needs ${effectiveTerm === 1 ? '50%' : '100%'} of fees paid` },
             { label: 'Coursework', ok: elig.cwOk, note: 'First coursework submitted on every unit with coursework' },
             { label: 'Class test', ok: elig.ctOk, note: 'First class test submitted on every unit with a mid-semester test' },
             ...(elig.guildOk !== null ? [{ label: 'Guild fee', ok: elig.guildOk, note: 'Current-semester Guild fee paid' }] : []),
@@ -200,7 +216,7 @@ export default function HallTicketIssuancePage() {
             {/* .ht-panel sets overflow: hidden — keep the modal's scroll on short screens. */}
             <section className="modal modal-lg ht-panel" style={{ overflowY: 'auto' }} role="dialog" aria-modal="true" aria-labelledby="ht-student-name">
               <div className="modal-hdr modal-hdr-blue">
-                <div className="modal-title"><i className="lni lni-ticket"></i> Hall Ticket · Term {term}</div>
+                <div className="modal-title"><i className="lni lni-ticket"></i> Hall Ticket · {termDisplayLabel}</div>
                 <button type="button" className="modal-close" onClick={() => setSelected(null)} aria-label="Close"><i className="lni lni-close"></i></button>
               </div>
               <header className="ht-id">
@@ -223,7 +239,7 @@ export default function HallTicketIssuancePage() {
               {!(elig?.alreadyIssued && !checking && !eligError) && (
               <div className="ht-body">
                 <div className="ht-checks-hdr">
-                  <h3 className="ht-checks-title">Exam clearance · Term {term}</h3>
+                  <h3 className="ht-checks-title">Exam clearance · {termDisplayLabel}</h3>
                   {showChecks && (
                     <div className="ht-tally">
                       <span className="ht-meter" aria-hidden="true">{checks.map(c => <span key={c.label} className={c.ok ? 'ok' : 'bad'} />)}</span>
@@ -239,8 +255,20 @@ export default function HallTicketIssuancePage() {
                   // lookup couldn't load — the API fails with a 400 naming it
                   // rather than reporting "not cleared", so show it as an
                   // error, never as a red clearance line.
-                  <div className="ht-state err" role="alert">
-                    <i className="lni lni-warning" aria-hidden="true"></i> {eligErr instanceof Error && eligErr.message ? eligErr.message : 'Couldn’t check eligibility. Please try again.'}
+                  <div className="ht-state err" role="alert" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 8 }}>
+                    <div className="flex items-center gap-2">
+                      <i className="lni lni-warning" aria-hidden="true"></i> {eligErr instanceof Error && eligErr.message ? eligErr.message : 'Couldn’t check eligibility. Please try again.'}
+                    </div>
+                    {eligErr instanceof Error && /Could not determine the hall ticket term/i.test(eligErr.message || '') && (
+                      <div className="mt-1 text-xs bg-amber-50 p-2.5 rounded border border-amber-200 text-amber-900 w-full text-left font-normal">
+                        <p className="font-semibold mb-1">Server could not auto-detect the term for this student.</p>
+                        <p className="mb-2">Please select a term override below to continue:</p>
+                        <div className="flex gap-2">
+                          <button type="button" className="btn btn-sm btn-primary py-0.5 px-2 text-xs" onClick={() => setTermOverride('1')}>Override to Term 1</button>
+                          <button type="button" className="btn btn-sm btn-primary py-0.5 px-2 text-xs" onClick={() => setTermOverride('2')}>Override to Term 2</button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <>
@@ -270,14 +298,14 @@ export default function HallTicketIssuancePage() {
                   <footer className="ht-verdict ok">
                     <div className="ht-verdict-msg">
                       <i className="lni lni-checkmark-circle" aria-hidden="true"></i>
-                      <div><div className="ht-verdict-title">Term {term} hall ticket already issued</div><div className="ht-verdict-sub">Nothing left to check. Print it from Hall Ticket Print.</div></div>
+                      <div><div className="ht-verdict-title">{termDisplayLabel} hall ticket already issued</div><div className="ht-verdict-sub">Nothing left to check. Print it from Hall Ticket Print.</div></div>
                     </div>
                     <Link
                       className="btn btn-neu"
                       // Hall Ticket Print reads these to open on this student
                       // (it resolves programme + semester GUIDs from them).
                       href={`/assessment/hall-print?${new URLSearchParams({
-                        term: String(term),
+                        ...(effectiveTerm ? { term: String(effectiveTerm) } : {}),
                         semCode: selected.semCode ?? '',
                         program: selected.programName ?? '',
                         q: selected.studentRegNo ?? selected.studentName ?? '',
@@ -298,7 +326,7 @@ export default function HallTicketIssuancePage() {
                   <footer className="ht-verdict ok">
                     <div className="ht-verdict-msg">
                       <i className="lni lni-checkmark-circle" aria-hidden="true"></i>
-                      <div><div className="ht-verdict-title">Eligible for a Term {term} hall ticket</div><div className="ht-verdict-sub">Every clearance is in place.</div></div>
+                      <div><div className="ht-verdict-title">Eligible for a {termDisplayLabel} hall ticket</div><div className="ht-verdict-sub">Every clearance is in place.</div></div>
                     </div>
                     {(permissions.add || permissions.edit) && (
                     <button type="button" className="btn btn-primary" onClick={handleIssue} disabled={issue.isPending}>
@@ -363,7 +391,7 @@ export default function HallTicketIssuancePage() {
         onClose={() => setBulkOpen(false)}
         intakeGuid={intakeGuid}
         intakeLabel={intakeLabel}
-        term={term}
+        initialTermOverride={termOverride}
         showToast={showToast}
       />
       <Toast toast={toast} />
@@ -399,15 +427,16 @@ function sentenceList(items: string[]) {
 // Bulk issue (POST /bulk) + issue status list (GET /bulk), per steps 5–6:
 // filter Not issued, bulk issue, and the list reloads to show who's left.
 // Program + semester narrow the scope; leaving program empty = whole intake.
-function BulkIssueModal({ isOpen, onClose, intakeGuid, intakeLabel, term, showToast }: {
+function BulkIssueModal({ isOpen, onClose, intakeGuid, intakeLabel, initialTermOverride, showToast }: {
   isOpen: boolean
   onClose: () => void
   intakeGuid: string
   intakeLabel: string
-  term: HallTicketTerm
+  initialTermOverride?: string
   showToast: (msg: string, type?: string) => void
 }) {
   const permissions = usePagePermissions('/assessment/hall-ticket')
+  const [termOverride, setTermOverride] = useState<string>(initialTermOverride || '')
   const [programGuid, setProgramGuid] = useState('')
   const [semesterGuid, setSemesterGuid] = useState('')
   const [status, setStatus] = useState<HallTicketIssueStatus | ''>('NotIssued')
@@ -419,18 +448,20 @@ function BulkIssueModal({ isOpen, onClose, intakeGuid, intakeLabel, term, showTo
 
   useEffect(() => {
     if (isOpen) {
+      setTermOverride(initialTermOverride || '')
       setSummary(null)
       setPage(1)
       setShowConfirmModal(false)
       setEligibilityFilter('')
     }
-  }, [isOpen])
+  }, [isOpen, initialTermOverride])
 
   const { data: programs = [] } = useProgramDropdown(undefined, isOpen)
   const { data: semesters = [] } = useSemestersForProgram(programGuid || null, isOpen)
   // The API needs program and semester together — a program alone isn't a scope.
   const scopeIncomplete = !!programGuid && !semesterGuid
-  const scope = { intakeGuid, term, programGuid: programGuid || null, semesterGuid: semesterGuid || null }
+  const modalTermParam = termOverride ? (Number(termOverride) as HallTicketTerm) : undefined
+  const scope: HallTicketScope = { intakeGuid, term: modalTermParam, programGuid: programGuid || null, semesterGuid: semesterGuid || null }
   const { data: rows = [], isFetching, isError } = useHallTicketScopeStudents(
     scope,
     status || null,
@@ -474,9 +505,14 @@ function BulkIssueModal({ isOpen, onClose, intakeGuid, intakeLabel, term, showTo
   return (
     <div className="modal-overlay open">
       <div className="modal modal-xl" style={{ display: 'flex', flexDirection: 'column', maxHeight: '88vh' }} onClick={e => e.stopPropagation()}>
-        <div className="modal-hdr"><div className="modal-title"><i className="lni lni-ticket"></i> Bulk Issue &amp; Status — Term {term}</div><button className="modal-close" onClick={onClose}>✕</button></div>
+        <div className="modal-hdr">
+          <div className="modal-title">
+            <i className="lni lni-ticket"></i> Bulk Issue &amp; Status {termOverride ? `— Term ${termOverride}` : '(Auto Term)'}
+          </div>
+          <button className="modal-close" onClick={onClose}>✕</button>
+        </div>
         <div style={{ overflowY: 'auto', flex: '1 1 auto', minHeight: 0 }}>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 mb-2">
             <div className="fg mb-0">
               <label className="lbl">Programme</label>
               <SearchSelect
@@ -520,6 +556,15 @@ function BulkIssueModal({ isOpen, onClose, intakeGuid, intakeLabel, term, showTo
                 }}
                 disabled={status === 'Issued'}
                 placeholder={status === 'Issued' ? 'N/A for Issued' : 'All clearances'}
+              />
+            </div>
+            <div className="fg mb-0">
+              <label className="lbl">Term Override <span className="text-slate-400 font-normal text-xs">(Optional)</span></label>
+              <SearchSelect
+                options={TERM_OPTIONS}
+                value={termOverride}
+                onChange={v => { setTermOverride(v); setPage(1) }}
+                placeholder="Auto"
               />
             </div>
           </div>
@@ -710,7 +755,7 @@ function BulkIssueModal({ isOpen, onClose, intakeGuid, intakeLabel, term, showTo
             </div>
             <div className="perm-delete-title">Confirm Bulk Issuance</div>
             <div className="perm-delete-sub">
-              Issue Term {term} hall tickets to every eligible student in {scopeLabel}? Students who already have one are skipped. This may take a while.
+              Issue {modalTermParam ? `Term ${modalTermParam}` : 'current term'} hall tickets to every eligible student in {scopeLabel}? Students who already have one are skipped. This may take a while.
             </div>
             <div className="perm-delete-actions">
               <button

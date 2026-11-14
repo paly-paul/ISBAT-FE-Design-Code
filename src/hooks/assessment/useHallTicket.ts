@@ -26,9 +26,10 @@ export function useHallTicketSearch(searchTerm: string, intakeGuid: string | nul
 }
 
 // staleTime 0 — clearances (fee, coursework…) move outside this page.
-export function useHallTicketEligibility(studentGuid: string | null, intakeGuid: string | null, term: HallTicketTerm) {
+// term is optional — when omitted/null the server picks the term automatically.
+export function useHallTicketEligibility(studentGuid: string | null, intakeGuid: string | null, term?: HallTicketTerm | null) {
   return useQuery({
-    queryKey: [...HALL_TICKET_KEY, 'eligibility', studentGuid, intakeGuid, term],
+    queryKey: [...HALL_TICKET_KEY, 'eligibility', studentGuid, intakeGuid, term ?? 'auto'],
     queryFn: () => getHallTicketEligibility(studentGuid as string, intakeGuid as string, term),
     enabled: !!studentGuid && !!intakeGuid,
     staleTime: 0,
