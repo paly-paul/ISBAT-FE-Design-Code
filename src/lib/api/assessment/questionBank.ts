@@ -218,11 +218,16 @@ export function postQuestionBankImport(params: QuestionBankFileParams): Promise<
 
 /**
  * Soft-delete question bank for the given course unit, category, and intake.
+ * University Exam (category 5) keeps Theory and Practical as separate banks:
+ * universityExamType 1 deletes only the Practical bank, 0 only the Theory
+ * bank. Omitting it also deletes Theory, so a Practical delete must send 1.
+ * Leave it undefined for other categories (their questions have no UE type).
  */
 export function deleteQuestionBank(
   courseUnitGuid: string,
   category: number,
   intakeGuid: string,
+  universityExamType?: number | null,
 ): Promise<QuestionBankImportResult> {
   if (MOCK_AUTH) {
     return Promise.resolve({
@@ -235,6 +240,9 @@ export function deleteQuestionBank(
     category: String(category),
     intakeGuid,
   })
+  if (category === 5 && universityExamType != null) {
+    params.set('universityExamType', String(universityExamType))
+  }
   return apiDelete<boolean>(`/api/v1/assessment/question-bank?${params.toString()}`)
     .then(data => ({
       success: Boolean(data),

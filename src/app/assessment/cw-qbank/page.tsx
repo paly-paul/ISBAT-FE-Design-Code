@@ -445,6 +445,7 @@ export default function QuestionBankUploadPage() {
         courseUnitGuid: targetUnit,
         category: Number(targetCat),
         intakeGuid,
+        universityExamType: deleteBankUeType,
       },
       {
         onSuccess: (res) => {
@@ -506,6 +507,20 @@ export default function QuestionBankUploadPage() {
     // Default fallback if not specified: Combined
     return { label: 'Combined', type: 'combined', badgeClass: 'badge-purple' }
   }, [isRepoUniversityExam, selectedRepoUnit, repoAllowedUeTypes])
+
+  // Which University Exam bank "Delete All" removes: the backend keeps Theory
+  // and Practical separately and deletes Theory when no type is sent, so the
+  // Practical bank must be targeted explicitly. Single-type units use their
+  // own type; combined units use the Theory/Practical selection on screen.
+  // null for other categories (no UE type is sent).
+  const repoDeleteUeType: number | null = !isRepoUniversityExam
+    ? null
+    : repoUeTypeInfo?.type === 'practical' ? UE_TYPE.Practical
+    : repoUeTypeInfo?.type === 'theory' ? UE_TYPE.Theory
+    : repoUeFilterType === 'PRACTICAL' ? UE_TYPE.Practical : UE_TYPE.Theory
+  const deleteBankUeType: number | null = activeTab === 'import'
+    ? (isImportUniversityExam ? effectiveImportUeType : null)
+    : repoDeleteUeType
 
   const selectedRepoCategoryObj = useMemo(() => {
     if (!repoCategory) return null
@@ -2207,6 +2222,14 @@ export default function QuestionBankUploadPage() {
                   <span className="text-slate-500">Academic Intake:</span>
                   <strong className="text-slate-800 font-mono">{selectedIntake?.intakeCode || intakeGuid}</strong>
                 </div>
+                {deleteBankUeType !== null && (
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Exam Type:</span>
+                    <strong className={deleteBankUeType === UE_TYPE.Practical ? 'text-amber-700' : 'text-cyan-700'}>
+                      {deleteBankUeType === UE_TYPE.Practical ? 'Practical only' : 'Theory only'}
+                    </strong>
+                  </div>
+                )}
               </div>
             </div>
 

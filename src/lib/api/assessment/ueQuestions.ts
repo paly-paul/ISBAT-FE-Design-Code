@@ -8,6 +8,9 @@ export interface UeCourseUnitDto {
   courseUnitGuid: string
   courseUnitName: string | null
   courseUnitCode: string | null
+  // Which UE banks the unit has: [0] Theory-only, [1] Practical-only,
+  // [0, 1] Combined, null = no type (Project) — unrestricted, offer both.
+  allowedUeTypes: number[] | null
 }
 
 export interface UeQuestionSummaryDto {
@@ -69,7 +72,10 @@ export async function getUeCourseUnits(): Promise<UeCourseUnitDto[]> {
   try {
     const data = await apiGet<UeCourseUnitDto[]>('/api/v1/assessment/ue-question/course-units')
     if (data && Array.isArray(data)) {
-      return data
+      return data.map(cu => ({
+        ...cu,
+        allowedUeTypes: Array.isArray(cu.allowedUeTypes) && cu.allowedUeTypes.length > 0 ? cu.allowedUeTypes : null,
+      }))
     }
     return []
   } catch (err: any) {
