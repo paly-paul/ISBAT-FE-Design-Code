@@ -28,8 +28,12 @@ export interface ResitParams {
 }
 
 export interface ResitOutcomeResponse {
-  outcome: 'Printed' | 'Reprinted' | 'ScheduleNotSet' | 'QuestionsNotAvailable' | 'ConfirmationRequired'
-  message?: string
+  // Known values: 'Printed' | 'Reprinted' | 'ScheduleNotSet' |
+  // 'QuestionsNotAvailable' | 'ConfirmationRequired'. Typed loosely because
+  // the backend can send other validation outcomes (or a numeric enum); the
+  // page falls back to `message` for anything it doesn't recognise.
+  outcome: string | number | null
+  message?: string | null
 }
 
 export interface ResitBookletResponse {

@@ -144,15 +144,21 @@ export default function ResitQuestionPrintPage() {
     try {
       const mut = isTheory ? printTheoryMut : printPracticalMut
       const res = await mut.mutateAsync(req)
+      // Match case-insensitively; any outcome not listed here is a backend
+      // validation, so show its message rather than doing nothing.
+      const outcome = String(res?.outcome ?? '').toLowerCase()
+      const backendMsg = res?.message?.trim()
 
-      if (res.outcome === 'ScheduleNotSet') {
-        showToast('Resit Exam not yet Scheduled or Exam Rule not yet set!!', 'error')
-      } else if (res.outcome === 'QuestionsNotAvailable') {
-        showToast('Questions are not yet uploaded!!', 'error')
-      } else if (res.outcome === 'ConfirmationRequired') {
-        confirmAndExecute(res.message || 'Questions are already printed. Do you want to reprint the same?', () => handlePrintQP(true))
-      } else if (res.outcome === 'Printed' || res.outcome === 'Reprinted') {
-        showToast(`Question Paper ${res.outcome}!`, 'success')
+      if (outcome === 'schedulenotset') {
+        showToast(backendMsg || 'Resit Exam not yet Scheduled or Exam Rule not yet set!!', 'error')
+      } else if (outcome === 'questionsnotavailable') {
+        showToast(backendMsg || 'Questions are not yet uploaded!!', 'error')
+      } else if (outcome === 'confirmationrequired') {
+        confirmAndExecute(backendMsg || 'Questions are already printed. Do you want to reprint the same?', () => handlePrintQP(true))
+      } else if (outcome === 'printed' || outcome === 'reprinted') {
+        showToast(`Question Paper ${outcome === 'printed' ? 'Printed' : 'Reprinted'}!`, 'success')
+      } else {
+        showToast(backendMsg || 'Question paper could not be generated.', 'error')
       }
     } catch (err: any) {
       showToast(err.message || 'Failed to print QP', 'error')
