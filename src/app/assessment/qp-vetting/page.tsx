@@ -31,7 +31,9 @@ export default function QpUploadVettingPage() {
 
   // ── Filters & Scoping ─────────────────────────────────────────────────────
   const [selectedCourseUnitGuid, setSelectedCourseUnitGuid] = useState<string>('')
-  const [ueType, setUeType] = useState<number>(0) // 0 = Theory, 1 = Practical
+  // The user's Theory/Practical pick; only used for units that have both
+  // banks. The type actually sent (ueType) is derived from the unit below.
+  const [ueChoice, setUeChoice] = useState<number>(0) // 0 = Theory, 1 = Practical
   const [activeLevel, setActiveLevel] = useState<number>(1) // 1 = Sec A, 2 = Sec B, 3 = Sec C
 
   // ── Table Search & Pagination (Faculty Upload) ────────────────────────────
@@ -64,6 +66,9 @@ export default function QpUploadVettingPage() {
   const [viewingQuestion, setViewingQuestion] = useState<UeQuestionDto | null>(null)
   const [isVerifyDialogOpen, setIsVerifyDialogOpen] = useState(false)
   const [successModal, setSuccessModal] = useState<{ title: string; subtitle: string } | null>(null)
+  // Set when Verify answers 409 exam_commenced; shown only while the same
+  // unit and UE type are selected (Theory and Practical have their own dates).
+  const [examClosed, setExamClosed] = useState<{ guid: string; ueType: number; msg: string } | null>(null)
 
   // ── Toast State ───────────────────────────────────────────────────────────
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
@@ -85,6 +90,14 @@ export default function QpUploadVettingPage() {
   const selectedUnit = useMemo(() => {
     return courseUnits.find(cu => cu.courseUnitGuid === selectedCourseUnitGuid)
   }, [courseUnits, selectedCourseUnitGuid])
+
+  // UE type sent on every call (summary, questions, verify, add/edit), driven
+  // by the unit's allowedUeTypes: a single-type unit always uses its own type
+  // (a Practical-only unit must never default to Theory); Combined and
+  // untyped units use the user's selection.
+  const ueOptions = unitUeTypes(selectedUnit)
+  const ueType = ueOptions.length === 1 ? ueOptions[0] : (ueOptions.includes(ueChoice) ? ueChoice : ueOptions[0])
+  const showUeSelector = ueOptions.length > 1
 
   const {
     data: summary = { totalCount: 0, sectionACount: 0, sectionBCount: 0, sectionCCount: 0, isVerified: false },
@@ -226,8 +239,21 @@ export default function QpUploadVettingPage() {
           refetchQuestions()
         },
         onError: (err: any) => {
-          const msg = err?.message || 'Verification failed. Required permission: assessment.qpvetting.verify'
-          showToast(msg, 'error')
+          const code: string | undefined = err?.code
+          // 409 exam_commenced: the exam date for this unit + UE type has
+          // passed, so it can never be verified now. Close the dialog (a
+          // retry can't succeed) and keep a notice on the page.
+          if (code === 'exam_commenced') {
+            const msg = err?.message || 'The exam date has passed. Questions can no longer be verified.'
+            setIsVerifyDialogOpen(false)
+            setExamClosed({ guid: selectedCourseUnitGuid, ueType, msg })
+            showToast(msg, 'error')
+            return
+          }
+          const fallback = code === 'forbidden'
+            ? 'You don’t have permission to verify question papers.'
+            : 'Verification failed. Please try again.'
+          showToast(err?.message || fallback, 'error')
         },
       }
     )
@@ -237,7 +263,7 @@ export default function QpUploadVettingPage() {
   const courseUnitOptions = useMemo(() => {
     return courseUnits.map(cu => ({
       value: cu.courseUnitGuid,
-      label: `${cu.courseUnitCode ? cu.courseUnitCode + ' – ' : ''}${cu.courseUnitName || 'Untitled Unit'}`,
+      label: `${cu.courseUnitCode ? cu.courseUnitCode + ' – ' : ''}${cu.courseUnitName || 'Untitled Unit'} (${unitUeLabel(cu)})`,
     }))
   }, [courseUnits])
 
@@ -332,16 +358,30 @@ export default function QpUploadVettingPage() {
                   <label className="text-[12px] font-semibold text-slate-700 block mb-1.5">
                     Exam Type
                   </label>
-                  <div className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-md font-medium text-slate-800 flex items-center justify-between">
-                    <span className="truncate">
-                      {ueType === 1
-                        ? 'UE (Practical)'
-                        : 'UE (Theory)'}
-                    </span>
-                    <span className="badge badge-blue text-[10.5px] font-semibold shrink-0">
-                      {ueType === 1 ? 'Practical' : 'Theory'}
-                    </span>
-                  </div>
+                  {showUeSelector ? (
+                    <div className="flex gap-1.5" role="group" aria-label="Exam type">
+                      {ueOptions.map(t => (
+                        <button
+                          key={t}
+                          type="button"
+                          className={`btn btn-sm flex-1 justify-center ${ueType === t ? 'btn-primary' : 'btn-neu'}`}
+                          aria-pressed={ueType === t}
+                          onClick={() => setUeChoice(t)}
+                        >
+                          {t === 1 ? 'Practical' : 'Theory'}
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-md font-medium text-slate-800 flex items-center justify-between">
+                      <span className="truncate">
+                        {ueType === 1 ? 'UE (Practical)' : 'UE (Theory)'}
+                      </span>
+                      <span className={`badge ${ueType === 1 ? 'badge-amber' : 'badge-cyan'} text-[10.5px] font-semibold shrink-0`}>
+                        {ueType === 1 ? 'Practical only' : 'Theory only'}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -374,6 +414,19 @@ export default function QpUploadVettingPage() {
               </div>
             </div>
           </div>
+
+          {/* Verification closed: exam date passed (from a 409 on Verify) */}
+          {!isLocked && examClosed && examClosed.guid === selectedCourseUnitGuid && examClosed.ueType === ueType && (
+            <div className="bg-amber-50 border border-amber-200 rounded-md p-3.5 flex gap-3 text-[12.5px] text-amber-900 items-start shadow-xs" role="status">
+              <div className="mt-0.5 text-amber-600"><i className="lni lni-alarm-clock text-[16px]"></i></div>
+              <div>
+                <strong className="font-semibold text-amber-950">
+                  Verification closed for {selectedUnit?.courseUnitCode || 'this course unit'} ({ueType === 1 ? 'Practical' : 'Theory'}).
+                </strong>{' '}
+                {examClosed.msg}
+              </div>
+            </div>
+          )}
 
           {/* Locked State Warning Banner */}
           {isLocked && (
@@ -412,166 +465,166 @@ export default function QpUploadVettingPage() {
           */}
 
           {/* Questions Table Card - Full Width */}
-          <div className="card w-full">
-              
-              {/* Card Header with Section Pills & Search */}
-              <div className="card-hdr flex-wrap gap-3">
-                <div className="flex items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setActiveLevel(1)}
-                    className={`btn btn-sm ${
-                      activeLevel === 1 ? 'btn-primary' : 'btn-neu'
-                    } text-xs font-semibold`}
-                  >
-                    Section A ({summary.sectionACount})
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setActiveLevel(2)}
-                    className={`btn btn-sm ${
-                      activeLevel === 2 ? 'btn-primary' : 'btn-neu'
-                    } text-xs font-semibold`}
-                  >
-                    Section B ({summary.sectionBCount})
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setActiveLevel(3)}
-                    className={`btn btn-sm ${
-                      activeLevel === 3 ? 'btn-primary' : 'btn-neu'
-                    } text-xs font-semibold`}
-                  >
-                    Section C ({summary.sectionCCount})
-                  </button>
-                </div>
-
-                <TableSearch
-                  className="w-56"
-                  placeholder="Search questions..."
-                  value={search}
-                  onChange={setSearch}
-                  results={searchResults}
-                  onSelect={(r) => setSearch(r.primary)}
-                />
-              </div>
-
-              {/* Scrollable Table */}
-              <ScrollTable>
-                <table style={{ fontSize: '11.5px' }}>
-                  <thead>
-                    <tr>
-                      <th style={{ width: 44 }}></th>
-                      <FilterTh
-                        label="TYPE"
-                        opts={['MCQ', 'Descriptive']}
-                        isOpen={openFilter === 'type'}
-                        activeFilter={filters['type'] || []}
-                        onToggle={(e) => { e.stopPropagation(); setOpenFilter(openFilter === 'type' ? null : 'type') }}
-                        onSelect={(vals) => handleFilterSelect('type', vals)}
-                        onClear={() => handleFilterSelect('type', [])}
-                        onClose={() => setOpenFilter(null)}
-                      />
-                      <th>QUESTION STATEMENT</th>
-                      <th>ANSWER KEY</th>
-                      <FilterTh
-                        label="STATUS"
-                        opts={['Verified', 'Draft']}
-                        isOpen={openFilter === 'status'}
-                        activeFilter={filters['status'] || []}
-                        onToggle={(e) => { e.stopPropagation(); setOpenFilter(openFilter === 'status' ? null : 'status') }}
-                        onSelect={(vals) => handleFilterSelect('status', vals)}
-                        onClear={() => handleFilterSelect('status', [])}
-                        onClose={() => setOpenFilter(null)}
-                      />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {isQuestionsLoading ? (
-                      <TableLoadingState colSpan={5} title="Loading section questions…" />
-                    ) : paginatedQuestions.length === 0 ? (
-                      <EmptyState
-                        colSpan={5}
-                        title="No questions found in this section"
-                        subtitle={isLocked ? 'Verified questions may be hidden for regular lecturers.' : 'Click "+ Add Question" above to prepare questions.'}
-                        hasFilters={Boolean(search || filters['status']?.length || filters['type']?.length)}
-                        onClearFilters={() => { setSearch(''); setFilters({}); }}
-                      />
-                    ) : (
-                      paginatedQuestions.map((q) => {
-                        const isMcq = q.questionType === 1
-                        return (
-                          <tr key={q.questionGuid} className="hover:bg-slate-50/60">
-                            <td>
-                              <ActionMenu>
-                                <button
-                                  className="btn btn-neu btn-sm"
-                                  onClick={() => setViewingQuestion(q)}
-                                >
-                                  <i className="lni lni-search-alt" /> View Details
-                                </button>
-                                {!isLocked && !q.isVerified && permissions.edit && (
-                                  <button
-                                    className="btn btn-neu btn-sm"
-                                    onClick={() => handleOpenEditModal(q)}
-                                  >
-                                    <i className="lni lni-pencil" /> Edit Question
-                                  </button>
-                                )}
-                              </ActionMenu>
-                            </td>
-                            <td>
-                              {isMcq ? (
-                                <span className="badge badge-purple text-[10px]">MCQ</span>
-                              ) : (
-                                <span className="badge bg-slate-100 text-slate-700 text-[10px] border border-slate-200">
-                                  Descriptive
-                                </span>
-                              )}
-                            </td>
-                            <td>
-                              <div className="font-medium text-slate-900 line-clamp-2 pr-2">
-                                {stripHtmlTags(q.questionText)}
-                              </div>
-                            </td>
-                            <td>
-                              <div className="text-slate-600 line-clamp-1 max-w-xs">
-                                {isMcq ? (
-                                  <span className="font-semibold text-emerald-800">
-                                    ✓ {stripHtmlTags(q.answerText)}
-                                  </span>
-                                ) : (
-                                  <span className="italic text-slate-500">
-                                    {stripHtmlTags(q.answerText) ? stripHtmlTags(q.answerText).slice(0, 50) + (stripHtmlTags(q.answerText).length > 50 ? '...' : '') : '—'}
-                                  </span>
-                                )}
-                              </div>
-                            </td>
-                            <td>
-                              {q.isVerified ? (
-                                <span className="badge badge-green">✓ Verified</span>
-                              ) : (
-                                <span className="badge badge-amber">Draft</span>
-                              )}
-                            </td>
-                          </tr>
-                        )
-                      })
-                    )}
-                  </tbody>
-                </table>
-              </ScrollTable>
-
-              {/* Pagination */}
-              {filteredQuestions.length > pageSize && (
-                <div className="p-3 border-t border-slate-100">
-                  <Pagination
-                    page={page}
-                    totalPages={totalPages}
-                    totalCount={filteredQuestions.length}
-                    onPageChange={setPage}
-                  />
-                </div>
+          <div className="card w-full">
+              
+              {/* Card Header with Section Pills & Search */}
+              <div className="card-hdr flex-wrap gap-3">
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setActiveLevel(1)}
+                    className={`btn btn-sm ${
+                      activeLevel === 1 ? 'btn-primary' : 'btn-neu'
+                    } text-xs font-semibold`}
+                  >
+                    Section A ({summary.sectionACount})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveLevel(2)}
+                    className={`btn btn-sm ${
+                      activeLevel === 2 ? 'btn-primary' : 'btn-neu'
+                    } text-xs font-semibold`}
+                  >
+                    Section B ({summary.sectionBCount})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveLevel(3)}
+                    className={`btn btn-sm ${
+                      activeLevel === 3 ? 'btn-primary' : 'btn-neu'
+                    } text-xs font-semibold`}
+                  >
+                    Section C ({summary.sectionCCount})
+                  </button>
+                </div>
+
+                <TableSearch
+                  className="w-56"
+                  placeholder="Search questions..."
+                  value={search}
+                  onChange={setSearch}
+                  results={searchResults}
+                  onSelect={(r) => setSearch(r.primary)}
+                />
+              </div>
+
+              {/* Scrollable Table */}
+              <ScrollTable>
+                <table style={{ fontSize: '11.5px' }}>
+                  <thead>
+                    <tr>
+                      <th style={{ width: 44 }}></th>
+                      <FilterTh
+                        label="TYPE"
+                        opts={['MCQ', 'Descriptive']}
+                        isOpen={openFilter === 'type'}
+                        activeFilter={filters['type'] || []}
+                        onToggle={(e) => { e.stopPropagation(); setOpenFilter(openFilter === 'type' ? null : 'type') }}
+                        onSelect={(vals) => handleFilterSelect('type', vals)}
+                        onClear={() => handleFilterSelect('type', [])}
+                        onClose={() => setOpenFilter(null)}
+                      />
+                      <th>QUESTION STATEMENT</th>
+                      <th>ANSWER KEY</th>
+                      <FilterTh
+                        label="STATUS"
+                        opts={['Verified', 'Draft']}
+                        isOpen={openFilter === 'status'}
+                        activeFilter={filters['status'] || []}
+                        onToggle={(e) => { e.stopPropagation(); setOpenFilter(openFilter === 'status' ? null : 'status') }}
+                        onSelect={(vals) => handleFilterSelect('status', vals)}
+                        onClear={() => handleFilterSelect('status', [])}
+                        onClose={() => setOpenFilter(null)}
+                      />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {isQuestionsLoading ? (
+                      <TableLoadingState colSpan={5} title="Loading section questions…" />
+                    ) : paginatedQuestions.length === 0 ? (
+                      <EmptyState
+                        colSpan={5}
+                        title="No questions found in this section"
+                        subtitle={isLocked ? 'Verified questions may be hidden for regular lecturers.' : 'Click "+ Add Question" above to prepare questions.'}
+                        hasFilters={Boolean(search || filters['status']?.length || filters['type']?.length)}
+                        onClearFilters={() => { setSearch(''); setFilters({}); }}
+                      />
+                    ) : (
+                      paginatedQuestions.map((q) => {
+                        const isMcq = q.questionType === 1
+                        return (
+                          <tr key={q.questionGuid} className="hover:bg-slate-50/60">
+                            <td>
+                              <ActionMenu>
+                                <button
+                                  className="btn btn-neu btn-sm"
+                                  onClick={() => setViewingQuestion(q)}
+                                >
+                                  <i className="lni lni-search-alt" /> View Details
+                                </button>
+                                {!isLocked && !q.isVerified && permissions.edit && (
+                                  <button
+                                    className="btn btn-neu btn-sm"
+                                    onClick={() => handleOpenEditModal(q)}
+                                  >
+                                    <i className="lni lni-pencil" /> Edit Question
+                                  </button>
+                                )}
+                              </ActionMenu>
+                            </td>
+                            <td>
+                              {isMcq ? (
+                                <span className="badge badge-purple text-[10px]">MCQ</span>
+                              ) : (
+                                <span className="badge bg-slate-100 text-slate-700 text-[10px] border border-slate-200">
+                                  Descriptive
+                                </span>
+                              )}
+                            </td>
+                            <td>
+                              <div className="font-medium text-slate-900 line-clamp-2 pr-2">
+                                {stripHtmlTags(q.questionText)}
+                              </div>
+                            </td>
+                            <td>
+                              <div className="text-slate-600 line-clamp-1 max-w-xs">
+                                {isMcq ? (
+                                  <span className="font-semibold text-emerald-800">
+                                    ✓ {stripHtmlTags(q.answerText)}
+                                  </span>
+                                ) : (
+                                  <span className="italic text-slate-500">
+                                    {stripHtmlTags(q.answerText) ? stripHtmlTags(q.answerText).slice(0, 50) + (stripHtmlTags(q.answerText).length > 50 ? '...' : '') : '—'}
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td>
+                              {q.isVerified ? (
+                                <span className="badge badge-green">✓ Verified</span>
+                              ) : (
+                                <span className="badge badge-amber">Draft</span>
+                              )}
+                            </td>
+                          </tr>
+                        )
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </ScrollTable>
+
+              {/* Pagination */}
+              {filteredQuestions.length > pageSize && (
+                <div className="p-3 border-t border-slate-100">
+                  <Pagination
+                    page={page}
+                    totalPages={totalPages}
+                    totalCount={filteredQuestions.length}
+                    onPageChange={setPage}
+                  />
+                </div>
               )}
 
           </div>
@@ -635,8 +688,9 @@ export default function QpUploadVettingPage() {
                     <VettingQueueRow
                       key={cu.courseUnitGuid}
                       cu={cu}
-                      onOpenReview={(guid) => {
+                      onOpenReview={(guid, type) => {
                         setSelectedCourseUnitGuid(guid)
+                        setUeChoice(type)
                         setActiveTab('faculty')
                       }}
                     />
@@ -782,17 +836,43 @@ export default function QpUploadVettingPage() {
 
 // ── Vetting Queue Row Component with Dynamic Action Button ───────────────────
 
+// Banks a UE course unit has, from allowedUeTypes; null (Project / no type)
+// is unrestricted, so both are offered.
+function unitUeTypes(cu: UeCourseUnitDto | undefined): number[] {
+  const t = cu?.allowedUeTypes
+  if (!t || t.length === 0) return [0, 1]
+  return [0, 1].filter(x => t.includes(x))
+}
+
+function unitUeLabel(cu: UeCourseUnitDto): string {
+  const t = cu.allowedUeTypes
+  if (!t || t.length === 0) return 'Theory / Practical'
+  const types = unitUeTypes(cu)
+  return types.length > 1 ? 'Combined' : types[0] === 1 ? 'Practical' : 'Theory'
+}
+
 function VettingQueueRow({
   cu,
   onOpenReview,
 }: {
   cu: UeCourseUnitDto
-  onOpenReview: (guid: string) => void
+  onOpenReview: (guid: string, ueType: number) => void
 }) {
-  const { data: summary, isLoading } = useUeQuestionSummary(cu.courseUnitGuid, 5, 0)
-  const totalCount = summary?.totalCount ?? 0
-  const isVerified = Boolean(summary?.isVerified)
+  // Theory and Practical are separate banks, so check each bank the unit has.
+  const types = unitUeTypes(cu)
+  const theory = useUeQuestionSummary(types.includes(0) ? cu.courseUnitGuid : '', 5, 0)
+  const practical = useUeQuestionSummary(types.includes(1) ? cu.courseUnitGuid : '', 5, 1)
+  const banks = [
+    ...(types.includes(0) ? [{ type: 0, q: theory }] : []),
+    ...(types.includes(1) ? [{ type: 1, q: practical }] : []),
+  ]
+  const isLoading = banks.some(b => b.q.isLoading)
+  const withQuestions = banks.filter(b => (b.q.data?.totalCount ?? 0) > 0)
+  const totalCount = withQuestions.reduce((n, b) => n + (b.q.data?.totalCount ?? 0), 0)
   const hasQuestions = totalCount > 0
+  const isVerified = hasQuestions && withQuestions.every(b => b.q.data?.isVerified)
+  // Open the first bank still awaiting verification.
+  const reviewType = (withQuestions.find(b => !b.q.data?.isVerified) ?? withQuestions[0] ?? banks[0])?.type ?? 0
 
   return (
     <tr className="hover:bg-slate-50">
@@ -801,7 +881,7 @@ function VettingQueueRow({
           <button
             className="btn btn-neu btn-sm"
             disabled={!hasQuestions || isVerified}
-            onClick={() => onOpenReview(cu.courseUnitGuid)}
+            onClick={() => onOpenReview(cu.courseUnitGuid, reviewType)}
           >
             <i className="lni lni-search-alt" />{' '}
             {!hasQuestions ? 'No Questions' : isVerified ? 'Verified' : 'Open for Review'}
@@ -815,6 +895,9 @@ function VettingQueueRow({
       </td>
       <td className="font-semibold text-slate-800">
         {cu.courseUnitName || 'Untitled Unit'}
+        <span className={`badge ${unitUeLabel(cu) === 'Practical' ? 'badge-amber' : unitUeLabel(cu) === 'Theory' ? 'badge-cyan' : 'badge-purple'} text-[10px] font-semibold ml-2`}>
+          {unitUeLabel(cu)}
+        </span>
       </td>
       <td>
         <span className="badge bg-slate-100 text-slate-600 text-[10.5px]">
@@ -848,7 +931,7 @@ function VettingQueueRow({
         ) : (
           <button
             type="button"
-            onClick={() => onOpenReview(cu.courseUnitGuid)}
+            onClick={() => onOpenReview(cu.courseUnitGuid, reviewType)}
             title={`Review ${totalCount} uploaded questions`}
             className="btn btn-primary btn-sm flex items-center gap-1.5 shadow-xs text-xs"
           >

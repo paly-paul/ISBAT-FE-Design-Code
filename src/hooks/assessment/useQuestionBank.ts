@@ -111,10 +111,10 @@ export function useDeleteQuestionBank() {
   return useMutation<
     QuestionBankImportResult,
     Error,
-    { courseUnitGuid: string; category: number; intakeGuid: string }
+    { courseUnitGuid: string; category: number; intakeGuid: string; universityExamType?: number | null }
   >({
-    mutationFn: ({ courseUnitGuid, category, intakeGuid }) =>
-      deleteQuestionBank(courseUnitGuid, category, intakeGuid),
+    mutationFn: ({ courseUnitGuid, category, intakeGuid, universityExamType }) =>
+      deleteQuestionBank(courseUnitGuid, category, intakeGuid, universityExamType),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['questions'] })
     },
