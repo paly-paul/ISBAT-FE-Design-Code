@@ -21,17 +21,15 @@ import { scrollToFirstError } from '@/lib/scrollToFirstError'
 
 // Confirmed via allocation/*.md — real endpoints now (was UI-only mock
 // against the legacy ISMS "Course Allottee" screen this page was first
-// built from). Term has no real master list of its own on the backend
-// (ProgramPlanningDto.term is just a plain int|null), so the same static
-// 1/2/3 options the Timetable page's own Term dropdown already uses are
-// reused here rather than inventing a second convention for it.
-// value 3 relabeled "Both" per request, 2026-09-08 — represents Term 1 AND
-// Term 2 together, not a literal third term.
+// built from). Term is required on create and update and must be 1 or 2
+// (program-plannings POST/PUT, 2026-11). The old third option ("Both", 3)
+// is no longer accepted; rows saved with it (or with no term) still show as
+// before but must be given Term 1 or 2 before they can be updated.
 const TERM_OPTIONS = [
   { value: '1', label: 'Term 1' },
   { value: '2', label: 'Term 2' },
-  { value: '3', label: 'Both' },
 ]
+const isValidTerm = (v: string): v is '1' | '2' => v === '1' || v === '2'
 
 const PAGE_SIZE = 10
 
@@ -164,9 +162,9 @@ export default function CourseAllocationPage() {
     setPage(1)
   }, [committedSearch, lecturerFilter])
 
-  // post-program-planning.md: lecturer / school / intake and 1 to 50 units are
-  // required; (lecturer, unit, intake) must be unique, which the API enforces
-  // (see serverFieldError). load and term are optional ints with no API rule —
+  // post-program-planning.md: lecturer / school / intake, 1 to 50 units and a
+  // term (1 or 2) on each unit are required; (lecturer, unit, intake) must be
+  // unique, which the API enforces (see serverFieldError). load is optional —
   // a 0 teaching load is meaningless, so the form requires at least 1 when one
   // is entered.
   const DUPLICATE_MESSAGE = 'This lecturer is already allocated to this course unit for this academic session.'
@@ -177,12 +175,16 @@ export default function CourseAllocationPage() {
     if (!lecturerGuid) e.lecturerGuid = 'Lecturer Name is required'
     if (!schoolGuid) e.schoolGuid = 'School / Faculty is required'
     if (editingRow) {
+      if (!isValidTerm(term)) e.term = 'Term is required'
       if (!courseUnit) e.courseUnit = 'Course Unit is required'
       if (!validLoad(load)) e.load = 'Teaching Load must be at least 1'
     } else {
       if (units.length === 0) e.courseUnit = 'Select at least one course unit'
       if (units.length > PROGRAM_PLANNING_MAX_UNITS) e.courseUnit = `Select at most ${PROGRAM_PLANNING_MAX_UNITS} course units (now ${units.length})`
-      units.forEach(u => { if (!validLoad(u.load)) e[`load-${u.value}`] = 'Must be at least 1' })
+      units.forEach(u => {
+        if (!isValidTerm(u.term)) e[`term-${u.value}`] = 'Required'
+        if (!validLoad(u.load)) e[`load-${u.value}`] = 'Must be at least 1'
+      })
     }
     setErrors(e)
     scrollToFirstError(e)
@@ -203,6 +205,8 @@ export default function CourseAllocationPage() {
     }
     if (/school not found/i.test(msg)) return { schoolGuid: 'This school / faculty no longer exists. Pick another one.' }
     if (/intake not found/i.test(msg)) return { intakeGuid: 'This academic session no longer exists. Pick another one.' }
+    // "Term is required." / "Term must be 1 or 2."
+    if (/\bterm\b/i.test(msg)) return editingRow ? { term: msg } : { courseUnit: `${msg} Pick Term 1 or 2 for every course unit.` }
     if (code === 'validation_error') {
       if (/lecturer/i.test(msg)) return { lecturerGuid: msg }
       if (/unit/i.test(msg)) return { courseUnit: msg }
@@ -219,7 +223,9 @@ export default function CourseAllocationPage() {
     setEditingRow(r)
     setUnits([])
     setIntakeGuid(r.intakeGuid)
-    setTerm(r.term != null ? String(r.term) : '')
+    // Only 1 or 2 can be saved now: a row saved as "Both" (3) or with no
+    // term starts blank, and Term is required before Update.
+    setTerm(r.term === 1 || r.term === 2 ? String(r.term) : '')
     setSchoolGuid(r.schoolGuid)
     setLecturerGuid(r.lecturerGuid)
     setPickedLecturer({ value: r.lecturerGuid, label: r.employeeName ?? 'Lecturer' })
@@ -234,12 +240,12 @@ export default function CourseAllocationPage() {
   }
 
   function handleUpdate() {
-    if (!editingRow || !validate() || !courseUnit) return
+    if (!editingRow || !validate() || !courseUnit || !isValidTerm(term)) return
     const lecturerLabel = lecturerOptions.find(o => o.value === lecturerGuid)?.label ?? 'The lecturer'
     updatePlanning.mutate(
       {
         guid: editingRow.programPlanGuid,
-        input: { lecturerGuid, unitGuid: courseUnit.value, load: load.trim() ? +load : null, schoolGuid, intakeGuid, term: term ? +term : null },
+        input: { lecturerGuid, unitGuid: courseUnit.value, load: load.trim() ? +load : null, schoolGuid, intakeGuid, term: +term as 1 | 2 },
       },
       {
         onSuccess: () => {
@@ -266,7 +272,8 @@ export default function CourseAllocationPage() {
         lecturerGuid,
         schoolGuid,
         intakeGuid,
-        units: units.map(u => ({ unitGuid: u.value, load: u.load.trim() ? +u.load : null, term: u.term ? +u.term : null })),
+        // validate() has made sure every unit has Term 1 or 2.
+        units: units.map(u => ({ unitGuid: u.value, load: u.load.trim() ? +u.load : null, term: +u.term as 1 | 2 })),
       },
       {
         onSuccess: () => {
@@ -364,14 +371,25 @@ export default function CourseAllocationPage() {
             {errors.intakeGuid && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.intakeGuid}</p>}
           </div>
           <div className="fg">
-            <div className="lbl">{editingRow ? 'Term' : 'Default Term'}</div>
+            <div className="lbl">{editingRow ? <>Term <span className="req">*</span></> : 'Default Term'}</div>
             <SearchSelect
               placeholder="— Select Term —"
               options={TERM_OPTIONS}
               value={term}
-              onChange={setTerm}
+              onChange={v => {
+                setTerm(v)
+                // Allocate: also fill units that don't have a term yet.
+                if (!editingRow && isValidTerm(v)) setUnits(prev => prev.map(u => (isValidTerm(u.term) ? u : { ...u, term: v })))
+                setErrors(p => Object.fromEntries(Object.entries(p).filter(([k]) => k !== 'term' && !k.startsWith('term-'))))
+              }}
             />
-            {!editingRow && <p className="text-g400" style={{ fontSize: 12, marginTop: 4 }}>Applied to each course unit you add. Change it per unit below.</p>}
+            {errors.term && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.term}</p>}
+            {editingRow && !errors.term && !isValidTerm(term) && (
+              <p className="text-g400" style={{ fontSize: 12, marginTop: 4 }}>
+                {editingRow.term === 3 ? 'This allocation was saved as “Both”. ' : 'This allocation has no term yet. '}Pick Term 1 or Term 2 to update it.
+              </p>
+            )}
+            {!editingRow && <p className="text-g400" style={{ fontSize: 12, marginTop: 4 }}>Applied to each course unit without a term. Change it per unit below.</p>}
           </div>
           <div className="fg">
             <div className="lbl">School / Faculty <span className="req">*</span></div>
@@ -472,11 +490,14 @@ export default function CourseAllocationPage() {
             {errors.courseUnit && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.courseUnit}</p>}
             {units.length > 0 && (
               <div className="cau-list">
-                <div className="cau-hdr" aria-hidden="true"><span>Course Unit</span><span>Term</span><span>Teaching Load</span><span></span></div>
+                <div className="cau-hdr" aria-hidden="true"><span>Course Unit</span><span>Term *</span><span>Teaching Load</span><span></span></div>
                 {units.map(u => (
                   <div className="cau-row" key={u.value}>
                     <div className="cau-name"><span className="font-mono text-xs text-b700">{u.code}</span> {u.name}</div>
-                    <SearchSelect placeholder="Term" options={TERM_OPTIONS} value={u.term} onChange={v => setUnitField(u.value, { term: v })} />
+                    <div>
+                      <SearchSelect placeholder="Term" options={TERM_OPTIONS} value={u.term} onChange={v => { setUnitField(u.value, { term: v }); setErrors(p => ({ ...p, [`term-${u.value}`]: '' })) }} />
+                      {errors[`term-${u.value}`] && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors[`term-${u.value}`]}</p>}
+                    </div>
                     <div>
                       {/* Digits only — type="number" let "-", "e" and decimals through. */}
                       <input

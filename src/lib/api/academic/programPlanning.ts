@@ -47,6 +47,11 @@ export interface ProgramPlanningListResult {
   pageSize: number
 }
 
+// Term is required on create and update and must be 1 or 2 (400
+// validation_error "Term is required." / "Term must be 1 or 2." otherwise).
+// Reads can still return older rows with null or another value.
+export type ProgramPlanningTerm = 1 | 2
+
 // PUT /program-plannings/{guid}: edits one row.
 export interface ProgramPlanningInput {
   lecturerGuid: string
@@ -54,7 +59,7 @@ export interface ProgramPlanningInput {
   load: number | null
   schoolGuid: string
   intakeGuid: string
-  term: number | null
+  term: ProgramPlanningTerm
 }
 
 // POST /program-plannings (post-program-planning.md): one row per unit, each
@@ -64,7 +69,7 @@ export const PROGRAM_PLANNING_MAX_UNITS = 50
 export interface ProgramPlanningUnitInput {
   unitGuid: string
   load: number | null
-  term: number | null
+  term: ProgramPlanningTerm // required on every unit
 }
 
 export interface ProgramPlanningCreateInput {
