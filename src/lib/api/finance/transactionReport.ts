@@ -17,17 +17,22 @@ export interface TransactionReportFilters {
   toDate?: string              // yyyy-mm-dd, inclusive of the whole day
   intakeGuid?: string
   applicationGuid?: string     // one student, from vetted-registered-search
-  receiptBookGuids?: string[]  // max 50
-  ledgerGuids?: string[]       // max 20; the Discount ledger (DA) is ignored
+  receiptBookGuids?: string[]  // max 50; hides refunds (they have no receipt)
+  // Two ledger lists, each narrowing only its own kind of row. Any ledger
+  // hides advance deposits; fee ledgers alone hide other payments and other
+  // ledgers alone hide fee payments.
+  ledgerGuids?: string[]       // fee ledgers, max 20; the Discount ledger (DA) is ignored
+  otherLedgerGuids?: string[]  // other ledgers (ledger-others/dropdown), max 20
   // Follow the student's CURRENT record, and leave out payments by anyone
   // without a student record.
   campusGuid?: string
   batchGuids?: string[]        // max 50
   sponsorCategoryGuid?: string
-  // Follow the semester the fee was paid for (the Semester column).
+  // Fee rows follow the semester the fee was paid for; other sources follow
+  // the student's current programme. Semesters show semester fees only.
   programGuid?: string
   semesterGuids?: string[]     // max 20
-  payTypes?: number[]          // 1 Cash, 2 Cheque, 3 Bank, 4 DemandDraft, 5 Online
+  payTypes?: number[]          // 1 Cash, 2 Cheque, 3 Bank, 4 DemandDraft, 5 Online; hides refunds
 }
 
 // GET /finance/enums/payment-types. `name` is the raw enum member.
@@ -40,7 +45,12 @@ export function getFinancePaymentTypes(): Promise<PaymentTypeOption[]> {
 
 export const TRANSACTION_REPORT_MAX_RECEIPT_BOOKS = 50
 export const TRANSACTION_REPORT_MAX_LEDGERS = 20
+export const TRANSACTION_REPORT_MAX_OTHER_LEDGERS = 20
 export const TRANSACTION_REPORT_PAGE_SIZE = 15
+
+// Row sources. Advance adjustments are shown but never counted (the money was
+// counted when it was deposited); refunds are negative.
+export const TXN_SOURCE = { DirectPayment: 1, AdvanceAdjustment: 2, AdvanceDeposit: 3, OtherPayment: 4, Refund: 5 } as const
 // The Discount ledger: discount is a column, never a row, so it isn't offered
 // as a filter (selecting only it returns nothing).
 export const DISCOUNT_LEDGER_CODE = 'DA'
@@ -49,21 +59,22 @@ export const DISCOUNT_LEDGER_CODE = 'DA'
 
 export interface TransactionReportRow {
   payDate: string          // calendar date, time always 00:00:00; no TZ conversion
-  receipt: string
-  receiptBook: string
+  receipt: string | null       // null on refunds
+  receiptBook: string | null   // null on refunds
   studentNumber: string    // reg no when registered, else AppRefNo
   studentName: string
-  programName: string      // the row's semester's programme
-  semesterName: string
-  semCode: number
-  ledgerCode: string
+  // The row's semester; null on deposits, other payments and refunds.
+  programName: string | null
+  semesterName: string | null
+  semCode: number | null
+  ledgerCode: string | null    // null on deposits ("Advance Deposit") and refunds without a ledger
   ledgerName: string
-  source: { value: number; name: string }   // 1 DirectPayment, 2 AdvanceAdjustment
-  payMode: { value: number; name: string }  // 1 Cash, 2 Cheque, 3 Bank, 4 DemandDraft, 5 Online
+  source: { value: number; name: string }   // 1 Direct, 2 AdvanceAdjustment, 3 AdvanceDeposit, 4 OtherPayment, 5 Refund
+  payMode: { value: number; name: string } | null  // null on refunds
   currencyCode: string
-  amount: number
-  discount: number         // 0 when none
-  net: number              // amount − discount
+  amount: number           // negative on refunds
+  discount: number         // 0 when none; fee payments only
+  net: number              // amount − discount; not counted on advance adjustments
 }
 
 export interface TransactionReportCurrencyTotal {
@@ -71,10 +82,12 @@ export interface TransactionReportCurrencyTotal {
   rowCount: number
   receiptCount: number
   studentCount: number
-  gross: number
+  gross: number            // fee payments + other payments + advance deposits
   discount: number
   unallocatedDiscount: number
-  net: number              // gross − discount − unallocatedDiscount
+  refunded: number         // negative, or 0
+  settledFromAdvance: number // advance adjustments; NOT part of net
+  net: number              // gross − discount − unallocatedDiscount + refunded
 }
 
 export interface TransactionReportSummary {
@@ -127,28 +140,44 @@ const MOCK_ROWS: TransactionReportRow[] = Array.from({ length: 72 }, (_, i) => {
   }
 })
 
+// A few rows of the other sources, so every kind shows in mock mode.
+const MOCK_EXTRA: TransactionReportRow[] = [
+  { payDate: '2026-09-29T00:00:00', receipt: '142990', receiptBook: 'MCB34', studentNumber: '011250412', studentName: 'Grace Nampijja', programName: null, semesterName: null, semCode: null, ledgerCode: null, ledgerName: 'Advance Deposit', source: { value: 3, name: 'AdvanceDeposit' }, payMode: { value: 3, name: 'Bank' }, currencyCode: 'UGX', amount: 1000000, discount: 0, net: 1000000 },
+  { payDate: '2026-09-28T00:00:00', receipt: '142950', receiptBook: 'OTH02', studentNumber: '011250415', studentName: 'Brian Kamya', programName: null, semesterName: null, semCode: null, ledgerCode: 'HST', ledgerName: 'Hostel Fee', source: { value: 4, name: 'OtherPayment' }, payMode: { value: 1, name: 'Cash' }, currencyCode: 'UGX', amount: 400000, discount: 0, net: 400000 },
+  { payDate: '2026-09-27T00:00:00', receipt: null, receiptBook: null, studentNumber: '011250411', studentName: 'James Okello', programName: null, semesterName: null, semCode: null, ledgerCode: 'TF', ledgerName: 'Tuition Fee', source: { value: 5, name: 'Refund' }, payMode: null, currencyCode: 'UGX', amount: -500000, discount: 0, net: -500000 },
+  { payDate: '2026-09-26T00:00:00', receipt: null, receiptBook: null, studentNumber: '011250414', studentName: 'Esther Tumukunde', programName: null, semesterName: null, semCode: null, ledgerCode: null, ledgerName: 'Refund (no ledger)', source: { value: 5, name: 'Refund' }, payMode: null, currencyCode: 'UGX', amount: -120000, discount: 0, net: -120000 },
+]
+const ALL_MOCK_ROWS = [...MOCK_ROWS, ...MOCK_EXTRA].sort((a, b) => b.payDate.localeCompare(a.payDate))
+
 function mockFilter(f: TransactionReportFilters): TransactionReportRow[] {
-  return MOCK_ROWS.filter(r =>
+  return ALL_MOCK_ROWS.filter(r =>
     (!f.fromDate || r.payDate.slice(0, 10) >= f.fromDate)
     && (!f.toDate || r.payDate.slice(0, 10) <= f.toDate)
-    && (!f.payTypes?.length || f.payTypes.includes(r.payMode.value)))
+    && (!f.payTypes?.length || (r.payMode !== null && f.payTypes.includes(r.payMode.value))))
 }
 
+// Same rules as the server: advance adjustments only in settledFromAdvance,
+// refunds only in refunded (negative), net = gross − discount + refunded.
 function mockSummary(rows: TransactionReportRow[]): TransactionReportSummary {
   const currencies = [...new Set(rows.map(r => r.currencyCode))].sort()
+  const isAdj = (r: TransactionReportRow) => r.source.value === TXN_SOURCE.AdvanceAdjustment
+  const isRefund = (r: TransactionReportRow) => r.source.value === TXN_SOURCE.Refund
   return {
     totalRows: rows.length,
-    totalReceipts: new Set(rows.map(r => r.receipt)).size,
+    totalReceipts: new Set(rows.filter(r => r.receipt).map(r => r.receipt)).size,
     totalStudents: new Set(rows.map(r => r.studentNumber)).size,
     byCurrency: currencies.map(code => {
       const inCur = rows.filter(r => r.currencyCode === code)
-      const gross = inCur.reduce((s, r) => s + r.amount, 0)
-      const discount = inCur.reduce((s, r) => s + r.discount, 0)
+      const counted = inCur.filter(r => !isAdj(r) && !isRefund(r))
+      const gross = counted.reduce((s, r) => s + r.amount, 0)
+      const discount = counted.reduce((s, r) => s + r.discount, 0)
+      const refunded = inCur.filter(isRefund).reduce((s, r) => s + r.amount, 0)
+      const settledFromAdvance = inCur.filter(isAdj).reduce((s, r) => s + r.amount, 0)
       return {
         currencyCode: code, rowCount: inCur.length,
-        receiptCount: new Set(inCur.map(r => r.receipt)).size,
+        receiptCount: new Set(inCur.filter(r => r.receipt).map(r => r.receipt)).size,
         studentCount: new Set(inCur.map(r => r.studentNumber)).size,
-        gross, discount, unallocatedDiscount: 0, net: gross - discount,
+        gross, discount, unallocatedDiscount: 0, refunded, settledFromAdvance, net: gross - discount + refunded,
       }
     }),
   }
@@ -177,6 +206,7 @@ export function getTransactionReportPreview(filters: TransactionReportFilters, p
   if (filters.applicationGuid) params.set('applicationGuid', filters.applicationGuid)
   filters.receiptBookGuids?.forEach(g => params.append('receiptBookGuids', g))
   filters.ledgerGuids?.forEach(g => params.append('ledgerGuids', g))
+  filters.otherLedgerGuids?.forEach(g => params.append('otherLedgerGuids', g))
   if (filters.campusGuid) params.set('campusGuid', filters.campusGuid)
   if (filters.programGuid) params.set('programGuid', filters.programGuid)
   filters.semesterGuids?.forEach(g => params.append('semesterGuids', g))
@@ -186,9 +216,9 @@ export function getTransactionReportPreview(filters: TransactionReportFilters, p
   return apiGet<TransactionReportPreview>(`/api/v1/finance/reports/transaction/preview?${params.toString()}`)
 }
 
-// POST /finance/reports/transaction/export (202). The same filters the
-// preview used, as JSON with the GUID lists as arrays. An identical export
-// already running comes back as that same job.
+// POST /finance/reports/transaction/export (202). The SAVED filters from
+// Process (the same ones the preview used), as JSON with every list filter as
+// an array. An identical export already running comes back as that same job.
 export function exportTransactionReport(filters: TransactionReportFilters): Promise<{ job: ReportJob; message: string | null }> {
   if (MOCK_AUTH) {
     return Promise.resolve({ job: mockQueueReportJob('TRANSACTION', 'Transaction Report'), message: 'Export started. You will be notified when it is ready to download.' })
@@ -200,12 +230,13 @@ export function exportTransactionReport(filters: TransactionReportFilters): Prom
     applicationGuid: filters.applicationGuid ?? null,
     receiptBookGuids: filters.receiptBookGuids ?? [],
     ledgerGuids: filters.ledgerGuids ?? [],
+    otherLedgerGuids: filters.otherLedgerGuids ?? [],
+    payTypes: filters.payTypes ?? [],
     campusGuid: filters.campusGuid ?? null,
     programGuid: filters.programGuid ?? null,
-    semesterGuids: filters.semesterGuids ?? null,
-    batchGuids: filters.batchGuids ?? null,
+    semesterGuids: filters.semesterGuids ?? [],
+    batchGuids: filters.batchGuids ?? [],
     sponsorCategoryGuid: filters.sponsorCategoryGuid ?? null,
-    payTypes: filters.payTypes ?? null,
   }
   return apiPostWithMessage<Parameters<typeof normalizeReportJob>[0]>('/api/v1/finance/reports/transaction/export', body)
     .then(({ data, message }) => ({ job: normalizeReportJob(data), message }))

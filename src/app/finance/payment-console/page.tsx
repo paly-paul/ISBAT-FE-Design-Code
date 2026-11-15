@@ -46,8 +46,8 @@ import {
   CurrentSemesterPayableTotal,
   PaymentHistoryEntry,
 } from '@/hooks/finance/usePaymentConsole'
-import { usePaymentOthersList, useResitFee, type ResitFee, type ResitFeeSemester } from '@/hooks/finance/usePaymentOthers'
-import { getPaymentReceiptPdf, isResitLedger, refugeeLabel, studCategoryLabel } from '@/lib/api/finance/paymentConsole'
+import { useGrievanceFee, usePaymentOthersList, useResitFee, type ResitFee, type ResitFeeSemester } from '@/hooks/finance/usePaymentOthers'
+import { findGrievanceLedger, getPaymentReceiptPdf, isResitLedger, refugeeLabel, studCategoryLabel } from '@/lib/api/finance/paymentConsole'
 import { downloadBlob } from '@/lib/downloadBlob'
 import { formatDate, formatDateTime } from '@/lib/date'
 import { formatTotalAmount } from '@/lib/api/finance/totalPaid'
@@ -481,8 +481,19 @@ export default function PaymentConsolePage() {
       // the resit-fee effect below fills it in; off it, the locked fee
       // shouldn't carry over to a ledger the cashier types into.
       const touchesResit = r.ledgerOthersGuid === resitLedgerGuid || value === resitLedgerGuid
-      return { ...r, ledgerOthersGuid: value, amount: touchesResit ? '' : r.amount }
+      // Grievance: onto it, default to one unit's fee (editable); off it,
+      // clear that default, same as resit.
+      const ontoGrievance = !!grievanceLedgerGuid && value === grievanceLedgerGuid
+      const offGrievance = !!grievanceLedgerGuid && r.ledgerOthersGuid === grievanceLedgerGuid && !ontoGrievance
+      grievanceDefaultPendingRef.current.delete(r.id)
+      if (ontoGrievance) {
+        if (grievanceUnitFee) return { ...r, ledgerOthersGuid: value, amount: String(grievanceUnitFee) }
+        grievanceDefaultPendingRef.current.add(r.id) // filled once the fee loads
+        return { ...r, ledgerOthersGuid: value, amount: '' }
+      }
+      return { ...r, ledgerOthersGuid: value, amount: touchesResit || offGrievance ? '' : r.amount }
     }))
+    setGrievanceRowError(null)
   }
   // Sum of every row's amount, in the one shared Currency picked below —
   // drives both the Total row under the table and the "Amount to Collect"
@@ -1121,6 +1132,34 @@ export default function PaymentConsolePage() {
       : prev)
   }, [resitFee, resitLedgerGuid, hasResitRow])
 
+  // Grievance fee (get-grievance-fee.md) — picking the grievance ledger
+  // defaults that row's amount to one unit's fee and shows the per-unit
+  // rule. Unlike resit the amount stays editable: the cashier may pay for
+  // several units at once, and the server only accepts a positive multiple.
+  const grievanceLedgerGuid = findGrievanceLedger(ledgerOthers)?.ledgerOthersGuid ?? null
+  const hasGrievanceRow = !!grievanceLedgerGuid && otherLedgerRows.some(r => r.ledgerOthersGuid === grievanceLedgerGuid)
+  const {
+    data: grievanceFeeData, isFetching: isGrievanceFeeLoading, isError: isGrievanceFeeError, error: grievanceFeeError,
+  } = useGrievanceFee(activePayTab === 'other' && hasGrievanceRow)
+  const grievanceUnitFee = grievanceFeeData?.unitFeeAmount && grievanceFeeData.unitFeeAmount > 0 ? grievanceFeeData.unitFeeAmount : 0
+  const grievanceFeeErrorMsg = grievanceFeeError instanceof Error ? grievanceFeeError.message : 'Could not fetch the grievance fee.'
+  // Rows switched onto the grievance ledger before the fee had loaded: they
+  // get the default once, when it arrives — never refilled after the cashier
+  // clears the field to type their own amount.
+  const grievanceDefaultPendingRef = useRef<Set<number>>(new Set())
+  // A rejected grievance amount, shown under that row (client check or the
+  // server's 400). Cleared on any edit to the ledger rows.
+  const [grievanceRowError, setGrievanceRowError] = useState<{ rowId: number; msg: string } | null>(null)
+  useEffect(() => {
+    const pending = grievanceDefaultPendingRef.current
+    if (!grievanceUnitFee || !grievanceLedgerGuid || pending.size === 0) return
+    const amount = String(grievanceUnitFee)
+    setOtherLedgerRows(prev => prev.map(r => (pending.has(r.id) && r.ledgerOthersGuid === grievanceLedgerGuid && r.amount === '' ? { ...r, amount } : r)))
+    pending.clear()
+  }, [grievanceUnitFee, grievanceLedgerGuid])
+  const isGrievanceMultiple = (amount: number) =>
+    !grievanceUnitFee || (amount > 0 && Math.abs(amount / grievanceUnitFee - Math.round(amount / grievanceUnitFee)) < 1e-9)
+
   function handleSearchClick() {
     const term = search.trim()
     if (!term) { showToast('Please enter a student number or name.', 'warn'); return }
@@ -1250,6 +1289,15 @@ export default function PaymentConsolePage() {
     }
     if (ledgerNoAmount) { showToast('Every ledger row needs an amount greater than 0.', 'warn'); return }
     if (amountNoLedger) { showToast('Every amount entered needs a ledger selected.', 'warn'); return }
+    // Grievance amount must be a whole number of unit fees (the server
+    // rejects anything else); caught here so the cashier fixes it in place.
+    const badGrievanceRow = grievanceLedgerGuid
+      ? validRows.find(r => r.ledgerOthersGuid === grievanceLedgerGuid && !isGrievanceMultiple(parseFloat(r.amount)))
+      : undefined
+    if (badGrievanceRow) {
+      setGrievanceRowError({ rowId: badGrievanceRow.id, msg: `Enter a multiple of ${grievanceUnitFee.toLocaleString('en-US')} (one unit is UGX ${grievanceUnitFee.toLocaleString('en-US')}).` })
+      return
+    }
     if (!otherCurrencyGuid) { showToast('Please select a currency.', 'warn'); return }
     if (!otherPayDate) { showToast('Please select a payment date.', 'warn'); return }
     const payTypeNum = Number(otherPayType)
@@ -1272,10 +1320,13 @@ export default function PaymentConsolePage() {
     const currencyCode = currencies.find(c => c.currencyGuid === otherCurrencyGuid)?.currencyCode ?? ''
 
     setIsSavingOtherBatch(true)
+    setGrievanceRowError(null)
     const successRows: [string, string][] = []
     const succeededIds: number[] = []
+    let currentRowId: number | null = null
     try {
       for (const row of validRows) {
+        currentRowId = row.id
         const ledgerName = ledgerOthers.find(l => l.ledgerOthersGuid === row.ledgerOthersGuid)?.ledgerName ?? '—'
         const result = await createPaymentOther.mutateAsync({
           applicationGuid: selectedApplicationGuid,
@@ -1311,7 +1362,14 @@ export default function PaymentConsolePage() {
         const remaining = prev.filter(r => !succeededIds.includes(r.id))
         return remaining.length > 0 ? remaining : [{ id: nextOtherRowIdRef.current++, ledgerOthersGuid: '', amount: '' }]
       })
-      showToast(error instanceof Error ? error.message : 'Failed to save other payment. Please try again.', 'error')
+      const msg = error instanceof Error ? error.message : 'Failed to save other payment. Please try again.'
+      // Grievance amount refused by the server: show it under that row so
+      // the cashier can re-enter a multiple of the unit fee.
+      if (currentRowId !== null && /grievance fee amount must be a multiple/i.test(msg)) {
+        setGrievanceRowError({ rowId: currentRowId, msg })
+      } else {
+        showToast(msg, 'error')
+      }
     } finally {
       setIsSavingOtherBatch(false)
     }
@@ -2128,6 +2186,18 @@ export default function PaymentConsolePage() {
                         : isResitFeeError ? { text: resitFeeErrorMsg, color: 'var(--red)' }
                         : resitFee === 0 ? { text: 'No resit exams to pay.', color: 'var(--amber)' }
                         : null
+                      // Grievance row: the per-unit rule (amount stays
+                      // editable), or the rejection for this row.
+                      const isGrievanceRow = !!grievanceLedgerGuid && row.ledgerOthersGuid === grievanceLedgerGuid
+                      const grievanceError = grievanceRowError?.rowId === row.id ? grievanceRowError.msg : null
+                      const unitFeeText = grievanceUnitFee.toLocaleString('en-US')
+                      const grievanceNote = !isGrievanceRow ? null
+                        : grievanceError ? { text: grievanceError, color: 'var(--red)' }
+                        : isGrievanceFeeLoading && !grievanceUnitFee ? { text: 'Fetching grievance fee…', color: 'var(--g400)' }
+                        : isGrievanceFeeError ? { text: grievanceFeeErrorMsg, color: 'var(--red)' }
+                        : grievanceUnitFee ? { text: `Grievance fee is UGX ${unitFeeText} per unit. Enter a multiple of ${unitFeeText} if paying for more than one unit.`, color: 'var(--g500)' }
+                        : null
+                      const rowNote = resitNote ?? grievanceNote
                       return (
                       <div className="recgrid-row recgrid-body" key={row.id}>
                         <span style={{ textAlign: 'left' }}>
@@ -2146,13 +2216,15 @@ export default function PaymentConsolePage() {
                           <div className="flex items-center gap-2 justify-end">
                             <input
                               className="ctrl"
-                              style={{ textAlign: 'right' }}
                               type="text"
                               inputMode="decimal"
                               placeholder="0.00"
                               value={row.amount}
                               disabled={isResitRow}
                               title={isResitRow ? 'Resit fee is set automatically and cannot be edited' : undefined}
+                              aria-invalid={grievanceError ? true : undefined}
+                              aria-label={`Amount for ${ledgerOthers.find(l => l.ledgerOthersGuid === row.ledgerOthersGuid)?.ledgerName ?? 'this row'}`}
+                              style={{ textAlign: 'right', ...(grievanceError ? { borderColor: 'var(--red)' } : {}) }}
                               onChange={e => updateOtherLedgerRow(row.id, 'amount', stripLeadingZeros(e.target.value))}
                             />
                             {otherLedgerRows.length > 1 && (
@@ -2167,8 +2239,8 @@ export default function PaymentConsolePage() {
                               </button>
                             )}
                           </div>
-                          {resitNote && (
-                            <div style={{ fontSize: 'var(--fs-xs)', color: resitNote.color, textAlign: 'right', marginTop: 4 }}>{resitNote.text}</div>
+                          {rowNote && (
+                            <div role={grievanceError ? 'alert' : undefined} style={{ fontSize: 'var(--fs-xs)', color: rowNote.color, textAlign: 'right', marginTop: 4 }}>{rowNote.text}</div>
                           )}
                         </span>
                       </div>

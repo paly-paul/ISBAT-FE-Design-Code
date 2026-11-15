@@ -1,11 +1,13 @@
-import { apiGet, apiGetBlob, apiPost } from '@/lib/api/client'
+import { apiGet, apiGetBlob, apiPost, apiPut } from '@/lib/api/client'
 import { writeWorkbook, type SheetData } from '@/lib/xlsx'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
-// Resit UE Mark Import (resit-ue-mark-import/*.md) — import the university
-// exam marks of the active resit from an Excel template. The browser reads
-// the sheet and sends JSON rows; the file never leaves the browser.
+// Resit UE Mark Import (resit-ue-mark-import/*.md). The exam list of an
+// academic session's resit; per exam a mark sheet where one student's marks
+// are entered or corrected (PUT …/students/{studentGuid}), and an Excel
+// import for the students still without marks. The import file is read in
+// the browser and sent as JSON rows; it never leaves the browser.
 
 // 1 To do · 2 Completed · 3 Upcoming · 4 Not scheduled. Only To do can import.
 export type ResitUeExamStatus = 1 | 2 | 3 | 4
@@ -32,7 +34,9 @@ export interface ResitUeExam {
 }
 
 export interface ResitUeExamsResponse {
-  resit: { refCode: string } | null
+  // isActive false = a past intake's (inactive) resit: marks can still be
+  // corrected on the mark sheet, but import is only for the active resit.
+  resit: { refCode: string; isActive: boolean } | null
   summary: { toDo: number; completed: number; upcoming: number; notScheduled: number }
   exams: { items: ResitUeExam[]; totalCount: number; pageNumber: number; pageSize: number }
 }
@@ -55,6 +59,46 @@ export interface ResitUeImportResult {
   importedCount: number
   pendingCount: number
   message?: string | null
+}
+
+// ── Mark sheet (get-resit-ue-mark-import-marks.md) ─────────────────────────
+
+// 1 Pending (no marks) · 2 Entered (saved, editable) · 3 Pushed (locked)
+export type ResitUeMarkStatus = 1 | 2 | 3
+
+export interface ResitUeMarkRow {
+  studentGuid: string
+  matchingCode: string | null
+  studentNum: string
+  studentName: string | null
+  status: ResitUeMarkStatus
+  marks: Record<string, number> | null // null when status is 1
+  total: number | null // server sum; null when status is 1
+}
+
+export interface ResitUeMarkSheetExam {
+  resitScheduleGuid: string
+  resitRefCode: string
+  unitCode: string
+  unitName: string
+  part: number
+  layout: 'Theory' | 'Practical' | 'Project' | string
+  examDate: string | null
+  maxMark: number
+  columns: ResitUeMarkColumn[]
+}
+
+export interface ResitUeMarkSheet {
+  exam: ResitUeMarkSheetExam
+  summary: { studentCount: number; enteredCount: number; pendingCount: number; pushedCount: number }
+  students: ResitUeMarkRow[]
+}
+
+// Counts recomputed from the rows (after a row save the cards are recounted
+// on the client, resit-ue-mark-import-page.md › Summary cards).
+export function countMarkRows(students: ResitUeMarkRow[]): ResitUeMarkSheet['summary'] {
+  const n = (s: number) => students.filter(r => r.status === s).length
+  return { studentCount: students.length, pendingCount: n(1), enteredCount: n(2), pushedCount: n(3) }
 }
 
 // ── Sheet → rows, and the row checks (post-resit-ue-mark-import.md#row-checks)
@@ -207,14 +251,27 @@ const sum = (cols: ResitUeMarkColumn[]) => cols.reduce((n, c) => n + c.maxMark, 
 
 const MOCK_NAMES = ['BAGUMA STEPHEN', 'ALFRED EKANYA', 'NANTUME BRIDGET', 'ISAAC GIIR AKOL GIIR', 'TIBALIRA MARK JONATHAN', 'NAKATO SARAH', 'OKELLO JAMES', 'AMONG GRACE']
 
-interface MockExam { exam: ResitUeExam; students: ResitUeStudent[] }
+interface MockStudent extends ResitUeStudent {
+  studentGuid: string
+  marks: Record<string, number> | null
+  pushed: boolean
+}
+interface MockExam { exam: ResitUeExam; students: MockStudent[] }
 
-function mockExam(guid: string | null, unitCode: string, unitName: string, part: number, layout: string, examDate: string | null, status: ResitUeExamStatus, cols: ResitUeMarkColumn[], count: number, imported: number, seed: number): MockExam {
-  const students = Array.from({ length: count }, (_, i) => ({
+// Imported students get a plausible mark per column (~60-90% of the max).
+function mockMarks(cols: ResitUeMarkColumn[], i: number): Record<string, number> {
+  return Object.fromEntries(cols.map((c, j) => [c.key, Math.round(c.maxMark * (0.6 + ((i + j) % 4) * 0.1) * 2) / 2]))
+}
+
+function mockExam(guid: string | null, unitCode: string, unitName: string, part: number, layout: string, examDate: string | null, status: ResitUeExamStatus, cols: ResitUeMarkColumn[], count: number, imported: number, seed: number, pushed = 0): MockExam {
+  const students: MockStudent[] = Array.from({ length: count }, (_, i) => ({
+    studentGuid: `mock-st-${seed}-${i}`,
     studentNum: `01${seed}${240100 + i * 7}`,
     studentName: MOCK_NAMES[(i + seed) % MOCK_NAMES.length],
     matchingCode: String(32440000 + (seed * 1000) + (i * 37)),
     imported: i < imported,
+    marks: i < imported ? mockMarks(cols, i) : null,
+    pushed: i < pushed,
   }))
   return {
     exam: { resitScheduleGuid: guid, unitCode, unitName, part, layout, examDate, status, maxMark: cols.length ? sum(cols) : null, columns: cols, studentCount: count, importedCount: imported },
@@ -228,12 +285,25 @@ const mockExams: MockExam[] = [
   mockExam('mock-rs-bcs3240', 'BCS3240', 'Final Year Project', 0, 'Project', '2026-03-14', 1, PROJECT_COLS, 3, 0, 3),
   mockExam('mock-rs-bnc2118', 'BNCS2118', 'Introduction to IOT', 0, 'Theory', '2026-11-20', 3, THEORY_COLS, 6, 0, 4),
   mockExam(null, 'BAF1209', 'Corporate and Business Law', 0, 'Theory', null, 4, [], 1, 0, 5),
-  mockExam('mock-rs-bba2217', 'BBA2217', 'Global Financial Markets', 0, 'Theory', '2026-03-10', 2, THEORY_COLS, 2, 2, 6),
+  mockExam('mock-rs-bba2217', 'BBA2217', 'Global Financial Markets', 0, 'Theory', '2026-03-10', 2, THEORY_COLS, 2, 2, 6, 1),
 ]
 
 function refreshMockStatus(m: MockExam) {
   m.exam.importedCount = m.students.filter(s => s.imported).length
   if (m.exam.status === 1 && m.exam.importedCount >= m.exam.studentCount) m.exam.status = 2
+}
+
+function mockRow(m: MockExam, s: MockStudent): ResitUeMarkRow {
+  const marks = s.marks ? { ...s.marks } : null
+  return {
+    studentGuid: s.studentGuid,
+    matchingCode: s.matchingCode ?? null,
+    studentNum: s.studentNum,
+    studentName: s.studentName ?? null,
+    status: s.pushed ? 3 : s.imported ? 2 : 1,
+    marks,
+    total: marks ? Math.round(m.exam.columns.reduce((n, c) => n + (marks[c.key] ?? 0), 0) * 100) / 100 : null,
+  }
 }
 
 function mockError(message: string, code: string, errors?: string[]) {
@@ -253,6 +323,9 @@ const delay = <T,>(v: T) => new Promise<T>(r => setTimeout(() => r(v), 250))
 // ── API ────────────────────────────────────────────────────────────────────
 
 export interface ResitUeExamsParams {
+  // The Academic Session (intake) whose resit to list: its active resit, or
+  // its latest one. Omitted = the active resit of the current intake.
+  academicIntakeGuid?: string
   status?: ResitUeExamStatus
   search?: string
   page?: number
@@ -271,12 +344,13 @@ export function getResitUeExams(params: ResitUeExamsParams): Promise<ResitUeExam
       .sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status] || (a.examDate ?? '9').localeCompare(b.examDate ?? '9') || a.unitCode.localeCompare(b.unitCode) || a.part - b.part)
     const count = (s: number) => all.filter(e => e.status === s).length
     return delay({
-      resit: { refCode: 'Resit Spring 2026' },
+      resit: { refCode: 'Resit Spring 2026', isActive: true },
       summary: { toDo: count(1), completed: count(2), upcoming: count(3), notScheduled: count(4) },
       exams: { items: items.slice((page - 1) * pageSize, page * pageSize).map(e => ({ ...e })), totalCount: items.length, pageNumber: page, pageSize },
     })
   }
   const qs = new URLSearchParams({ page: String(page), pageSize: String(pageSize) })
+  if (params.academicIntakeGuid) qs.set('academicIntakeGuid', params.academicIntakeGuid)
   if (params.status) qs.set('status', String(params.status))
   if (params.search?.trim()) qs.set('search', params.search.trim().slice(0, 100))
   return apiGet<ResitUeExamsResponse | null>(`/api/v1/assessment/resit-ue-mark-import/exams?${qs}`)
@@ -285,7 +359,9 @@ export function getResitUeExams(params: ResitUeExamsParams): Promise<ResitUeExam
 
 export function getResitUeStudents(resitScheduleGuid: string): Promise<ResitUeStudent[]> {
   if (MOCK_AUTH) {
-    try { return delay(findMock(resitScheduleGuid).students.map(s => ({ ...s }))) } catch (e) { return Promise.reject(e) }
+    try {
+      return delay(findMock(resitScheduleGuid).students.map(s => ({ studentNum: s.studentNum, studentName: s.studentName, matchingCode: s.matchingCode, imported: s.imported })))
+    } catch (e) { return Promise.reject(e) }
   }
   return apiGet<ResitUeStudent[] | null>(`/api/v1/assessment/resit-ue-mark-import/students?resitScheduleGuid=${encodeURIComponent(resitScheduleGuid)}`)
     .then(data => data ?? [])
@@ -314,11 +390,65 @@ export async function importResitUeMarks(resitScheduleGuid: string, rows: ResitU
     const checked = validateRows(rows.map(r => ({ ...r, studentName: null, raw: {}, errors: {} })), m.exam.columns, m.students)
     const errors = checked.flatMap(r => Object.entries(r.errors).flatMap(([col, msgs]) => msgs.map(msg => `Row ${r.slNo} · ${col}: ${msg}`)))
     if (errors.length) throw mockError(errors[0], 'validation_error', errors)
-    const nums = new Set(rows.map(r => r.studentNum.trim().toUpperCase()))
-    m.students.forEach(s => { if (nums.has(s.studentNum.toUpperCase())) s.imported = true })
+    const byNum = new Map(rows.map(r => [r.studentNum.trim().toUpperCase(), r]))
+    m.students.forEach(s => {
+      const row = byNum.get(s.studentNum.toUpperCase())
+      if (!row) return
+      s.imported = true
+      s.marks = Object.fromEntries(m.exam.columns.map(c => [c.key, row.marks[c.key] ?? 0]))
+    })
     refreshMockStatus(m)
     const pendingCount = m.students.filter(s => !s.imported).length
     return delay({ importedCount: rows.length, pendingCount, message: `Marks of ${rows.length} students imported.` })
   }
   return apiPost<ResitUeImportResult>('/api/v1/assessment/resit-ue-mark-import/import', { resitScheduleGuid, rows })
+}
+
+// GET /{resitScheduleGuid}/marks — the exam, its columns and every applicant
+// with their saved marks and status. Works for any intake's resit.
+export function getResitUeMarks(resitScheduleGuid: string): Promise<ResitUeMarkSheet> {
+  if (MOCK_AUTH) {
+    try {
+      const m = findMock(resitScheduleGuid)
+      const students = m.students.map(s => mockRow(m, s))
+      const e = m.exam
+      return delay({
+        exam: { resitScheduleGuid, resitRefCode: 'Resit Spring 2026', unitCode: e.unitCode, unitName: e.unitName, part: e.part, layout: e.layout, examDate: e.examDate, maxMark: e.maxMark ?? 0, columns: e.columns },
+        summary: countMarkRows(students),
+        students,
+      })
+    } catch (e) { return Promise.reject(e) }
+  }
+  return apiGet<ResitUeMarkSheet>(`/api/v1/assessment/resit-ue-mark-import/${encodeURIComponent(resitScheduleGuid)}/marks`)
+}
+
+// PUT /{resitScheduleGuid}/students/{studentGuid} — insert or update one
+// student's marks; returns the row (status 2, server total). A 400 lists
+// "{COLUMN}: {message}" per bad cell; 409 when pushed or saved concurrently.
+export function saveResitUeStudentMarks(resitScheduleGuid: string, studentGuid: string, marks: Record<string, number>): Promise<ResitUeMarkRow> {
+  if (MOCK_AUTH) {
+    try {
+      const m = findMock(resitScheduleGuid)
+      const s = m.students.find(x => x.studentGuid === studentGuid)
+      if (!s) throw mockError('The student has not applied for this resit exam.', 'not_found')
+      if (s.pushed) throw mockError('The resit marks of this student are already updated. They can no longer be changed.', 'conflict')
+      const errors: string[] = []
+      for (const c of m.exam.columns) {
+        const v = marks[c.key]
+        if (v === null || v === undefined) errors.push(`${c.header}: Required.`)
+        else if (v < 0) errors.push(`${c.header}: Cannot be negative.`)
+        else if (Math.abs(v * 100 - Math.round(v * 100)) > 1e-6) errors.push(`${c.header}: At most 2 decimals.`)
+        else if (v > c.maxMark) errors.push(`${c.header}: Cannot be more than ${c.maxMark}.`)
+      }
+      if (errors.length) throw mockError(errors[0], 'validation_error', errors)
+      s.marks = Object.fromEntries(m.exam.columns.map(c => [c.key, marks[c.key]]))
+      s.imported = true
+      refreshMockStatus(m)
+      return delay(mockRow(m, s))
+    } catch (e) { return Promise.reject(e) }
+  }
+  return apiPut<ResitUeMarkRow>(
+    `/api/v1/assessment/resit-ue-mark-import/${encodeURIComponent(resitScheduleGuid)}/students/${encodeURIComponent(studentGuid)}`,
+    { marks },
+  )
 }

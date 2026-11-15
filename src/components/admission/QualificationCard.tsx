@@ -27,8 +27,10 @@ export function QualificationCard({ q, index, onViewProof }: {
         )}
       </div>
       <div className="vd-fields">
-        <div><div className="vd-field-lbl">Institution</div><div className="vd-field-val">{orDash(q.institution)}</div></div>
-        <div><div className="vd-field-lbl">University / Awarding Board</div><div className="vd-field-val">{orDash(q.university)}</div></div>
+        {/* Full-width rows: long institution and university names wrapped
+            side by side in the grid and read as one merged name. */}
+        <div className="vd-field-wide"><div className="vd-field-lbl">Institution</div><div className="vd-field-val">{orDash(q.institution)}</div></div>
+        <div className="vd-field-wide"><div className="vd-field-lbl">University / Awarding Board</div><div className="vd-field-val">{orDash(q.university)}</div></div>
         <div><div className="vd-field-lbl">Year</div><div className="vd-field-val tabular-nums">{q.passYear ?? '—'}</div></div>
         <div><div className="vd-field-lbl">Grade</div><div className="vd-field-val">{orDash(q.grade)}</div></div>
         <div><div className="vd-field-lbl">Duration (Years)</div><div className="vd-field-val tabular-nums">{q.yearsTaken ?? '—'}</div></div>

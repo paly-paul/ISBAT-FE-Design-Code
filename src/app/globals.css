@@ -4343,6 +4343,19 @@ tfoot td.tfoot-label {
   font-style: italic;
 }
 
+/* MultiSelect option group heading (e.g. "Fee ledgers" / "Other ledgers"). */
+.ss-group-hdr {
+  padding: 8px 10px 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--g500);
+  background: var(--g50);
+  border-top: 1px solid var(--g100);
+}
+.ss-opts > div:first-child > .ss-group-hdr {
+  border-top: none;
+}
+
 /* ── STICKY ACTION COLUMN (always first) ── */
 .tbl-wrap table th:first-child {
   position: sticky;
@@ -4396,6 +4409,20 @@ tr.selected-row td:first-child {
 .no-sticky-col table td:first-child {
   position: static;
   box-shadow: none;
+}
+
+/* Resit UE mark grids: each th normally paints its own 135° gradient, which
+   on wide cells shows as separate tiles with seams between them. Let the
+   header row's single gradient show through instead (.tbl-wrap has no
+   vertical scroll, so the sticky header needs no backing of its own). */
+.rue-grid thead th,
+.rue-grid table th:first-child {
+  background: none;
+}
+.rue-grid .th-max {
+  font-weight: 500;
+  color: rgba(255, 255, 255, .72);
+  letter-spacing: .02em;
 }
 
 /* ── COLUMN FILTER ICON + DROPDOWN ── */
@@ -7354,7 +7381,10 @@ body:has(.modal-overlay.open) {
 
 .file-zone p {
   font-size: 12px;
-  color: var(--g500)
+  color: var(--g500);
+  /* Picked file names (e.g. from a phone's "Copy from Files") are often one
+     long unbroken string — let them wrap instead of spilling out of the box. */
+  overflow-wrap: anywhere
 }
 
 .file-zone .fz-uploaded {
@@ -13841,9 +13871,9 @@ body:has(.drawer-overlay) {
 /* No min-height: a short result shouldn't sit in a mostly empty box; long
    results still cap at max-height and scroll. */
 .tbl-wrap.rpt-scroll { overflow-y: auto; max-height: calc(100vh - 380px); }
-/* Above the sticky first-column cells (td:first-child is z-index 2), or the
-   pinned Date cells scroll over the header's Date cell. */
-.tbl-wrap.rpt-scroll thead { position: sticky; top: 0; z-index: 4; }
+/* Above the sticky first-column cells (.tbl-wrap table td:first-child is
+   z-index 5), or the pinned Date cells scroll over the header's Date cell. */
+.tbl-wrap.rpt-scroll thead { position: sticky; top: 0; z-index: 6; }
 .tbl-wrap.rpt-scroll .num { text-align: right; font-variant-numeric: tabular-nums; }
 .rpt-amt { font-weight: 600; color: var(--g900); }
 .rpt-cur { color: var(--g500); font-weight: 500; margin-left: 5px; font-size: var(--fs-sm); }
@@ -13964,12 +13994,13 @@ body:has(.drawer-overlay) {
 .vd-doc.missing .vd-doc-icon { background: var(--white); color: #991b1b; }
 .vd-doc-body { flex: 1; min-width: 0; }
 .vd-doc-name { font-size: 13.5px; font-weight: 600; color: var(--g800); overflow-wrap: anywhere; }
-.vd-doc-sub { font-size: 12px; color: var(--g500); margin-top: 1px; font-variant-numeric: tabular-nums; }
+.vd-doc-sub { font-size: 12px; color: var(--g500); margin-top: 1px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .vd-doc.missing .vd-doc-sub { color: #991b1b; }
 /* A qualification: header row like .vd-doc, then its fields under their own labels. */
 .vd-qual { padding: 12px; border: 1px solid var(--g200); border-radius: var(--rsm); background: var(--white); }
 .vd-qual-hdr { display: flex; align-items: center; gap: 12px; padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px solid var(--g100); }
 .vd-qual .vd-fields { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px 20px; }
+.vd-qual .vd-field-wide { grid-column: 1 / -1; }
 .vd-qual.missing .vd-qual-hdr .vd-doc-icon { background: var(--red-bg); color: #991b1b; }
 .vd-qual.missing .vd-qual-hdr .vd-doc-sub { color: #991b1b; }
 

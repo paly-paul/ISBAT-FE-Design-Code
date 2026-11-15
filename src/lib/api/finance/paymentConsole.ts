@@ -804,6 +804,7 @@ const mockLedgerOthers: LedgerOthersDto[] = [
   { ledgerOthersGuid: 'ldo-mock-5', ledgerCode: 'UNF', ledgerName: 'Uniform Fee' },
   { ledgerOthersGuid: 'ldo-mock-6', ledgerCode: 'OTH', ledgerName: 'Other Fee' },
   { ledgerOthersGuid: 'ldo-mock-7', ledgerCode: 'RSF', ledgerName: 'Resit Exam Fee' },
+  { ledgerOthersGuid: 'ldo-mock-8', ledgerCode: 'EGF', ledgerName: 'Exam Grievance Fee' },
 ]
 
 // The ledger-others catalogue carries no "is resit" flag, so the resit
@@ -816,6 +817,18 @@ const mockLedgerOthers: LedgerOthersDto[] = [
 const RESIT_LEDGER_NAME = 'resit exam fee'
 export function isResitLedger(l: Pick<LedgerOthersDto, 'ledgerCode' | 'ledgerName'>): boolean {
   return (l.ledgerName ?? '').trim().toLowerCase() === RESIT_LEDGER_NAME
+}
+
+// The grievance ledger (server: the GRIEV general setting) has no flag in the
+// ledger-others list either, so it's recognised by name/code containing
+// "grievance". findGrievanceLedger only returns a match when exactly one
+// ledger matches — two lookalikes mean we can't tell which the server checks,
+// so neither gets the grievance default/hint (the server still validates).
+// TODO: confirm the real ledger name with the backend, or swap for a flag.
+const GRIEVANCE_RE = /griev/i
+export function findGrievanceLedger<T extends Pick<LedgerOthersDto, 'ledgerCode' | 'ledgerName'>>(ledgers: T[]): T | null {
+  const matches = ledgers.filter(l => GRIEVANCE_RE.test(l.ledgerName ?? '') || GRIEVANCE_RE.test(l.ledgerCode ?? ''))
+  return matches.length === 1 ? matches[0] : null
 }
 
 export function getLedgerOthers(): Promise<LedgerOthersDto[]> {

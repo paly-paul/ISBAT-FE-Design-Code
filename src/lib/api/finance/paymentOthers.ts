@@ -124,3 +124,16 @@ export function getResitFee(studentGuid: string, applicationGuid: string): Promi
   return apiGet<Partial<ResitFee> | null>(`/api/v1/finance/other-payment/resit-fee?${qs.toString()}`)
     .then(data => ({ amount: data?.amount ?? 0, units: data?.units ?? [], semesters: data?.semesters ?? [] }))
 }
+
+// GET /other-payment/grievance-fee (get-grievance-fee.md) — the fixed exam
+// grievance fee per unit, in UGX (the UEGR setting). Unlike resit it isn't
+// per student and the amount isn't locked: the cashier may pay for several
+// units, so any positive multiple of unitFeeAmount is accepted on submit.
+// 400 bad_request when UEGR is missing or invalid.
+export interface GrievanceFee { unitFeeAmount: number }
+
+export function getGrievanceFee(): Promise<GrievanceFee> {
+  if (MOCK_AUTH) return Promise.resolve({ unitFeeAmount: 10000 })
+  return apiGet<GrievanceFee | null>('/api/v1/finance/other-payment/grievance-fee')
+    .then(data => ({ unitFeeAmount: data?.unitFeeAmount ?? 0 }))
+}

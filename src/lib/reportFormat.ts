@@ -18,7 +18,10 @@ export function fmtReportCount(n: number): string {
   return n.toLocaleString('en-US')
 }
 
-export const REPORT_SOURCE_LABEL: Record<number, string> = { 1: 'Direct payment', 2: 'Advance adjustment' }
+// Transaction report row sources (get-transaction-report-preview.md).
+export const REPORT_SOURCE_LABEL: Record<number, string> = {
+  1: 'Direct payment', 2: 'Advance adjustment', 3: 'Advance deposit', 4: 'Other payment', 5: 'Refund',
+}
 export const REPORT_PAYMODE_LABEL: Record<number, string> = { 1: 'Cash', 2: 'Cheque', 3: 'Bank', 4: 'Demand draft', 5: 'Online' }
 
 // A recap chip's value for a multi-select: the name for one, a count for more.

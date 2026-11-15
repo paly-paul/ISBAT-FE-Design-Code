@@ -203,6 +203,7 @@ export function EmployeeFormModal({ isOpen, onClose, showToast, mode, employeeGu
     if (!maritalStatus.trim()) e.maritalStatus = 'Select Marital Status before proceeding!'
     if (!deptGuid) e.department = 'Select Department before proceeding!'
     if (!designationGuid) e.designation = 'Select Designation before proceeding!'
+    if (campusGuids.length === 0) e.campus = 'Select Campus before proceeding!'
     return e
   }
 
@@ -422,6 +423,9 @@ export function EmployeeFormModal({ isOpen, onClose, showToast, mode, employeeGu
               <DatePicker
                 value={birthDate}
                 maxYmd={getMaxBirthDate()}
+                // The max is 18 years ago, so a later date means under-age,
+                // not a future date — use the form's own wording.
+                rangeMessage="The minimum age should be 18 years."
                 onChange={v => { setBirthDate(v); clearError('birthDate') }}
                 hasError={!!errors.birthDate}
               />
@@ -479,8 +483,9 @@ export function EmployeeFormModal({ isOpen, onClose, showToast, mode, employeeGu
               {errors.designation && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.designation}</p>}
             </div>
             <div className="fg">
-              <div className="lbl">Campus Assignment</div>
-              <MultiSelect placeholder="Select campuses…" options={campusOptions} value={campusGuids} onChange={setCampusGuids} />
+              <div className="lbl">Campus Assignment <span className="req">*</span></div>
+              <MultiSelect placeholder="Select campuses…" options={campusOptions} value={campusGuids} onChange={v => { setCampusGuids(v); clearError('campus') }} />
+              {errors.campus && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.campus}</p>}
             </div>
           </div>
 
