@@ -408,7 +408,6 @@ export default function UniversityExamPracticalQpPrintPage() {
                   <p className="text-xs text-gray-500 m-0">Not supported for practical units yet</p>
                 </div>
               </div>
-              <span className="text-xs bg-gray-200 text-gray-600 px-2 py-1 rounded font-semibold uppercase">Coming Soon</span>
             </div>
             <div className="p-5 grid grid-cols-2 sm:grid-cols-3 gap-3">
               <button className="flex flex-col items-center justify-center p-4 border rounded-xl gap-2 text-sm font-medium opacity-50 cursor-not-allowed bg-sky-50 border-sky-100" disabled title="Not yet supported for practical exams">
