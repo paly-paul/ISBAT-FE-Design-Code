@@ -1,4 +1,4 @@
-import { apiPost, apiGet, apiGetBlob, apiDeleteWithMessage } from '@/lib/api/client'
+import { apiPostWithMessage, apiGet, apiGetBlob, apiDeleteWithMessage } from '@/lib/api/client'
 
 export interface UePrintParams {
   programGuid: string
@@ -49,9 +49,26 @@ export function getUeQuestionPrintCourseUnits(
 }
 
 // -- Theory Actions --
-export function printUeQuestionTheory(data: UePrintParams) {
-  if (MOCK_AUTH) return Promise.resolve({ outcome: 'Printed' as const, message: '' })
-  return apiPost<UeOutcomeResponse>('/api/v1/assessment/ue-question-print/theory', data)
+export async function printUeQuestionTheory(data: UePrintParams): Promise<UeOutcomeResponse> {
+  if (MOCK_AUTH) return { outcome: 'Printed' as const, message: '' }
+  const { data: resData, message: envMessage } = await apiPostWithMessage<any>('/api/v1/assessment/ue-question-print/theory', {
+    programGuid: data.programGuid,
+    semesterGuid: data.semesterGuid,
+    courseUnitGuid: data.courseUnitGuid,
+    intakeGuid: data.intakeGuid,
+    confirm: Boolean(data.confirm),
+  })
+  if (resData && typeof resData === 'object') {
+    return {
+      ...resData,
+      outcome: resData.outcome ?? resData.Outcome,
+      message: resData.message || envMessage || '',
+    }
+  }
+  return {
+    outcome: resData,
+    message: envMessage || '',
+  }
 }
 
 export function downloadUeQuestionTheoryPdf(paramsObj: UePrintParams) {
@@ -101,9 +118,20 @@ export function downloadUeQuestionTheoryAnswerKey(paramsObj: UePrintParams) {
 }
 
 // -- Booklet Actions --
-export function printUeBooklet(data: UePrintParams) {
-  if (MOCK_AUTH) return Promise.resolve({ confirmationRequired: false, message: '', wasReprint: false, totalStudentCount: 42, addedStudentCount: 0 })
-  return apiPost<UeBookletResponse>('/api/v1/assessment/ue-booklet', data)
+export async function printUeBooklet(data: UePrintParams): Promise<UeBookletResponse> {
+  if (MOCK_AUTH) return { confirmationRequired: false, message: '', wasReprint: false, totalStudentCount: 42, addedStudentCount: 0 }
+  const { data: resData, message: envMessage } = await apiPostWithMessage<UeBookletResponse>('/api/v1/assessment/ue-booklet', {
+    programGuid: data.programGuid,
+    semesterGuid: data.semesterGuid,
+    courseUnitGuid: data.courseUnitGuid,
+    intakeGuid: data.intakeGuid,
+    ...(data.streamGuid ? { streamGuid: data.streamGuid } : {}),
+    confirm: Boolean(data.confirm),
+  })
+  return {
+    ...resData,
+    message: resData?.message || envMessage || '',
+  }
 }
 
 export function downloadUeBookletPdf(paramsObj: UePrintParams) {

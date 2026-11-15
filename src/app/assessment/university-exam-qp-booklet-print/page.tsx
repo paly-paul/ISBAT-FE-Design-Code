@@ -21,6 +21,7 @@ import {
   usePrintUeQuestionPractical,
 } from '@/hooks/assessment/useUePracticalPrint'
 import { AuthError } from '@/lib/api/client'
+import { extractApiErrorMessage } from '@/lib/errorMessages'
 import { UePrintParams } from '@/lib/api/assessment/ueMaterialPrint'
 import { UePracticalPrintParams } from '@/lib/api/assessment/uePracticalPrint'
 
@@ -200,9 +201,9 @@ export default function UniversityExamQpBookletPrintPage() {
       }
       const file = await downloadBooklet.mutateAsync(request())
       download(file.blob, file.filename, 'Booklet.pdf')
-      showToast(result.wasReprint ? 'Booklet reprinted successfully.' : 'Booklet downloaded successfully.', 'success')
+      showToast(result.message || (result.wasReprint ? 'Booklet reprinted successfully.' : 'Booklet downloaded successfully.'), 'success')
     } catch (error: any) {
-      const errMsg = error?.message || 'Failed to print booklet. Please verify enrollment and exam schedules.'
+      const errMsg = extractApiErrorMessage(error, 'Failed to print booklet.')
       setValidationError(errMsg)
       showToast(errMsg, 'error')
     }
@@ -227,13 +228,13 @@ export default function UniversityExamQpBookletPrintPage() {
         return
       }
       if (outcome === 'ExamRuleNotSet') {
-        const msg = message || 'University Exam not yet Scheduled for this course unit!!'
+        const msg = message || 'University Exam not yet Scheduled!!'
         setValidationError(msg)
         showToast(msg, 'error')
         return
       }
       if (outcome === 'QuestionsNotAvailable') {
-        const msg = message || 'Questions are not yet uploaded for this course unit!!'
+        const msg = message || 'Questions are not yet uploaded!!'
         setValidationError(msg)
         showToast(msg, 'error')
         return
@@ -248,20 +249,13 @@ export default function UniversityExamQpBookletPrintPage() {
         return
       }
 
-      try {
-        const file = effectiveType === 'Practical'
-          ? await downloadPracticalWord.mutateAsync(practicalRequest())
-          : await downloadTheoryWord.mutateAsync(request())
-        download(file.blob, file.filename, 'QuestionPaper.doc')
-        showToast(message || 'Question paper downloaded successfully.', 'success')
-        return
-      } catch (downloadErr: any) {
-        const msg = message || downloadErr?.message || 'Failed to download question paper.'
-        setValidationError(msg)
-        showToast(msg, 'error')
-      }
+      const file = effectiveType === 'Practical'
+        ? await downloadPracticalWord.mutateAsync(practicalRequest())
+        : await downloadTheoryWord.mutateAsync(request())
+      download(file.blob, file.filename, 'QuestionPaper.doc')
+      showToast(message || 'Question paper downloaded successfully.', 'success')
     } catch (error: any) {
-      const errMsg = error?.message || 'Failed to print question paper.'
+      const errMsg = extractApiErrorMessage(error, 'Failed to print question paper.')
       setValidationError(errMsg)
       showToast(errMsg, 'error')
     }
@@ -270,6 +264,7 @@ export default function UniversityExamQpBookletPrintPage() {
   // Delete Practical QP (Practical only)
   const handleDeletePracticalQP = async (confirm = false) => {
     if (!canDeletePracticalQp || isWorking) return
+    setValidationError(null)
     try {
       const res = await deletePractical.mutateAsync(practicalRequest(confirm))
       if (res.data === false && !confirm) {
@@ -279,15 +274,13 @@ export default function UniversityExamQpBookletPrintPage() {
         })
         return
       }
-      if (res.data === true) {
-        showToast(res.message || 'Practical QP deleted successfully!', 'success')
+      if (res.data === true || confirm) {
+        showToast(res.message || 'Deleted successfully......!', 'success')
       }
     } catch (error: any) {
-      if (error instanceof AuthError && error.code === 'not_found') {
-        showToast('There is no printed practical QP to delete for this unit.', 'warn')
-      } else {
-        showToast(error?.message || 'Could not delete practical QP.', 'error')
-      }
+      const errMsg = extractApiErrorMessage(error, 'Could not delete....!')
+      setValidationError(errMsg)
+      showToast(errMsg, 'error')
     }
   }
 

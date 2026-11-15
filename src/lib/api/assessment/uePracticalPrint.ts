@@ -1,4 +1,4 @@
-import { apiPost, apiGetBlob, apiDeleteWithMessage } from '@/lib/api/client'
+import { apiPostWithMessage, apiGetBlob, apiDeleteWithMessage } from '@/lib/api/client'
 
 export interface UePracticalPrintParams {
   programGuid: string
@@ -19,9 +19,27 @@ export interface UePracticalOutcomeResponse {
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
-export function printUeQuestionPractical(data: UePracticalPrintParams) {
-  if (MOCK_AUTH) return Promise.resolve({ outcome: 'Printed' as const, message: '' })
-  return apiPost<UePracticalOutcomeResponse>('/api/v1/assessment/ue-question-print/practical', data)
+export async function printUeQuestionPractical(data: UePracticalPrintParams): Promise<UePracticalOutcomeResponse> {
+  if (MOCK_AUTH) return { outcome: 'Printed' as const, message: '' }
+  const { data: resData, message: envMessage } = await apiPostWithMessage<any>('/api/v1/assessment/ue-question-print/practical', {
+    programGuid: data.programGuid,
+    semesterGuid: data.semesterGuid,
+    courseUnitGuid: data.courseUnitGuid,
+    intakeGuid: data.intakeGuid,
+    ...(data.streamGuid ? { streamGuid: data.streamGuid } : {}),
+    confirm: Boolean(data.confirm),
+  })
+  if (resData && typeof resData === 'object') {
+    return {
+      ...resData,
+      outcome: resData.outcome ?? resData.Outcome,
+      message: resData.message || envMessage || '',
+    }
+  }
+  return {
+    outcome: resData,
+    message: envMessage || '',
+  }
 }
 
 export function downloadUeQuestionPracticalPdf(paramsObj: UePracticalPrintParams) {

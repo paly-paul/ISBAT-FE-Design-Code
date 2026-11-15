@@ -11,7 +11,6 @@ import {
   usePrintUeBooklet,
   usePrintUeQuestionTheory,
   useUeMaterialPrintPrograms,
-  useUeMaterialPrintProgramUnits,
   useUeMaterialPrintSemesters,
   useUeQuestionPrintCourseUnits,
   useDownloadUeQuestionTheoryPdf,
@@ -21,23 +20,7 @@ import {
   useDownloadUeBookletCover,
   useDownloadUeConsolidatedMarkSheet,
 } from '@/hooks/assessment/useUeMaterialPrint'
-import {
-  useDownloadUeQuestionPracticalWord,
-  usePrintUeQuestionPractical,
-  useDownloadUeQuestionPracticalPdf,
-  useDeleteUeQuestionPractical,
-} from '@/hooks/assessment/useUePracticalPrint'
-
-type EffectiveType = 'Theory' | 'Practical' | 'Project'
-
-function unitType(value?: string | null): EffectiveType | 'Combined' {
-  switch ((value ?? '').trim().toLowerCase()) {
-    case 'practical': return 'Practical'
-    case 'project': return 'Project'
-    case 'combined': return 'Combined'
-    default: return 'Theory'
-  }
-}
+import { extractApiErrorMessage } from '@/lib/errorMessages'
 
 const OUTCOME_NAMES = ['Printed', 'Reprinted', 'ExamRuleNotSet', 'QuestionsNotAvailable', 'ConfirmationRequired'] as const
 type QpOutcome = typeof OUTCOME_NAMES[number]
@@ -54,6 +37,8 @@ function parseOutcome(result: any): { outcome: QpOutcome | null; message: string
     const trimmed = raw.trim()
     if (/^\d+$/.test(trimmed)) {
       outcome = OUTCOME_NAMES[Number(trimmed)] ?? null
+    } else if (trimmed.toLowerCase() === 'schedulenotset') {
+      outcome = 'ExamRuleNotSet'
     } else {
       outcome = OUTCOME_NAMES.find(n => n.toLowerCase() === trimmed.toLowerCase()) ?? null
     }
@@ -74,7 +59,6 @@ export default function UniversityExamMaterialPrintPage() {
   const [programGuid, setProgramGuid] = useState('')
   const [semesterGuid, setSemesterGuid] = useState('')
   const [courseUnitGuid, setCourseUnitGuid] = useState('')
-  const [combinedType, setCombinedType] = useState<'Theory' | 'Practical'>('Theory')
   const [confirmation, setConfirmation] = useState<{ message: string; action: () => void } | null>(null)
   const [activeAction, setActiveAction] = useState<string | null>(null)
 
@@ -117,44 +101,18 @@ export default function UniversityExamMaterialPrintPage() {
     }
   }, [intakeOptions, selectedIntakeGuid])
 
+  const intakeGuid = selectedIntakeGuid || currentIntake?.intakeGuid || ''
+
   const { data: programs, isLoading: programsLoading } = useUeMaterialPrintPrograms()
   const { data: semesters, isLoading: semestersLoading } = useUeMaterialPrintSemesters(programGuid || null)
   const { data: courseUnits, isLoading: unitsLoading } = useUeQuestionPrintCourseUnits(
-    programGuid, semesterGuid, Boolean(programGuid && semesterGuid), selectedIntakeGuid || currentIntake?.intakeGuid, ['Theory', 'Combined']
+    programGuid,
+    semesterGuid,
+    Boolean(programGuid && semesterGuid && intakeGuid),
+    intakeGuid,
+    ['Theory', 'Combined']
   )
-  const { data: programUnits } = useUeMaterialPrintProgramUnits(programGuid || null)
 
-  const selectedUnitRow = useMemo(() => {
-    if (!courseUnitGuid) return null
-    // 1. Try finding in programUnits with semester match (case-insensitive)
-    const exact = (programUnits ?? []).find(unit =>
-      unit.courseUnitGuid?.toLowerCase() === courseUnitGuid.toLowerCase() &&
-      unit.semesterGuid?.toLowerCase() === semesterGuid?.toLowerCase()
-    )
-    if (exact) return exact
-
-    // 2. Try finding in programUnits by courseUnitGuid alone (case-insensitive)
-    const byUnit = (programUnits ?? []).find(unit =>
-      unit.courseUnitGuid?.toLowerCase() === courseUnitGuid.toLowerCase()
-    )
-    if (byUnit) return byUnit
-
-    // 3. Try finding in courseUnits (from ue-question-print/course-units)
-    const fromCourseUnits = (courseUnits ?? []).find((unit: any) =>
-      unit.courseUnitGuid?.toLowerCase() === courseUnitGuid.toLowerCase()
-    )
-    return fromCourseUnits ?? null
-  }, [courseUnitGuid, courseUnits, programUnits, semesterGuid])
-
-  const selectedUnitType = useMemo(() => {
-    const rawType = (selectedUnitRow as any)?.unitTypeName
-      || (selectedUnitRow as any)?.unitType
-      || (selectedUnitRow as any)?.courseUnitType
-    return unitType(rawType)
-  }, [selectedUnitRow])
-
-  const effectiveType: EffectiveType = selectedUnitType === 'Combined' ? combinedType : selectedUnitType
-  const intakeGuid = selectedIntakeGuid || currentIntake?.intakeGuid || ''
   const formComplete = Boolean(intakeGuid && programGuid && semesterGuid && courseUnitGuid)
 
   // Permissions mapping
@@ -181,12 +139,12 @@ export default function UniversityExamMaterialPrintPage() {
   const canPrintQuestionPaperWord = formComplete && canPrint
   const canPrintQuestionPaperPdf = formComplete && canPrint
   const canDeleteQuestionPaper = formComplete && canDelete
-  const canGetAnswerKey = formComplete && canGetAnswerKeyPermission && effectiveType !== 'Practical'
+  const canGetAnswerKey = formComplete && canGetAnswerKeyPermission
   const canGetAttendance = formComplete && canGetAttendancePermission
   const canGetCoverLetter = formComplete && canGetCoverLetterPermission
   const canGetConsolidated = formComplete && canGetConsolidatedPermission
 
-  // Hook instances
+  // Hook instances (strictly Theory-only + Booklet + Consolidated Mark Sheet per MD specification)
   const printBooklet = usePrintUeBooklet()
   const downloadBooklet = useDownloadUeBookletPdf()
   const downloadAttendance = useDownloadUeBookletAttendance()
@@ -199,25 +157,17 @@ export default function UniversityExamMaterialPrintPage() {
   const deleteTheory = useDeleteUeQuestionTheory()
   const downloadTheoryAnswerKey = useDownloadUeQuestionTheoryAnswerKey()
 
-  const printPractical = usePrintUeQuestionPractical()
-  const downloadPracticalWord = useDownloadUeQuestionPracticalWord()
-  const downloadPracticalPdf = useDownloadUeQuestionPracticalPdf()
-  const deletePractical = useDeleteUeQuestionPractical()
-
   const isWorking = activeAction !== null ||
     printBooklet.isPending || downloadBooklet.isPending ||
     downloadAttendance.isPending || downloadCover.isPending || downloadConsolidated.isPending ||
     printTheory.isPending || downloadTheoryWord.isPending || downloadTheoryPdf.isPending ||
-    deleteTheory.isPending || downloadTheoryAnswerKey.isPending ||
-    printPractical.isPending || downloadPracticalWord.isPending || downloadPracticalPdf.isPending ||
-    deletePractical.isPending
+    deleteTheory.isPending || downloadTheoryAnswerKey.isPending
 
   const request = (confirm = false) => ({
     programGuid,
     semesterGuid,
     courseUnitGuid,
     intakeGuid,
-    streamGuid: (selectedUnitRow as any)?.streamGuid ?? null,
     confirm,
   })
 
@@ -225,7 +175,6 @@ export default function UniversityExamMaterialPrintPage() {
     setProgramGuid('')
     setSemesterGuid('')
     setCourseUnitGuid('')
-    setCombinedType('Theory')
     setValidationError(null)
     setActiveAction(null)
     if (intakeOptions.length > 0) {
@@ -261,9 +210,12 @@ export default function UniversityExamMaterialPrintPage() {
       }
       const file = await downloadBooklet.mutateAsync(request())
       download(file.blob, file.filename, 'Booklet.pdf')
-      showToast(result.wasReprint ? 'Booklet reprinted successfully.' : 'Booklet downloaded successfully.', 'success')
+      showToast(
+        result.message || (result.wasReprint ? 'Booklet reprinted successfully.' : 'Booklet downloaded successfully.'),
+        'success'
+      )
     } catch (error: any) {
-      const errMsg = error?.message || 'Failed to print booklet. Please verify enrollment and exam schedules.'
+      const errMsg = extractApiErrorMessage(error, 'Failed to print booklet.')
       setValidationError(errMsg)
       showToast(errMsg, 'error')
     } finally {
@@ -271,17 +223,14 @@ export default function UniversityExamMaterialPrintPage() {
     }
   }
 
-  // 2. Question Paper Print (Word or PDF)
+  // 2. Question Paper Print (Word or PDF — Theory)
   const handleQuestionPaperPrint = async (format: 'word' | 'pdf', confirm = false) => {
     const allowed = format === 'word' ? canPrintQuestionPaperWord : canPrintQuestionPaperPdf
     if (!allowed || isWorking) return
     setValidationError(null)
     setActiveAction(format === 'word' ? 'qp-word' : 'qp-pdf')
     try {
-      const result = effectiveType === 'Practical'
-        ? await printPractical.mutateAsync(request(confirm))
-        : await printTheory.mutateAsync(request(confirm))
-
+      const result = await printTheory.mutateAsync(request(confirm))
       const { outcome, message } = parseOutcome(result)
 
       if (outcome === 'ConfirmationRequired') {
@@ -293,13 +242,13 @@ export default function UniversityExamMaterialPrintPage() {
         return
       }
       if (outcome === 'ExamRuleNotSet') {
-        const msg = message || 'University Exam not yet Scheduled for this course unit!!'
+        const msg = message || 'University Exam not yet Scheduled!!'
         setValidationError(msg)
         showToast(msg, 'error')
         return
       }
       if (outcome === 'QuestionsNotAvailable') {
-        const msg = message || 'Questions are not yet uploaded for this course unit!!'
+        const msg = message || 'Questions are not yet uploaded!!'
         setValidationError(msg)
         showToast(msg, 'error')
         return
@@ -307,42 +256,30 @@ export default function UniversityExamMaterialPrintPage() {
       if (outcome === 'Printed' || outcome === 'Reprinted') {
         setValidationError(null)
         if (format === 'pdf') {
-          const file = effectiveType === 'Practical'
-            ? await downloadPracticalPdf.mutateAsync(request())
-            : await downloadTheoryPdf.mutateAsync(request())
+          const file = await downloadTheoryPdf.mutateAsync(request())
           download(file.blob, file.filename, 'QuestionPaper.pdf')
         } else {
-          const file = effectiveType === 'Practical'
-            ? await downloadPracticalWord.mutateAsync(request())
-            : await downloadTheoryWord.mutateAsync(request())
+          const file = await downloadTheoryWord.mutateAsync(request())
           download(file.blob, file.filename, 'QuestionPaper.doc')
         }
-        showToast(message || (outcome === 'Reprinted' ? 'Question paper reprinted successfully.' : 'Question paper downloaded successfully.'), 'success')
+        showToast(
+          message || (outcome === 'Reprinted' ? 'Question paper reprinted successfully.' : 'Question paper downloaded successfully.'),
+          'success'
+        )
         return
       }
 
-      // Fallback: If print completed without a blocking outcome, proceed to download requested format
-      try {
-        if (format === 'pdf') {
-          const file = effectiveType === 'Practical'
-            ? await downloadPracticalPdf.mutateAsync(request())
-            : await downloadTheoryPdf.mutateAsync(request())
-          download(file.blob, file.filename, 'QuestionPaper.pdf')
-        } else {
-          const file = effectiveType === 'Practical'
-            ? await downloadPracticalWord.mutateAsync(request())
-            : await downloadTheoryWord.mutateAsync(request())
-          download(file.blob, file.filename, 'QuestionPaper.doc')
-        }
-        showToast(message || 'Question paper downloaded successfully.', 'success')
-        return
-      } catch (downloadErr: any) {
-        const msg = message || downloadErr?.message || 'Failed to download question paper.'
-        setValidationError(msg)
-        showToast(msg, 'error')
+      // Fallback when 200 OK completes without an explicit blocking outcome
+      if (format === 'pdf') {
+        const file = await downloadTheoryPdf.mutateAsync(request())
+        download(file.blob, file.filename, 'QuestionPaper.pdf')
+      } else {
+        const file = await downloadTheoryWord.mutateAsync(request())
+        download(file.blob, file.filename, 'QuestionPaper.doc')
       }
+      showToast(message || 'Question paper downloaded successfully.', 'success')
     } catch (error: any) {
-      const errMsg = error?.message || 'Failed to print question paper.'
+      const errMsg = extractApiErrorMessage(error, 'Failed to print question paper.')
       setValidationError(errMsg)
       showToast(errMsg, 'error')
     } finally {
@@ -350,15 +287,13 @@ export default function UniversityExamMaterialPrintPage() {
     }
   }
 
-  // 3. Delete Question Paper
+  // 3. Delete Question Paper (Theory)
   const handleQuestionPaperDelete = async (confirm = false) => {
     if (!canDeleteQuestionPaper || isWorking) return
     setValidationError(null)
     setActiveAction('qp-delete')
     try {
-      const res = effectiveType === 'Practical'
-        ? await deletePractical.mutateAsync(request(confirm))
-        : await deleteTheory.mutateAsync(request(confirm))
+      const res = await deleteTheory.mutateAsync(request(confirm))
 
       if (res.data === false && !confirm) {
         setActiveAction(null)
@@ -372,7 +307,7 @@ export default function UniversityExamMaterialPrintPage() {
         showToast(res.message || 'Deleted successfully......!', 'success')
       }
     } catch (error: any) {
-      const errMsg = error?.message || error?.errors?.[0] || 'Could not delete question paper. Please verify if questions have been printed.'
+      const errMsg = extractApiErrorMessage(error, 'Could not delete....!')
       setValidationError(errMsg)
       showToast(errMsg, 'error')
     } finally {
@@ -390,7 +325,7 @@ export default function UniversityExamMaterialPrintPage() {
       download(file.blob, file.filename, 'AnswerKey.pdf')
       showToast('Answer key downloaded successfully.', 'success')
     } catch (error: any) {
-      const errMsg = error?.message || 'Failed to download answer key. Ensure questions have been printed.'
+      const errMsg = extractApiErrorMessage(error, 'Failed to download answer key.')
       setValidationError(errMsg)
       showToast(errMsg, 'error')
     } finally {
@@ -408,7 +343,7 @@ export default function UniversityExamMaterialPrintPage() {
       download(file.blob, file.filename, 'AttendanceSheet.pdf')
       showToast('Attendance sheet downloaded successfully.', 'success')
     } catch (error: any) {
-      const errMsg = error?.message || 'Failed to download attendance sheet. Ensure booklet has been printed.'
+      const errMsg = extractApiErrorMessage(error, 'Failed to download attendance sheet.')
       setValidationError(errMsg)
       showToast(errMsg, 'error')
     } finally {
@@ -426,7 +361,7 @@ export default function UniversityExamMaterialPrintPage() {
       download(file.blob, file.filename, 'CoverLetter.pdf')
       showToast('Cover letter downloaded successfully.', 'success')
     } catch (error: any) {
-      const errMsg = error?.message || 'Failed to download cover letter. Ensure booklet has been printed.'
+      const errMsg = extractApiErrorMessage(error, 'Failed to download cover letter.')
       setValidationError(errMsg)
       showToast(errMsg, 'error')
     } finally {
@@ -444,7 +379,7 @@ export default function UniversityExamMaterialPrintPage() {
       download(file.blob, file.filename, 'ConsolidatedMarkSheet.pdf')
       showToast('Consolidated mark sheet downloaded successfully.', 'success')
     } catch (error: any) {
-      const errMsg = error?.message || 'Failed to download consolidated mark sheet. Ensure booklet has been printed.'
+      const errMsg = extractApiErrorMessage(error, 'Failed to download consolidated mark sheet.')
       setValidationError(errMsg)
       showToast(errMsg, 'error')
     } finally {
@@ -458,7 +393,7 @@ export default function UniversityExamMaterialPrintPage() {
   const qpPdfHint = formHint || (!canPrint ? 'You do not have permission to print question papers.' : '')
   const qpWordHint = formHint || (!canPrint ? 'You do not have permission to download question papers in Word.' : '')
   const qpDeleteHint = formHint || (!canDelete ? 'You do not have permission to delete question papers.' : '')
-  const answerKeyHint = formHint || (effectiveType === 'Practical' ? 'Answer Key is only applicable for Theory components.' : (!canGetAnswerKeyPermission ? 'You do not have permission to download answer key.' : ''))
+  const answerKeyHint = formHint || (!canGetAnswerKeyPermission ? 'You do not have permission to download answer key.' : '')
   const attendanceHint = formHint || (!canGetAttendancePermission ? 'You do not have permission to download attendance sheet.' : '')
   const coverLetterHint = formHint || (!canGetCoverLetterPermission ? 'You do not have permission to download cover letter.' : '')
   const consolidatedHint = formHint || (!canGetConsolidatedPermission ? 'You do not have permission to download consolidated mark sheet.' : '')
@@ -491,7 +426,6 @@ export default function UniversityExamMaterialPrintPage() {
                 setProgramGuid(guid)
                 setSemesterGuid('')
                 setCourseUnitGuid('')
-                setCombinedType('Theory')
                 setValidationError(null)
               }}
               disabled={programsLoading || intakeLoading}
@@ -506,7 +440,6 @@ export default function UniversityExamMaterialPrintPage() {
               onChange={guid => {
                 setSemesterGuid(guid)
                 setCourseUnitGuid('')
-                setCombinedType('Theory')
                 setValidationError(null)
               }}
               disabled={!programGuid || semestersLoading}
@@ -520,7 +453,6 @@ export default function UniversityExamMaterialPrintPage() {
               value={courseUnitGuid}
               onChange={guid => {
                 setCourseUnitGuid(guid)
-                setCombinedType('Theory')
                 setValidationError(null)
               }}
               disabled={!semesterGuid || unitsLoading}
@@ -528,24 +460,6 @@ export default function UniversityExamMaterialPrintPage() {
             />
           </div>
         </div>
-
-        {selectedUnitType === 'Combined' && (
-          <div className="px-5 py-4 border-t border-gray-100 bg-slate-50 flex items-center gap-6">
-            <span className="lbl mb-0">Print component</span>
-            {(['Theory', 'Practical'] as const).map(type => (
-              <label key={type} className="flex items-center gap-2 cursor-pointer text-sm text-gray-700">
-                <input
-                  type="radio"
-                  name="combined-unit-type"
-                  checked={combinedType === type}
-                  onChange={() => setCombinedType(type)}
-                  className="w-4 h-4 text-primary"
-                />
-                {type}
-              </label>
-            ))}
-          </div>
-        )}
 
         {/* Real Backend API Validation Banner */}
         {validationError && (
