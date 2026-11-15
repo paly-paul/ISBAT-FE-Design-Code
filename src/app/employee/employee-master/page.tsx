@@ -15,9 +15,28 @@ import { Pagination } from '@/components/Pagination'
 import { useEmployeesPaged } from '@/hooks/employee/useEmployees'
 import { EmployeeListItem } from '@/lib/api/employee/employee'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
+import { sameOriginApiUrl } from '@/lib/apiFileUrl'
 
 const PAGE_SIZE = 10
 const MIN_SEARCH_CHARS = 2
+
+// Round photo beside the name; initials when there's no photo or the signed
+// link fails to load (it expires after ~1 hour).
+function EmployeeAvatar({ photoUrl, firstName, surname }: { photoUrl?: string | null; firstName: string; surname: string }) {
+  const [failed, setFailed] = useState(false)
+  const initials = `${firstName?.[0] ?? ''}${surname?.[0] ?? ''}`.toUpperCase() || '?'
+  const size = 32
+  const base: React.CSSProperties = { width: size, height: size, borderRadius: '50%', flexShrink: 0 }
+  const src = sameOriginApiUrl(photoUrl)
+  if (src && !failed) {
+    return <img src={src} alt="" loading="lazy" onError={() => setFailed(true)} style={{ ...base, objectFit: 'cover', border: '1px solid var(--g200)' }} />
+  }
+  return (
+    <span aria-hidden="true" style={{ ...base, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'var(--b50)', color: 'var(--b700)', fontSize: 12, fontWeight: 700 }}>
+      {initials}
+    </span>
+  )
+}
 
 function EmployeeMasterContent() {
   const router = useRouter()
@@ -229,7 +248,12 @@ function EmployeeMasterContent() {
                       )}
                     </td>
                     <td className="font-mono text-b700">{r.shortCode}</td>
-                    <td><strong>{normalizeTitle(r.title)} {r.firstName} {r.surname}</strong></td>
+                    <td>
+                      <span className="inline-flex items-center gap-2.5">
+                        <EmployeeAvatar key={r.photoUrl ?? 'none'} photoUrl={r.photoUrl} firstName={r.firstName} surname={r.surname} />
+                        <strong>{normalizeTitle(r.title)} {r.firstName} {r.surname}</strong>
+                      </span>
+                    </td>
                     <td>{r.sex === 1 ? 'Male' : 'Female'}</td>
                     <td>
                       <span className={`badge ${r.isApproved ? 'badge-green' : 'badge-amber'}`}>

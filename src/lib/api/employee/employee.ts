@@ -12,6 +12,9 @@ export interface EmployeeListItem {
   firstName: string
   sex: number
   isApproved: boolean
+  // Signed photo link (expires after ~1 hour, so it's used straight from the
+  // list response, never cached); null when no photo was uploaded.
+  photoUrl?: string | null
 }
 
 export interface EmployeeListResponse {
@@ -229,11 +232,21 @@ export function getEmployee(id: string): Promise<Employee> {
 // POST /employees is multipart/form-data since 2026-11-09 (post-employee.md):
 // each SaveEmployeeRequest key is its own form field, campusGuids repeats once
 // per campus, and empty values (a form can't send null) are left out.
+// post-employee.md: every SaveEmployeeRequest field must be present in the
+// form, even with no value — a missing field (most often otherName or
+// nationalId) fails with 400 and an EMPTY body before validation runs. A form
+// can't send null, so those two go as empty strings. Only fields outside the
+// documented request (intReligion) are still left out when empty.
+const ALWAYS_SENT_FIELDS = new Set(['otherName', 'nationalId'])
+
 function employeeFormData(input: CreateEmployeeInput, photo: File | null): FormData {
   const fd = new FormData()
   for (const [key, value] of Object.entries(input)) {
     if (key === 'campusGuids') continue
-    if (value === null || value === undefined || value === '') continue
+    if (value === null || value === undefined || value === '') {
+      if (ALWAYS_SENT_FIELDS.has(key)) fd.append(key, '')
+      continue
+    }
     fd.append(key, String(value))
   }
   for (const guid of input.campusGuids) fd.append('campusGuids', guid)
