@@ -265,7 +265,6 @@ export function MarkSheet({ resitScheduleGuid, resitActive, openImportOnLoad, sh
           </div>
         </div>
         <div className="flex items-center gap-3 flex-wrap justify-end">
-          <span className="text-sm text-g500">{exam.resitRefCode}</span>
           {canImport && (
             <button className="btn btn-primary" onClick={() => guard(() => setDrawerOpen(true))}>
               <i className="lni lni-upload"></i> Import from Excel
