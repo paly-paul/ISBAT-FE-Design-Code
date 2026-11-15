@@ -1,4 +1,4 @@
-import { apiGet, apiPost, apiDelete } from '../client'
+import { apiGet, apiPostWithMessage, apiDeleteWithMessage } from '../client'
 
 const BASE_PATH = '/api/v1/assessment/cw-rectification'
 
@@ -172,14 +172,10 @@ function normalizeRecheck(item: any): CwRecheckDetail {
  * Spec: get-intakes.md
  */
 export async function getCwIntakes(): Promise<CwIntakeOption[]> {
-  try {
-    const res = await apiGet<any>(`${BASE_PATH}/intakes`)
-    const list = Array.isArray(res) ? res : (res?.data && Array.isArray(res.data) ? res.data : [])
-    if (list.length > 0) {
-      return list.map(normalizeIntake)
-    }
-  } catch (err: any) {
-    console.warn('ℹ️ [CW Rectification] Live intakes API error:', err?.message || err)
+  const res = await apiGet<any>(`${BASE_PATH}/intakes`)
+  const list = Array.isArray(res) ? res : (res?.data && Array.isArray(res.data) ? res.data : [])
+  if (list.length > 0) {
+    return list.map(normalizeIntake)
   }
   return []
 }
@@ -190,16 +186,12 @@ export async function getCwIntakes(): Promise<CwIntakeOption[]> {
  */
 export async function getCwCourseUnits(intakeGuid: string): Promise<CwCourseUnitOption[]> {
   if (!intakeGuid) return []
-  try {
-    const res = await apiGet<any>(`${BASE_PATH}/intakes/${encodeURIComponent(intakeGuid)}/course-units`)
-    const list: any[] = Array.isArray(res) ? res : (res?.data && Array.isArray(res.data) ? res.data : [])
-    if (list.length > 0) {
-      return list
-        .map(normalizeCourseUnit)
-        .filter((u: CwCourseUnitOption) => Boolean(u.courseUnitName && u.courseUnitName.trim().length > 0))
-    }
-  } catch (err: any) {
-    console.warn('ℹ️ [CW Rectification] Live course-units API error:', err?.message || err)
+  const res = await apiGet<any>(`${BASE_PATH}/intakes/${encodeURIComponent(intakeGuid)}/course-units`)
+  const list: any[] = Array.isArray(res) ? res : (res?.data && Array.isArray(res.data) ? res.data : [])
+  if (list.length > 0) {
+    return list
+      .map(normalizeCourseUnit)
+      .filter((u: CwCourseUnitOption) => Boolean(u.courseUnitName && u.courseUnitName.trim().length > 0))
   }
   return []
 }
@@ -213,16 +205,12 @@ export async function getCwCourseworks(
   courseUnitGuid: string
 ): Promise<CwCourseworkOption[]> {
   if (!intakeGuid || !courseUnitGuid) return []
-  try {
-    const res = await apiGet<any>(
-      `${BASE_PATH}/intakes/${encodeURIComponent(intakeGuid)}/course-units/${encodeURIComponent(courseUnitGuid)}/courseworks`
-    )
-    const list = Array.isArray(res) ? res : (res?.data && Array.isArray(res.data) ? res.data : [])
-    if (list.length > 0) {
-      return list.map(normalizeCoursework)
-    }
-  } catch (err: any) {
-    console.warn('ℹ️ [CW Rectification] Live courseworks API error:', err?.message || err)
+  const res = await apiGet<any>(
+    `${BASE_PATH}/intakes/${encodeURIComponent(intakeGuid)}/course-units/${encodeURIComponent(courseUnitGuid)}/courseworks`
+  )
+  const list = Array.isArray(res) ? res : (res?.data && Array.isArray(res.data) ? res.data : [])
+  if (list.length > 0) {
+    return list.map(normalizeCoursework)
   }
   return []
 }
@@ -237,16 +225,12 @@ export async function getCwStudents(
   courseworkNumber: number
 ): Promise<CwStudentOption[]> {
   if (!intakeGuid || !courseUnitGuid || !courseworkNumber) return []
-  try {
-    const res = await apiGet<any>(
-      `${BASE_PATH}/intakes/${encodeURIComponent(intakeGuid)}/course-units/${encodeURIComponent(courseUnitGuid)}/courseworks/${courseworkNumber}/students`
-    )
-    const list = Array.isArray(res) ? res : (res?.data && Array.isArray(res.data) ? res.data : [])
-    if (list.length > 0) {
-      return list.map(normalizeStudent)
-    }
-  } catch (err: any) {
-    console.warn('ℹ️ [CW Rectification] Live students API error:', err?.message || err)
+  const res = await apiGet<any>(
+    `${BASE_PATH}/intakes/${encodeURIComponent(intakeGuid)}/course-units/${encodeURIComponent(courseUnitGuid)}/courseworks/${courseworkNumber}/students`
+  )
+  const list = Array.isArray(res) ? res : (res?.data && Array.isArray(res.data) ? res.data : [])
+  if (list.length > 0) {
+    return list.map(normalizeStudent)
   }
   return []
 }
@@ -260,19 +244,13 @@ export async function getCwSubmissionSummary(
   studentGuid: string
 ): Promise<CwSubmissionSummary | null> {
   if (!courseworkGuid || !studentGuid) return null
-
-  try {
-    const res = await apiGet<any>(
-      `${BASE_PATH}/${encodeURIComponent(courseworkGuid)}/students/${encodeURIComponent(studentGuid)}`
-    )
-    const data = res?.data ?? res
-    if (data && (data.studentGuid || data.StudentGuid || data.status || data.Status)) {
-      return normalizeSummary(data)
-    }
-  } catch (err: any) {
-    console.warn('ℹ️ [CW Rectification] Live summary API error:', err?.message || err)
+  const res = await apiGet<any>(
+    `${BASE_PATH}/${encodeURIComponent(courseworkGuid)}/students/${encodeURIComponent(studentGuid)}`
+  )
+  const data = res?.data ?? res
+  if (data && (data.studentGuid || data.StudentGuid || data.status || data.Status)) {
+    return normalizeSummary(data)
   }
-
   return null
 }
 
@@ -284,12 +262,12 @@ export async function deleteCwSubmission(
   courseworkGuid: string,
   studentGuid: string
 ): Promise<{ success: boolean; message: string }> {
-  const res = await apiDelete<any>(
+  const { data, message } = await apiDeleteWithMessage<any>(
     `${BASE_PATH}/${encodeURIComponent(courseworkGuid)}/students/${encodeURIComponent(studentGuid)}/submission`
   )
   return {
-    success: true,
-    message: res?.message ?? 'Submission deleted successfully.',
+    success: Boolean(data ?? true),
+    message: message?.trim() || 'Submission deleted successfully.',
   }
 }
 
@@ -301,13 +279,13 @@ export async function reopenCwSubmission(
   courseworkGuid: string,
   studentGuid: string
 ): Promise<{ success: boolean; message: string }> {
-  const res = await apiPost<any>(
+  const { data, message } = await apiPostWithMessage<any>(
     `${BASE_PATH}/${encodeURIComponent(courseworkGuid)}/students/${encodeURIComponent(studentGuid)}/reopen`,
     {}
   )
   return {
-    success: true,
-    message: res?.message ?? 'Submission reopened successfully.',
+    success: Boolean(data ?? true),
+    message: message?.trim() || 'Submission reopened successfully.',
   }
 }
 
@@ -319,13 +297,13 @@ export async function reevaluateCwSubmission(
   courseworkGuid: string,
   studentGuid: string
 ): Promise<{ success: boolean; message: string }> {
-  const res = await apiPost<any>(
+  const { data, message } = await apiPostWithMessage<any>(
     `${BASE_PATH}/${encodeURIComponent(courseworkGuid)}/students/${encodeURIComponent(studentGuid)}/reevaluate`,
     {}
   )
   return {
-    success: true,
-    message: res?.message ?? 'Evaluation cleared successfully. Submission awaiting evaluation.',
+    success: Boolean(data ?? true),
+    message: message?.trim() || 'Evaluation cleared successfully. Submission awaiting evaluation.',
   }
 }
 
@@ -338,16 +316,12 @@ export async function getCwRecheck(
   studentGuid: string
 ): Promise<CwRecheckDetail | null> {
   if (!courseworkGuid || !studentGuid) return null
-  try {
-    const res = await apiGet<any>(
-      `${BASE_PATH}/${encodeURIComponent(courseworkGuid)}/students/${encodeURIComponent(studentGuid)}/recheck`
-    )
-    const data = res?.data ?? res
-    if (data) {
-      return normalizeRecheck(data)
-    }
-  } catch (err: any) {
-    console.warn('ℹ️ [CW Rectification] Live recheck API error:', err?.message || err)
+  const res = await apiGet<any>(
+    `${BASE_PATH}/${encodeURIComponent(courseworkGuid)}/students/${encodeURIComponent(studentGuid)}/recheck`
+  )
+  const data = res?.data ?? res
+  if (data) {
+    return normalizeRecheck(data)
   }
   return null
 }

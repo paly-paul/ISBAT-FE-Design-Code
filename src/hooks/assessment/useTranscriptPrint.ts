@@ -10,6 +10,7 @@ export function useTranscriptPrintEligibility(academicIntakeGuid: string | null,
     queryKey: ['transcript-print-eligibility', academicIntakeGuid, programGuid, semesterGuid],
     queryFn: () => getTranscriptPrintEligibility(academicIntakeGuid!, programGuid!, semesterGuid!),
     enabled: !!(academicIntakeGuid && programGuid && semesterGuid),
+    retry: false,
   })
 }
 

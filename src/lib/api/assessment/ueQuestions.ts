@@ -69,19 +69,14 @@ export interface ApiProbeResult {
  * GET /api/v1/assessment/ue-question/course-units
  */
 export async function getUeCourseUnits(): Promise<UeCourseUnitDto[]> {
-  try {
-    const data = await apiGet<UeCourseUnitDto[]>('/api/v1/assessment/ue-question/course-units')
-    if (data && Array.isArray(data)) {
-      return data.map(cu => ({
-        ...cu,
-        allowedUeTypes: Array.isArray(cu.allowedUeTypes) && cu.allowedUeTypes.length > 0 ? cu.allowedUeTypes : null,
-      }))
-    }
-    return []
-  } catch (err: any) {
-    console.warn('ℹ️ [UE CourseUnits] Could not fetch from backend:', err?.message || err)
-    return []
+  const data = await apiGet<UeCourseUnitDto[]>('/api/v1/assessment/ue-question/course-units')
+  if (data && Array.isArray(data)) {
+    return data.map(cu => ({
+      ...cu,
+      allowedUeTypes: Array.isArray(cu.allowedUeTypes) && cu.allowedUeTypes.length > 0 ? cu.allowedUeTypes : null,
+    }))
   }
+  return []
 }
 
 /**
@@ -110,13 +105,8 @@ export async function getUeQuestionSummary(
     ueType: String(ueType),
   })
 
-  try {
-    const data = await apiGet<UeQuestionSummaryDto>(`/api/v1/assessment/ue-question/summary?${params.toString()}`)
-    return data ?? emptySummary
-  } catch (err: any) {
-    console.warn('ℹ️ [UE Summary] Could not fetch from backend:', err?.message || err)
-    return emptySummary
-  }
+  const data = await apiGet<UeQuestionSummaryDto>(`/api/v1/assessment/ue-question/summary?${params.toString()}`)
+  return data ?? emptySummary
 }
 
 /**
@@ -139,16 +129,11 @@ export async function getUeQuestions(
     ueType: String(ueType),
   })
 
-  try {
-    const data = await apiGet<UeQuestionDto[]>(`/api/v1/assessment/ue-question/questions?${params.toString()}`)
-    if (data && Array.isArray(data)) {
-      return data
-    }
-    return []
-  } catch (err: any) {
-    console.warn(`ℹ️ [UE Questions] Could not fetch for level ${level}:`, err?.message || err)
-    return []
+  const data = await apiGet<UeQuestionDto[]>(`/api/v1/assessment/ue-question/questions?${params.toString()}`)
+  if (data && Array.isArray(data)) {
+    return data
   }
+  return []
 }
 
 /**

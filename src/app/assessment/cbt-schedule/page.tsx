@@ -200,12 +200,13 @@ function CbtScheduleContent() {
   // Update-only page: a testGuid that doesn't resolve is an error, not a
   // prompt to create (cbt-schedule-page.md, Business logic notes).
   if (testGuid && (testMissing || (loadFailed && (loadError as { code?: string } | null)?.code === 'not_found'))) {
+    const notFoundMsg = extractApiErrorMessage(loadError, 'It was deleted or changed after the Assessment Structure grid was loaded. Refresh the grid and pick the test again.')
     return (
       <div className="page active">
         <div className="card p-8 text-center max-w-xl mx-auto mt-10">
           <i className="lni lni-warning text-3xl" style={{ color: 'var(--amber)' }}></i>
           <div className="text-lg font-semibold text-g900 mt-3">This class test no longer exists</div>
-          <div className="text-sm text-g500 mt-1">It was deleted or changed after the Assessment Structure grid was loaded. Refresh the grid and pick the test again.</div>
+          <div className="text-sm text-g500 mt-1">{notFoundMsg}</div>
           <Link href="/assessment/ia-creation" className="btn btn-primary mt-5 inline-flex"><i className="lni lni-arrow-left"></i> Back to Assessment Structure</Link>
         </div>
         <Toast toast={toast} />
@@ -283,6 +284,15 @@ function CbtScheduleContent() {
             <span className="font-semibold text-amber-950">Notice:</span> Please ensure the question paper is uploaded before scheduling the exam.
           </div>
         </div>
+
+        {loadFailed && (
+          <div className="mb-6 p-3.5 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3 text-xs text-red-700 shadow-xs">
+            <i className="lni lni-warning text-red-500 text-base shrink-0 mt-0.5"></i>
+            <div className="leading-relaxed">
+              {extractApiErrorMessage(loadError, 'Could not load class test schedule.')}
+            </div>
+          </div>
+        )}
 
         <div className={`grid grid-cols-1 md:grid-cols-2 gap-6 transition-opacity duration-300 ${isLoading ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
           {/* Dates */}

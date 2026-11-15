@@ -1,4 +1,4 @@
-import { apiDelete, apiGet, apiPostForm } from '../client'
+import { apiDeleteWithMessage, apiGet, apiPostForm, apiPostFormWithMessage } from '../client'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
@@ -209,10 +209,12 @@ export function postQuestionBankImport(params: QuestionBankFileParams): Promise<
     formData.append('UniversityExamType', String(params.universityExamType))
   }
 
-  return apiPostForm<boolean>('/api/v1/assessment/question-bank/import', formData)
-    .then(data => ({
+  return apiPostFormWithMessage<boolean>('/api/v1/assessment/question-bank/import', formData)
+    .then(({ data, message }) => ({
       success: Boolean(data),
-      message: 'Questions imported successfully.',
+      // Backend's own success message; empty when the backend sends none so
+      // the page keeps its existing "N question(s) committed…" fallback.
+      message: message?.trim() || '',
     }))
 }
 
@@ -243,9 +245,10 @@ export function deleteQuestionBank(
   if (category === 5 && universityExamType != null) {
     params.set('universityExamType', String(universityExamType))
   }
-  return apiDelete<boolean>(`/api/v1/assessment/question-bank?${params.toString()}`)
-    .then(data => ({
+  return apiDeleteWithMessage<boolean>(`/api/v1/assessment/question-bank?${params.toString()}`)
+    .then(({ data, message }) => ({
       success: Boolean(data),
-      message: 'Questions deleted successfully.',
+      // Backend's own success message first; old text only as a fallback.
+      message: message?.trim() || 'Questions deleted successfully.',
     }))
 }

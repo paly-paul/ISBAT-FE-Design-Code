@@ -104,7 +104,7 @@ const ruleValue = (code: string | null | undefined, name: string | null | undefi
 
 // One university exam (Theory or Practical), loaded by its own guid.
 function UeSection({ examGuid }: { examGuid: string }) {
-  const { data, isLoading, isError } = useIaUeSchedule(examGuid)
+  const { data, isLoading, isError, error: ueErr } = useIaUeSchedule(examGuid)
   const scheduled = (d: UeScheduleDto) => Boolean(d.examDate && d.startTime && !d.startTime.startsWith('00:00'))
 
   return (
@@ -112,7 +112,7 @@ function UeSection({ examGuid }: { examGuid: string }) {
       {isLoading ? (
         <LoadingBox>Loading exam details…</LoadingBox>
       ) : isError || !data ? (
-        <EmptyBox icon="lni-warning">Couldn’t load this exam’s schedule.</EmptyBox>
+        <EmptyBox icon="lni-warning">{(ueErr as Error)?.message || 'Couldn’t load this exam’s schedule.'}</EmptyBox>
       ) : !scheduled(data) ? (
         <EmptyBox icon="lni-calendar">This exam hasn’t been scheduled yet.</EmptyBox>
       ) : (
@@ -144,8 +144,8 @@ export function IaStructureViewModal({ row, progName, semName, onClose, onEditCw
     }
   }, [row])
 
-  const { data: ct, isLoading: ctLoading, isError: ctError } = useIaTestSchedule(row?.classTestGuid || null)
-  const { data: cw, isLoading: cwLoading, isError: cwError } = useIaCwSchedule(row?.courseworkGuid || null)
+  const { data: ct, isLoading: ctLoading, isError: ctError, error: ctErr } = useIaTestSchedule(row?.classTestGuid || null)
+  const { data: cw, isLoading: cwLoading, isError: cwError, error: cwErr } = useIaCwSchedule(row?.courseworkGuid || null)
 
   // Same sliding underline as the Academic view modals.
   const tabRefs = useRef<Partial<Record<Tab, HTMLButtonElement>>>({})
@@ -236,7 +236,7 @@ export function IaStructureViewModal({ row, progName, semName, onClose, onEditCw
               ) : ctLoading ? (
                 <LoadingBox>Loading class test details…</LoadingBox>
               ) : ctError || !ct ? (
-                <EmptyBox icon="lni-warning">Couldn’t load the class test schedule.</EmptyBox>
+                <EmptyBox icon="lni-warning">{(ctErr as Error)?.message || 'Couldn’t load the class test schedule.'}</EmptyBox>
               ) : !ct.scheduledStartDateTime ? (
                 <EmptyBox icon="lni-calendar">The class test hasn’t been scheduled yet.</EmptyBox>
               ) : (
@@ -263,7 +263,7 @@ export function IaStructureViewModal({ row, progName, semName, onClose, onEditCw
               ) : cwLoading ? (
                 <LoadingBox>Loading course work details…</LoadingBox>
               ) : cwError || !cw ? (
-                <EmptyBox icon="lni-warning">Couldn’t load the course work schedule.</EmptyBox>
+                <EmptyBox icon="lni-warning">{(cwErr as Error)?.message || 'Couldn’t load the course work schedule.'}</EmptyBox>
               ) : !cw.scheduledStartDateTime ? (
                 <EmptyBox icon="lni-calendar">The course work hasn’t been scheduled yet.</EmptyBox>
               ) : (

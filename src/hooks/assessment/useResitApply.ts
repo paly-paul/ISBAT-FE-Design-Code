@@ -13,7 +13,8 @@ import {
 export function useResitEligibleStudents(params?: { page?: number; pageSize?: number; search?: string }) {
   return useQuery({
     queryKey: ['resit-eligible-students', params],
-    queryFn: () => getResitEligibleStudents(params)
+    queryFn: () => getResitEligibleStudents(params),
+    retry: false,
   })
 }
 
@@ -21,7 +22,8 @@ export function useResitDropdownUnits(studentGuid: string | null) {
   return useQuery({
     queryKey: ['resit-dropdown', studentGuid],
     queryFn: () => getResitDropdownUnits(studentGuid!),
-    enabled: !!studentGuid
+    enabled: !!studentGuid,
+    retry: false,
   })
 }
 
@@ -29,7 +31,8 @@ export function useResitCheckboxState(studentGuid: string | null, courseUnitGuid
   return useQuery({
     queryKey: ['resit-checkbox-state', studentGuid, courseUnitGuid],
     queryFn: () => getResitCheckboxState(studentGuid!, courseUnitGuid!),
-    enabled: !!studentGuid && !!courseUnitGuid
+    enabled: !!studentGuid && !!courseUnitGuid,
+    retry: false,
   })
 }
 
@@ -37,7 +40,8 @@ export function useResitAppliedUnits(studentGuid: string | null) {
   return useQuery({
     queryKey: ['resit-applied-units', studentGuid],
     queryFn: () => getResitAppliedUnits(studentGuid!),
-    enabled: !!studentGuid
+    enabled: !!studentGuid,
+    retry: false,
   })
 }
 
@@ -45,7 +49,8 @@ export function useResitApplicationForEdit(resitApplicationGuid: string | null) 
   return useQuery({
     queryKey: ['resit-app-edit', resitApplicationGuid],
     queryFn: () => getResitApplicationForEdit(resitApplicationGuid!),
-    enabled: !!resitApplicationGuid
+    enabled: !!resitApplicationGuid,
+    retry: false,
   })
 }
 

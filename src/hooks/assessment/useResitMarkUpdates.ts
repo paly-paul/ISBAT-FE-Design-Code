@@ -11,7 +11,8 @@ export function useResitMarkUpdates(params: ResitMarkUpdateQueryParams, enabled:
   return useQuery({
     queryKey: RESIT_MARK_UPDATES_KEYS.list(params),
     queryFn: () => getResitMarkUpdates(params),
-    enabled: enabled && !!params.intakeGuid && !!params.resitConfigGuid
+    enabled: enabled && !!params.intakeGuid && !!params.resitConfigGuid,
+    retry: false,
   })
 }
 

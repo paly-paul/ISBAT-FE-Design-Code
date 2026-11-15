@@ -80,7 +80,9 @@ export default function UeMarkImportPage() {
 
   const {
     data: examInfo,
-    isLoading: isLoadingExamInfo
+    isLoading: isLoadingExamInfo,
+    isFetching: isFetchingExamInfo,
+    error: examError,
   } = useUeMarkImportExam(
     program?.programGuid || '',
     semesterGuid,
@@ -89,6 +91,21 @@ export default function UeMarkImportPage() {
     Number(ueType),
     !!program && !!semesterGuid && !!courseUnitGuid && !!intakeGuid && !!ueType
   )
+
+  const examErrorMessage = useMemo(() => {
+    if (!examError || !courseUnitGuid) return null
+    const err = examError as { message?: string; errors?: string[] }
+    if (Array.isArray(err?.errors) && err.errors.length > 0) {
+      return err.errors.filter(Boolean).join('\n')
+    }
+    return err?.message || null
+  }, [examError, courseUnitGuid])
+
+  useEffect(() => {
+    if (examErrorMessage && !isFetchingExamInfo) {
+      showToast(examErrorMessage, 'error')
+    }
+  }, [examErrorMessage, isFetchingExamInfo])
 
   const isTheoryExam = examInfo?.layout === 0
   const isTheoryNoRule = Boolean(isTheoryExam && examInfo && !hasTheoryMarks(examInfo.maxMarks))
@@ -123,8 +140,18 @@ export default function UeMarkImportPage() {
     handleClearFile()
   }
 
+  const handleIntakeChange = (val: string) => {
+    setIntakeGuid(val)
+    handleClearFile()
+  }
+
   const handleCourseUnitChange = (val: string) => {
     setCourseUnitGuid(val)
+    handleClearFile()
+  }
+
+  const handleUeTypeChange = (val: string) => {
+    setUeType(val)
     handleClearFile()
   }
 
@@ -269,7 +296,7 @@ export default function UeMarkImportPage() {
             <SearchSelect
               options={intakes?.map(i => ({ value: i.intakeGuid, label: `${i.intakeCode} — ${i.description}` })) || []}
               value={intakeGuid}
-              onChange={setIntakeGuid}
+              onChange={handleIntakeChange}
               placeholder={isLoadingIntakes ? 'Loading...' : 'Select Intake'}
             />
           </div>
@@ -315,7 +342,7 @@ export default function UeMarkImportPage() {
                 { value: '1', label: 'Re-Sit' }
               ]}
               value={ueType}
-              onChange={setUeType}
+              onChange={handleUeTypeChange}
             />
           </div>
 
@@ -335,6 +362,13 @@ export default function UeMarkImportPage() {
             )}
           </div>
         </div>
+
+        {examErrorMessage && !isLoadingExamInfo && !isFetchingExamInfo && courseUnitGuid && (
+          <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm flex items-center gap-2">
+            <i className="lni lni-warning text-base text-red-500 flex-shrink-0" />
+            <span className="whitespace-pre-line">{examErrorMessage}</span>
+          </div>
+        )}
       </div>
 
       <div className="card mb-5 p-5">

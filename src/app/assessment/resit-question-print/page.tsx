@@ -472,11 +472,14 @@ export default function ResitQuestionPrintPage() {
 
   return (
     <div className="page active">
-      <div className="pg-hdr">
+      <div className="pg-hdr flex justify-between items-end">
         <div>
           <h1 className="pg-title">Resit Question Print</h1>
           <p className="pg-sub">Generate and download resit exam booklets, question papers, answer keys, attendance sheets, and cover letters.</p>
         </div>
+        <button className="btn btn-neu" onClick={reset} disabled={isWorking}>
+          <i className="lni lni-reload"></i> Refresh
+        </button>
       </div>
 
       <div className="card mb-5">
@@ -597,118 +600,115 @@ export default function ResitQuestionPrintPage() {
           </div>
         )}
 
-        {/* Actions Toolbar */}
-        <div className="p-5 pt-0 flex flex-col gap-4">
-          <div className="border-t border-gray-100 pt-4">
-            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-2.5">
-              Booklet & Exam Materials
-            </span>
-            <div className="flex flex-wrap gap-2.5">
-              <button
-                className="btn btn-primary"
-                onClick={() => handleBookletPrint()}
-                disabled={!canPrintBooklet || isWorking}
-                title={bookletHint}
-              >
-                <i className={`lni ${activeAction === 'booklet' ? 'lni-spinner lni-is-spinning' : 'lni-printer'}`} />
-                {activeAction === 'booklet' ? ' Printing...' : ' Print Booklet'}
-              </button>
-
-              <button
-                className="btn btn-neu"
-                onClick={handleAttendanceDownload}
-                disabled={!canGetAttendance || isWorking}
-                title={attendanceHint}
-              >
-                <i className={`lni ${activeAction === 'attendance' ? 'lni-spinner lni-is-spinning' : 'lni-users'}`} />
-                {activeAction === 'attendance' ? ' Downloading...' : ' Attendance Sheet'}
-              </button>
-
-              <button
-                className="btn btn-neu"
-                onClick={handleCoverLetterDownload}
-                disabled={!canGetCoverLetter || isWorking}
-                title={coverLetterHint}
-              >
-                <i className={`lni ${activeAction === 'cover' ? 'lni-spinner lni-is-spinning' : 'lni-envelope'}`} />
-                {activeAction === 'cover' ? ' Downloading...' : ' Cover Letter'}
-              </button>
-
-              <button
-                className="btn btn-neu"
-                onClick={handleConsolidatedMarkSheetDownload}
-                disabled={!canGetConsolidated || isWorking}
-                title={consolidatedHint}
-              >
-                <i className={`lni ${activeAction === 'consolidated' ? 'lni-spinner lni-is-spinning' : 'lni-files'}`} />
-                {activeAction === 'consolidated' ? ' Downloading...' : ' Consolidated Mark Sheet'}
-              </button>
+        <div className="p-5 pt-0 mt-4 grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Question Paper Card */}
+          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-xs">
+            <div className="bg-slate-50 px-5 py-4 border-b border-gray-100 flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center">
+                <i className="lni lni-layout"></i>
+              </div>
+              <div>
+                <h3 className="font-semibold text-gray-800 text-sm m-0">Question Paper Materials</h3>
+                <p className="text-xs text-gray-500 m-0">{selectedCourseUnitGuid ? `Type: ${effectiveType}` : 'Select a course unit'}</p>
+              </div>
             </div>
-          </div>
-
-          <div className="border-t border-gray-100 pt-4">
-            <div className="flex items-center justify-between mb-2.5">
-              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                Question Paper Materials
-              </span>
-              {selectedCourseUnitGuid && (
-                <span className="text-xs text-gray-500">
-                  Type: <strong className="text-gray-700">{effectiveType}</strong>
-                </span>
-              )}
-            </div>
-            <div className="flex flex-wrap gap-2.5">
+            <div className="p-5 grid grid-cols-2 sm:grid-cols-2 gap-3">
               <button
-                className="btn btn-neu"
+                className="flex flex-col items-center justify-center p-4 border rounded-xl gap-2 text-sm font-medium transition-all hover:border-primary hover:text-primary hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-gray-200 disabled:hover:shadow-none disabled:hover:text-gray-700 bg-blue-50 border-blue-100"
                 onClick={() => handleQuestionPaperPrint('pdf')}
                 disabled={!canPrintQuestionPaperPdf || isWorking}
                 title={qpPdfHint}
               >
-                <i className={`lni ${activeAction === 'qp-pdf' ? 'lni-spinner lni-is-spinning' : 'lni-printer'}`} />
-                {activeAction === 'qp-pdf' ? ' Printing...' : ' QP Print (PDF)'}
+                <i className={`lni ${activeAction === 'qp-pdf' ? 'lni-spinner lni-is-spinning' : 'lni-printer'} text-3xl text-red-500`}></i>
+                {activeAction === 'qp-pdf' ? 'Printing...' : 'QP Print (PDF)'}
               </button>
 
               <button
-                className="btn btn-neu"
+                className="flex flex-col items-center justify-center p-4 border rounded-xl gap-2 text-sm font-medium transition-all hover:border-primary hover:text-primary hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-gray-200 disabled:hover:shadow-none disabled:hover:text-gray-700 bg-slate-50 border-slate-200"
                 onClick={() => handleQuestionPaperPrint('word')}
                 disabled={!canPrintQuestionPaperWord || isWorking}
                 title={qpWordHint}
               >
-                <i className={`lni ${activeAction === 'qp-word' ? 'lni-spinner lni-is-spinning' : 'lni-download'}`} />
-                {activeAction === 'qp-word' ? ' Downloading...' : ' QP Print in MS Word'}
+                <i className={`lni ${activeAction === 'qp-word' ? 'lni-spinner lni-is-spinning' : 'lni-wordpress'} text-3xl text-blue-500`}></i>
+                {activeAction === 'qp-word' ? 'Downloading...' : 'QP Print in MS Word'}
               </button>
 
               {!isPractical && (
                 <button
-                  className="btn btn-neu"
+                  className="flex flex-col items-center justify-center p-4 border rounded-xl gap-2 text-sm font-medium transition-all hover:border-primary hover:text-primary hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-gray-200 disabled:hover:shadow-none disabled:hover:text-gray-700 bg-sky-50 border-sky-100"
                   onClick={handleAnswerKeyDownload}
                   disabled={!canGetAnswerKey || isWorking}
                   title={answerKeyHint}
                 >
-                  <i className={`lni ${activeAction === 'answer-key' ? 'lni-spinner lni-is-spinning' : 'lni-key'}`} />
-                  {activeAction === 'answer-key' ? ' Downloading...' : ' Answer Key'}
+                  <i className={`lni ${activeAction === 'answer-key' ? 'lni-spinner lni-is-spinning' : 'lni-key'} text-3xl text-amber-500`}></i>
+                  {activeAction === 'answer-key' ? 'Downloading...' : 'Answer Key'}
                 </button>
               )}
 
               <button
-                className="btn btn-danger"
+                className="flex flex-col items-center justify-center p-4 border rounded-xl gap-2 text-sm font-medium transition-all hover:border-red-500 hover:text-red-600 hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-gray-200 disabled:hover:shadow-none disabled:hover:text-gray-700 bg-red-50 border-red-100"
                 onClick={() => handleQuestionPaperDelete()}
                 disabled={!canDeleteQuestionPaper || isWorking}
                 title={qpDeleteHint}
               >
-                <i className={`lni ${activeAction === 'qp-delete' ? 'lni-spinner lni-is-spinning' : 'lni-trash-can'}`} />
-                {activeAction === 'qp-delete' ? ' Deleting...' : ' Delete QP'}
+                <i className={`lni ${activeAction === 'qp-delete' ? 'lni-spinner lni-is-spinning' : 'lni-trash-can'} text-3xl text-red-600`}></i>
+                {activeAction === 'qp-delete' ? 'Deleting...' : 'Delete QP'}
               </button>
             </div>
           </div>
 
-          <div className="border-t border-gray-100 pt-4 flex justify-between items-center">
-            <span className="text-xs text-gray-400">
-              Select all mandatory fields above to enable materials generation.
-            </span>
-            <button className="btn btn-neu" onClick={reset} disabled={isWorking}>
-              <i className="lni lni-reload" /> Refresh
-            </button>
+          {/* Booklet Card */}
+          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-xs">
+            <div className="bg-slate-50 px-5 py-4 border-b border-gray-100 flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center">
+                <i className="lni lni-book"></i>
+              </div>
+              <div>
+                <h3 className="font-semibold text-gray-800 text-sm m-0">Booklet &amp; Registers</h3>
+                <p className="text-xs text-gray-500 m-0">Merge students &amp; download files</p>
+              </div>
+            </div>
+            <div className="p-5 grid grid-cols-2 sm:grid-cols-2 gap-3">
+              <button
+                className="flex flex-col items-center justify-center p-4 border rounded-xl gap-2 text-sm font-medium transition-all hover:border-indigo-500 hover:text-indigo-600 hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-gray-200 disabled:hover:shadow-none disabled:hover:text-gray-700 bg-white"
+                onClick={() => handleBookletPrint()}
+                disabled={!canPrintBooklet || isWorking}
+                title={bookletHint}
+              >
+                <i className={`lni ${activeAction === 'booklet' ? 'lni-spinner lni-is-spinning' : 'lni-printer'} text-3xl text-indigo-500`}></i>
+                {activeAction === 'booklet' ? 'Printing...' : 'Print Booklet'}
+              </button>
+
+              <button
+                className="flex flex-col items-center justify-center p-4 border rounded-xl gap-2 text-sm font-medium transition-all hover:border-indigo-500 hover:text-indigo-600 hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-gray-200 disabled:hover:shadow-none disabled:hover:text-gray-700 bg-gray-50 border-gray-200"
+                onClick={handleAttendanceDownload}
+                disabled={!canGetAttendance || isWorking}
+                title={attendanceHint}
+              >
+                <i className={`lni ${activeAction === 'attendance' ? 'lni-spinner lni-is-spinning' : 'lni-users'} text-3xl text-green-600`}></i>
+                {activeAction === 'attendance' ? 'Downloading...' : 'Attendance Sheet'}
+              </button>
+
+              <button
+                className="flex flex-col items-center justify-center p-4 border rounded-xl gap-2 text-sm font-medium transition-all hover:border-indigo-500 hover:text-indigo-600 hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-gray-200 disabled:hover:shadow-none disabled:hover:text-gray-700 bg-emerald-50 border-emerald-100"
+                onClick={handleCoverLetterDownload}
+                disabled={!canGetCoverLetter || isWorking}
+                title={coverLetterHint}
+              >
+                <i className={`lni ${activeAction === 'cover' ? 'lni-spinner lni-is-spinning' : 'lni-envelope'} text-3xl text-orange-500`}></i>
+                {activeAction === 'cover' ? 'Downloading...' : 'Cover Letter'}
+              </button>
+
+              <button
+                className="flex flex-col items-center justify-center p-4 border rounded-xl gap-2 text-sm font-medium transition-all hover:border-indigo-500 hover:text-indigo-600 hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-gray-200 disabled:hover:shadow-none disabled:hover:text-gray-700 bg-orange-50 border-orange-100"
+                onClick={handleConsolidatedMarkSheetDownload}
+                disabled={!canGetConsolidated || isWorking}
+                title={consolidatedHint}
+              >
+                <i className={`lni ${activeAction === 'consolidated' ? 'lni-spinner lni-is-spinning' : 'lni-list'} text-3xl text-purple-600`}></i>
+                {activeAction === 'consolidated' ? 'Downloading...' : 'Consolidated Mark Sheet'}
+              </button>
+            </div>
           </div>
         </div>
       </div>

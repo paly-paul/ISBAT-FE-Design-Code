@@ -12,7 +12,8 @@ import {
 export function useProjectReviewUnits() {
   return useQuery({
     queryKey: ['assessment', 'project-reviews', 'units'],
-    queryFn: getProjectReviewUnits
+    queryFn: getProjectReviewUnits,
+    retry: false,
   })
 }
 
@@ -20,7 +21,8 @@ export function useProjectReviewStudents(unitGuid: string) {
   return useQuery({
     queryKey: ['assessment', 'project-reviews', 'students', unitGuid],
     queryFn: () => getProjectReviewStudents(unitGuid),
-    enabled: !!unitGuid
+    enabled: !!unitGuid,
+    retry: false,
   })
 }
 
@@ -28,7 +30,8 @@ export function useProjectReviews(proposalGuid: string | null) {
   return useQuery({
     queryKey: ['assessment', 'project-reviews', 'history', proposalGuid],
     queryFn: () => getProjectReviews(proposalGuid!),
-    enabled: !!proposalGuid
+    enabled: !!proposalGuid,
+    retry: false,
   })
 }
 
@@ -36,7 +39,8 @@ export function useProjectReviewByGuid(reviewGuid: string | null) {
   return useQuery({
     queryKey: ['assessment', 'project-reviews', reviewGuid],
     queryFn: () => getProjectReviewByGuid(reviewGuid!),
-    enabled: !!reviewGuid
+    enabled: !!reviewGuid,
+    retry: false,
   })
 }
 

@@ -92,13 +92,15 @@ export default function UeAttendancePage() {
     queryKey: ['ueAttendanceSchedule', programGuid, semesterGuid, unitGuid, intakeGuid, derivedUeType],
     queryFn: () => getUeAttendanceSchedule(programGuid, semesterGuid, unitGuid, intakeGuid, derivedUeType),
     enabled: isReadyForData,
+    retry: false,
   })
 
   // 5. Students
-  const { data: students, isLoading: loadingStudents, isFetching: fetchingStudents } = useQuery({
+  const { data: students, isLoading: loadingStudents, isFetching: fetchingStudents, error: studentsError } = useQuery({
     queryKey: ['ueAttendanceStudents', programGuid, semesterGuid, unitGuid, intakeGuid, derivedUeType, selectedUnit?.unitCat],
     queryFn: () => getUeAttendanceStudents(programGuid, semesterGuid, unitGuid, intakeGuid, derivedUeType, selectedUnit!.unitCat),
     enabled: isReadyForData && !!schedule, // Only load students if schedule exists
+    retry: false,
   })
 
   // Sync local attendance state when students fetch
@@ -275,7 +277,7 @@ export default function UeAttendancePage() {
               </div>
             ) : scheduleError ? (
               <div className="flex items-center gap-3 text-red-500 font-medium bg-red-50 p-3 rounded-lg border border-red-100 w-full">
-                <i className="lni lni-warning text-xl"></i> No scheduled exam found for this combination. Please create the exam schedule first.
+                <i className="lni lni-warning text-xl"></i> {(scheduleError as Error)?.message || 'No scheduled exam found for this combination. Please create the exam schedule first.'}
               </div>
             ) : schedule ? (
               <>
@@ -351,6 +353,12 @@ export default function UeAttendancePage() {
                 <EmptyState colSpan={5} title="No Exam Selected" subtitle="Select a Programme, Intake, Semester, and Unit to view students." />
               ) : isLoadingData ? (
                 <TableLoadingState colSpan={5} title="Loading students..." subtitle="Fetching eligible students for this exam." />
+              ) : studentsError ? (
+                <tr>
+                  <td colSpan={5} className="text-clr-red text-center" style={{ padding: 24 }}>
+                    <i className="lni lni-warning"></i> {(studentsError as Error)?.message || 'Could not load eligible students.'}
+                  </td>
+                </tr>
               ) : !students || students.length === 0 ? (
                 <EmptyState colSpan={5} title="No students found" subtitle="No eligible students found for this exam combination." />
               ) : filteredStudents.length === 0 ? (

@@ -16,6 +16,7 @@ export function useUeDetailedMarks(universityExamGuid: string | null) {
     queryKey: [...KEY, 'grid', universityExamGuid],
     queryFn: () => getUeDetailedMarks(universityExamGuid!),
     enabled: !!universityExamGuid,
+    retry: false,
   })
 }
 

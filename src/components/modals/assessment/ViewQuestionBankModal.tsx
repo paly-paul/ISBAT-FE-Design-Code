@@ -49,7 +49,7 @@ export function ViewQuestionBankModal({
   const [isAddingNew, setIsAddingNew] = useState(false)
 
   // Fetch live questions from backend
-  const { data: liveQuestionsDto, isLoading: isLoadingQuestions } = useQuestions(
+  const { data: liveQuestionsDto, isLoading: isLoadingQuestions, isError: isQuestionsError, error: questionsError } = useQuestions(
     bank?.courseUnitGuid || '',
     Number(bank?.categoryId || 0),
     bank?.intakeGuid || '',
@@ -350,7 +350,21 @@ export function ViewQuestionBankModal({
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredQuestions.length === 0 ? (
+                    {isLoadingQuestions ? (
+                      <tr>
+                        <td colSpan={7} style={{ textAlign: 'center', padding: '40px 16px', color: 'var(--g500)' }}>
+                          <span className="inline-block w-5 h-5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin mb-2"></span>
+                          <div className="text-xs">Loading questions…</div>
+                        </td>
+                      </tr>
+                    ) : isQuestionsError ? (
+                      <tr>
+                        <td colSpan={7} style={{ textAlign: 'center', padding: '40px 16px', color: 'var(--clr-red, #dc2626)' }}>
+                          <i className="lni lni-warning text-2xl block mb-2 opacity-80"></i>
+                          <div className="text-xs font-semibold">{(questionsError as Error)?.message || 'Failed to load questions.'}</div>
+                        </td>
+                      </tr>
+                    ) : filteredQuestions.length === 0 ? (
                       <tr>
                         <td colSpan={7} style={{ textAlign: 'center', padding: '40px 16px', color: 'var(--g400)' }}>
                           <i className="lni lni-search text-2xl block mb-2 opacity-50"></i>

@@ -534,12 +534,13 @@ export default function ResultModerationPage() {
       return { ok: true }
     } catch (err: any) {
       if (err?.status === 404 || err?.code === 'not_found') {
-        showToast('This exam result was not found. Reloading results...', 'error')
+        const notFoundMsg = err?.message || 'This exam result was not found. Reloading results...'
+        showToast(notFoundMsg, 'error')
         setEditRow(null)
         setPage(1)
         setLoadedRows([])
         queryClient.invalidateQueries({ queryKey: GENERATE_RESULT_KEYS.results() })
-        return { ok: false, error: 'Row not found' }
+        return { ok: false, error: notFoundMsg }
       }
       const msg = err?.message || 'Unable to apply this moderation.'
       return { ok: false, error: msg }
@@ -582,7 +583,7 @@ export default function ResultModerationPage() {
       setRemoveRow(null)
     } catch (err: any) {
       if (err?.status === 404 || err?.code === 'not_found') {
-        showToast('This exam result was not found. Reloading results...', 'error')
+        showToast(err?.message || 'This exam result was not found. Reloading results...', 'error')
         setRemoveRow(null)
         setPage(1)
         setLoadedRows([])
@@ -981,6 +982,12 @@ export default function ResultModerationPage() {
                   title="Loading results..."
                   subtitle="Fetching moderation records for the intake."
                 />
+              ) : resultsQ.isError && loadedRows.length === 0 ? (
+                <tr>
+                  <td colSpan={15} className="text-clr-red text-center" style={{ padding: 24 }}>
+                    <i className="lni lni-warning"></i> {(resultsQ.error as Error)?.message || 'Failed to load moderation results.'}
+                  </td>
+                </tr>
               ) : loadedRows.length === 0 ? (
                 <EmptyState
                   colSpan={15}

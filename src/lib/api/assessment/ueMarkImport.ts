@@ -1,4 +1,4 @@
-import { apiGet, apiPostForm, apiGetBlob } from '../client'
+import { apiGet, apiPostForm, apiPostFormWithMessage, apiGetBlob } from '../client'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
@@ -227,9 +227,10 @@ export function postUeMarkImportImport(params: UeMarkImportFileParams): Promise<
   formData.append('SheetName', params.sheetName || '')
   formData.append('UniversityExamGuid', params.universityExamGuid?.toUpperCase() || '')
 
-  return apiPostForm<boolean>('/api/v1/assessment/ue-mark-import/import', formData)
-    .then(data => ({
+  return apiPostFormWithMessage<boolean>('/api/v1/assessment/ue-mark-import/import', formData)
+    .then(({ data, message }) => ({
       success: Boolean(data),
-      message: 'Marks Saved successfully......!',
+      // Backend's own success message first; old text only as a fallback.
+      message: message?.trim() || 'Marks Saved successfully......!',
     }))
 }

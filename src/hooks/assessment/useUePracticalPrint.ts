@@ -26,10 +26,13 @@ export function useUePracticalPrintSemesters(programGuid: string | null) {
 }
 
 // Fetches all program units. The component must filter by semesterGuid and unitTypeName === 'Practical'
+// The error is NOT swallowed — it stays on the query (isError / error). The
+// page only uses this list when it is non-empty and otherwise falls back to
+// the assessment course units, so a failure here never blocks the UI.
 export function useUePracticalProgramUnits(programGuid: string | null) {
   return useQuery({
     queryKey: ['ue-practical-program-course-units', programGuid],
-    queryFn: () => getProgramCourseUnits(programGuid!).catch(() => []),
+    queryFn: () => getProgramCourseUnits(programGuid!),
     enabled: !!programGuid,
     retry: false,
   })

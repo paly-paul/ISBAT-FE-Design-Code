@@ -139,27 +139,22 @@ export async function getQuestions(courseUnitGuid: string, category: number, int
     category: String(category),
     intakeGuid,
   })
-  try {
-    const data = await apiGet<any>(`/api/v1/assessment/questions?${params.toString()}`)
-    const items = Array.isArray(data) ? data : data?.items ?? []
-    return items.map((q: any) => ({
-      questionGuid: q.questionGuid || q.guid || q.id || '',
-      questionText: q.questionText ?? q.question ?? '',
-      option1Text: q.option1Text ?? q.option1 ?? null,
-      option2Text: q.option2Text ?? q.option2 ?? null,
-      option3Text: q.option3Text ?? q.option3 ?? null,
-      option4Text: q.option4Text ?? q.option4 ?? null,
-      answerText: q.answerText ?? q.answer ?? '',
-      questionType: typeof q.questionType === 'number' ? q.questionType : (q.questionType === 'MCQ' ? 1 : 2),
-      level: q.level ?? null,
-      universityExamType: typeof q.universityExamType === 'number' ? q.universityExamType : (q.universityExamType === null ? null : (typeof q.examType === 'number' ? q.examType : null)),
-      imageFileName: q.imageFileName ?? null,
-      imageUrl: q.imageUrl ?? null,
-    }))
-  } catch (err) {
-    console.warn('ℹ️ [Questions] Could not fetch questions from backend:', err)
-    return []
-  }
+  const data = await apiGet<any>(`/api/v1/assessment/questions?${params.toString()}`)
+  const items = Array.isArray(data) ? data : data?.items ?? []
+  return items.map((q: any) => ({
+    questionGuid: q.questionGuid || q.guid || q.id || '',
+    questionText: q.questionText ?? q.question ?? '',
+    option1Text: q.option1Text ?? q.option1 ?? null,
+    option2Text: q.option2Text ?? q.option2 ?? null,
+    option3Text: q.option3Text ?? q.option3 ?? null,
+    option4Text: q.option4Text ?? q.option4 ?? null,
+    answerText: q.answerText ?? q.answer ?? '',
+    questionType: typeof q.questionType === 'number' ? q.questionType : (q.questionType === 'MCQ' ? 1 : 2),
+    level: q.level ?? null,
+    universityExamType: typeof q.universityExamType === 'number' ? q.universityExamType : (q.universityExamType === null ? null : (typeof q.examType === 'number' ? q.examType : null)),
+    imageFileName: q.imageFileName ?? null,
+    imageUrl: q.imageUrl ?? null,
+  }))
 }
 
 /**

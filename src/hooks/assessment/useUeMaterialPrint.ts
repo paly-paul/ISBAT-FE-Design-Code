@@ -50,12 +50,15 @@ export function useUeQuestionPrintCourseUnits(
 // The current-intake course-unit endpoint owns the dropdown population. Its
 // response does not reliably include unit type, so this lookup is used only
 // to decide how the selected unit should be printed.
-// retry: false and .catch prevent 403 authorization errors from blocking the UI
-// when an assessment user does not have academic module permissions.
+// retry: false keeps a 403 (assessment user without academic module
+// permissions) from being retried. The error is NOT swallowed any more — it
+// stays on the query (isError / error); every caller already reads
+// `programUnits ?? []` and falls back to the current-intake course units, so
+// a failure here never blocks the UI.
 export function useUeMaterialPrintProgramUnits(programGuid: string | null) {
   return useQuery({
     queryKey: ['ue-material-print-program-course-units', programGuid],
-    queryFn: () => getProgramCourseUnits(programGuid!).catch(() => []),
+    queryFn: () => getProgramCourseUnits(programGuid!),
     enabled: !!programGuid,
     retry: false,
   })

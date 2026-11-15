@@ -27,7 +27,12 @@ export default function TranscriptPrintPage() {
   const { data: programs, isLoading: isLoadingPrograms } = useProgramDropdown()
   const { data: semesters, isLoading: isLoadingSemesters } = useSemestersForProgram(programGuid, !!programGuid)
 
-  const { data: eligibilityList, isLoading: isLoadingEligibility } = useTranscriptPrintEligibility(
+  const {
+    data: eligibilityList,
+    isLoading: isLoadingEligibility,
+    isError: isEligibilityError,
+    error: eligibilityError,
+  } = useTranscriptPrintEligibility(
     academicIntakeGuid || null, 
     programGuid || null, 
     semesterGuid || null
@@ -55,7 +60,7 @@ export default function TranscriptPrintPage() {
         showToast(`Downloaded transcript for ${studentName}`)
       },
       onError: (err: any) => {
-        showToast(err?.code === 'forbidden' ? 'You do not have permission to print transcripts.' : err?.message || 'Failed to download transcript. Please try again.', 'error')
+        showToast(err?.message || (err?.code === 'forbidden' ? 'You do not have permission to print transcripts.' : 'Failed to download transcript. Please try again.'), 'error')
       }
     })
   }
@@ -75,7 +80,7 @@ export default function TranscriptPrintPage() {
         showToast(`Downloaded bulk transcripts successfully`)
       },
       onError: (err: any) => {
-        showToast(err?.code === 'forbidden' ? 'You do not have permission to print transcripts.' : err?.message || 'Failed to download bulk transcripts. Please try again.', 'error')
+        showToast(err?.message || (err?.code === 'forbidden' ? 'You do not have permission to print transcripts.' : 'Failed to download bulk transcripts. Please try again.'), 'error')
       }
     })
   }
@@ -177,6 +182,12 @@ export default function TranscriptPrintPage() {
                 <EmptyState colSpan={5} title="Select Academic Intake, Programme, and Semester to view eligibility." />
               ) : isLoadingEligibility ? (
                 <TableLoadingState colSpan={5} title="Loading eligible students..." />
+              ) : isEligibilityError ? (
+                <tr>
+                  <td colSpan={5} className="text-clr-red text-center" style={{ padding: 24 }}>
+                    <i className="lni lni-warning"></i> {(eligibilityError as Error)?.message || 'Failed to load transcript eligibility.'}
+                  </td>
+                </tr>
               ) : !eligibilityList || eligibilityList.length === 0 ? (
                 <EmptyState colSpan={5} title="No eligible students found for printing transcripts in this batch." />
               ) : (

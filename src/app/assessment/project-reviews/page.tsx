@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { SearchSelect } from '@/components/SearchSelect'
 import { ScrollTable } from '@/components/ScrollTable'
@@ -31,11 +31,23 @@ export default function ProjectReviewsPage() {
   const [unitGuid, setUnitGuid] = useState('')
   const [proposalGuid, setProposalGuid] = useState('')
 
-  const { data: units, isLoading: isLoadingUnits } = useProjectReviewUnits()
-  const { data: students, isLoading: isLoadingStudents } = useProjectReviewStudents(unitGuid)
+  const { data: units, isLoading: isLoadingUnits, error: unitsError } = useProjectReviewUnits()
+  const { data: students, isLoading: isLoadingStudents, error: studentsError } = useProjectReviewStudents(unitGuid)
   
-  const { data: reviewData, isLoading: isLoadingReviews } = useProjectReviews(proposalGuid || null)
+  const {
+    data: reviewData,
+    isLoading: isLoadingReviews,
+    isError: isReviewsError,
+    error: reviewsError,
+  } = useProjectReviews(proposalGuid || null)
   const deleteMut = useDeleteProjectReview()
+
+  useEffect(() => {
+    const err = reviewsError || studentsError || unitsError
+    if (err instanceof Error && err.message) {
+      showToast(err.message, 'error')
+    }
+  }, [reviewsError, studentsError, unitsError])
 
   const unitOptions = useMemo(() => {
     if (!units) return []
@@ -171,9 +183,15 @@ export default function ProjectReviewsPage() {
             <tbody className="divide-y divide-slate-200/80 bg-white">
               {!proposalGuid ? (
                 <EmptyState colSpan={4} title="Select a Student" subtitle="Please select a course unit and a student to view their project reviews." />
-              ) : isLoadingReviews || !reviewData ? (
+              ) : isLoadingReviews ? (
                 <TableLoadingState colSpan={4} title="Loading reviews..." />
-              ) : !reviewData.reviews || reviewData.reviews.length === 0 ? (
+              ) : isReviewsError ? (
+                <tr>
+                  <td colSpan={4} className="text-clr-red text-center" style={{ padding: 24 }}>
+                    <i className="lni lni-warning"></i> {(reviewsError as Error)?.message || 'Could not load project reviews.'}
+                  </td>
+                </tr>
+              ) : !reviewData || !reviewData.reviews || reviewData.reviews.length === 0 ? (
                 <EmptyState colSpan={4} title="No reviews found for this project proposal." />
               ) : (
                 reviewData.reviews.map((row) => (

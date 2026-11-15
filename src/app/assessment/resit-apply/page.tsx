@@ -43,7 +43,7 @@ export default function ResitApplyPage() {
   function doSearch() { setSearch(searchInput.trim()); setPage(1) }
   function doClear() { setSearchInput(''); setSearch(''); setPage(1) }
 
-  const { data: listData, isLoading: listLoading, refetch: refetchList } = useResitEligibleStudents({ page, pageSize: 10, search })
+  const { data: listData, isLoading: listLoading, isError: listError, error: listErr, refetch: refetchList } = useResitEligibleStudents({ page, pageSize: 10, search })
 
   // Page beyond the last page → back to the last page.
   useEffect(() => {
@@ -57,12 +57,18 @@ export default function ResitApplyPage() {
   const [ue, setUe] = useState(false)
   const [ueType, setUeType] = useState<0 | 1>(0)
 
-  const { data: dropdownUnits, refetch: refetchDropdown } = useResitDropdownUnits(selectedStudent?.studentGuid || null)
-  const { data: checkboxState } = useResitCheckboxState(selectedStudent?.studentGuid || null, courseUnitGuid || null)
-  const { data: appliedUnits, refetch: refetchApplied } = useResitAppliedUnits(selectedStudent?.studentGuid || null)
+  const { data: dropdownUnits, isError: dropdownFailed, error: dropdownError, refetch: refetchDropdown } = useResitDropdownUnits(selectedStudent?.studentGuid || null)
+  const { data: checkboxState, error: checkboxError } = useResitCheckboxState(selectedStudent?.studentGuid || null, courseUnitGuid || null)
+  const { data: appliedUnits, isError: appliedFailed, error: appliedError, refetch: refetchApplied } = useResitAppliedUnits(selectedStudent?.studentGuid || null)
   const { data: editData, isError: editFailed, error: editError } = useResitApplicationForEdit(editingGuid)
   // Set when submit says the resit period is closed — the form stays disabled.
   const [periodClosed, setPeriodClosed] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (checkboxError instanceof Error && checkboxError.message) {
+      setToast({ msg: checkboxError.message, type: 'error' })
+    }
+  }, [checkboxError])
 
   // 404 on edit: deleted meanwhile — leave edit mode and reload the grid.
   useEffect(() => {
@@ -221,6 +227,8 @@ export default function ResitApplyPage() {
               <tbody>
                 {listLoading 
                   ? <TableLoadingState colSpan={6} />
+                  : listError
+                    ? <tr><td colSpan={6} className="text-clr-red text-center" style={{ padding: 24 }}><i className="lni lni-warning"></i> {(listErr as Error)?.message || 'Failed to load eligible students.'}</td></tr>
                   : (!listData?.items || listData.items.length === 0) 
                     ? <EmptyState colSpan={6} title="No students have pending resit units." hasFilters={!!search} onClearFilters={doClear} />
                     : listData.items.map(s => (
@@ -323,6 +331,10 @@ export default function ResitApplyPage() {
 
                 {periodClosed ? (
                   <div className="warn-box text-sm"><i className="lni lni-lock mt-0.5"></i><span>{periodClosed} Applications can&apos;t be made or changed now.</span></div>
+                ) : dropdownFailed ? (
+                  <div className="text-sm text-red-600 flex items-center gap-2">
+                    <i className="lni lni-warning"></i> {(dropdownError as Error)?.message || 'Failed to load resit course units.'}
+                  </div>
                 ) : (!dropdownUnits || dropdownUnits.length === 0) && !editingGuid ? (
                   <div className="text-sm text-slate-500 flex items-center gap-2">
                     <i className="lni lni-checkmark-circle" style={{ color: 'var(--green)' }}></i> No units left to apply for.
@@ -442,7 +454,9 @@ export default function ResitApplyPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {(!appliedUnits || appliedUnits.length === 0) ? (
+                    {appliedFailed ? (
+                      <tr><td colSpan={8} className="text-clr-red text-center" style={{ padding: 24 }}><i className="lni lni-warning"></i> {(appliedError as Error)?.message || 'Failed to load applied units.'}</td></tr>
+                    ) : (!appliedUnits || appliedUnits.length === 0) ? (
                       <EmptyState colSpan={8} hasFilters={false} title="No applications yet" subtitle="Units applied for this student will appear here." />
                     ) : (
                       appliedUnits.map(app => (

@@ -44,7 +44,7 @@ export default function HallTicketPrintAllPage() {
   const [termOverride, setTermOverride] = useState<string>('')
   const termParam = termOverride ? (Number(termOverride) as HallTicketTerm) : undefined
 
-  const { data: issued = [], isFetching: previewLoading, isError: previewError } = useHallTicketScopeStudents(
+  const { data: issued = [], isFetching: previewLoading, isError: previewError, error: previewErr } = useHallTicketScopeStudents(
     intakeGuid ? { intakeGuid, term: termParam } : null,
     'Issued',
   )
@@ -60,14 +60,8 @@ export default function HallTicketPrintAllPage() {
       const termLabel = termOverride ? `Term ${termOverride} ` : ''
       showToast(`Downloaded ${issued.length} ${termLabel}hall tickets for ${intakeLabel}.`, 'ok')
     } catch (e: any) {
-      const msg = e?.message || ''
-      if (/cannot be printed after the exam/i.test(msg)) {
-        showToast('Hall ticket cannot be printed after the exam.', 'error')
-      } else if (/Could not determine the hall ticket term/i.test(msg)) {
-        showToast('Could not determine the hall ticket term. Please specify the term.', 'error')
-      } else {
-        showToast(msg || 'Could not generate the hall tickets.', 'error')
-      }
+      const msg = e?.errors?.[0] || e?.message || 'Could not generate the hall tickets.'
+      showToast(msg, 'error')
     } finally {
       setPrinting(false)
     }
@@ -108,7 +102,7 @@ export default function HallTicketPrintAllPage() {
           {!intakeGuid ? null : previewLoading ? (
             <div className="text-g400" style={{ fontSize: 12.5, marginBottom: 12 }}>Counting issued hall tickets…</div>
           ) : previewError ? (
-            <div className="text-clr-red" style={{ fontSize: 12.5, marginBottom: 12 }}><i className="lni lni-warning"></i> Couldn&apos;t count issued hall tickets. You can still try Print All.</div>
+            <div className="text-clr-red" style={{ fontSize: 12.5, marginBottom: 12 }}><i className="lni lni-warning"></i> {(previewErr as Error)?.message || "Couldn't count issued hall tickets. You can still try Print All."}</div>
           ) : issued.length === 0 ? (
             <div className="info-box mb-3" style={{ borderColor: 'var(--amber-bd)', background: 'var(--amber-bg)' }}>
               <i className="lni lni-warning" style={{ color: 'var(--amber)', fontSize: 15, flexShrink: 0 }}></i>

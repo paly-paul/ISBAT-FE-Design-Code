@@ -59,7 +59,7 @@ export function getHallTicketEligibility(studentGuid: string, intakeGuid: string
 // (query or body, 2026-10-30 docs); `intakeGuid` is a 400. Only the academic
 // service's student search still takes `intakeGuid`.
 // `term` is optional — when omitted the server picks it (post-issue.md 2026-11-13).
-export async function issueHallTicket(payload: { studentGuid: string; intakeGuid: string; term?: HallTicketTerm | null }): Promise<{ alreadyIssued: boolean }> {
+export async function issueHallTicket(payload: { studentGuid: string; intakeGuid: string; term?: HallTicketTerm | null }): Promise<{ alreadyIssued: boolean; message: string | null }> {
   const body: Record<string, any> = {
     studentGuid: payload.studentGuid,
     academicIntakeGuid: payload.intakeGuid,
@@ -67,7 +67,9 @@ export async function issueHallTicket(payload: { studentGuid: string; intakeGuid
   if (payload.term) body.term = payload.term
 
   const { message } = await apiPostWithMessage<boolean>('/api/v1/assessment/hall-ticket-issue', body)
-  return { alreadyIssued: /already issued/i.test(message ?? '') }
+  // `message` is the backend's own wording ("Hall ticket issued successfully."
+  // / "Hall ticket already issued.") — passed through so the page can show it.
+  return { alreadyIssued: /already issued/i.test(message ?? ''), message: message?.trim() || null }
 }
 
 // alreadyIssued students are skipped and their issue date is NOT refreshed

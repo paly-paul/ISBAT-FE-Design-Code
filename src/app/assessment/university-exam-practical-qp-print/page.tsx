@@ -225,12 +225,7 @@ export default function UniversityExamPracticalQpPrintPage() {
         showToast(res.message || 'Deleted successfully!', 'success')
       }
     } catch (err: any) {
-      const msg = err?.message || ''
-      if (msg.toLowerCase().includes('not found') || msg.toLowerCase().includes('could not delete')) {
-        showToast('No printed question paper found to delete.', 'info')
-      } else {
-        showToast(msg || 'Could not delete QP.', 'error')
-      }
+      showToast(err?.message || 'Could not delete....!', 'error')
     }
   }
 
@@ -239,30 +234,8 @@ export default function UniversityExamPracticalQpPrintPage() {
     if (!isFormValid) return
     const req = buildRequest(confirm)
 
-    try {
-      if (type === 'QPPDF') {
-        const { blob, filename } = await dlPracticalPdfMut.mutateAsync(req)
-        downloadFile(blob, filename, 'Practical_QuestionPaper.pdf')
-      } else if (type === 'QPWord') {
-        const { blob, filename } = await dlPracticalWordMut.mutateAsync(req)
-        downloadFile(blob, filename, 'Practical_QuestionPaper.doc')
-      }
-    } catch (err: any) {
-      // If questions haven't been printed yet (returns 404), seamlessly generate and download per MD flow
+    if (!confirm) {
       try {
-        const res = await printPracticalMut.mutateAsync(req)
-        const { outcome, message } = parseOutcome(res)
-
-        if (outcome === 'ConfirmationRequired') {
-          confirmAndExecute(message || 'Questions are already printed. Do you want to reprint the same?', () => handleDownload(type, true))
-          return
-        }
-
-        if (outcome === 'ExamRuleNotSet' || outcome === 'QuestionsNotAvailable') {
-          showToast(message || 'Questions are not yet available for this unit.', 'error')
-          return
-        }
-
         if (type === 'QPPDF') {
           const { blob, filename } = await dlPracticalPdfMut.mutateAsync(req)
           downloadFile(blob, filename, 'Practical_QuestionPaper.pdf')
@@ -270,9 +243,36 @@ export default function UniversityExamPracticalQpPrintPage() {
           const { blob, filename } = await dlPracticalWordMut.mutateAsync(req)
           downloadFile(blob, filename, 'Practical_QuestionPaper.doc')
         }
-      } catch (innerErr: any) {
-        showToast(innerErr.message || 'Failed to download document', 'error')
+        return
+      } catch {
+        // If questions haven't been printed yet (returns 404), seamlessly generate and download per MD flow
       }
+    }
+
+    try {
+      const res = await printPracticalMut.mutateAsync(req)
+      const { outcome, message } = parseOutcome(res)
+
+      if (outcome === 'ConfirmationRequired') {
+        confirmAndExecute(message || 'Questions are already printed. Do you want to reprint the same?', () => handleDownload(type, true))
+        return
+      }
+
+      if (outcome === 'ExamRuleNotSet' || outcome === 'QuestionsNotAvailable') {
+        showToast(message || 'Questions are not yet available for this unit.', 'error')
+        return
+      }
+
+      if (type === 'QPPDF') {
+        const { blob, filename } = await dlPracticalPdfMut.mutateAsync(req)
+        downloadFile(blob, filename, 'Practical_QuestionPaper.pdf')
+      } else if (type === 'QPWord') {
+        const { blob, filename } = await dlPracticalWordMut.mutateAsync(req)
+        downloadFile(blob, filename, 'Practical_QuestionPaper.doc')
+      }
+      if (message) showToast(message, 'success')
+    } catch (innerErr: any) {
+      showToast(innerErr?.message || 'Failed to download document', 'error')
     }
   }
 
