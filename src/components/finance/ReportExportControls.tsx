@@ -7,6 +7,7 @@ import { REPORT_JOBS_KEY, downloadReportJob, trackInline, upsertReportJob } from
 import { getReportJobs, REPORT_STATUS, type ReportJob } from '@/lib/api/finance/discountReport'
 import { fmtReportCount, reportErrorMessage } from '@/lib/reportFormat'
 import { useActionGuard } from '@/hooks/users/useActionGuard'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { Toast } from '@/components/Toast'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
@@ -24,11 +25,16 @@ const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 // shows, and without it clicking shows a toast instead of exporting. Every
 // error (refused, failed job, expired link) is a toast too; only the
 // Building… / Ready progress stays inline.
-export function ReportExportControls({ startExport, resetKey, mockFileName }: {
+//
+// `hideWithoutPermission`: for pages whose doc says to hide the button
+// rather than explain on click (e.g. the Transaction Report).
+export function ReportExportControls({ startExport, resetKey, mockFileName, hideWithoutPermission = false }: {
   startExport: () => Promise<{ job: ReportJob; message: string | null }>
   resetKey: number
   mockFileName: string
+  hideWithoutPermission?: boolean
 }) {
+  const permissions = usePagePermissions()
   const queryClient = useQueryClient()
   const jobsQuery = useQuery({ queryKey: REPORT_JOBS_KEY, queryFn: () => getReportJobs(1, 15) })
   const [jobGuid, setJobGuid] = useState<string | null>(null)
@@ -96,6 +102,8 @@ export function ReportExportControls({ startExport, resetKey, mockFileName }: {
       setDownloading(false)
     }
   }
+
+  if (hideWithoutPermission && !permissions.export) return null
 
   return (
     <div className="rpt-export">

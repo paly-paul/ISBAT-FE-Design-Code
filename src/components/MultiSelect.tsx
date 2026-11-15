@@ -2,7 +2,9 @@
 import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 
-type Opt = { value: string; label: string }
+// `group` (optional): consecutive options with the same group are listed
+// under a small heading, e.g. "Fee ledgers" / "Other ledgers".
+type Opt = { value: string; label: string; group?: string }
 
 interface MultiSelectProps {
   options: (string | Opt)[]
@@ -179,14 +181,16 @@ export function MultiSelect({ options, value, onChange, onSearch, placeholder, c
               ? <div className="ss-no-match"><i className="lni lni-spinner-arrow" /> Loading results…</div>
               : visible.length === 0
               ? <div className="ss-no-match">No matches</div>
-              : visible.map(o => (
-                  <label
-                    key={o.value}
-                    className={`col-filter-opt-row${value.includes(o.value) ? ' fil-active' : ''}`}
-                  >
-                    <input type="checkbox" checked={value.includes(o.value)} onChange={() => toggleOne(o.value)} />
-                    {o.label}
-                  </label>
+              : visible.map((o, i) => (
+                  <div key={o.value} role="presentation">
+                    {o.group && o.group !== visible[i - 1]?.group && (
+                      <div className="ss-group-hdr" role="presentation">{o.group}</div>
+                    )}
+                    <label className={`col-filter-opt-row${value.includes(o.value) ? ' fil-active' : ''}`}>
+                      <input type="checkbox" checked={value.includes(o.value)} onChange={() => toggleOne(o.value)} />
+                      {o.label}
+                    </label>
+                  </div>
                 ))
             }
           </div>

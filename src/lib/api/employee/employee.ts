@@ -136,7 +136,8 @@ export function getEmployees(page = 1, pageSize = 10, search = ''): Promise<Empl
     return Promise.resolve(q ? mockEmployees.filter(e => e.empName.toLowerCase().includes(q) || e.shortCode.toLowerCase().includes(q)) : mockEmployees)
   }
   const q = search.trim()
-  const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) })
+  // get-employees.md: the query param is pageNumber (a `page` param is ignored).
+  const params = new URLSearchParams({ pageNumber: String(page), pageSize: String(pageSize) })
   if (q) params.set('search', q)
   return apiGet<EmployeeListResponse | null>(`/api/v1/users/employees?${params}`).then(data => data?.items ?? [])
 }

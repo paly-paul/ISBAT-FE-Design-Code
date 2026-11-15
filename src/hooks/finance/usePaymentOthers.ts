@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { getPaymentOthers, getResitFee, PaymentOtherListParams } from '@/lib/api/finance/paymentOthers'
+import { getGrievanceFee, getPaymentOthers, getResitFee, PaymentOtherListParams } from '@/lib/api/finance/paymentOthers'
 
 // Exported (not just used internally) so useCreatePaymentOther in
 // usePaymentConsole.ts can invalidate this list too — a newly-added Other
@@ -27,4 +27,16 @@ export function useResitFee(studentGuid: string | null, applicationGuid: string 
   })
 }
 
+// The flat grievance fee per unit — the same for every student, so one
+// cached value; fetched only once a grievance ledger row exists.
+export function useGrievanceFee(enabled: boolean) {
+  return useQuery({
+    queryKey: [...PAYMENT_OTHERS_KEY, 'grievance-fee'],
+    queryFn: getGrievanceFee,
+    enabled,
+    staleTime: 5 * 60 * 1000,
+  })
+}
+
+export type { GrievanceFee } from '@/lib/api/finance/paymentOthers'
 export type { PaymentOtherDto, PaymentOtherListResponse, PaymentOtherListParams, ResitFee, ResitFeeUnit, ResitFeeSemester } from '@/lib/api/finance/paymentOthers'

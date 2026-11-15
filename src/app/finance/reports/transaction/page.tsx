@@ -14,9 +14,10 @@ import { getReceiptBookDropdown } from '@/lib/api/finance/receiptBook'
 import { useLedgers } from '@/hooks/finance/useLedgers'
 import { searchVettedRegisteredApplications } from '@/lib/api/admission/applicationFiling'
 import {
-  DISCOUNT_LEDGER_CODE, TRANSACTION_REPORT_MAX_LEDGERS, TRANSACTION_REPORT_MAX_RECEIPT_BOOKS,
+  DISCOUNT_LEDGER_CODE, TRANSACTION_REPORT_MAX_LEDGERS, TRANSACTION_REPORT_MAX_OTHER_LEDGERS, TRANSACTION_REPORT_MAX_RECEIPT_BOOKS, TXN_SOURCE,
   TransactionReportFilters, TransactionReportRow, exportTransactionReport, getFinancePaymentTypes, getTransactionReportPreview,
 } from '@/lib/api/finance/transactionReport'
+import { getLedgerOthersDropdown } from '@/lib/api/finance/ledgerOthersMaster'
 import {
   REPORT_PAYMODE_LABEL, REPORT_SOURCE_LABEL, fmtReportAmount, fmtReportCount, fmtReportDate, reportChipValue, reportErrorMessage,
 } from '@/lib/reportFormat'
@@ -24,7 +25,29 @@ import {
 // Transaction Report — erp-docs/pages/finance/transaction-report-page.md.
 // Works like the Discount Report: Process → page 1 (summary + 15 rows) →
 // infinite scroll (includeSummary=false) → Export to Excel in the background,
-// delivered through the shared Downloads list.
+// delivered through the shared Downloads list. Rows come from five sources:
+// fee payments, advance adjustments (shown, never counted), advance deposits,
+// other payments and refunds (negative).
+
+// The Ledgers multi-select holds both kinds; a prefix tells them apart.
+const FEE_PREFIX = 'fee:'
+const OTHER_PREFIX = 'oth:'
+
+const ADJUSTMENT_TIP = 'Paid from an advance deposit. Already counted when it was deposited.'
+
+// Badge per source (Direct, Adjustment, Deposit, Other, Refund).
+const SOURCE_BADGE: Record<number, string> = {
+  [TXN_SOURCE.DirectPayment]: 'badge-grey',
+  [TXN_SOURCE.AdvanceAdjustment]: 'badge-amber',
+  [TXN_SOURCE.AdvanceDeposit]: 'badge-blue',
+  [TXN_SOURCE.OtherPayment]: 'badge-purple',
+  [TXN_SOURCE.Refund]: 'badge-red',
+}
+
+// "—" for cells a source doesn't have (receipt, programme, pay mode…).
+const dash = (v: string | number | null | undefined) => (v === null || v === undefined || v === '' ? '—' : v)
+// Amounts with a real minus sign, so refunds read as negative.
+const fmtSigned = (n: number) => (n < 0 ? `−${fmtReportAmount(Math.abs(n))}` : fmtReportAmount(n))
 
 interface FormState {
   fromDate: string
@@ -33,6 +56,7 @@ interface FormState {
   applicationGuid: string
   receiptBookGuids: string[]
   ledgerGuids: string[]
+  otherLedgerGuids: string[]
   campusGuid: string
   programGuid: string
   semesterGuids: string[]
@@ -41,7 +65,7 @@ interface FormState {
   payTypes: string[]         // MultiSelect values; sent as numbers
 }
 const EMPTY_FORM: FormState = {
-  fromDate: '', toDate: '', intakeGuid: '', applicationGuid: '', receiptBookGuids: [], ledgerGuids: [],
+  fromDate: '', toDate: '', intakeGuid: '', applicationGuid: '', receiptBookGuids: [], ledgerGuids: [], otherLedgerGuids: [],
   campusGuid: '', programGuid: '', semesterGuids: [], batchGuids: [], sponsorCategoryGuid: '', payTypes: [],
 }
 
@@ -57,8 +81,12 @@ function toFilters(f: FormState): TransactionReportFilters {
     applicationGuid: f.applicationGuid || undefined,
     receiptBookGuids: f.receiptBookGuids.length ? f.receiptBookGuids : undefined,
     ledgerGuids: f.ledgerGuids.length ? f.ledgerGuids : undefined,
+    otherLedgerGuids: f.otherLedgerGuids.length ? f.otherLedgerGuids : undefined,
     campusGuid: f.campusGuid || undefined,
-    programGuid: f.programGuid || undefined,
+    // Known backend limitation (page doc): a programme filter currently hides
+    // every fee row, and programme + semesters returns nothing. When semesters
+    // are chosen, send only them — the programme was just there to list them.
+    programGuid: f.programGuid && !f.semesterGuids.length ? f.programGuid : undefined,
     semesterGuids: f.semesterGuids.length ? f.semesterGuids : undefined,
     batchGuids: f.batchGuids.length ? f.batchGuids : undefined,
     sponsorCategoryGuid: f.sponsorCategoryGuid || undefined,
@@ -88,6 +116,7 @@ export default function TransactionReportPage() {
   const intakesQuery = useIntakesDropdown()
   const booksQuery = useQuery({ queryKey: ['finance', 'receipt-books', 'dropdown', 'all'], queryFn: () => getReceiptBookDropdown(true) })
   const ledgersQuery = useLedgers()
+  const otherLedgersQuery = useQuery({ queryKey: ['finance', 'ledger-others', 'dropdown'], queryFn: () => getLedgerOthersDropdown() })
   const payTypesQuery = useQuery({ queryKey: ['finance', 'enums', 'payment-types'], queryFn: getFinancePaymentTypes })
   const {
     campusesQuery, sponsorsQuery, programsQuery, semestersQuery, batchesQuery,
@@ -101,6 +130,23 @@ export default function TransactionReportPage() {
   const ledgerOptions = useMemo(() => (ledgersQuery.data ?? [])
     .filter(l => l.ledgerCode.trim().toUpperCase() !== DISCOUNT_LEDGER_CODE)
     .map(l => ({ value: l.ledgerGuid, label: `${l.ledgerCode} - ${l.ledgerName}` })), [ledgersQuery.data])
+  const otherLedgerOptions = useMemo(() => (otherLedgersQuery.data ?? [])
+    .map(l => ({ value: l.ledgerOthersGuid, label: l.ledgerCode ? `${l.ledgerCode} - ${l.ledgerName}` : l.ledgerName })), [otherLedgersQuery.data])
+  // One Ledgers field with two groups; values carry a prefix so the pick can
+  // be split back into ledgerGuids and otherLedgerGuids.
+  const groupedLedgerOptions = useMemo(() => [
+    ...ledgerOptions.map(o => ({ value: FEE_PREFIX + o.value, label: o.label, group: 'Fee ledgers' })),
+    ...otherLedgerOptions.map(o => ({ value: OTHER_PREFIX + o.value, label: o.label, group: 'Other ledgers' })),
+  ], [ledgerOptions, otherLedgerOptions])
+  const groupedLedgerValue = [...form.ledgerGuids.map(g => FEE_PREFIX + g), ...form.otherLedgerGuids.map(g => OTHER_PREFIX + g)]
+  function pickLedgers(vals: string[]) {
+    setForm(prev => ({
+      ...prev,
+      ledgerGuids: vals.filter(v => v.startsWith(FEE_PREFIX)).map(v => v.slice(FEE_PREFIX.length)),
+      otherLedgerGuids: vals.filter(v => v.startsWith(OTHER_PREFIX)).map(v => v.slice(OTHER_PREFIX.length)),
+    }))
+    setErrors(prev => ({ ...prev, ledgerGuids: '', otherLedgerGuids: '' }))
+  }
 
   const payTypeOptions = useMemo(() => (payTypesQuery.data ?? []).map(t => ({ value: String(t.value), label: REPORT_PAYMODE_LABEL[t.value] ?? t.name })), [payTypesQuery.data])
 
@@ -158,7 +204,8 @@ export default function TransactionReportPage() {
     const e: Partial<Record<keyof FormState, string>> = {}
     if (form.fromDate && form.toDate && form.fromDate > form.toDate) e.toDate = 'To date can’t be before the from date'
     if (form.receiptBookGuids.length > TRANSACTION_REPORT_MAX_RECEIPT_BOOKS) e.receiptBookGuids = `Select at most ${TRANSACTION_REPORT_MAX_RECEIPT_BOOKS} receipt books (now ${form.receiptBookGuids.length})`
-    if (form.ledgerGuids.length > TRANSACTION_REPORT_MAX_LEDGERS) e.ledgerGuids = `Select at most ${TRANSACTION_REPORT_MAX_LEDGERS} ledgers (now ${form.ledgerGuids.length})`
+    if (form.ledgerGuids.length > TRANSACTION_REPORT_MAX_LEDGERS) e.ledgerGuids = `Select at most ${TRANSACTION_REPORT_MAX_LEDGERS} fee ledgers (now ${form.ledgerGuids.length})`
+    else if (form.otherLedgerGuids.length > TRANSACTION_REPORT_MAX_OTHER_LEDGERS) e.ledgerGuids = `Select at most ${TRANSACTION_REPORT_MAX_OTHER_LEDGERS} other ledgers (now ${form.otherLedgerGuids.length})`
     if (form.semesterGuids.length > REPORT_MAX_SEMESTERS) e.semesterGuids = `Select at most ${REPORT_MAX_SEMESTERS} semesters (now ${form.semesterGuids.length})`
     if (form.batchGuids.length > REPORT_MAX_BATCHES) e.batchGuids = `Select at most ${REPORT_MAX_BATCHES} batches (now ${form.batchGuids.length})`
     setErrors(e)
@@ -227,9 +274,8 @@ export default function TransactionReportPage() {
     if (saved.receiptBookGuids?.length) {
       chips.push({ label: 'Receipt books', value: saved.receiptBookGuids.length === 1 ? (bookOptions.find(o => o.value === saved.receiptBookGuids![0])?.label ?? '1 selected') : `${saved.receiptBookGuids.length} selected` })
     }
-    if (saved.ledgerGuids?.length) {
-      chips.push({ label: 'Ledgers', value: saved.ledgerGuids.length === 1 ? (ledgerOptions.find(o => o.value === saved.ledgerGuids![0])?.label ?? '1 selected') : `${saved.ledgerGuids.length} selected` })
-    }
+    if (saved.ledgerGuids?.length) chips.push({ label: 'Fee ledgers', value: reportChipValue(ledgerOptions, saved.ledgerGuids, 'selected') })
+    if (saved.otherLedgerGuids?.length) chips.push({ label: 'Other ledgers', value: reportChipValue(otherLedgerOptions, saved.otherLedgerGuids, 'selected') })
     if (saved.campusGuid) chips.push({ label: 'Campus', value: reportChipValue(campusOptions, [saved.campusGuid], 'campuses') })
     if (saved.programGuid) chips.push({ label: 'Programme', value: reportChipValue(programOptions, [saved.programGuid], 'programmes') })
     if (saved.semesterGuids?.length) chips.push({ label: 'Semesters', value: reportChipValue(semesterOptions, saved.semesterGuids, 'semesters') })
@@ -237,7 +283,7 @@ export default function TransactionReportPage() {
     if (saved.sponsorCategoryGuid) chips.push({ label: 'Sponsor', value: reportChipValue(sponsorOptions, [saved.sponsorCategoryGuid], 'sponsors') })
     if (saved.payTypes?.length) chips.push({ label: 'Payment types', value: saved.payTypes.map(t => payTypeOptions.find(o => o.value === String(t))?.label ?? t).join(', ') })
     return chips
-  }, [saved, savedStudentLabel, intakeOptions, bookOptions, ledgerOptions, campusOptions, programOptions, semesterOptions, batchOptions, sponsorOptions, payTypeOptions])
+  }, [saved, savedStudentLabel, intakeOptions, bookOptions, ledgerOptions, otherLedgerOptions, campusOptions, programOptions, semesterOptions, batchOptions, sponsorOptions, payTypeOptions])
 
   const COLS = 14
 
@@ -247,7 +293,7 @@ export default function TransactionReportPage() {
       <div className="pg-hdr">
         <div>
           <div className="pg-title">Transaction Report</div>
-          <div className="pg-sub">Every fee ledger line paid on a receipt · with its discount and net amount, and totals per currency</div>
+          <div className="pg-sub">Fee payments, advance deposits, other payments and refunds · with discounts, net amounts and totals per currency</div>
         </div>
       </div>
 
@@ -287,12 +333,17 @@ export default function TransactionReportPage() {
               <div className="fg m-0">
                 <label className="lbl">Programme</label>
                 <SearchSelect placeholder={form.campusGuid ? 'All programmes' : 'Choose a campus first'} options={programOptions} value={form.programGuid} onChange={pickProgram} disabled={!form.campusGuid} isLoading={programsQuery.isFetching} />
+                {form.programGuid && !form.semesterGuids.length && (
+                  <p className="text-g400" style={{ fontSize: 12, marginTop: 4 }}>
+                    A programme on its own currently shows no fee payments. Pick its semesters to see them.
+                  </p>
+                )}
               </div>
               <div className="fg m-0">
                 <label className="lbl">Semesters <span className="text-g400" style={{ fontWeight: 400 }}>· up to {REPORT_MAX_SEMESTERS}</span></label>
                 <MultiSelect placeholder={form.programGuid ? 'All semesters' : 'Choose a programme first'} options={semesterOptions} value={form.semesterGuids} onChange={pickSemesters} disabled={!form.programGuid} isLoading={semestersQuery.isFetching} />
                 {errors.semesterGuids && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.semesterGuids}</p>}
-                {form.semesterGuids.length > 0 && !errors.semesterGuids && <p className="text-g400" style={{ fontSize: 12, marginTop: 4 }}>Lines paid for these semesters, whatever semester the student is in now.</p>}
+                {form.semesterGuids.length > 0 && !errors.semesterGuids && <p className="text-g400" style={{ fontSize: 12, marginTop: 4 }}>Fee payments for these semesters only. Deposits, other payments and refunds are left out.</p>}
               </div>
               <div className="fg m-0">
                 <label className="lbl">Batches <span className="text-g400" style={{ fontWeight: 400 }}>· up to {REPORT_MAX_BATCHES}</span></label>
@@ -306,16 +357,31 @@ export default function TransactionReportPage() {
               <div className="fg m-0">
                 <label className="lbl">Payment types</label>
                 <MultiSelect placeholder="All payment types" options={payTypeOptions} value={form.payTypes} onChange={v => setField('payTypes', v)} isLoading={payTypesQuery.isLoading} />
+                {form.payTypes.length > 0 && <p className="text-g400" style={{ fontSize: 12, marginTop: 4 }}>Refunds have no payment type, so they’re left out.</p>}
               </div>
               <div className="fg m-0">
                 <label className="lbl">Receipt books <span className="text-g400" style={{ fontWeight: 400 }}>· up to {TRANSACTION_REPORT_MAX_RECEIPT_BOOKS}</span></label>
                 <MultiSelect placeholder="All receipt books" options={bookOptions} value={form.receiptBookGuids} onChange={v => setField('receiptBookGuids', v)} isLoading={booksQuery.isLoading} />
                 {errors.receiptBookGuids && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.receiptBookGuids}</p>}
+                {form.receiptBookGuids.length > 0 && !errors.receiptBookGuids && <p className="text-g400" style={{ fontSize: 12, marginTop: 4 }}>Refunds have no receipt, so they’re left out.</p>}
               </div>
               <div className="fg m-0">
-                <label className="lbl">Ledgers <span className="text-g400" style={{ fontWeight: 400 }}>· up to {TRANSACTION_REPORT_MAX_LEDGERS}</span></label>
-                <MultiSelect placeholder="All ledgers" options={ledgerOptions} value={form.ledgerGuids} onChange={v => setField('ledgerGuids', v)} isLoading={ledgersQuery.isLoading} />
+                <label className="lbl">Ledgers <span className="text-g400" style={{ fontWeight: 400 }}>· up to {TRANSACTION_REPORT_MAX_LEDGERS} of each kind</span></label>
+                <MultiSelect
+                  placeholder="All ledgers"
+                  options={groupedLedgerOptions}
+                  value={groupedLedgerValue}
+                  onChange={pickLedgers}
+                  isLoading={ledgersQuery.isLoading || otherLedgersQuery.isLoading}
+                />
                 {errors.ledgerGuids && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.ledgerGuids}</p>}
+                {!errors.ledgerGuids && (form.ledgerGuids.length > 0 || form.otherLedgerGuids.length > 0) && (
+                  <p className="text-g400" style={{ fontSize: 12, marginTop: 4 }}>
+                    Advance deposits have no ledger, so they’re left out.
+                    {form.ledgerGuids.length > 0 && !form.otherLedgerGuids.length && ' Other payments are left out too.'}
+                    {form.otherLedgerGuids.length > 0 && !form.ledgerGuids.length && ' Fee payments are left out too.'}
+                  </p>
+                )}
               </div>
             </div>
             <div className="flex items-center justify-end gap-2 mt-4">
@@ -351,7 +417,7 @@ export default function TransactionReportPage() {
           <div className="rpt-empty">
             <i className="lni lni-bar-chart" aria-hidden="true" />
             <div className="rpt-empty-title">Set your filters, then Process</div>
-            <div style={{ fontSize: 13 }}>The paid ledger lines appear here, with totals per currency.</div>
+            <div style={{ fontSize: 13 }}>The transactions appear here, with totals per currency.</div>
           </div>
         ) : firstPageFailed ? (
           <div className="rpt-empty">
@@ -381,6 +447,7 @@ export default function TransactionReportPage() {
                 resetKey={runId}
                 mockFileName="Transaction_Report.xlsx"
                 startExport={() => exportTransactionReport(saved)}
+                hideWithoutPermission
               />
             </div>
 
@@ -394,34 +461,49 @@ export default function TransactionReportPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((r, i) => (
-                    // A receipt has several lines and adjustment rows can
-                    // repeat a receipt, so the key includes the position.
-                    <tr key={`${r.receipt}-${r.ledgerCode}-${r.semCode}-${i}`}>
-                      <td>{fmtReportDate(r.payDate)}</td>
-                      <td className="rpt-mono">{r.receipt}</td>
-                      <td className="rpt-mono">{r.receiptBook}</td>
-                      <td className="rpt-mono">{r.studentNumber}</td>
-                      <td>{r.studentName}</td>
-                      <td>{r.programName}</td>
-                      <td>{r.semesterName}</td>
-                      <td>{r.ledgerCode} - {r.ledgerName}</td>
-                      <td>{REPORT_PAYMODE_LABEL[r.payMode.value] ?? r.payMode.name}</td>
-                      <td>
-                        <span className={`badge ${r.source.value === 2 ? 'badge-amber' : 'badge-grey'}`}>
-                          {REPORT_SOURCE_LABEL[r.source.value] ?? r.source.name}
-                        </span>
-                      </td>
-                      <td>{r.currencyCode}</td>
-                      <td className="num"><span className="rpt-amt">{fmtReportAmount(r.amount)}</span><span className="rpt-cur">{r.currencyCode}</span></td>
-                      <td className="num">
-                        {r.discount > 0
-                          ? <><span className="rpt-amt">{fmtReportAmount(r.discount)}</span><span className="rpt-cur">{r.currencyCode}</span></>
-                          : <span className="text-g400">0.00</span>}
-                      </td>
-                      <td className="num"><span className="rpt-amt">{fmtReportAmount(r.net)}</span><span className="rpt-cur">{r.currencyCode}</span></td>
-                    </tr>
-                  ))}
+                  {rows.map((r, i) => {
+                    const isRefund = r.source.value === TXN_SOURCE.Refund
+                    const isAdjustment = r.source.value === TXN_SOURCE.AdvanceAdjustment
+                    const negStyle = isRefund ? { color: 'var(--red)' } : undefined
+                    return (
+                      // A receipt has several lines, adjustment rows repeat a
+                      // receipt and refunds have none, so the key includes the position.
+                      <tr key={`${r.receipt ?? 'r'}-${r.ledgerCode ?? ''}-${r.semCode ?? ''}-${i}`}>
+                        <td>{fmtReportDate(r.payDate)}</td>
+                        <td className="rpt-mono">{dash(r.receipt)}</td>
+                        <td className="rpt-mono">{dash(r.receiptBook)}</td>
+                        <td className="rpt-mono">{r.studentNumber}</td>
+                        <td>{r.studentName}</td>
+                        <td>{dash(r.programName)}</td>
+                        <td>{dash(r.semesterName)}</td>
+                        <td>{r.ledgerCode ? `${r.ledgerCode} - ${r.ledgerName}` : r.ledgerName}</td>
+                        <td>{r.payMode ? (REPORT_PAYMODE_LABEL[r.payMode.value] ?? r.payMode.name) : '—'}</td>
+                        <td>
+                          <span className={`badge ${SOURCE_BADGE[r.source.value] ?? 'badge-grey'}`}>
+                            {REPORT_SOURCE_LABEL[r.source.value] ?? r.source.name}
+                          </span>
+                        </td>
+                        <td>{r.currencyCode}</td>
+                        <td className="num"><span className="rpt-amt" style={negStyle}>{fmtSigned(r.amount)}</span><span className="rpt-cur">{r.currencyCode}</span></td>
+                        <td className="num">
+                          {r.discount > 0
+                            ? <><span className="rpt-amt">{fmtReportAmount(r.discount)}</span><span className="rpt-cur">{r.currencyCode}</span></>
+                            : <span className="text-g400">0.00</span>}
+                        </td>
+                        <td className="num" title={isAdjustment ? ADJUSTMENT_TIP : undefined}>
+                          {isAdjustment ? (
+                            // Not counted: muted, with the reason on hover/focus.
+                            <span className="text-g400" tabIndex={0} aria-label={`${fmtReportAmount(r.net)} ${r.currencyCode}, not counted. ${ADJUSTMENT_TIP}`}>
+                              <span className="rpt-amt">{fmtReportAmount(r.net)}</span><span className="rpt-cur">{r.currencyCode}</span>
+                              <i className="lni lni-information" aria-hidden="true" style={{ marginLeft: 4, fontSize: 12 }} />
+                            </span>
+                          ) : (
+                            <><span className="rpt-amt" style={negStyle}>{fmtSigned(r.net)}</span><span className="rpt-cur">{r.currencyCode}</span></>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
                   <tr ref={sentinelRef} className="rpt-foot-row">
                     <td colSpan={COLS}>
                       {nextPageFailed ? (
@@ -456,7 +538,16 @@ export default function TransactionReportPage() {
                   ...(summary.byCurrency.some(c => c.unallocatedDiscount > 0)
                     ? [{ label: 'Unallocated discount', value: (c: typeof summary.byCurrency[number]) => fmtReportAmount(c.unallocatedDiscount) }]
                     : []),
-                  { label: 'Net', value: c => fmtReportAmount(c.net), key: true },
+                  // Refunded (negative) and Settled from advance only when
+                  // some currency has them; "—" for a currency without.
+                  ...(summary.byCurrency.some(c => (c.refunded ?? 0) !== 0)
+                    ? [{ label: 'Refunded', value: (c: typeof summary.byCurrency[number]) => ((c.refunded ?? 0) !== 0 ? fmtSigned(c.refunded) : '—') }]
+                    : []),
+                  // Net already has refunds taken off.
+                  { label: 'Net', value: c => fmtSigned(c.net), key: true },
+                  ...(summary.byCurrency.some(c => (c.settledFromAdvance ?? 0) !== 0)
+                    ? [{ label: 'Settled from advance (not in totals)', value: (c: typeof summary.byCurrency[number]) => ((c.settledFromAdvance ?? 0) !== 0 ? fmtReportAmount(c.settledFromAdvance) : '—') }]
+                    : []),
                 ]}
               />
             )}
