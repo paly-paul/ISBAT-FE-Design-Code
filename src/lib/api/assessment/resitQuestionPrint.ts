@@ -1,4 +1,4 @@
-import { apiPost, apiGet, apiGetBlob, apiDeleteWithMessage } from '@/lib/api/client'
+import { apiPostWithMessage, apiGet, apiGetBlob, apiDeleteWithMessage } from '@/lib/api/client'
 
 // DELETE /theory and /practical are confirm-before-delete: without
 // confirm=true they answer { data: false, message: "You are about to
@@ -37,6 +37,7 @@ export interface ResitOutcomeResponse {
 }
 
 export interface ResitBookletResponse {
+  wasReprint?: boolean
   confirmationRequired: boolean
   message?: string
   totalStudentCount?: number
@@ -60,9 +61,27 @@ export function getResitCourseUnits(programGuid: string, semesterGuid: string, a
 }
 
 // -- Theory Actions --
-export function postResitTheory(data: ResitParams) {
-  if (MOCK_AUTH) return Promise.resolve({ outcome: 'Printed' as const, message: '' })
-  return apiPost<ResitOutcomeResponse>('/api/v1/assessment/resit-question-print/theory', data)
+export async function postResitTheory(data: ResitParams): Promise<ResitOutcomeResponse> {
+  if (MOCK_AUTH) return { outcome: 'Printed' as const, message: '' }
+  const { data: resData, message: envMessage } = await apiPostWithMessage<any>('/api/v1/assessment/resit-question-print/theory', {
+    programGuid: data.programGuid,
+    semesterGuid: data.semesterGuid,
+    courseUnitGuid: data.courseUnitGuid,
+    academicIntakeGuid: data.academicIntakeGuid,
+    questionBankIntakeGuid: data.questionBankIntakeGuid || data.academicIntakeGuid,
+    confirm: Boolean(data.confirm),
+  })
+  if (resData && typeof resData === 'object') {
+    return {
+      ...resData,
+      outcome: resData.outcome ?? resData.Outcome,
+      message: resData.message || envMessage || '',
+    }
+  }
+  return {
+    outcome: resData,
+    message: envMessage || '',
+  }
 }
 export function getResitTheoryPdf(paramsObj: ResitParams) {
   if (MOCK_AUTH) return Promise.resolve({ blob: new Blob(['mock pdf content'], { type: 'application/pdf' }), filename: 'mock-theory.pdf' })
@@ -72,7 +91,6 @@ export function getResitTheoryPdf(paramsObj: ResitParams) {
     courseUnitGuid: paramsObj.courseUnitGuid?.toUpperCase() || '',
     academicIntakeGuid: paramsObj.academicIntakeGuid?.toUpperCase() || ''
   })
-  if (paramsObj.questionBankIntakeGuid) params.append('questionBankIntakeGuid', paramsObj.questionBankIntakeGuid)
   return apiGetBlob(`/api/v1/assessment/resit-question-print/theory/pdf?${params.toString()}`)
 }
 export function getResitTheoryWord(paramsObj: ResitParams) {
@@ -83,7 +101,6 @@ export function getResitTheoryWord(paramsObj: ResitParams) {
     courseUnitGuid: paramsObj.courseUnitGuid?.toUpperCase() || '',
     academicIntakeGuid: paramsObj.academicIntakeGuid?.toUpperCase() || ''
   })
-  if (paramsObj.questionBankIntakeGuid) params.append('questionBankIntakeGuid', paramsObj.questionBankIntakeGuid)
   return apiGetBlob(`/api/v1/assessment/resit-question-print/theory/word?${params.toString()}`)
 }
 export function deleteResitTheory(data: ResitParams): Promise<ResitDeleteResponse> {
@@ -109,9 +126,27 @@ export function getResitTheoryAnswerKey(paramsObj: ResitParams) {
 }
 
 // -- Practical Actions --
-export function postResitPractical(data: ResitParams) {
-  if (MOCK_AUTH) return Promise.resolve({ outcome: 'Printed' as const, message: '' })
-  return apiPost<ResitOutcomeResponse>('/api/v1/assessment/resit-question-print/practical', data)
+export async function postResitPractical(data: ResitParams): Promise<ResitOutcomeResponse> {
+  if (MOCK_AUTH) return { outcome: 'Printed' as const, message: '' }
+  const { data: resData, message: envMessage } = await apiPostWithMessage<any>('/api/v1/assessment/resit-question-print/practical', {
+    programGuid: data.programGuid,
+    semesterGuid: data.semesterGuid,
+    courseUnitGuid: data.courseUnitGuid,
+    academicIntakeGuid: data.academicIntakeGuid,
+    questionBankIntakeGuid: data.questionBankIntakeGuid || data.academicIntakeGuid,
+    confirm: Boolean(data.confirm),
+  })
+  if (resData && typeof resData === 'object') {
+    return {
+      ...resData,
+      outcome: resData.outcome ?? resData.Outcome,
+      message: resData.message || envMessage || '',
+    }
+  }
+  return {
+    outcome: resData,
+    message: envMessage || '',
+  }
 }
 export function getResitPracticalPdf(paramsObj: ResitParams) {
   if (MOCK_AUTH) return Promise.resolve({ blob: new Blob(['mock pdf content'], { type: 'application/pdf' }), filename: 'mock-practical.pdf' })
@@ -146,9 +181,20 @@ export function deleteResitPractical(data: ResitParams): Promise<ResitDeleteResp
 }
 
 // -- Booklet Actions --
-export function postResitBooklet(data: ResitParams) {
-  if (MOCK_AUTH) return Promise.resolve({ confirmationRequired: false, message: '', totalStudentCount: 10, addedStudentCount: 10 })
-  return apiPost<ResitBookletResponse>('/api/v1/assessment/resit-booklet', data)
+export async function postResitBooklet(data: ResitParams): Promise<ResitBookletResponse> {
+  if (MOCK_AUTH) return { wasReprint: false, confirmationRequired: false, message: '', totalStudentCount: 10, addedStudentCount: 10 }
+  const { data: resData, message: envMessage } = await apiPostWithMessage<ResitBookletResponse>('/api/v1/assessment/resit-booklet', {
+    programGuid: data.programGuid,
+    semesterGuid: data.semesterGuid,
+    courseUnitGuid: data.courseUnitGuid,
+    academicIntakeGuid: data.academicIntakeGuid,
+    ueType: data.ueType ?? 0,
+    confirm: Boolean(data.confirm),
+  })
+  return {
+    ...resData,
+    message: resData?.message || envMessage || '',
+  }
 }
 export function getResitBookletPdf(paramsObj: ResitParams) {
   if (MOCK_AUTH) return Promise.resolve({ blob: new Blob(['mock booklet content'], { type: 'application/pdf' }), filename: 'mock-booklet.pdf' })

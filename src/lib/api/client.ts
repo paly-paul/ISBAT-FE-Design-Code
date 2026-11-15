@@ -272,7 +272,10 @@ interface ApiEnvelope<T> {
 function extractErrorInfo(envelope: unknown): { code: string; message?: string } {
   const e = envelope as (Partial<ApiEnvelope<unknown>> & { title?: string; errors?: unknown }) | null
   if (!e) return { code: 'unknown' }
-  if (e.code) return { code: e.code, message: (Array.isArray(e.errors) ? (e.errors as string[]).filter(Boolean).join(' ') : undefined) ?? e.message ?? undefined }
+  const joinedErrors = Array.isArray(e.errors)
+    ? (e.errors as string[]).filter(Boolean).join(' ').trim()
+    : ''
+  if (e.code) return { code: e.code, message: (joinedErrors || undefined) ?? (e.message?.trim() || undefined) }
   if (e.errors && !Array.isArray(e.errors) && typeof e.errors === 'object') {
     const fieldErrors = e.errors as Record<string, string[]>
     const firstField = Object.keys(fieldErrors)[0]
@@ -281,7 +284,7 @@ function extractErrorInfo(envelope: unknown): { code: string; message?: string }
   // An app envelope with a null `code` but a populated errors[]/message
   // (seen on a 400 from announcements create) — surface that text rather
   // than a bare 'unknown'.
-  return { code: 'unknown', message: (Array.isArray(e.errors) ? (e.errors as string[]).filter(Boolean).join(' ') : undefined) ?? e.message ?? e.title ?? undefined }
+  return { code: 'unknown', message: (joinedErrors || undefined) ?? (e.message?.trim() || undefined) ?? e.title ?? undefined }
 }
 
 export async function apiPost<T>(path: string, body: unknown): Promise<T> {
@@ -518,13 +521,13 @@ export async function apiDeleteWithMessage<T>(path: string, retried = false): Pr
   if (res.ok) {
     if (!envelope) return { data: null as T, message: null }
     if (!envelope.success) {
-      throw new AuthError(envelope.code ?? 'unknown', envelope.errors?.[0] ?? envelope.message ?? undefined)
+      throw new AuthError(envelope.code ?? 'unknown', envelope.errors?.[0] ?? envelope.message ?? undefined, Array.isArray(envelope.errors) ? envelope.errors : undefined)
     }
     return { data: envelope.data as T, message: envelope.message }
   }
 
   const { code, message } = extractErrorInfo(envelope)
-  throw new AuthError(code, message)
+  throw new AuthError(code, message, Array.isArray(envelope?.errors) ? envelope.errors : undefined)
 }
 
 // Raw file download — no JSON envelope on success (confirmed via
@@ -550,9 +553,9 @@ export async function apiGetBlob(path: string, retried = false): Promise<{ blob:
   }
 
   if (!res.ok) {
-    const envelope = await res.json().catch(() => null)
+    const envelope = (await res.json().catch(() => null)) as ApiEnvelope<unknown> | null
     const { code, message } = extractErrorInfo(envelope)
-    throw new AuthError(code, message)
+    throw new AuthError(code, message, Array.isArray(envelope?.errors) ? envelope.errors : undefined)
   }
 
   const disposition = res.headers.get('content-disposition') ?? ''
