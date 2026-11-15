@@ -582,6 +582,9 @@ export interface ProgramMasterFullDetails {
   currencyGuid?: string | null
   currencyName?: string | null
   intakeGuid: string | null
+  // Campus the programme runs at (confirmed on a live full-details response).
+  campusGuid?: string | null
+  campusName?: string | null
   streamGuids: string[]
   streamNames?: string[]
   semesters: ProgramSemesterDetail[]
