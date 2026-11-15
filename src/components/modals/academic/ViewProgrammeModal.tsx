@@ -159,6 +159,8 @@ export function ViewProgrammeModal({ isOpen, onClose, programGuid, onEdit }: Vie
   const levelName = programLevel?.levelName || '—'
   const facultyName = facultiesByGuid.get(program.facultyGuid)?.facultyName || '—'
   const intakeName = (program.intakeGuid ? intakesByGuid.get(program.intakeGuid) : undefined)?.description || '—'
+  // Campus straight from full-details (campusName).
+  const campusName = program.campusName?.trim() || '—'
 
   const semesters = program.semesters ?? []
   const programUnits = program.programUnits ?? []
@@ -210,6 +212,7 @@ export function ViewProgrammeModal({ isOpen, onClose, programGuid, onEdit }: Vie
               <Field label="Programme Group" value={groupName} />
               <Field label="Programme Level" value={levelName} />
               <Field label="Faculty" value={facultyName} />
+              <Field label="Campus" value={campusName} />
               <Field label="Intake" value={intakeName} />
               <Field label="Total Course Units" value={program.unitCount ?? '—'} />
               <Field label="Accreditation Date" value={program.dateAcc ? formatDate(program.dateAcc) : '—'} />
