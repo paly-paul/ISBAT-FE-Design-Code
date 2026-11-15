@@ -49,10 +49,11 @@ export default function Page() {
   function closeModal(id: string) { setOpenModals(prev => { const s = new Set(prev); s.delete(id); return s }) }
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 
+  // Viewing a programme keeps the search and level filter as they are, so
+  // closing the view returns to the same filtered list (QA, 2026-11-10).
   function openViewModal(guid: string) {
     setViewingProgramGuid(guid)
     openModal('view-prog-modal')
-    setSearch('')
   }
 
   function confirmDeleteProgram() {
