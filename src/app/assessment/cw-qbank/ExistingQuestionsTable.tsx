@@ -10,6 +10,8 @@ interface ExistingQuestionsTableProps {
   questions: QuestionDto[]
   allQuestions?: QuestionDto[]
   selectedUeType?: number | null
+  /** UE types the course unit has (0 Theory, 1 Practical); a single-type unit shows only its own bank count. */
+  allowedUeTypes?: number[]
   isLoading: boolean
   isFetching: boolean
   onRefresh: () => void
@@ -28,6 +30,7 @@ export function ExistingQuestionsTable({
   questions,
   allQuestions,
   selectedUeType,
+  allowedUeTypes,
   isLoading,
   isFetching,
   onRefresh,
@@ -50,6 +53,9 @@ export function ExistingQuestionsTable({
   const hasUeTypes = useMemo(() => targetAllQuestions.some(q => q.universityExamType !== null && q.universityExamType !== undefined), [targetAllQuestions])
   const theoryCount = useMemo(() => targetAllQuestions.filter(q => q.universityExamType === 0 || q.universityExamType === null || q.universityExamType === undefined).length, [targetAllQuestions])
   const practicalCount = useMemo(() => targetAllQuestions.filter(q => q.universityExamType === 1).length, [targetAllQuestions])
+  const singleUeType = allowedUeTypes?.length === 1 ? allowedUeTypes[0] : null
+  const showTheoryBank = singleUeType !== 1
+  const showPracticalBank = singleUeType !== 0
 
   const filteredQuestions = useMemo(() => {
     return questions.filter(q => {
@@ -93,7 +99,11 @@ export function ExistingQuestionsTable({
             {hasUeTypes && (
               <>
                 {' • '}
-                <span>UE Banks: <strong className="text-cyan-700 font-semibold">{theoryCount} Theory</strong>, <strong className="text-amber-700 font-semibold">{practicalCount} Practical</strong></span>
+                <span>UE Banks:{' '}
+                  {showTheoryBank && <strong className="text-cyan-700 font-semibold">{theoryCount} Theory</strong>}
+                  {showTheoryBank && showPracticalBank && ', '}
+                  {showPracticalBank && <strong className="text-amber-700 font-semibold">{practicalCount} Practical</strong>}
+                </span>
                 {selectedUeType !== undefined && selectedUeType !== null && (
                   <>
                     {' • '}
