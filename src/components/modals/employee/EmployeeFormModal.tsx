@@ -13,6 +13,7 @@ import { useDesignationsDropdown } from '@/hooks/config/useDesignations'
 import { useCountryDropdown } from '@/hooks/config/useCountries'
 import { useCampusDropdown } from '@/hooks/config/useCampuses'
 import { scrollToFirstError } from '@/lib/scrollToFirstError'
+import { sameOriginApiUrl } from '@/lib/apiFileUrl'
 
 // Add and Edit share this form — differ in prefill and which mutation runs.
 
@@ -350,7 +351,7 @@ export function EmployeeFormModal({ isOpen, onClose, showToast, mode, employeeGu
             <div className="prof-photo-row">
               <div className={`prof-photo-zone${employee?.photoUrl ? ' has-photo' : ''}`} style={{ cursor: 'default' }}>
                 <div className="prof-photo-icon"><i className="lni lni-user"></i><small>No photo</small></div>
-                {employee?.photoUrl && <img className="prof-photo-preview" src={employee.photoUrl} alt="Employee photo" />}
+                {employee?.photoUrl && <img className="prof-photo-preview" src={sameOriginApiUrl(employee.photoUrl) ?? employee.photoUrl} alt="Employee photo" />}
               </div>
               <div className="prof-photo-info">
                 <div className="prof-photo-title">Profile Photo</div>

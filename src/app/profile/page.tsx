@@ -8,6 +8,7 @@ import { AuthError } from '@/lib/api/client'
 import { useMyProfile, useUpdateMyPhoto } from '@/hooks/users/useMyProfile'
 import { PROFILE_STATUS_ACTIVE, type MyProfile } from '@/lib/api/users/profile'
 import { parseUtcNoZ } from '@/lib/api/finance/discountReport'
+import { sameOriginApiUrl } from '@/lib/apiFileUrl'
 import { MyTeachingTab } from './_components/MyTeachingTab'
 
 // "My Profile" — the signed-in staff user's own account page, reached from
@@ -287,7 +288,8 @@ export default function ProfilePage() {
   // loop); a link that still fails falls back to the initials.
   const [brokenPhotoUrl, setBrokenPhotoUrl] = useState<string | null>(null)
   const [photoRefreshed, setPhotoRefreshed] = useState(false)
-  const photoUrl = profile?.photoUrl && profile.photoUrl !== brokenPhotoUrl ? profile.photoUrl : null
+  const rawPhotoUrl = profile?.photoUrl && profile.photoUrl !== brokenPhotoUrl ? profile.photoUrl : null
+  const photoUrl = sameOriginApiUrl(rawPhotoUrl)
 
   function handlePhotoError() {
     setBrokenPhotoUrl(profile?.photoUrl ?? null)

@@ -76,6 +76,14 @@ export function VettingReviewModal({ isOpen, onClose, showToast, applicationGuid
   // Documents and qualification proofs open in an in-page preview (PDF/image
   // inline, with Download) — a plain link just downloaded the file.
   const [preview, setPreview] = useState<{ url: string; title: string } | null>(null)
+  const [photoError, setPhotoError] = useState(false)
+
+  const photoDoc = detail?.documents?.find(d => d.documentType?.toLowerCase() === 'photo' && d.uploaded && d.url)
+  const photoUrl = sameOriginApiUrl(photoDoc?.url)
+
+  useEffect(() => {
+    setPhotoError(false)
+  }, [photoUrl])
 
   if (!isOpen || !applicationGuid) return null
 
@@ -196,14 +204,6 @@ export function VettingReviewModal({ isOpen, onClose, showToast, applicationGuid
         ? { tone: 'ok' as const, icon: 'lni-checkmark-circle', text: 'Current intake' }
         : null,
   ].filter((c): c is { tone: 'ok' | 'warn' | 'bad'; icon: string; text: string } => !!c)
-
-  const photoDoc = detail?.documents?.find(d => d.documentType?.toLowerCase() === 'photo' && d.uploaded && d.url)
-  const photoUrl = sameOriginApiUrl(photoDoc?.url)
-  const [photoError, setPhotoError] = useState(false)
-
-  useEffect(() => {
-    setPhotoError(false)
-  }, [photoUrl])
 
   const initials = fullName === '—'
     ? '?'
