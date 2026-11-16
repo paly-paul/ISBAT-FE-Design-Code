@@ -76,6 +76,12 @@ export function findCategory(val?: string | number | null) {
 const SEXES = ['Male', 'Female', 'Others']
 const MARITAL_STATUSES = ['Single', 'Married', 'Divorced', 'Widow', 'Widower', 'Separated']
 const RELIGIONS = ['Christian', 'Muslim', 'Hindu', 'Other']
+// natId is a Yes/No flag, not a type: "0" = has a national ID (number
+// required), "1" = no national ID (number optional).
+const NAT_ID_OPTIONS = [
+  { value: '0', label: 'Yes' },
+  { value: '1', label: 'No' },
+]
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -441,18 +447,14 @@ export function EmployeeFormModal({ isOpen, onClose, showToast, mode, employeeGu
               <SearchSelect placeholder="Select…" options={countryOptions} value={countryGuid} onChange={setCountryGuid} />
             </div>
             <div className="fg">
-              <div className="lbl">National ID Type <span className="req">*</span></div>
-              <input className="ctrl" type="text" placeholder={isEdit ? undefined : 'e.g. 1'} value={natId} onChange={e => { setNatId(e.target.value); clearError('natId') }} style={errors.natId ? { borderColor: 'var(--red)' } : undefined} />
+              <div className="lbl">Has National ID? <span className="req">*</span></div>
+              <SearchSelect placeholder="Select…" options={NAT_ID_OPTIONS} value={natId} onChange={v => { setNatId(v); clearError('natId'); if (v !== '0') clearError('nationalId') }} />
               {errors.natId && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.natId}</p>}
             </div>
             <div className="fg">
-              <div className="lbl">National ID Number</div>
+              <div className="lbl">National ID Number {natId === '0' && <span className="req">*</span>}</div>
               <input className="ctrl" type="text" placeholder={isEdit ? undefined : 'e.g. CM12345678'} value={nationalId} onChange={e => { setNationalId(e.target.value); clearError('nationalId') }} style={errors.nationalId ? { borderColor: 'var(--red)' } : undefined} />
               {errors.nationalId && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.nationalId}</p>}
-            </div>
-            <div className="fg">
-              <div className="lbl">Religion</div>
-              <SearchSelect placeholder="Select…" options={RELIGIONS} value={religion} onChange={setReligion} />
             </div>
             <div className="fg">
               <div className="lbl">Marital Status <span className="req">*</span></div>

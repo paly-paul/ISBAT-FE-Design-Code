@@ -305,7 +305,7 @@ export default function QpUploadVettingPage() {
         </div>
       </div>
 
-      {/* ── Tabs (Faculty Upload vs Vetting Committee) ────────────────────── */}
+      {/* ── Tabs (Faculty Upload vs Vetting List) ────────────────────── */}
       <div className="flex flex-wrap items-center gap-2.5 mb-6">
         <button
           type="button"
@@ -321,7 +321,7 @@ export default function QpUploadVettingPage() {
           onClick={() => setActiveTab('vetting')}
         >
           <i className="lni lni-users"></i>
-          <span>Vetting Committee</span>
+          <span>Vetting List</span>
           <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ml-1 ${
             activeTab === 'vetting' ? 'bg-white/20 text-white' : 'bg-red-50 text-red-600 border border-red-100'
           }`}>
@@ -655,7 +655,7 @@ export default function QpUploadVettingPage() {
         </div>
       )}
 
-      {/* ── Tab 2: Vetting Committee Queue ─────────────────────────────────── */}
+      {/* ── Tab 2: Vetting List Queue ─────────────────────────────────── */}
       {activeTab === 'vetting' && (
         <div className="card">
           <div className="card-hdr">

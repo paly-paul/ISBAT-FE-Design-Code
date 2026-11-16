@@ -8,7 +8,6 @@ import { normalizeTitle, findCategory } from './EmployeeFormModal'
 
 const SEXES: Record<number, string> = { 1: 'Male', 2: 'Female', 3: 'Others' }
 const MARITAL_STATUSES = ['Single', 'Married', 'Divorced', 'Widow', 'Widower', 'Separated']
-const RELIGIONS = ['Christian', 'Muslim', 'Hindu', 'Other']
 
 interface ViewEmployeeModalProps extends ModalProps {
   employeeGuid: string | null
@@ -88,9 +87,8 @@ export function ViewEmployeeModal({ isOpen, onClose, employeeGuid, onEdit, canEd
             <Field label="Date of Birth" value={formatDate(employee.birthDate)} />
             <Field label="Place of Birth" value={employee.placeOfBirth} />
             <Field label="Country" value={employee.countryName || '—'} />
-            <Field label="National ID Type" value={employee.natId} />
+            <Field label="Has National ID?" value={employee.natId === '0' ? 'Yes' : employee.natId === '1' ? 'No' : '—'} />
             <Field label="National ID Number" value={employee.nationalId || '—'} />
-            <Field label="Religion" value={employee.intReligion ? RELIGIONS[employee.intReligion - 1] ?? '—' : '—'} />
             <Field label="Marital Status" value={MARITAL_STATUSES[employee.maritalStatus - 1] ?? '—'} />
             <Field label="Department" value={deptName} />
             <Field label="Designation" value={designationName} />

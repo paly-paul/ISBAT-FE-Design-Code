@@ -68,7 +68,10 @@ export default function QuestionBankUploadPage() {
   const [repoCategory, setRepoCategory] = useState<string>('')
   const [repoCourseUnitGuid, setRepoCourseUnitGuid] = useState<string>('')
   const [repoFilterType, setRepoFilterType] = useState<'ALL' | 'MCQ' | 'DQ'>('ALL')
-  const [repoUeFilterType, setRepoUeFilterType] = useState<'THEORY' | 'PRACTICAL'>('THEORY')
+  // The on-screen Theory/Practical pick — only offered for combined units.
+  // Read `repoUeFilterType` (derived below), which forces single-type units
+  // to their own type.
+  const [repoUeFilterChoice, setRepoUeFilterType] = useState<'THEORY' | 'PRACTICAL'>('THEORY')
   const [repoSearch, setRepoSearch] = useState<string>('')
 
   // ── Tab 2: Bulk Excel Import Scope (Question Bank API) ──────────────────────
@@ -513,6 +516,13 @@ export default function QuestionBankUploadPage() {
     return { label: 'Combined', type: 'combined', badgeClass: 'badge-purple' }
   }, [isRepoUniversityExam, selectedRepoUnit, repoAllowedUeTypes])
 
+  // Practical-only / theory-only units always show their own type; only
+  // combined units follow the Theory/Practical toggle.
+  const repoUeFilterType: 'THEORY' | 'PRACTICAL' =
+    repoUeTypeInfo?.type === 'practical' ? 'PRACTICAL'
+    : repoUeTypeInfo?.type === 'theory' ? 'THEORY'
+    : repoUeFilterChoice
+
   // Which University Exam bank "Delete All" removes: the backend keeps Theory
   // and Practical separately and deletes Theory when no type is sent, so the
   // Practical bank must be targeted explicitly. Single-type units use their
@@ -682,90 +692,28 @@ export default function QuestionBankUploadPage() {
         </div>
       </div>
 
-      {/* ── Top Row: Left Tabs + Right Unified Filter Card ───── */}
-      <div className="flex flex-col lg:flex-row items-stretch gap-4 mb-4">
-        
-        {/* Left: Workflow Module Navigation Tabs Card */}
-        <div className="card p-3.5 w-full lg:w-72 xl:w-80 shrink-0 flex flex-col justify-between">
-          <div>
-            <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider px-1 mb-2 flex items-center justify-between">
-              <span>Select Module</span>
-              <span className="badge badge-neu text-[10px] font-semibold">2 Modes</span>
-            </div>
+      {/* ── Mode Tabs: same pill switcher as Payment Console's
+          Semester Payment / Other Payment tabs ───── */}
+      <div className="pc-tabs">
+        <button
+          type="button"
+          className={`pc-tab-btn${activeTab === 'repository' ? ' active' : ''}`}
+          onClick={() => handleTabChange('repository')}
+        >
+          <i className="lni lni-library"></i> Question Repository
+        </button>
+        <button
+          type="button"
+          className={`pc-tab-btn${activeTab === 'import' ? ' active' : ''}`}
+          onClick={() => handleTabChange('import')}
+        >
+          <i className="lni lni-cloud-upload"></i> Bulk Excel Import
+        </button>
+      </div>
 
-            <div className="flex flex-col gap-2">
-              {/* Tab 1: Question Repository */}
-              <button
-                type="button"
-                onClick={() => handleTabChange('repository')}
-                className={`w-full text-left p-2.5 rounded-lg border transition-all flex items-start gap-2.5 cursor-pointer ${
-                  activeTab === 'repository'
-                    ? 'bg-indigo-50/90 border-indigo-300 text-indigo-950 shadow-xs'
-                    : 'bg-white border-transparent hover:bg-slate-50 text-slate-700'
-                }`}
-              >
-                <div
-                  className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-sm ${
-                    activeTab === 'repository'
-                      ? 'bg-indigo-600 text-white shadow-xs font-bold'
-                      : 'bg-slate-100 text-slate-600'
-                  }`}
-                >
-                  <i className="lni lni-library"></i>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-1">
-                    <span className="text-xs font-bold text-slate-900 truncate">Question Repository</span>
-                    <span
-                      className={`badge ${
-                        activeTab === 'repository' ? 'badge-indigo font-bold' : 'badge-neu'
-                      } text-[10px] px-1.5 py-0.2`}
-                    >
-                      {liveQuestions?.length ?? 0}
-                    </span>
-                  </div>
-                  <div className="text-[11px] text-slate-500 mt-0.5 line-clamp-1">
-                    Class Test, Course Work, Activity
-                  </div>
-                </div>
-              </button>
-
-              {/* Tab 2: Bulk Excel Import */}
-              <button
-                type="button"
-                onClick={() => handleTabChange('import')}
-                className={`w-full text-left p-2.5 rounded-lg border transition-all flex items-start gap-2.5 cursor-pointer ${
-                  activeTab === 'import'
-                    ? 'bg-indigo-50/90 border-indigo-300 text-indigo-950 shadow-xs'
-                    : 'bg-white border-transparent hover:bg-slate-50 text-slate-700'
-                }`}
-              >
-                <div
-                  className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-sm ${
-                    activeTab === 'import'
-                      ? 'bg-indigo-600 text-white shadow-xs font-bold'
-                      : 'bg-slate-100 text-slate-600'
-                  }`}
-                >
-                  <i className="lni lni-cloud-upload"></i>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-1">
-                    <span className="text-xs font-bold text-slate-900 truncate">Bulk Excel Import</span>
-                    <span className="badge badge-green text-[10px] font-bold px-1.5 py-0.2">
-                      .xlsx
-                    </span>
-                  </div>
-                  <div className="text-[11px] text-slate-500 mt-0.5 line-clamp-1">
-                    CBT, Course Work, Univ Exam
-                  </div>
-                </div>
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Right: Unified Filter & Academic Scope Card */}
+      {/* ── Unified Filter Card ───── */}
+      <div className="flex flex-col items-stretch gap-4 mb-4">
+        {/* Unified Filter & Academic Scope Card */}
         <div className="card p-4 flex-1 min-w-0 flex flex-col justify-between">
           <div className="flex flex-wrap items-center justify-between pb-3 mb-3 border-b border-slate-100 gap-2">
             <div className="font-semibold text-sm text-slate-800 flex items-center gap-2">
@@ -1170,7 +1118,16 @@ export default function QuestionBankUploadPage() {
                       {(repoTheoryCount > 0 || repoPracticalCount > 0) && (
                         <>
                           {' • '}
-                          <span>UE Banks: <strong className="text-cyan-700 font-semibold">{repoTheoryCount} Theory</strong>, <strong className="text-amber-700 font-semibold">{repoPracticalCount} Practical</strong></span>
+                          {/* Single-type units show only their own bank's count. */}
+                          <span>UE Banks:{' '}
+                            {repoUeTypeInfo?.type !== 'practical' && (
+                              <strong className="text-cyan-700 font-semibold">{repoTheoryCount} Theory</strong>
+                            )}
+                            {(!repoUeTypeInfo || repoUeTypeInfo.type === 'combined') && ', '}
+                            {repoUeTypeInfo?.type !== 'theory' && (
+                              <strong className="text-amber-700 font-semibold">{repoPracticalCount} Practical</strong>
+                            )}
+                          </span>
                         </>
                       )}
                     </div>
@@ -1503,6 +1460,7 @@ export default function QuestionBankUploadPage() {
                   questions={currentImportQuestions}
                   allQuestions={importExistingQuestions ?? []}
                   selectedUeType={isImportUniversityExam ? effectiveImportUeType : undefined}
+                  allowedUeTypes={isImportUniversityExam ? importUeOptions : undefined}
                   isLoading={isLoadingImportExistingQuestions}
                   isFetching={isFetchingImportExistingQuestions}
                   onRefresh={refetchImportExistingQuestions}
