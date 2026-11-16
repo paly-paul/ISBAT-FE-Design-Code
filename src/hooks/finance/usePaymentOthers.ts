@@ -17,8 +17,8 @@ export function usePaymentOthersList(params: PaymentOtherListParams, enabled: bo
 
 // Lives under PAYMENT_OTHERS_KEY on purpose — useCreatePaymentOther already
 // invalidates that whole family, so a just-paid resit fee refetches (and
-// drops to 0) without any extra wiring. A 400 here means "no intake
-// assigned".
+// drops to 0) without any extra wiring. A 400 here is typically "No current
+// academic intake is configured." (an admin must set it in Academic).
 export function useResitFee(studentGuid: string | null, applicationGuid: string | null, enabled: boolean) {
   return useQuery({
     queryKey: [...PAYMENT_OTHERS_KEY, 'resit-fee', studentGuid, applicationGuid],

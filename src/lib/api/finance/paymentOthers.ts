@@ -26,6 +26,9 @@ export interface PaymentOtherDto {
   remarks: string | null
   payDate: string
   payType: number
+  // The CURRENT academic intake at the time of payment (server-decided), not
+  // the intake the applicant was admitted to; older rows may still hold the
+  // application's own intake. Don't display it as the admitted intake.
   intakeGuid: string | null
   bank: { bankGuid: string; shortCode: string; bankName: string } | null
   // PaymentAdvanceType: 1 means this payment drew down an advance deposit
@@ -75,7 +78,8 @@ export function getPaymentOthers(params: PaymentOtherListParams): Promise<Paymen
 // once the resit ledger is picked (legacy txtAmount.Enabled = false). Always
 // in UGX; 0 when nothing is unpaid or there's no active resit config. The
 // POST re-verifies the amount server-side, so this is a preview only.
-// 404 (application not found) / 400 (no intake, or Assessment's fee call
+// Calculated for the current academic intake. 404 (application not found) /
+// 400 ("No current academic intake is configured.", or Assessment's fee call
 // failed) surface as thrown errors with the backend message.
 //
 // Besides amount it lists the unpaid units the student applied to resit and a
