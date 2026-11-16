@@ -43,7 +43,9 @@ function ApplicantProfileContent() {
   const searchParams = useSearchParams()
   const applicationGuid = searchParams.get('applicationGuid')
   const { data: detail, isLoading, isError, error } = useVettingApplicationDetail(applicationGuid, !!applicationGuid)
-  const { data: rawPhotoUrl } = useApplicationPhoto(applicationGuid, !!applicationGuid)
+  const { data: rawPhotoFromApi } = useApplicationPhoto(applicationGuid, !!applicationGuid)
+  const photoDoc = detail?.documents?.find(d => d.documentType?.toLowerCase() === 'photo' && d.uploaded && d.url)
+  const rawPhotoUrl = photoDoc?.url || rawPhotoFromApi || null
   const photoUrl = sameOriginApiUrl(rawPhotoUrl)
   const [photoError, setPhotoError] = useState(false)
 

@@ -5,6 +5,8 @@ import { FailurePopup } from '../shared/FailurePopup'
 import { SearchSelect } from '@/components/SearchSelect'
 import { applicantProfileHref } from '@/lib/applicantProfileLink'
 import { useRegistrationDetail, useRegisterStudent, RegisterStudentResponse } from '@/hooks/admission/useRegistrarDesk'
+import { useApplicationPhoto } from '@/hooks/admission/useApplicationFiling'
+import { sameOriginApiUrl } from '@/lib/apiFileUrl'
 import { AuthError } from '@/lib/api/client'
 import { scrollToFirstError } from '@/lib/scrollToFirstError'
 import { formatDate } from '@/lib/date'
@@ -40,6 +42,14 @@ function Field({ label, value }: { label: string; value: string }) {
 // Refugee ID — the actual POST /register body.
 export function CompleteRegistrationModal({ isOpen, onClose, showToast, applicationGuid, onRegistered }: Props) {
   const { data: detail, isLoading, isError, error } = useRegistrationDetail(applicationGuid, isOpen && !!applicationGuid)
+  const { data: rawPhotoUrl } = useApplicationPhoto(applicationGuid, isOpen && !!applicationGuid)
+  const photoUrl = sameOriginApiUrl(rawPhotoUrl)
+  const [photoError, setPhotoError] = useState(false)
+
+  useEffect(() => {
+    setPhotoError(false)
+  }, [rawPhotoUrl])
+
   const registerStudent = useRegisterStudent()
 
   const [registrationTypeId, setRegistrationTypeId] = useState('')
@@ -173,7 +183,13 @@ export function CompleteRegistrationModal({ isOpen, onClose, showToast, applicat
         <div className="modal-scroll">
           {/* Who is being registered, before any detail. */}
           <div className="vd-hero">
-            <div className="vd-avatar" aria-hidden="true">{initials}</div>
+            <div className="vd-avatar overflow-hidden" aria-hidden="true">
+              {photoUrl && !photoError ? (
+                <img src={photoUrl} alt="" onError={() => setPhotoError(true)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              ) : (
+                initials
+              )}
+            </div>
             <div className="vd-hero-main">
               <div className="vd-hero-name">{orDash(detail.studentName)}</div>
               <div className="vd-hero-meta">

@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ModalProps } from '../types'
 import { SuccessPopup } from '../shared/SuccessPopup'
 import { FailurePopup } from '../shared/FailurePopup'
@@ -11,6 +11,7 @@ import { NO_CURRENT_INTAKE_MESSAGE, NOT_CURRENT_INTAKE_MESSAGE, VetApplicationIn
 import { useCurrentAdmissionIntake } from '@/hooks/academic/useIntakes'
 import { AuthError } from '@/lib/api/client'
 import { formatDate } from '@/lib/date'
+import { sameOriginApiUrl } from '@/lib/apiFileUrl'
 import { documentTitle, genderText, orDash } from '@/lib/admission/applicantDisplay'
 
 // Read-only value, same label/value treatment as ViewApplicantModal — the
@@ -196,6 +197,14 @@ export function VettingReviewModal({ isOpen, onClose, showToast, applicationGuid
         : null,
   ].filter((c): c is { tone: 'ok' | 'warn' | 'bad'; icon: string; text: string } => !!c)
 
+  const photoDoc = detail?.documents?.find(d => d.documentType?.toLowerCase() === 'photo' && d.uploaded && d.url)
+  const photoUrl = sameOriginApiUrl(photoDoc?.url)
+  const [photoError, setPhotoError] = useState(false)
+
+  useEffect(() => {
+    setPhotoError(false)
+  }, [photoUrl])
+
   const initials = fullName === '—'
     ? '?'
     : fullName.split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase()
@@ -213,7 +222,13 @@ export function VettingReviewModal({ isOpen, onClose, showToast, applicationGuid
         <div className="modal-scroll">
           {/* Who is applying, for what — before any detail. */}
           <div className="vd-hero">
-            <div className="vd-avatar" aria-hidden="true">{initials}</div>
+            <div className="vd-avatar overflow-hidden" aria-hidden="true">
+              {photoUrl && !photoError ? (
+                <img src={photoUrl} alt="" onError={() => setPhotoError(true)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              ) : (
+                initials
+              )}
+            </div>
             <div className="vd-hero-main">
               <div className="vd-hero-name flex items-center gap-2 flex-wrap">
                 {fullName}
