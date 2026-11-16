@@ -282,13 +282,12 @@ const ASSESSMENT_SECTIONS: MenuNode[] = [
     // leaf('CW Recheck Hub', 'search-alt', '/assessment/recheck'),
     leaf('Exam Grievances', 'files', '/assessment/exam-grievances'),
   ]),
-  // Reports section hidden from the sidebar per request, 2026-10-05 — both
-  // pages still exist on disk. Commented out whole since Sidebar.tsx renders
-  // a childless section as a disabled "Soon" item.
-  // section('Reports', [
-  //   leaf('Pending QP Upload', 'folder', '/assessment/rpt-pending-qp'),
-  //   leaf('Faculty Summary', 'users', '/assessment/rpt-faculty'),
-  // ]),
+  section('Reports', [
+    // exam-schedule-report-page.md, 2026-11-16.
+    leaf('Exam Schedule Report', 'bar-chart', '/assessment/reports/exam-schedule'),
+    // leaf('Pending QP Upload', 'folder', '/assessment/rpt-pending-qp'),
+    // leaf('Faculty Summary', 'users', '/assessment/rpt-faculty'),
+  ]),
 ]
 
 // Mirrors docs/MENU_ROUTES_REFERENCE.md — full access to everything, matching
@@ -749,6 +748,36 @@ function ensureOdelApplication(menu: MenuNode[]): MenuNode[] {
   return merged
 }
 
+function ensureExamScheduleReport(menu: MenuNode[]): MenuNode[] {
+  const assessmentIdx = menu.findIndex(n => n.name === 'Assessment')
+  if (assessmentIdx === -1) return menu
+
+  const assessmentModule = menu[assessmentIdx]
+  const moduleChildren = assessmentModule.children || []
+  const hasReport = moduleChildren.some(sec =>
+    (sec.children || []).some(l => l.url === '/assessment/reports/exam-schedule')
+  )
+  if (hasReport) return menu
+
+  const examScheduleLeaf = leaf('Exam Schedule Report', 'bar-chart', '/assessment/reports/exam-schedule')
+  const reportsIdx = moduleChildren.findIndex(s => s.name === 'Reports')
+
+  const newChildren = [...moduleChildren]
+  if (reportsIdx !== -1) {
+    const reportSec = newChildren[reportsIdx]
+    newChildren[reportsIdx] = {
+      ...reportSec,
+      children: [...(reportSec.children || []), examScheduleLeaf],
+    }
+  } else {
+    newChildren.push(section('Reports', [examScheduleLeaf]))
+  }
+
+  const merged = [...menu]
+  merged[assessmentIdx] = { ...assessmentModule, children: newChildren }
+  return merged
+}
+
 // A failed /me/menu call rejects (no fallback menu): the sidebar shows its
 // "Couldn't load menu" state, RouteGuard blocks the page and
 // usePagePermissions grants nothing, until the user retries.
@@ -759,7 +788,7 @@ export function getMenu(): Promise<MenuResult> {
       // Taken as-is apart from the remove/rename steps — see the note above
       // cleanStudentSections.
       const menu = removeBatchSummary(cleanStudentSections(data ?? []))
-      const finalMenu = stripUnintegratedPages(stripLectureMaster(renameIaCreation(renameTimetable(ensureOdelApplication(menu)))))
+      const finalMenu = stripUnintegratedPages(stripLectureMaster(renameIaCreation(renameTimetable(ensureExamScheduleReport(ensureOdelApplication(menu))))))
       return { menu: finalMenu }
     })
 }
