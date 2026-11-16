@@ -174,7 +174,7 @@ export default function StaffLoginPage() {
           )}
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '18px 0 22px' }}>
+        {/* <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '18px 0 22px' }}>
           <label className="isb-check">
             <input
               type="checkbox"
@@ -183,12 +183,13 @@ export default function StaffLoginPage() {
             />
             Trust this device for 30 days
           </label>
-        </div>
+        </div> */}
 
         <button
           type="submit"
           className="isb-btn primary full"
           disabled={loading}
+          style={{ marginTop: 8 }}
         >
           {loading
             ? <>
@@ -206,7 +207,7 @@ export default function StaffLoginPage() {
           }
         </button>
 
-        <div className="isb-divider">Single sign-on</div>
+        {/* <div className="isb-divider">Single sign-on</div>
 
         <button type="button" className="isb-btn ghost full">
           <svg width="14" height="14" viewBox="0 0 23 23">
@@ -216,7 +217,7 @@ export default function StaffLoginPage() {
             <path fill="#FFB900" d="M12 12h10v10H12z"/>
           </svg>
           Continue with ISBAT Microsoft 365
-        </button>
+        </button> */}
       </form>
 
       <div style={{
