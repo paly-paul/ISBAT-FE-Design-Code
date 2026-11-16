@@ -151,12 +151,52 @@ export interface BulkMovementStatusDto {
   failed: BulkAuditEntry[]
 }
 
-export function getBulkMovementStatus(bulkMovementGuid: string): Promise<BulkMovementStatusDto> {
+function normalizeBulkAuditEntry(item: any): BulkAuditEntry {
+  if (!item) {
+    return { sessionGuid: '', programName: '—', reason: null }
+  }
+  return {
+    sessionGuid: String(item.sessionGuid ?? item.SessionGuid ?? item.guid ?? item.Guid ?? ''),
+    programName: String(item.programName ?? item.ProgramName ?? item.programmeName ?? item.ProgrammeName ?? item.program ?? item.Programme ?? '—'),
+    reason: item.reason ?? item.Reason ?? item.message ?? item.Message ?? null,
+  }
+}
+
+function normalizeBulkMovementStatus(raw: any, bulkMovementGuid: string): BulkMovementStatusDto {
+  if (!raw) {
+    return {
+      bulkMovementGuid,
+      status: 'Completed',
+      requestedAt: '',
+      completedAt: null,
+      moved: [],
+      skipped: [],
+      failed: [],
+    }
+  }
+
+  const rawMoved = raw.moved ?? raw.Moved ?? []
+  const rawSkipped = raw.skipped ?? raw.Skipped ?? []
+  const rawFailed = raw.failed ?? raw.Failed ?? []
+
+  return {
+    bulkMovementGuid: String(raw.bulkMovementGuid ?? raw.BulkMovementGuid ?? bulkMovementGuid),
+    status: (raw.status ?? raw.Status ?? 'Completed') as BulkMovementRunStatus,
+    requestedAt: String(raw.requestedAt ?? raw.RequestedAt ?? ''),
+    completedAt: raw.completedAt ?? raw.CompletedAt ?? null,
+    moved: Array.isArray(rawMoved) ? rawMoved.map(normalizeBulkAuditEntry) : [],
+    skipped: Array.isArray(rawSkipped) ? rawSkipped.map(normalizeBulkAuditEntry) : [],
+    failed: Array.isArray(rawFailed) ? rawFailed.map(normalizeBulkAuditEntry) : [],
+  }
+}
+
+export async function getBulkMovementStatus(bulkMovementGuid: string): Promise<BulkMovementStatusDto> {
   if (MOCK_AUTH) {
-    return Promise.resolve({
+    return {
       bulkMovementGuid, status: 'Completed', requestedAt: new Date().toISOString(), completedAt: new Date().toISOString(),
       moved: [], skipped: [], failed: [],
-    })
+    }
   }
-  return apiGet<BulkMovementStatusDto>(`/api/v1/academic/session-management/move-all/${bulkMovementGuid}/status`)
+  const raw = await apiGet<any>(`/api/v1/academic/session-management/move-all/${bulkMovementGuid}/status`)
+  return normalizeBulkMovementStatus(raw, bulkMovementGuid)
 }

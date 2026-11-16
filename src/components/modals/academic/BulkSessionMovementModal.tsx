@@ -41,18 +41,18 @@ export function BulkSessionMovementModal({ isOpen, onClose, showToast, intakeLab
     onConfirm()
   }
 
-  const movedCount = result?.moved.length ?? 0
-  const skippedCount = result?.skipped.length ?? 0
-  const failedCount = result?.failed.length ?? 0
+  const movedCount = result?.moved?.length ?? 0
+  const skippedCount = result?.skipped?.length ?? 0
+  const failedCount = result?.failed?.length ?? 0
   const breakdown = [
-    ...(result?.moved.map(e => ({ ...e, outcome: 'Moved' as const })) ?? []),
-    ...(result?.skipped.map(e => ({ ...e, outcome: 'Skipped' as const })) ?? []),
-    ...(result?.failed.map(e => ({ ...e, outcome: 'Failed' as const })) ?? []),
+    ...(Array.isArray(result?.moved) ? result.moved.map(e => ({ ...e, outcome: 'Moved' as const })) : []),
+    ...(Array.isArray(result?.skipped) ? result.skipped.map(e => ({ ...e, outcome: 'Skipped' as const })) : []),
+    ...(Array.isArray(result?.failed) ? result.failed.map(e => ({ ...e, outcome: 'Failed' as const })) : []),
   ]
 
   return (
     <div className="modal-overlay open">
-      <div className="modal modal-lg" onClick={e => e.stopPropagation()}>
+      <div className={`modal ${phase === 'result' ? 'modal-xl' : 'modal-lg'}`} onClick={e => e.stopPropagation()}>
         <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title"><i className="lni lni-reload"></i> Bulk Session Movement — {intakeLabel}</div>
           {(phase === 'confirm' || !isRunning) && <button className="modal-close" onClick={onClose}><i className="lni lni-close"></i></button>}
@@ -98,17 +98,40 @@ export function BulkSessionMovementModal({ isOpen, onClose, showToast, intakeLab
             {breakdown.length === 0 ? (
               <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>No sessions were eligible for movement.</div>
             ) : (
-              <ScrollTable className="no-sticky-col mb-[14px]">
-                <table>
-                  <thead><tr><th>Programme</th><th>Outcome</th><th>Reason</th></tr></thead>
+              <ScrollTable className="no-sticky-col mb-[14px]" maxHeight="52vh">
+                <table style={{ width: '100%', minWidth: '100%', tableLayout: 'fixed' }}>
+                  <thead>
+                    <tr>
+                      <th style={{ width: '42%', textAlign: 'left', paddingLeft: 16 }}>Programme</th>
+                      <th style={{ width: '18%', textAlign: 'center' }}>Outcome</th>
+                      <th style={{ width: '40%', textAlign: 'left', paddingLeft: 12 }}>Reason</th>
+                    </tr>
+                  </thead>
                   <tbody>
                     {breakdown.map((e, i) => (
                       <tr key={`${e.sessionGuid}-${i}`}>
-                        <td>{e.programName}</td>
-                        <td>
-                          <span className={`badge ${e.outcome === 'Moved' ? 'badge-green' : e.outcome === 'Skipped' ? 'badge-amber' : 'badge-red'}`}>{e.outcome}</span>
+                        <td style={{ textAlign: 'left', paddingLeft: 16, whiteSpace: 'normal', wordBreak: 'break-word', fontWeight: 500, color: 'var(--g900)' }}>
+                          {e.programName}
                         </td>
-                        <td>{e.reason ?? '—'}</td>
+                        <td style={{ textAlign: 'center' }}>
+                          <span
+                            className={`badge ${e.outcome === 'Moved' ? 'badge-green' : e.outcome === 'Skipped' ? 'badge-amber' : 'badge-red'}`}
+                            title={e.reason ?? undefined}
+                          >
+                            {e.outcome}
+                          </span>
+                        </td>
+                        <td style={{ textAlign: 'left', paddingLeft: 12, whiteSpace: 'normal', wordBreak: 'break-word', fontSize: 12.5 }}>
+                          {e.reason ? (
+                            <span style={{ color: e.outcome === 'Failed' ? 'var(--red, #dc2626)' : 'var(--g700, #374151)' }}>
+                              {e.reason}
+                            </span>
+                          ) : e.outcome === 'Moved' ? (
+                            <span className="text-clr-green font-medium">Session moved to next semester</span>
+                          ) : (
+                            <span className="text-g400">—</span>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
