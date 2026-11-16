@@ -339,11 +339,17 @@ function ResitSchedulingContent() {
           <div className="stat-grid-fluid mb-5">
             {!forbidden.exam && (
               <SummaryCard label="University Exam" icon="lni-graduation" active={activeTab === 'exam'} onClick={() => requestTab('exam')}>
-                {examSummary.isLoading ? <CardLoading /> : examSummary.isError ? <CardError /> : (
+                {examSummary.isLoading ? <CardLoading /> : examSummary.isError ? <CardError error={examSummary.error} /> : (
                   <>
                     <div className="stat-num">{(examTotal ?? 0).toLocaleString()} <span className="text-sm font-semibold text-g500">scheduled</span></div>
                     <div className="stat-lbl">
-                      {unitsPending === null ? 'Counting pending units…' : `${unitsPending.toLocaleString()} unit${unitsPending === 1 ? '' : 's'} pending`}
+                      {unitsQuery.isError ? (
+                        <span style={{ color: 'var(--red)' }}>{errMsg(unitsQuery.error, 'Could not load pending units.')}</span>
+                      ) : unitsPending === null ? (
+                        'Counting pending units…'
+                      ) : (
+                        `${unitsPending.toLocaleString()} unit${unitsPending === 1 ? '' : 's'} pending`
+                      )}
                     </div>
                   </>
                 )}
@@ -448,16 +454,16 @@ function SummaryCard({ label, icon, active, onClick, children }: { label: string
 function CardLoading() {
   return <div className="stat-lbl mt-3"><i className="lni lni-spinner-solid animate-spin mr-1"></i>Loading…</div>
 }
-function CardError() {
-  return <div className="stat-lbl mt-3" style={{ color: 'var(--red)' }}>Could not load.</div>
+function CardError({ error }: { error?: unknown }) {
+  return <div className="stat-lbl mt-3" style={{ color: 'var(--red)' }}>{errMsg(error, 'Could not load.')}</div>
 }
 
 function WindowCardBody({ query, duration }: {
-  query: { data?: ResitCtScheduleResponse | ResitCwScheduleResponse; isLoading: boolean; isError: boolean }
+  query: { data?: ResitCtScheduleResponse | ResitCwScheduleResponse; isLoading: boolean; isError: boolean; error?: unknown }
   duration?: boolean
 }) {
   if (query.isLoading) return <CardLoading />
-  if (query.isError || !query.data) return <CardError />
+  if (query.isError || !query.data) return <CardError error={query.error} />
   const { schedule, locked, studentsStarted } = query.data
   if (!schedule) return <div className="mt-2"><span className="badge badge-amber">Not scheduled</span></div>
   const mins = duration && 'durationMinutes' in schedule ? schedule.durationMinutes : null

@@ -22,6 +22,7 @@ export function useHallTicketSearch(searchTerm: string, intakeGuid: string | nul
     queryFn: () => getHallTicketSearch(searchTerm, intakeGuid as string).then(d => d ?? []),
     enabled: !!intakeGuid && !!searchTerm.trim(),
     placeholderData: prev => prev,
+    retry: false,
   })
 }
 
@@ -33,6 +34,7 @@ export function useHallTicketEligibility(studentGuid: string | null, intakeGuid:
     queryFn: () => getHallTicketEligibility(studentGuid as string, intakeGuid as string, term),
     enabled: !!studentGuid && !!intakeGuid,
     staleTime: 0,
+    retry: false,
   })
 }
 
@@ -69,6 +71,7 @@ export function useHallTicketScopeStudents(
     queryFn: () => getHallTicketScopeStudents(scope as HallTicketScope, status, options),
     enabled: enabled && !!scope?.intakeGuid,
     staleTime: 0,
+    retry: false,
   })
 }
 

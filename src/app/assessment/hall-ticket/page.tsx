@@ -102,7 +102,7 @@ export default function HallTicketIssuancePage() {
     const t = setTimeout(() => { if (searchInput.trim() !== search) { setSearch(searchInput.trim()); setPage(1) } }, 400)
     return () => clearTimeout(t)
   }, [searchInput, search])
-  const { data: students = [], isFetching: searching, isError: searchError } = useHallTicketSearch(search, intakeGuid || null)
+  const { data: students = [], isFetching: searching, isError: searchError, error: searchErr } = useHallTicketSearch(search, intakeGuid || null)
   const [page, setPage] = useState(1)
   const totalPages = Math.max(1, Math.ceil(students.length / PAGE_SIZE))
   const pageRows = students.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
@@ -128,9 +128,11 @@ export default function HallTicketIssuancePage() {
     issue.mutate({ studentGuid: selected.studentGuid, intakeGuid, term: termParam }, {
       // "Already issued" is a success too — the server refreshed the
       // existing ticket's issue date rather than creating a new one.
-      onSuccess: ({ alreadyIssued }) => {
+      onSuccess: ({ alreadyIssued, message }) => {
         const who = selected.studentName ?? 'the student'
-        showToast(alreadyIssued ? `${who} already had a ${termDisplayLabel} hall ticket — its issue date has been updated to today.` : `Hall ticket issued to ${who}.`, 'ok')
+        // Backend's own message first (with the student's name for context);
+        // the existing wording stays only as a fallback when none is sent.
+        showToast(message ? `${message} (${who})` : alreadyIssued ? `${who} already had a ${termDisplayLabel} hall ticket — its issue date has been updated to today.` : `Hall ticket issued to ${who}.`, 'ok')
         // Per the page doc: clear the selection and the search box.
         setSelected(null); setSearchInput(''); setSearch('')
       },
@@ -367,7 +369,7 @@ export default function HallTicketIssuancePage() {
                 ) : searching && students.length === 0 ? (
                   <TableLoadingState colSpan={5} />
                 ) : searchError ? (
-                  <tr><td colSpan={5} className="text-clr-red text-center" style={{ padding: 24 }}><i className="lni lni-warning"></i> Couldn&apos;t search students. Please try again.</td></tr>
+                  <tr><td colSpan={5} className="text-clr-red text-center" style={{ padding: 24 }}><i className="lni lni-warning"></i> {(searchErr as Error)?.message || "Couldn't search students. Please try again."}</td></tr>
                 ) : students.length === 0 ? (
                   <tr><td colSpan={5} className="text-g400 text-center" style={{ padding: 24 }}>No registered student of this intake matches &quot;{search}&quot;.</td></tr>
                 ) : pageRows.map(s => (
@@ -462,7 +464,7 @@ function BulkIssueModal({ isOpen, onClose, intakeGuid, intakeLabel, initialTermO
   const scopeIncomplete = !!programGuid && !semesterGuid
   const modalTermParam = termOverride ? (Number(termOverride) as HallTicketTerm) : undefined
   const scope: HallTicketScope = { intakeGuid, term: modalTermParam, programGuid: programGuid || null, semesterGuid: semesterGuid || null }
-  const { data: rows = [], isFetching, isError } = useHallTicketScopeStudents(
+  const { data: rows = [], isFetching, isError, error: scopeErr } = useHallTicketScopeStudents(
     scope,
     status || null,
     {
@@ -651,7 +653,7 @@ function BulkIssueModal({ isOpen, onClose, intakeGuid, intakeLabel, initialTermO
                     {isFetching && rows.length === 0 ? (
                       <TableLoadingState colSpan={7} />
                     ) : isError ? (
-                      <tr><td colSpan={7} className="text-clr-red text-center" style={{ padding: 24 }}><i className="lni lni-warning"></i> Couldn&apos;t load students. Please try again.</td></tr>
+                      <tr><td colSpan={7} className="text-clr-red text-center" style={{ padding: 24 }}><i className="lni lni-warning"></i> {(scopeErr as Error)?.message || "Couldn't load students. Please try again."}</td></tr>
                     ) : rows.length === 0 ? (
                       <tr><td colSpan={7} className="text-g400 text-center" style={{ padding: 24 }}>No students {status === 'Issued' ? 'with an issued ticket' : status === 'NotIssued' ? 'left without a ticket' : ''} in this scope.</td></tr>
                     ) : rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map(r => (

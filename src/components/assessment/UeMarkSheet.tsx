@@ -242,7 +242,7 @@ export function UeMarkSheet({ mode }: { mode: UeMarkSheetMode }) {
       onSuccess: () => { setVerifiedPopup(true); handleRefresh() },
       onError: err => {
         const code = err instanceof AuthError ? err.code : undefined
-        if (code === 'no_marks_entered') showToast('Please enter marks before proceeding.', 'error')
+        if (code === 'no_marks_entered') showToast(errMessage(err, 'Please enter marks before proceeding.'), 'error')
         else if (code === 'already_verified') showToast(errMessage(err, 'This exam is already verified.'), 'info')
         else showToast(errMessage(err, 'Could not verify the exam.'), 'error')
       },
@@ -253,7 +253,7 @@ export function UeMarkSheet({ mode }: { mode: UeMarkSheetMode }) {
   const gridErrorText = gridError instanceof AuthError && gridError.code === 'attendance_not_taken'
     ? errMessage(gridError, 'Attendance has not been entered for this exam yet.')
     : gridError instanceof AuthError && gridError.code === 'not_found'
-      ? 'This exam no longer exists.'
+      ? errMessage(gridError, 'This exam no longer exists.')
       : errMessage(gridError, 'Could not load the mark sheet.')
 
   const unitLabel = selectedUnit ? `${selectedUnit.courseUnitCode} — ${selectedUnit.courseUnitName}` : ''

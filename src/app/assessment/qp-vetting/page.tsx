@@ -78,7 +78,7 @@ export default function QpUploadVettingPage() {
   }
 
   // ── Data Queries ──────────────────────────────────────────────────────────
-  const { data: courseUnits = [], isLoading: isCuLoading } = useUeCourseUnits()
+  const { data: courseUnits = [], isLoading: isCuLoading, isError: isCuError, error: cuError } = useUeCourseUnits()
 
   // Auto-select first unit
   useEffect(() => {
@@ -102,12 +102,16 @@ export default function QpUploadVettingPage() {
   const {
     data: summary = { totalCount: 0, sectionACount: 0, sectionBCount: 0, sectionCCount: 0, isVerified: false },
     isLoading: isSummaryLoading,
+    isError: isSummaryError,
+    error: summaryError,
     refetch: refetchSummary,
   } = useUeQuestionSummary(selectedCourseUnitGuid, 5, ueType)
 
   const {
     data: questions = [],
     isLoading: isQuestionsLoading,
+    isError: isQuestionsError,
+    error: questionsError,
     refetch: refetchQuestions,
   } = useUeQuestions(selectedCourseUnitGuid, 5, activeLevel, ueType)
 
@@ -415,6 +419,19 @@ export default function QpUploadVettingPage() {
             </div>
           </div>
 
+          {/* Question Summary Backend Error Banner */}
+          {isSummaryError && (
+            <div className="bg-red-50 border border-red-200 rounded-md p-3.5 flex gap-3 text-[12.5px] text-red-900 items-start shadow-xs" role="alert">
+              <div className="mt-0.5 text-red-600"><i className="lni lni-warning text-[16px]"></i></div>
+              <div>
+                <strong className="font-semibold text-red-950">
+                  Could not load summary for {selectedUnit?.courseUnitCode || 'this course unit'}:
+                </strong>{' '}
+                {(summaryError as Error)?.message || 'Failed to load summary counts from server.'}
+              </div>
+            </div>
+          )}
+
           {/* Verification closed: exam date passed (from a 409 on Verify) */}
           {!isLocked && examClosed && examClosed.guid === selectedCourseUnitGuid && examClosed.ueType === ueType && (
             <div className="bg-amber-50 border border-amber-200 rounded-md p-3.5 flex gap-3 text-[12.5px] text-amber-900 items-start shadow-xs" role="status">
@@ -542,6 +559,12 @@ export default function QpUploadVettingPage() {
                   <tbody>
                     {isQuestionsLoading ? (
                       <TableLoadingState colSpan={5} title="Loading section questions…" />
+                    ) : isQuestionsError ? (
+                      <EmptyState
+                        colSpan={5}
+                        title={(questionsError as Error)?.message || 'Failed to load questions'}
+                        subtitle="Please check the server response or try refreshing."
+                      />
                     ) : paginatedQuestions.length === 0 ? (
                       <EmptyState
                         colSpan={5}
@@ -673,6 +696,12 @@ export default function QpUploadVettingPage() {
               <tbody>
                 {isCuLoading ? (
                   <TableLoadingState colSpan={5} title="Loading vetting queue…" />
+                ) : isCuError ? (
+                  <EmptyState
+                    colSpan={5}
+                    title={(cuError as Error)?.message || 'Failed to load course units for vetting queue'}
+                    subtitle="Please check your active intake configuration or permissions."
+                  />
                 ) : paginatedVettingUnits.length === 0 ? (
                   <EmptyState
                     colSpan={5}
@@ -867,6 +896,8 @@ function VettingQueueRow({
     ...(types.includes(1) ? [{ type: 1, q: practical }] : []),
   ]
   const isLoading = banks.some(b => b.q.isLoading)
+  const hasError = banks.some(b => b.q.isError)
+  const bankError = (banks.find(b => b.q.error)?.q.error as Error | undefined)?.message
   const withQuestions = banks.filter(b => (b.q.data?.totalCount ?? 0) > 0)
   const totalCount = withQuestions.reduce((n, b) => n + (b.q.data?.totalCount ?? 0), 0)
   const hasQuestions = totalCount > 0
@@ -880,11 +911,11 @@ function VettingQueueRow({
         <ActionMenu>
           <button
             className="btn btn-neu btn-sm"
-            disabled={!hasQuestions || isVerified}
+            disabled={!hasQuestions || isVerified || hasError}
             onClick={() => onOpenReview(cu.courseUnitGuid, reviewType)}
           >
             <i className="lni lni-search-alt" />{' '}
-            {!hasQuestions ? 'No Questions' : isVerified ? 'Verified' : 'Open for Review'}
+            {hasError ? 'Error checking' : !hasQuestions ? 'No Questions' : isVerified ? 'Verified' : 'Open for Review'}
           </button>
         </ActionMenu>
       </td>
@@ -913,6 +944,16 @@ function VettingQueueRow({
           >
             <span className="w-3.5 h-3.5 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" />
             <span>Checking…</span>
+          </button>
+        ) : hasError ? (
+          <button
+            type="button"
+            disabled
+            title={bankError || 'Failed to check questions'}
+            className="btn btn-neu btn-sm text-red-600 border-red-200 bg-red-50 opacity-90 cursor-not-allowed flex items-center gap-1.5 text-xs"
+          >
+            <i className="lni lni-warning" />
+            <span className="truncate max-w-[120px]">{bankError || 'Error'}</span>
           </button>
         ) : !hasQuestions ? (
           <button

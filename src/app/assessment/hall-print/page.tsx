@@ -86,7 +86,7 @@ export default function HallTicketPrintPage() {
 
   const ready = !!intakeGuid && !!programGuid && !!semesterGuid
   const termParam = termOverride ? (Number(termOverride) as HallTicketTerm) : undefined
-  const { data: rows = [], isFetching, isError } = useHallTicketScopeStudents(
+  const { data: rows = [], isFetching, isError, error: scopeError } = useHallTicketScopeStudents(
     ready ? { intakeGuid, term: termParam, programGuid, semesterGuid } : null,
     status || null,
     ready,
@@ -104,14 +104,8 @@ export default function HallTicketPrintPage() {
       downloadBlob(blob, filename)
       showToast(`Hall ticket downloaded for ${name ?? 'the student'}.`, 'ok')
     } catch (e: any) {
-      const msg = e?.message || ''
-      if (/cannot be printed after the exam/i.test(msg)) {
-        showToast('Hall ticket cannot be printed after the exam.', 'error')
-      } else if (/Could not determine the hall ticket term/i.test(msg)) {
-        showToast('Could not determine the hall ticket term. Please select a Term override.', 'error')
-      } else {
-        showToast(msg || 'Could not generate the hall ticket.', 'error')
-      }
+      const msg = e?.errors?.[0] || e?.message || 'Could not generate the hall ticket.'
+      showToast(msg, 'error')
     } finally {
       setPrintingGuid(null)
     }
@@ -192,7 +186,7 @@ export default function HallTicketPrintPage() {
                 ) : isFetching && rows.length === 0 ? (
                   <TableLoadingState colSpan={5} />
                 ) : isError ? (
-                  <tr><td colSpan={5} className="text-clr-red text-center" style={{ padding: 24 }}><i className="lni lni-warning"></i> Couldn&apos;t load students. Please try again.</td></tr>
+                  <tr><td colSpan={5} className="text-clr-red text-center" style={{ padding: 24 }}><i className="lni lni-warning"></i> {(scopeError as Error)?.message || "Couldn't load students. Please try again."}</td></tr>
                 ) : filtered.length === 0 ? (
                   <tr><td colSpan={5} className="text-g400 text-center" style={{ padding: 24 }}>No students match.</td></tr>
                 ) : filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map(r => {

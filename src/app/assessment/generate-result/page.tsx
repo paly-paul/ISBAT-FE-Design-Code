@@ -1045,6 +1045,14 @@ export default function GenerateResultPage() {
                     style={{ padding: '0' }}
                   />
                 </div>
+              ) : statusQ.isError ? (
+                <div className="gr-empty" style={{ color: 'var(--red)' }}>
+                  <b>Could not load batches</b>
+                  {(statusQ.error as Error)?.message || 'Failed to load generate result status.'}<br />
+                  <button type="button" className="gr-btn gr-sm" onClick={() => statusQ.refetch()}>
+                    Retry
+                  </button>
+                </div>
               ) : (
                 <div className="gr-empty">
                   <b>No batches match these filters</b>

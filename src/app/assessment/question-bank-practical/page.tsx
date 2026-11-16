@@ -58,8 +58,8 @@ export default function QuestionBankPracticalPage() {
         value: u.courseUnitGuid,
         label: `${u.courseUnitCode ? u.courseUnitCode + ' - ' : ''}${u.courseUnitName || 'Unnamed Unit'}`
       })))
-    }).catch(() => {
-      showToast('Failed to load course units', 'error')
+    }).catch(err => {
+      showToast(errMsg(err, 'Failed to load course units'), 'error')
     }).finally(() => setCourseUnitsLoading(false))
   }, [])
 
@@ -182,8 +182,8 @@ export default function QuestionBankPracticalPage() {
       } else {
         throw new Error('Template URL not received')
       }
-    } catch {
-      showToast('Failed to download template.', 'error')
+    } catch (err) {
+      showToast(errMsg(err, 'Failed to download template.'), 'error')
     } finally {
       setBusy(null)
     }

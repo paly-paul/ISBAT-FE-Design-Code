@@ -117,6 +117,8 @@ export default function QuestionBankUploadPage() {
     data: liveQuestions,
     isLoading: isLoadingQuestions,
     isFetching: isFetchingQuestions,
+    isError: isLiveQuestionsError,
+    error: liveQuestionsError,
     refetch: refetchQuestions,
   } = useQuestions(
     repoCourseUnitGuid,
@@ -160,6 +162,8 @@ export default function QuestionBankUploadPage() {
     data: importExistingQuestions,
     isLoading: isLoadingImportExistingQuestions,
     isFetching: isFetchingImportExistingQuestions,
+    isError: isImportExistingQuestionsError,
+    error: importExistingQuestionsError,
     refetch: refetchImportExistingQuestions,
   } = useQuestions(
     importCourseUnitGuid,
@@ -390,11 +394,12 @@ export default function QuestionBankUploadPage() {
         universityExamType: isImportUniversityExam ? effectiveImportUeType : undefined,
       },
       {
-        onSuccess: () => {
+        onSuccess: (res) => {
           const count = previewRows?.length ?? 0
           setSuccessModal({
             title: 'Questions Uploaded Successfully!',
-            subtitle: `${count > 0 ? `${count} question(s)` : 'Questions'} committed to the Question Bank database.`,
+            // Backend's own message first; existing count text as fallback.
+            subtitle: res?.message || `${count > 0 ? `${count} question(s)` : 'Questions'} committed to the Question Bank database.`,
           })
           handleClearFile()
           // Automatically sync repository unit and refetch live questions
@@ -1296,6 +1301,25 @@ export default function QuestionBankUploadPage() {
                             <div className="text-xs font-medium">Fetching live questions from repository...</div>
                           </td>
                         </tr>
+                      ) : isLiveQuestionsError ? (
+                        <tr>
+                          <td colSpan={7} style={{ textAlign: 'center', padding: '48px 16px', color: 'var(--clr-red, #dc2626)' }}>
+                            <i className="lni lni-warning text-3xl block mb-2 opacity-80"></i>
+                            <div className="text-sm font-semibold">{(liveQuestionsError as Error)?.message || 'Failed to load questions from repository.'}</div>
+                            <div className="text-xs text-slate-500 mt-1">
+                              Please check the server response or retry.
+                            </div>
+                            <div className="mt-4">
+                              <button
+                                type="button"
+                                className="btn btn-neu btn-sm"
+                                onClick={() => refetchQuestions()}
+                              >
+                                <i className="lni lni-reload mr-1"></i> Retry
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
                       ) : !repoCategory || !repoCourseUnitGuid ? (
                         <tr>
                           <td colSpan={7} style={{ textAlign: 'center', padding: '48px 16px', color: 'var(--g500)' }}>
@@ -1464,6 +1488,12 @@ export default function QuestionBankUploadPage() {
              ─────────────────────────────────────────────────────────────────── */}
           {activeTab === 'import' && (
             <div className="space-y-4">
+              {isImportExistingQuestionsError && (
+                <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-md text-xs flex items-center gap-2">
+                  <i className="lni lni-warning text-base shrink-0" />
+                  <span>{(importExistingQuestionsError as Error)?.message || 'Failed to load existing questions for this course unit.'}</span>
+                </div>
+              )}
 
               {/* If questions already exist for current type and user has not toggled upload box: Show Existing Questions */}
               {currentImportQuestions && currentImportQuestions.length > 0 && !showUploadBox ? (

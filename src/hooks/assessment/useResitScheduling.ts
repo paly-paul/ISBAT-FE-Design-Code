@@ -31,6 +31,7 @@ export function useResitSchedules(params: { page: number; pageSize: number; sear
     queryKey: RESIT_SCHEDULING_KEYS.examList(params),
     queryFn: () => getResitSchedules({ ...params, search: params.search || undefined }),
     placeholderData: keepPreviousData,
+    retry: false,
   })
 }
 
@@ -41,6 +42,7 @@ export function useResitScheduleCourseUnits(enabled = true) {
     queryKey: RESIT_SCHEDULING_KEYS.courseUnits(),
     queryFn: getResitScheduleCourseUnits,
     enabled,
+    retry: false,
   })
 }
 
@@ -50,6 +52,7 @@ export function useResitSchedule(resitScheduleGuid: string | null) {
     queryFn: () => getResitSchedule(resitScheduleGuid as string),
     enabled: !!resitScheduleGuid,
     staleTime: 0,
+    retry: false,
   })
 }
 
@@ -73,7 +76,7 @@ export function useUpdateResitSchedule() {
 }
 
 export function useResitCtSchedule() {
-  return useQuery({ queryKey: RESIT_SCHEDULING_KEYS.ct(), queryFn: getResitCtSchedule })
+  return useQuery({ queryKey: RESIT_SCHEDULING_KEYS.ct(), queryFn: getResitCtSchedule, retry: false })
 }
 
 // Refill the form and the card from the response, then reload for the
@@ -90,7 +93,7 @@ export function useUpdateResitCtSchedule() {
 }
 
 export function useResitCwSchedule() {
-  return useQuery({ queryKey: RESIT_SCHEDULING_KEYS.cw(), queryFn: getResitCwSchedule })
+  return useQuery({ queryKey: RESIT_SCHEDULING_KEYS.cw(), queryFn: getResitCwSchedule, retry: false })
 }
 
 export function useUpdateResitCwSchedule() {

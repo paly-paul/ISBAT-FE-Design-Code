@@ -104,6 +104,42 @@ const PASS_YEAR_MIN = 1950
 // POST /application-filling/photo: extension-checked only.
 const PHOTO_EXT_RE = /\.(jpe?g|png|bmp)$/i
 const PHOTO_TYPE_MESSAGE = 'Only JPG, PNG, or BMP images are accepted.'
+const PHOTO_COMPRESS_THRESHOLD_BYTES = 300 * 1024
+const PHOTO_MAX_DIMENSION = 1200
+
+// Downscales oversized camera/phone photos client-side before uploading so
+// multi-megabyte images don't stall the photo upload and submission flow.
+async function compressPhotoFile(file: File): Promise<File> {
+  if (file.size <= PHOTO_COMPRESS_THRESHOLD_BYTES || typeof document === 'undefined') return file
+  const objectUrl = URL.createObjectURL(file)
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image()
+      el.onload = () => resolve(el)
+      el.onerror = err => reject(err)
+      el.src = objectUrl
+    })
+    const { naturalWidth: w, naturalHeight: h } = img
+    if (!w || !h) return file
+    const scale = Math.min(1, PHOTO_MAX_DIMENSION / Math.max(w, h))
+    const targetW = Math.max(1, Math.round(w * scale))
+    const targetH = Math.max(1, Math.round(h * scale))
+    const canvas = document.createElement('canvas')
+    canvas.width = targetW
+    canvas.height = targetH
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return file
+    ctx.drawImage(img, 0, 0, targetW, targetH)
+    const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.85))
+    if (!blob || blob.size >= file.size) return file
+    const baseName = file.name.replace(/\.[^.]+$/, '') || 'photo'
+    return new File([blob], `${baseName}.jpg`, { type: 'image/jpeg' })
+  } catch {
+    return file
+  } finally {
+    URL.revokeObjectURL(objectUrl)
+  }
+}
 
 // `error` renders the same inline field message the academic forms use
 // (.field-err, picked up by scrollToFirstError).
@@ -1106,23 +1142,31 @@ export default function FilingPage() {
   const [photoFile, setPhotoFile] = useState<File | null>(null)
   const [photoError, setPhotoError] = useState<string | null>(null)
   const [photoSaved, setPhotoSaved] = useState(false)
+  const [awaitingPhotoBeforeSubmit, setAwaitingPhotoBeforeSubmit] = useState(false)
+  const photoUploadPromiseRef = useRef<Promise<boolean> | null>(null)
   const uploadPhoto = useUploadPhoto()
   const submitApplication = useSubmitApplication()
 
   useEffect(() => {
     setPhotoSaved(!!selectedApplication?.studUserFileName)
     setPhotoFile(null); setPhotoError(null)
+    photoUploadPromiseRef.current = null
+    setAwaitingPhotoBeforeSubmit(false)
   }, [selectedApplication])
 
   const hasPhoto = photoSaved || !!selectedApplication?.studUserFileName
+  // As soon as a valid photo is picked (with no validation/upload error),
+  // treat the photo step as ready in the UI so the Submit Application button
+  // becomes active immediately instead of staying dimmed during network upload.
+  const isPhotoReady = hasPhoto || (!!photoFile && !photoError)
   const qualifiedCount = qualRows.filter(r => r.savedId != null).length
-  const canSubmit = generalSaved && intApplication != null && qualifiedCount > 0 && hasPhoto
+  const canSubmit = generalSaved && intApplication != null && qualifiedCount > 0 && isPhotoReady
   // Drives the progress strip under the pipeline — same three checkpoints as
   // the Documents tab's own "Application Status" checklist, so the two
   // never disagree about what "done" means. Was four checkpoints including
   // a declaration/consent checkbox, removed 2026-09-15 per request.
   const filingProgressPct = Math.round(
-    ([generalSaved, qualifiedCount > 0, hasPhoto].filter(Boolean).length / 3) * 100,
+    ([generalSaved, qualifiedCount > 0, isPhotoReady].filter(Boolean).length / 3) * 100,
   )
 
   // Picking (or dropping) a photo uploads it straight away. It used to need
@@ -1140,9 +1184,24 @@ export default function FilingPage() {
 
   function uploadPhotoFile(file: File) {
     if (!selectedApplication) return
-    uploadPhoto.mutate({ appRefNo: selectedApplication.appRefNo, photo: file }, {
-      onSuccess: () => { setPhotoSaved(true); showToast('Photo saved', 'success') },
-      onError: (error: Error) => setPhotoError(error.message || "Couldn't upload the photo."),
+    const appRefNo = selectedApplication.appRefNo
+    const promise = (async () => {
+      try {
+        const prepared = await compressPhotoFile(file)
+        await uploadPhoto.mutateAsync({ appRefNo, photo: prepared })
+        setPhotoSaved(true)
+        showToast('Photo saved', 'success')
+        return true
+      } catch (error: any) {
+        setPhotoError(error?.message || "Couldn't upload the photo.")
+        return false
+      }
+    })()
+    photoUploadPromiseRef.current = promise
+    promise.finally(() => {
+      if (photoUploadPromiseRef.current === promise) {
+        photoUploadPromiseRef.current = null
+      }
     })
   }
 
@@ -1167,7 +1226,7 @@ export default function FilingPage() {
     setDocPreview(null)
   }
 
-  function handleSubmitApplication() {
+  async function handleSubmitApplication() {
     if (!selectedApplication || intApplication == null) {
       showToast('Please save Personal & Programme Details first.', 'error')
       return
@@ -1176,7 +1235,16 @@ export default function FilingPage() {
       showToast('Please add and save at least one qualification before submitting.', 'error')
       return
     }
-    if (!hasPhoto) {
+    if (!isPhotoReady) {
+      showToast('Applicant profile photo is required. Please upload the photo before submitting.', 'error')
+      return
+    }
+    if (photoUploadPromiseRef.current) {
+      setAwaitingPhotoBeforeSubmit(true)
+      const ok = await photoUploadPromiseRef.current
+      setAwaitingPhotoBeforeSubmit(false)
+      if (!ok) return
+    } else if (!hasPhoto) {
       showToast('Applicant profile photo is required. Please upload the photo before submitting.', 'error')
       return
     }
@@ -1749,28 +1817,28 @@ export default function FilingPage() {
                         <span className="flex-1 text-sm text-g700">Qualifications</span>
                         <span className="chk-status text-xs">{qualifiedCount} saved</span>
                       </div>
-                      <div className={`chk-item ${hasPhoto ? 'pass' : 'pending'}`}>
-                        <i className={`lni ${hasPhoto ? 'lni-checkmark-circle' : 'lni-timer'}`} />
+                      <div className={`chk-item ${isPhotoReady ? 'pass' : 'pending'}`}>
+                        <i className={`lni ${isPhotoReady ? 'lni-checkmark-circle' : 'lni-timer'}`} />
                         <span className="flex-1 text-sm text-g700">Student Photo</span>
-                        <span className="chk-status text-xs">{hasPhoto ? 'Uploaded' : 'Required — Pending'}</span>
+                        <span className="chk-status text-xs">{hasPhoto ? 'Uploaded' : uploadPhoto.isPending ? 'Uploading…' : 'Required — Pending'}</span>
                       </div>
                     </div>
 
                     <div className="flex justify-between items-center mt-5">
                       <button className="btn" onClick={() => setActiveTab('qualifications')}><i className="lni lni-arrow-left" /> Qualifications</button>
                       <div className="flex flex-col items-end gap-1">
-                        {!hasPhoto && (
+                        {!isPhotoReady && (
                           <span className="text-xs text-clr-red font-medium flex items-center gap-1">
                             <i className="lni lni-warning" /> Applicant profile photo is required before submitting
                           </span>
                         )}
                         <button
                           className={`btn btn-primary btn-submit-ready${!canSubmit ? ' opacity-75' : ''}`}
-                          disabled={submitApplication.isPending || !permissions.submit}
+                          disabled={submitApplication.isPending || awaitingPhotoBeforeSubmit || !permissions.submit}
                           title={!permissions.submit ? 'You don’t have permission to submit applications for vetting.' : undefined}
                           onClick={handleSubmitApplication}
                         >
-                          <i className="lni lni-checkmark" /> {submitApplication.isPending ? 'Submitting…' : 'Submit Application for Vetting'}
+                          <i className="lni lni-checkmark" /> {submitApplication.isPending || awaitingPhotoBeforeSubmit ? 'Submitting…' : 'Submit Application for Vetting'}
                         </button>
                       </div>
                     </div>

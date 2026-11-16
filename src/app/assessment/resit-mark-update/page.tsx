@@ -131,7 +131,7 @@ export default function ResitMarkUpdatePage() {
       // 400 / 409: the server's message; 404: the application is gone. Reload
       // the list either way (resit-mark-update-page.md, Error handling).
       onError: (err: any) => {
-        showToast(err?.code === 'not_found' ? 'This application no longer exists.' : err?.message || 'Error pushing marks', 'error')
+        showToast(err?.message || (err?.code === 'not_found' ? 'This application no longer exists.' : 'Error pushing marks'), 'error')
         setPushModalData(null)
         queryClient.invalidateQueries({ queryKey: RESIT_MARK_UPDATES_KEYS.lists() })
       }
@@ -272,7 +272,7 @@ export default function ResitMarkUpdatePage() {
               ) : updatesFailed ? (
                 <tr><td colSpan={colCount} className="text-center py-8 text-sm">
                   <span style={{ color: 'var(--red)' }}>
-                    {listNotFound ? 'Resit not found for the selected academic session.' : (updatesError as { message?: string } | null)?.message || 'Could not load the list.'}
+                    {(updatesError as { message?: string } | null)?.message || (listNotFound ? 'Resit not found for the selected academic session.' : 'Could not load the list.')}
                   </span>{' '}
                   {!listNotFound && <button className="btn btn-neu btn-sm ml-2" onClick={() => refetchUpdates()}><i className="lni lni-reload"></i> Retry</button>}
                 </td></tr>

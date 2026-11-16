@@ -163,7 +163,7 @@ export default function IaCreationPage() {
       // AuthError carries the envelope's code, not the HTTP status.
       if (err?.code === 'conflict') {
         // Informational, not an error — and load the grid so it's visible.
-        showToast('IA Structure already exists for this combination.', '')
+        showToast(extractApiErrorMessage(err, 'IA Structure already exists for this combination.'), '')
         refetchStructure()
       } else {
         showToast(extractApiErrorMessage(err, 'Failed to create IA Structure.'), 'error')
@@ -280,7 +280,7 @@ export default function IaCreationPage() {
             <i className="lni lni-warning text-3xl text-amber-400" />
             <div className="text-sm font-semibold text-g700 mt-2">No Session Mapping Found</div>
             <div className="text-xs text-g500 max-w-sm">
-              No session mapping is configured for this Programme / Semester / Intake combination. Please contact Academic Affairs.
+              {extractApiErrorMessage(structureError, 'No session mapping is configured for this Programme / Semester / Intake combination. Please contact Academic Affairs.')}
             </div>
           </div>
         )}
@@ -311,6 +311,12 @@ export default function IaCreationPage() {
                         <i className="lni lni-pointer text-2xl" />
                         <span className="text-sm">Select Programme, Semester &amp; Session to view structure</span>
                       </div>
+                    </td>
+                  </tr>
+                ) : structureError ? (
+                  <tr>
+                    <td colSpan={6} className="text-clr-red text-center" style={{ padding: 24 }}>
+                      <i className="lni lni-warning" /> {extractApiErrorMessage(structureError, 'Could not load IA structure.')}
                     </td>
                   </tr>
                 ) : structureRows?.length === 0 ? (

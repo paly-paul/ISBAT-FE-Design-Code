@@ -87,7 +87,7 @@ export default function CwRectificationPage() {
 
 
   // ── 1. Fetch Intakes ────────────────────────────────────────────────────────
-  const { data: intakes = [], isLoading: isIntakesLoading } = useCwIntakes()
+  const { data: intakes = [], isLoading: isIntakesLoading, isError: isIntakesError, error: intakesError } = useCwIntakes()
 
   // Auto-select first intake if none is selected
   useEffect(() => {
@@ -97,7 +97,7 @@ export default function CwRectificationPage() {
   }, [intakes, selectedIntakeGuid])
 
   // ── 2. Fetch Course Units ───────────────────────────────────────────────────
-  const { data: courseUnits = [], isLoading: isUnitsLoading } = useCwCourseUnits(
+  const { data: courseUnits = [], isLoading: isUnitsLoading, isError: isUnitsError, error: unitsError } = useCwCourseUnits(
     selectedIntakeGuid,
     Boolean(selectedIntakeGuid)
   )
@@ -123,7 +123,7 @@ export default function CwRectificationPage() {
   }, [validCourseUnits, selectedCourseUnitGuid])
 
   // ── 3. Fetch Courseworks ────────────────────────────────────────────────────
-  const { data: courseworks = [], isLoading: isCourseworksLoading } = useCwCourseworks(
+  const { data: courseworks = [], isLoading: isCourseworksLoading, isError: isCourseworksError, error: courseworksError } = useCwCourseworks(
     selectedIntakeGuid,
     selectedCourseUnitGuid,
     Boolean(selectedIntakeGuid && selectedCourseUnitGuid)
@@ -149,7 +149,7 @@ export default function CwRectificationPage() {
   const courseworkNumber = activeCoursework?.courseworkNumber ?? 1
 
   // ── 4. Fetch Students ───────────────────────────────────────────────────────
-  const { data: students = [], isLoading: isStudentsLoading } = useCwStudents(
+  const { data: students = [], isLoading: isStudentsLoading, isError: isStudentsError, error: studentsError } = useCwStudents(
     selectedIntakeGuid,
     selectedCourseUnitGuid,
     courseworkNumber,
@@ -172,6 +172,8 @@ export default function CwRectificationPage() {
   const {
     data: summary,
     isLoading: isSummaryLoading,
+    isError: isSummaryError,
+    error: summaryError,
     refetch: refetchSummary,
   } = useCwSubmissionSummary(
     selectedCourseworkGuid,
@@ -184,7 +186,7 @@ export default function CwRectificationPage() {
   const [viewerIndex, setViewerIndex] = useState<number>(0)
 
   // Fetch recheck Q&A only when student can recheck & viewer is open
-  const { data: recheckData, isLoading: isRecheckLoading } = useCwRecheck(
+  const { data: recheckData, isLoading: isRecheckLoading, isError: isRecheckError, error: recheckError } = useCwRecheck(
     selectedCourseworkGuid,
     selectedStudentGuid,
     Boolean(isViewerOpen && summary?.canRecheck)
@@ -208,13 +210,22 @@ export default function CwRectificationPage() {
 
   // ── Handle Find Button Click ───────────────────────────────────────────────
   const handleFindSubmission = () => {
-    refetchSummary()
-    const student = students.find(s => s.studentGuid === selectedStudentGuid)
-    if (student) {
-      showToast(`Refreshed submission for ${student.studentName || 'Student'}`, 'success')
-    } else {
+    if (!selectedStudentGuid) {
       showToast('Select a valid student to find submission', 'info')
+      return
     }
+    refetchSummary()
+      .then((res) => {
+        if (res.error) {
+          showToast((res.error as Error).message || 'Failed to fetch submission', 'error')
+        } else {
+          const student = students.find(s => s.studentGuid === selectedStudentGuid)
+          showToast(`Refreshed submission for ${student?.studentName || 'Student'}`, 'success')
+        }
+      })
+      .catch((err) => {
+        showToast(err?.message || 'Failed to fetch submission', 'error')
+      })
   }
 
   // ── Action Handlers ────────────────────────────────────────────────────────
@@ -506,6 +517,21 @@ export default function CwRectificationPage() {
           </button>
         </div>
 
+        {/* Error Alert Banner */}
+        {(isSummaryError || isStudentsError || isUnitsError || isIntakesError || isCourseworksError) && (
+          <div className="mx-4 my-2 p-3 bg-red-50 border border-red-200 text-red-700 rounded-md text-xs flex items-center gap-2" role="alert">
+            <i className="lni lni-warning text-base shrink-0" />
+            <span>
+              {(summaryError as Error)?.message ||
+               (studentsError as Error)?.message ||
+               (unitsError as Error)?.message ||
+               (courseworksError as Error)?.message ||
+               (intakesError as Error)?.message ||
+               'Failed to load rectification data.'}
+            </span>
+          </div>
+        )}
+
         {/* Summary Strip */}
         <div className="p-4 flex items-center gap-6 flex-wrap border-t border-[#E1E4EE] bg-[#FAFBFE]">
           {/* Student Avatar & Name */}
@@ -733,8 +759,12 @@ export default function CwRectificationPage() {
               </div>
             </div>
           ) : (
-            <div className="p-6 text-center text-xs text-slate-500 italic">
-              {isRecheckLoading ? 'Loading questions...' : 'No question records found for this student coursework.'}
+            <div className={`p-6 text-center text-xs ${isRecheckError ? 'text-red-600 font-semibold' : 'text-slate-500 italic'}`}>
+              {isRecheckLoading
+                ? 'Loading questions...'
+                : isRecheckError
+                ? ((recheckError as Error)?.message || 'Failed to load recheck questions.')
+                : 'No question records found for this student coursework.'}
             </div>
           )}
 

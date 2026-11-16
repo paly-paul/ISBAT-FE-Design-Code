@@ -384,6 +384,46 @@ export async function apiPostForm<T>(path: string, formData: FormData, retried =
   throw new AuthError(code, message || responseText || `HTTP ${res.status}`, Array.isArray(envelope?.errors) ? envelope.errors : undefined)
 }
 
+// Same as apiPostForm, but also returns the envelope's `message` — for
+// multipart endpoints whose success message carries meaning a primitive
+// `data` can't hold (e.g. UE mark import / question bank import answering
+// `data: true` with a backend-worded success message). Standalone on purpose
+// so apiPostForm and all its existing callers stay exactly as they were.
+export async function apiPostFormWithMessage<T>(path: string, formData: FormData, retried = false): Promise<{ data: T; message: string | null }> {
+  const res = await send(path, {
+    method: 'POST',
+    headers: NGROK_HEADERS,
+    credentials: 'include',
+    body: formData,
+  })
+
+  const responseText = await res.text()
+
+  let envelope: ApiEnvelope<T> | null = null
+  try {
+    envelope = responseText ? (JSON.parse(responseText) as ApiEnvelope<T>) : null
+  } catch {
+    envelope = null
+  }
+  const unauthorized = res.status === 401 || (envelope != null && !envelope.success && envelope.code === 'unauthorized')
+
+  if (unauthorized && !isAuthEndpoint(path) && !retried) {
+    await handleUnauthorized(path, res)
+    return apiPostFormWithMessage<T>(path, formData, true)
+  }
+
+  if (res.ok) {
+    if (!envelope) return { data: null as T, message: null }
+    if (!envelope.success) {
+      throw new AuthError(envelope.code ?? 'unknown', envelope.errors?.[0] ?? envelope.message ?? undefined, Array.isArray(envelope.errors) ? envelope.errors : undefined)
+    }
+    return { data: envelope.data as T, message: envelope.message }
+  }
+
+  const { code, message } = extractErrorInfo(envelope)
+  throw new AuthError(code, message || responseText || `HTTP ${res.status}`, Array.isArray(envelope?.errors) ? envelope.errors : undefined)
+}
+
 // multipart/form-data variant of apiPut — mirrors apiPostForm for endpoints
 // that accept an optional file on update too (e.g. course unit syllabus
 // replace).
