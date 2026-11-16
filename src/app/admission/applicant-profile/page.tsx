@@ -1,8 +1,9 @@
 'use client'
-import { Suspense, useLayoutEffect, useRef, useState } from 'react'
+import { Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { formatDate } from '@/lib/date'
 import { useVettingApplicationDetail } from '@/hooks/admission/useVetting'
+import { useApplicationPhoto } from '@/hooks/admission/useApplicationFiling'
 import { documentTitle, genderText, orDash } from '@/lib/admission/applicantDisplay'
 import { DocumentPreviewModal } from '@/components/modals/shared/DocumentPreviewModal'
 import { QualificationCard } from '@/components/admission/QualificationCard'
@@ -41,6 +42,12 @@ function ApplicantProfileContent() {
   const searchParams = useSearchParams()
   const applicationGuid = searchParams.get('applicationGuid')
   const { data: detail, isLoading, isError, error } = useVettingApplicationDetail(applicationGuid, !!applicationGuid)
+  const { data: photoUrl } = useApplicationPhoto(applicationGuid, !!applicationGuid)
+  const [photoError, setPhotoError] = useState(false)
+
+  useEffect(() => {
+    setPhotoError(false)
+  }, [photoUrl])
 
   const [activeTab, setActiveTab] = useState<Tab>('personal')
   const [preview, setPreview] = useState<{ url: string; title: string } | null>(null)
@@ -87,9 +94,19 @@ function ApplicantProfileContent() {
 
       <div className="card mb-6">
         <div className="flex items-center gap-4">
-          <div className="flex items-center justify-center rounded-full font-bold text-white shrink-0" style={{ width: 64, height: 64, background: 'var(--b500)', fontSize: 22 }}>
-            {initials}
-          </div>
+          {photoUrl && !photoError ? (
+            <img
+              src={photoUrl}
+              alt={fullName}
+              onError={() => setPhotoError(true)}
+              className="rounded-full object-cover shrink-0"
+              style={{ width: 64, height: 64 }}
+            />
+          ) : (
+            <div className="flex items-center justify-center rounded-full font-bold text-white shrink-0" style={{ width: 64, height: 64, background: 'var(--b500)', fontSize: 22 }}>
+              {initials}
+            </div>
+          )}
           <div className="flex-1 min-w-0">
             <div className="font-semibold text-lg text-g900">{fullName}</div>
             <div className="text-sm text-g500">{orDash(detail.programName)}{admissionType !== '—' && ` · ${admissionType}`}</div>

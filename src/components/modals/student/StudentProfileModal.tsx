@@ -1,4 +1,5 @@
 'use client'
+import { useEffect, useState } from 'react'
 import { ModalProps } from '../types'
 import { useStudent } from '@/hooks/student/useStudents'
 import { useCountryDropdown } from '@/hooks/config/useCountries'
@@ -20,6 +21,11 @@ interface Props extends ModalProps {
 // Transfer, which still read them — this modal just doesn't rely on them.
 export function StudentProfileModal({ isOpen, onClose, studentGuid }: Props) {
   const { data: student, isLoading, isError } = useStudent(studentGuid, isOpen)
+  const [photoError, setPhotoError] = useState(false)
+
+  useEffect(() => {
+    setPhotoError(false)
+  }, [student?.photoUrl])
   // Country Master's own catalogue (config/country-master) — nationality/
   // nationalityCode have both come back null on real responses that still
   // carried a country guid, on live data confirmed live 2026-09-01: neither
@@ -70,9 +76,19 @@ export function StudentProfileModal({ isOpen, onClose, studentGuid }: Props) {
             <>
               <div className="card mb-6">
                 <div className="flex items-center gap-4">
-                  <div className="flex items-center justify-center rounded-full font-bold text-white shrink-0" style={{ width: 64, height: 64, background: 'var(--b500)', fontSize: 22 }}>
-                    {(name?.trim()[0] ?? '—').toUpperCase()}
-                  </div>
+                  {student.photoUrl && !photoError ? (
+                    <img
+                      src={student.photoUrl}
+                      alt={name}
+                      onError={() => setPhotoError(true)}
+                      className="rounded-full object-cover shrink-0"
+                      style={{ width: 64, height: 64 }}
+                    />
+                  ) : (
+                    <div className="flex items-center justify-center rounded-full font-bold text-white shrink-0" style={{ width: 64, height: 64, background: 'var(--b500)', fontSize: 22 }}>
+                      {(name?.trim()[0] ?? '—').toUpperCase()}
+                    </div>
+                  )}
                   <div className="flex-1 min-w-0">
                     <div className="font-semibold text-lg text-g900">{name}</div>
                     <div className="text-sm text-g500">{programme} &middot; {semester}</div>

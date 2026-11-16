@@ -5,6 +5,7 @@ import {
   getApplicants,
   getApplicationAllDetail,
   getApplicationByPaymentGuid,
+  getApplicationPhoto,
   getApplications,
   getFilingApplicationsPage,
   getFilingCountries,
@@ -103,6 +104,14 @@ export function useApplicationAllDetail(applicationGuid: string | null | undefin
   return useQuery({
     queryKey: [...FILING_KEY, 'all-detail', applicationGuid],
     queryFn: () => getApplicationAllDetail(applicationGuid as string),
+    enabled: enabled && !!applicationGuid,
+  })
+}
+
+export function useApplicationPhoto(applicationGuid: string | null | undefined, enabled = true) {
+  return useQuery({
+    queryKey: [...FILING_KEY, 'photo', applicationGuid],
+    queryFn: () => getApplicationPhoto(applicationGuid as string),
     enabled: enabled && !!applicationGuid,
   })
 }

@@ -794,6 +794,11 @@ export function deleteQualification(intApplicationQual: number): Promise<unknown
   return apiDelete<unknown>(`/api/v1/admissions/application-filling/qualifications/${intApplicationQual}`)
 }
 
+export function getApplicationPhoto(applicationGuid: string): Promise<string | null> {
+  if (MOCK_AUTH) return Promise.resolve(null)
+  return apiGet<string | null>(`/api/v1/admissions/application-filling/${applicationGuid}/photo`).catch(() => null)
+}
+
 export function uploadPhoto(appRefNo: string, photo: File): Promise<unknown> {
   if (MOCK_AUTH) return Promise.resolve({ success: true })
   const formData = new FormData()

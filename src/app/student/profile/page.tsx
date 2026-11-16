@@ -121,9 +121,16 @@ function StudentProfileContent() {
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [student, setStudent] = useState<StudentDto | null>(null)
   const [tab, setTab] = useState<TabId>('info')
+  const [heroPhotoError, setHeroPhotoError] = useState(false)
+  const [idPhotoError, setIdPhotoError] = useState(false)
 
   const effectiveStudentGuid = student?.studentGuid ?? studentGuidParam
   const { data: detail } = useStudent(effectiveStudentGuid ?? null, !!effectiveStudentGuid)
+
+  useEffect(() => {
+    setHeroPhotoError(false)
+    setIdPhotoError(false)
+  }, [detail?.photoUrl])
 
   // Registration Date and Fee Structure read the student record first, then
   // the timeline's joinedDate / current history row, which both carry them.
@@ -443,7 +450,13 @@ function StudentProfileContent() {
                 link out to the page that manages them. */}
             <section className="mp-hero" aria-label="Student summary">
               <div className="mp-hero-top">
-                <div className="mp-avatar sp-hero-av" aria-hidden="true"><span>{initials(student.studentName)}</span></div>
+                <div className="mp-avatar sp-hero-av" aria-hidden="true">
+                  {detail?.photoUrl && !heroPhotoError ? (
+                    <img src={detail.photoUrl} alt="" onError={() => setHeroPhotoError(true)} />
+                  ) : (
+                    <span>{initials(student.studentName) || <i className="lni lni-user"></i>}</span>
+                  )}
+                </div>
                 <div className="mp-hero-id">
                   <h1 className="mp-hero-name" title={student.studentName}>{student.studentName}</h1>
                   <div className="mp-hero-sub">
@@ -715,7 +728,13 @@ function StudentProfileContent() {
                         <span className="mp-idcard-chip" aria-hidden="true"></span>
                       </div>
                       <div className="sp-id-main">
-                        <div className="id-photo"><i className="lni lni-user"></i></div>
+                        <div className="id-photo">
+                          {detail?.photoUrl && !idPhotoError ? (
+                            <img src={detail.photoUrl} alt="" onError={() => setIdPhotoError(true)} />
+                          ) : (
+                            <i className="lni lni-user"></i>
+                          )}
+                        </div>
                         <div className="sp-id-who">
                           <div className="id-name">{student.studentName}</div>
                           <div className="id-prog">{student.programName || '—'} · {student.semesterName || '—'}</div>
