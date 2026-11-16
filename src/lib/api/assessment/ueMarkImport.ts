@@ -6,6 +6,7 @@ export interface UeMarkImportUnit {
   courseUnitGuid: string
   courseUnitCode: string
   courseUnitName: string
+  unitType?: number | null
 }
 
 export interface UeMarkImportExam {
@@ -67,8 +68,8 @@ export interface UeMarkImportResult {
 }
 
 const mockUnits: UeMarkImportUnit[] = [
-  { courseUnitGuid: 'dse1101-guid', courseUnitCode: 'DSE1101', courseUnitName: 'Office Automation' },
-  { courseUnitGuid: 'dse1102-guid', courseUnitCode: 'DSE1102', courseUnitName: 'Programming in C' }
+  { courseUnitGuid: 'dse1101-guid', courseUnitCode: 'DSE1101', courseUnitName: 'Office Automation', unitType: 1 },
+  { courseUnitGuid: 'dse1102-guid', courseUnitCode: 'DSE1102', courseUnitName: 'Programming in C', unitType: 3 }
 ]
 
 const mockExam: UeMarkImportExam = {
@@ -80,6 +81,18 @@ const mockExam: UeMarkImportExam = {
     synopsisMax: null, reviewMax: null, methodologyMax: null, analysisMax: null
   },
   examRuleTotalMark: 100,
+  isVerified: false
+}
+
+const mockPracticalExam: UeMarkImportExam = {
+  universityExamGuid: 'mock-practical-exam-guid',
+  layout: 1, // Practical layout
+  maxMarks: {
+    sectionAMax: null, sectionBMax: null, sectionCMax: null,
+    recordMax: 10, codingMax: 30, outputMax: 10, vivaMax: 20,
+    synopsisMax: null, reviewMax: null, methodologyMax: null, analysisMax: null
+  },
+  examRuleTotalMark: 70,
   isVerified: false
 }
 
@@ -99,7 +112,15 @@ export function getUeMarkImportUnits(programGuid: string, semesterGuid: string):
     semesterGuid: semesterGuid?.toUpperCase() || ''
   })
   return apiGet<any>(`/api/v1/assessment/ue-mark-import/units?${params.toString()}`)
-    .then(data => Array.isArray(data) ? data : (data?.data ?? []))
+    .then(data => {
+      const list = Array.isArray(data) ? data : (data?.data ?? [])
+      return list.map((item: any) => ({
+        courseUnitGuid: item?.courseUnitGuid ?? item?.CourseUnitGuid ?? '',
+        courseUnitCode: item?.courseUnitCode ?? item?.CourseUnitCode ?? '',
+        courseUnitName: item?.courseUnitName ?? item?.CourseUnitName ?? '',
+        unitType: item?.unitType ?? item?.UnitType ?? null,
+      }))
+    })
 }
 
 export function getUeMarkImportExam(
@@ -109,7 +130,7 @@ export function getUeMarkImportExam(
   intakeGuid: string,
   ueType: number
 ): Promise<UeMarkImportExam> {
-  if (MOCK_AUTH) return Promise.resolve(mockExam)
+  if (MOCK_AUTH) return Promise.resolve(ueType === 1 ? mockPracticalExam : mockExam)
   const params = new URLSearchParams({
     programGuid: programGuid?.toUpperCase() || '',
     semesterGuid: semesterGuid?.toUpperCase() || '',

@@ -41,7 +41,7 @@ export default function UeMarkImportPage() {
   const [semesterGuid, setSemesterGuid] = useState('')
   const [courseUnitGuid, setCourseUnitGuid] = useState('')
   const [intakeGuid, setIntakeGuid] = useState('')
-  const [ueType, setUeType] = useState('0') // 0 = First Sit
+  const [ueType, setUeType] = useState<'0' | '1'>('0') // '0' = Theory, '1' = Practical
 
   const [file, setFile] = useState<File | null>(null)
   const [sheetNames, setSheetNames] = useState<string[]>([])
@@ -78,6 +78,22 @@ export default function UeMarkImportPage() {
     isFetching: isFetchingCourseUnits
   } = useUeMarkImportUnits(program?.programGuid || '', semesterGuid, !!program && !!semesterGuid)
 
+  // Combined unit support (unitType === 3):
+  // When selected unit is Combined, user can choose between Theory (0) and Practical (1).
+  // For any other unit, radio is hidden and ueType is strictly 0.
+  const selectedUnit = useMemo(() => {
+    if (!courseUnitGuid) return null
+    return courseUnits?.find(u => u.courseUnitGuid?.toLowerCase() === courseUnitGuid?.toLowerCase()) ?? null
+  }, [courseUnits, courseUnitGuid])
+
+  const isCombinedUnit = Number(selectedUnit?.unitType) === 3
+
+  useEffect(() => {
+    if (!isCombinedUnit && ueType !== '0') {
+      setUeType('0')
+    }
+  }, [isCombinedUnit, ueType])
+
   const {
     data: examInfo,
     isLoading: isLoadingExamInfo,
@@ -89,7 +105,7 @@ export default function UeMarkImportPage() {
     courseUnitGuid,
     intakeGuid,
     Number(ueType),
-    !!program && !!semesterGuid && !!courseUnitGuid && !!intakeGuid && !!ueType
+    !!program && !!semesterGuid && !!courseUnitGuid && !!intakeGuid
   )
 
   const examErrorMessage = useMemo(() => {
@@ -131,12 +147,14 @@ export default function UeMarkImportPage() {
     setProgram(programs?.find(p => p.programGuid === programGuid) ?? null)
     setSemesterGuid('')
     setCourseUnitGuid('')
+    setUeType('0')
     handleClearFile()
   }
 
   const handleSemesterChange = (val: string) => {
     setSemesterGuid(val)
     setCourseUnitGuid('')
+    setUeType('0')
     handleClearFile()
   }
 
@@ -147,10 +165,12 @@ export default function UeMarkImportPage() {
 
   const handleCourseUnitChange = (val: string) => {
     setCourseUnitGuid(val)
+    setUeType('0')
     handleClearFile()
   }
 
-  const handleUeTypeChange = (val: string) => {
+  const handleUeTypeChange = (val: '0' | '1') => {
+    if (val === ueType) return
     setUeType(val)
     handleClearFile()
   }
@@ -248,7 +268,7 @@ export default function UeMarkImportPage() {
 
   const handleDownloadTemplate = () => {
     if (!examInfo?.universityExamGuid) {
-      showToast('Please select Course Unit and UE Type to resolve exam first.', 'warn')
+      showToast('Please select Course Unit to resolve exam first.', 'warn')
       return
     }
 
@@ -326,7 +346,12 @@ export default function UeMarkImportPage() {
           <div className="fg mb-0">
             <label className="lbl">Course Unit <span className="text-red-500">*</span></label>
             <SearchSelect
-              options={courseUnits?.map(u => ({ value: u.courseUnitGuid, label: `${u.courseUnitCode} — ${u.courseUnitName}` })) || []}
+              options={courseUnits?.map(u => ({
+                value: u.courseUnitGuid,
+                label: Number(u.unitType) === 3
+                  ? `${u.courseUnitCode} — ${u.courseUnitName} (Combined)`
+                  : `${u.courseUnitCode} — ${u.courseUnitName}`
+              })) || []}
               value={courseUnitGuid}
               onChange={handleCourseUnitChange}
               disabled={!semesterGuid || isLoadingCourseUnits}
@@ -334,17 +359,33 @@ export default function UeMarkImportPage() {
             />
           </div>
 
-          <div className="fg mb-0">
-            <label className="lbl">UE Type <span className="text-red-500">*</span></label>
-            <SearchSelect
-              options={[
-                { value: '0', label: 'First Sit' },
-                { value: '1', label: 'Re-Sit' }
-              ]}
-              value={ueType}
-              onChange={handleUeTypeChange}
-            />
-          </div>
+          {isCombinedUnit && (
+            <div className="fg mb-0">
+              <label className="lbl">Exam Component <span className="text-red-500">*</span></label>
+              <div className="flex gap-4 items-center h-[38px] px-1">
+                <label className="flex items-center gap-2 text-sm cursor-pointer font-medium text-slate-700">
+                  <input
+                    type="radio"
+                    name="ueTypeRadio"
+                    value="0"
+                    checked={ueType === '0'}
+                    onChange={() => handleUeTypeChange('0')}
+                  />
+                  Theory
+                </label>
+                <label className="flex items-center gap-2 text-sm cursor-pointer font-medium text-slate-700">
+                  <input
+                    type="radio"
+                    name="ueTypeRadio"
+                    value="1"
+                    checked={ueType === '1'}
+                    onChange={() => handleUeTypeChange('1')}
+                  />
+                  Practical
+                </label>
+              </div>
+            </div>
+          )}
 
           <div className="fg mb-0 flex flex-col justify-center">
             <label className="lbl text-slate-400">Maximum Marks</label>
@@ -490,10 +531,18 @@ export default function UeMarkImportPage() {
                       {previewRows.some(r => r.sectionAMark !== null) && <th>Section A</th>}
                       {previewRows.some(r => r.sectionBMark !== null) && <th>Section B</th>}
                       {previewRows.some(r => r.sectionCMark !== null) && <th>Section C</th>}
-                      {previewRows.some(r => r.recordMark !== null) && <th>Record</th>}
-                      {previewRows.some(r => r.codingMark !== null) && <th>Coding</th>}
-                      {previewRows.some(r => r.outputMark !== null) && <th>Output</th>}
-                      {previewRows.some(r => r.vivaMark !== null) && <th>Viva</th>}
+                      {(examInfo?.maxMarks.recordMax != null || previewRows.some(r => r.recordMark !== null)) && (
+                        <th>Record {examInfo?.maxMarks.recordMax != null ? `(${examInfo.maxMarks.recordMax})` : ''}</th>
+                      )}
+                      {(examInfo?.maxMarks.codingMax != null || previewRows.some(r => r.codingMark !== null)) && (
+                        <th>Coding {examInfo?.maxMarks.codingMax != null ? `(${examInfo.maxMarks.codingMax})` : ''}</th>
+                      )}
+                      {(examInfo?.maxMarks.outputMax != null || previewRows.some(r => r.outputMark !== null)) && (
+                        <th>Output {examInfo?.maxMarks.outputMax != null ? `(${examInfo.maxMarks.outputMax})` : ''}</th>
+                      )}
+                      {(examInfo?.maxMarks.vivaMax != null || previewRows.some(r => r.vivaMark !== null)) && (
+                        <th>Viva {examInfo?.maxMarks.vivaMax != null ? `(${examInfo.maxMarks.vivaMax})` : ''}</th>
+                      )}
                       {previewRows.some(r => r.synopsisMark !== null) && <th>Synopsis</th>}
                       {previewRows.some(r => r.reviewMark !== null) && <th>Review</th>}
                       {previewRows.some(r => r.methodologyMark !== null) && <th>Methodology</th>}
@@ -518,10 +567,18 @@ export default function UeMarkImportPage() {
                         {previewRows.some(r => r.sectionAMark !== null) && <td className="font-mono">{row.sectionAMark}</td>}
                         {previewRows.some(r => r.sectionBMark !== null) && <td className="font-mono">{row.sectionBMark}</td>}
                         {previewRows.some(r => r.sectionCMark !== null) && <td className="font-mono">{row.sectionCMark}</td>}
-                        {previewRows.some(r => r.recordMark !== null) && <td className="font-mono">{row.recordMark}</td>}
-                        {previewRows.some(r => r.codingMark !== null) && <td className="font-mono">{row.codingMark}</td>}
-                        {previewRows.some(r => r.outputMark !== null) && <td className="font-mono">{row.outputMark}</td>}
-                        {previewRows.some(r => r.vivaMark !== null) && <td className="font-mono">{row.vivaMark}</td>}
+                        {(examInfo?.maxMarks.recordMax != null || previewRows.some(r => r.recordMark !== null)) && (
+                          <td className="font-mono">{row.recordMark ?? '—'}</td>
+                        )}
+                        {(examInfo?.maxMarks.codingMax != null || previewRows.some(r => r.codingMark !== null)) && (
+                          <td className="font-mono">{row.codingMark ?? '—'}</td>
+                        )}
+                        {(examInfo?.maxMarks.outputMax != null || previewRows.some(r => r.outputMark !== null)) && (
+                          <td className="font-mono">{row.outputMark ?? '—'}</td>
+                        )}
+                        {(examInfo?.maxMarks.vivaMax != null || previewRows.some(r => r.vivaMark !== null)) && (
+                          <td className="font-mono">{row.vivaMark ?? '—'}</td>
+                        )}
                         {previewRows.some(r => r.synopsisMark !== null) && <td className="font-mono">{row.synopsisMark}</td>}
                         {previewRows.some(r => r.reviewMark !== null) && <td className="font-mono">{row.reviewMark}</td>}
                         {previewRows.some(r => r.methodologyMark !== null) && <td className="font-mono">{row.methodologyMark}</td>}
