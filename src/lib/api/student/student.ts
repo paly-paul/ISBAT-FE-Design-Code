@@ -13,6 +13,9 @@ export interface StudentDto {
   programName: string
   semesterName: string
   batchCode: string
+  // Signed photo link (expires after ~1 hour, use directly as img src);
+  // null when no photo was uploaded.
+  photoUrl?: string | null
   // Intake code (e.g. 20241) — on /students/filter list items since
   // 2026-09-30; absent on older responses.
   academicIntake?: number | null
@@ -123,6 +126,7 @@ export function normalizeStudentDetail(d: StudentDetailDto, requestedGuid?: stri
     programName: d.programName || d.programme || '',
     semesterName: d.semesterName || d.semester || '',
     batchCode: d.batchCode || d.batch || '',
+    photoUrl: d.photoUrl ?? null,
   }
 }
 
@@ -224,6 +228,7 @@ export function getStudentByGuid(guid: string): Promise<StudentDetailDto> {
     if (!found) throw new Error('not_found')
     return Promise.resolve({
       ...found,
+      photoUrl: null,
       regStatusName: '', iStatus: 0, studActive: 1, regDate: null,
       discountGuid: null, calcType: null, amtPer: null, intSem: null,
       discountStatus: null, discountEffectiveFromSemesterGuid: null, discountCancelledAtSemesterGuid: null,
