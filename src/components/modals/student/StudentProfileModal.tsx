@@ -2,7 +2,9 @@
 import { useEffect, useState } from 'react'
 import { ModalProps } from '../types'
 import { useStudent } from '@/hooks/student/useStudents'
+import { useIdCard } from '@/hooks/student/useIdCards'
 import { useCountryDropdown } from '@/hooks/config/useCountries'
+import { sameOriginApiUrl } from '@/lib/apiFileUrl'
 
 interface Props extends ModalProps {
   studentGuid: string | null
@@ -21,11 +23,14 @@ interface Props extends ModalProps {
 // Transfer, which still read them — this modal just doesn't rely on them.
 export function StudentProfileModal({ isOpen, onClose, studentGuid }: Props) {
   const { data: student, isLoading, isError } = useStudent(studentGuid, isOpen)
+  const { data: card } = useIdCard(studentGuid, isOpen && !student?.photoUrl)
+  const rawPhotoUrl = student?.photoUrl || card?.photoUrl || null
+  const photoUrl = sameOriginApiUrl(rawPhotoUrl)
   const [photoError, setPhotoError] = useState(false)
 
   useEffect(() => {
     setPhotoError(false)
-  }, [student?.photoUrl])
+  }, [rawPhotoUrl])
   // Country Master's own catalogue (config/country-master) — nationality/
   // nationalityCode have both come back null on real responses that still
   // carried a country guid, on live data confirmed live 2026-09-01: neither
@@ -76,9 +81,9 @@ export function StudentProfileModal({ isOpen, onClose, studentGuid }: Props) {
             <>
               <div className="card mb-6">
                 <div className="flex items-center gap-4">
-                  {student.photoUrl && !photoError ? (
+                  {photoUrl && !photoError ? (
                     <img
-                      src={student.photoUrl}
+                      src={photoUrl}
                       alt={name}
                       onError={() => setPhotoError(true)}
                       className="rounded-full object-cover shrink-0"

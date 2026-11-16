@@ -36,6 +36,8 @@ export interface IdCardDetailsDto {
   studentName: string | null
   batchTimeInfo: IdCardBatchTimeInfo | null
   cardHistory: IdCardHistoryEntry[]
+  // Signed link to the student's photo (expires ~1 hr); null when no photo stored
+  photoUrl?: string | null
 }
 
 // There's no separate "current card" field on the wire — the most recent

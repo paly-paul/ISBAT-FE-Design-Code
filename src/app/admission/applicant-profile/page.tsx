@@ -4,6 +4,7 @@ import { useSearchParams } from 'next/navigation'
 import { formatDate } from '@/lib/date'
 import { useVettingApplicationDetail } from '@/hooks/admission/useVetting'
 import { useApplicationPhoto } from '@/hooks/admission/useApplicationFiling'
+import { sameOriginApiUrl } from '@/lib/apiFileUrl'
 import { documentTitle, genderText, orDash } from '@/lib/admission/applicantDisplay'
 import { DocumentPreviewModal } from '@/components/modals/shared/DocumentPreviewModal'
 import { QualificationCard } from '@/components/admission/QualificationCard'
@@ -42,12 +43,13 @@ function ApplicantProfileContent() {
   const searchParams = useSearchParams()
   const applicationGuid = searchParams.get('applicationGuid')
   const { data: detail, isLoading, isError, error } = useVettingApplicationDetail(applicationGuid, !!applicationGuid)
-  const { data: photoUrl } = useApplicationPhoto(applicationGuid, !!applicationGuid)
+  const { data: rawPhotoUrl } = useApplicationPhoto(applicationGuid, !!applicationGuid)
+  const photoUrl = sameOriginApiUrl(rawPhotoUrl)
   const [photoError, setPhotoError] = useState(false)
 
   useEffect(() => {
     setPhotoError(false)
-  }, [photoUrl])
+  }, [rawPhotoUrl])
 
   const [activeTab, setActiveTab] = useState<Tab>('personal')
   const [preview, setPreview] = useState<{ url: string; title: string } | null>(null)

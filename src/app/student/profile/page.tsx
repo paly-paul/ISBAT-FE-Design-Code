@@ -16,6 +16,7 @@ import { useDropoutStudents } from '@/hooks/student/useDropoutRejoin'
 import { useCountryDropdown } from '@/hooks/config/useCountries'
 import { useIntakesDropdown } from '@/hooks/academic/useIntakes'
 import { formatDate } from '@/lib/date'
+import { sameOriginApiUrl } from '@/lib/apiFileUrl'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { useActionGuard } from '@/hooks/users/useActionGuard'
 
@@ -127,11 +128,6 @@ function StudentProfileContent() {
   const effectiveStudentGuid = student?.studentGuid ?? studentGuidParam
   const { data: detail } = useStudent(effectiveStudentGuid ?? null, !!effectiveStudentGuid)
 
-  useEffect(() => {
-    setHeroPhotoError(false)
-    setIdPhotoError(false)
-  }, [detail?.photoUrl])
-
   // Registration Date and Fee Structure read the student record first, then
   // the timeline's joinedDate / current history row, which both carry them.
   const { data: timeline } = useStudentTimeline(effectiveStudentGuid ?? null)
@@ -173,9 +169,23 @@ function StudentProfileContent() {
   // Real ID-card record — GET /students/id-cards/{studentGuid}. Resolves to
   // null when the student has no card yet (404 not_found is the common case,
   // not an error — see getIdCardDetails).
-  const { data: card } = useIdCard(student?.studentGuid ?? null, !!student)
+  const { data: card } = useIdCard(effectiveStudentGuid ?? null, !!effectiveStudentGuid)
   const issueOrRenewIdCard = useIssueOrRenewIdCard()
-  const updateIdCardDates = useUpdateIdCardDates(student?.studentGuid ?? null)
+  const updateIdCardDates = useUpdateIdCardDates(effectiveStudentGuid ?? null)
+
+  // Photo URL: prefer detail?.photoUrl (from GET /api/v1/students/{guid}),
+  // fallback to card?.photoUrl (from GET /api/v1/students/id-cards/{guid}) or
+  // student?.photoUrl.
+  // sameOriginApiUrl converts absolute gateway URLs into relative /api/* URLs
+  // so cookies are sent correctly on both dev server (Next.js rewrite proxy)
+  // and production without cross-origin 401s.
+  const rawPhotoUrl = detail?.photoUrl || card?.photoUrl || student?.photoUrl || null
+  const photoUrl = sameOriginApiUrl(rawPhotoUrl)
+
+  useEffect(() => {
+    setHeroPhotoError(false)
+    setIdPhotoError(false)
+  }, [rawPhotoUrl])
 
   // Sponsor is read-only here (assign/change lives in Student Master's
   // StudentSponsorModal). Never fetched from this page (per 2026-09-01, no
@@ -451,8 +461,8 @@ function StudentProfileContent() {
             <section className="mp-hero" aria-label="Student summary">
               <div className="mp-hero-top">
                 <div className="mp-avatar sp-hero-av" aria-hidden="true">
-                  {detail?.photoUrl && !heroPhotoError ? (
-                    <img src={detail.photoUrl} alt="" onError={() => setHeroPhotoError(true)} />
+                  {photoUrl && !heroPhotoError ? (
+                    <img src={photoUrl} alt="" onError={() => setHeroPhotoError(true)} />
                   ) : (
                     <span>{initials(student.studentName) || <i className="lni lni-user"></i>}</span>
                   )}
@@ -729,8 +739,8 @@ function StudentProfileContent() {
                       </div>
                       <div className="sp-id-main">
                         <div className="id-photo">
-                          {detail?.photoUrl && !idPhotoError ? (
-                            <img src={detail.photoUrl} alt="" onError={() => setIdPhotoError(true)} />
+                          {photoUrl && !idPhotoError ? (
+                            <img src={photoUrl} alt="" onError={() => setIdPhotoError(true)} />
                           ) : (
                             <i className="lni lni-user"></i>
                           )}
