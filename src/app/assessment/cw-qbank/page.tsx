@@ -905,55 +905,65 @@ export default function QuestionBankUploadPage() {
           {activeTab === 'repository' && isRepoUniversityExam && repoCourseUnitGuid && repoUeTypeInfo && (
             <div className="mt-3 pt-3 border-t border-slate-100">
               {repoUeTypeInfo.type === 'combined' ? (
-                <div className="w-full flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-gradient-to-r from-purple-50/80 via-slate-50/60 to-white py-2 px-3 rounded-xl border border-purple-200/80 shadow-2xs">
-                  <div className="flex items-center gap-2 shrink-0">
-                    <div className="w-6 h-6 rounded-md bg-purple-600 text-white flex items-center justify-center text-xs font-bold shadow-2xs shrink-0">
-                      <i className="lni lni-layers" />
+                <div className="w-full flex flex-col gap-2">
+                  <div className="w-full flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-gradient-to-r from-purple-50/80 via-slate-50/60 to-white py-2 px-3 rounded-xl border border-purple-200/80 shadow-2xs">
+                    <div className="flex items-center gap-2 shrink-0">
+                      <div className="w-6 h-6 rounded-md bg-purple-600 text-white flex items-center justify-center text-xs font-bold shadow-2xs shrink-0">
+                        <i className="lni lni-layers" />
+                      </div>
+                      <span className="text-xs font-bold text-slate-800 whitespace-nowrap">
+                        University Exam Type <span className="text-purple-600">*</span>
+                      </span>
+                      <span className="badge badge-purple text-[10px] font-bold py-0.5 px-2 whitespace-nowrap">
+                        Combined Unit
+                      </span>
                     </div>
-                    <span className="text-xs font-bold text-slate-800 whitespace-nowrap">
-                      University Exam Type <span className="text-purple-600">*</span>
-                    </span>
-                    <span className="badge badge-purple text-[10px] font-bold py-0.5 px-2 whitespace-nowrap">
-                      Combined Unit
-                    </span>
+
+                    <div className="inline-flex items-center p-0.5 bg-white border border-slate-200 rounded-lg shadow-2xs gap-0.5 shrink-0 self-start sm:self-auto">
+                      <button
+                        type="button"
+                        className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                          repoUeFilterType === 'THEORY'
+                            ? 'bg-blue-600 text-white shadow-xs font-bold'
+                            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                        }`}
+                        onClick={() => setRepoUeFilterType('THEORY')}
+                      >
+                        <i className="lni lni-book text-xs" />
+                        <span>Theory</span>
+                        {repoTheoryCount > 0 && (
+                          <span className={`text-[10px] px-1.5 py-0.2 rounded font-bold ${repoUeFilterType === 'THEORY' ? 'bg-blue-700 text-white' : 'bg-slate-100 text-slate-700 border border-slate-200'}`}>
+                            {repoTheoryCount}
+                          </span>
+                        )}
+                      </button>
+
+                      <button
+                        type="button"
+                        className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                          repoUeFilterType === 'PRACTICAL'
+                            ? 'bg-amber-600 text-white shadow-xs font-bold'
+                            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                        }`}
+                        onClick={() => setRepoUeFilterType('PRACTICAL')}
+                      >
+                        <i className="lni lni-cog text-xs" />
+                        <span>Practical</span>
+                        {repoPracticalCount > 0 && (
+                          <span className={`text-[10px] px-1.5 py-0.2 rounded font-bold ${repoUeFilterType === 'PRACTICAL' ? 'bg-amber-700 text-white' : 'bg-slate-100 text-slate-700 border border-slate-200'}`}>
+                            {repoPracticalCount}
+                          </span>
+                        )}
+                      </button>
+                    </div>
                   </div>
 
-                  <div className="inline-flex items-center p-0.5 bg-white border border-slate-200 rounded-lg shadow-2xs gap-0.5 shrink-0 self-start sm:self-auto">
-                    <button
-                      type="button"
-                      className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
-                        repoUeFilterType === 'THEORY'
-                          ? 'bg-blue-600 text-white shadow-xs font-bold'
-                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-                      }`}
-                      onClick={() => setRepoUeFilterType('THEORY')}
-                    >
-                      <i className="lni lni-book text-xs" />
-                      <span>Theory</span>
-                      {repoTheoryCount > 0 && (
-                        <span className={`text-[10px] px-1.5 py-0.2 rounded font-bold ${repoUeFilterType === 'THEORY' ? 'bg-blue-700 text-white' : 'bg-slate-100 text-slate-700 border border-slate-200'}`}>
-                          {repoTheoryCount}
-                        </span>
-                      )}
-                    </button>
-
-                    <button
-                      type="button"
-                      className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
-                        repoUeFilterType === 'PRACTICAL'
-                          ? 'bg-amber-600 text-white shadow-xs font-bold'
-                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-                      }`}
-                      onClick={() => setRepoUeFilterType('PRACTICAL')}
-                    >
-                      <i className="lni lni-cog text-xs" />
-                      <span>Practical</span>
-                      {repoPracticalCount > 0 && (
-                        <span className={`text-[10px] px-1.5 py-0.2 rounded font-bold ${repoUeFilterType === 'PRACTICAL' ? 'bg-amber-700 text-white' : 'bg-slate-100 text-slate-700 border border-slate-200'}`}>
-                          {repoPracticalCount}
-                        </span>
-                      )}
-                    </button>
+                  {/* Combined Unit Info Alert */}
+                  <div className="flex items-center gap-2 text-xs text-purple-900 bg-purple-50/70 py-1.5 px-3 rounded-lg border border-purple-200/60">
+                    <i className="lni lni-information text-purple-600 shrink-0 text-sm" />
+                    <span>
+                      This is a <strong>Combined Course Unit</strong>. Both <strong>Theory</strong> and <strong>Practical</strong> questions must be uploaded.
+                    </span>
                   </div>
                 </div>
               ) : (
@@ -1113,21 +1123,6 @@ export default function QuestionBankUploadPage() {
                               ? 'text-cyan-700 font-semibold'
                               : 'text-amber-700 font-semibold'
                           }>{repoUeFilterType === 'THEORY' ? 'Theory' : 'Practical'}</strong></span>
-                        </>
-                      )}
-                      {(repoTheoryCount > 0 || repoPracticalCount > 0) && (
-                        <>
-                          {' • '}
-                          {/* Single-type units show only their own bank's count. */}
-                          <span>UE Banks:{' '}
-                            {repoUeTypeInfo?.type !== 'practical' && (
-                              <strong className="text-cyan-700 font-semibold">{repoTheoryCount} Theory</strong>
-                            )}
-                            {(!repoUeTypeInfo || repoUeTypeInfo.type === 'combined') && ', '}
-                            {repoUeTypeInfo?.type !== 'theory' && (
-                              <strong className="text-amber-700 font-semibold">{repoPracticalCount} Practical</strong>
-                            )}
-                          </span>
                         </>
                       )}
                     </div>
@@ -1357,19 +1352,12 @@ export default function QuestionBankUploadPage() {
 
                             {/* Type Badge */}
                             <td style={{ textAlign: 'center' }}>
-                              <div className="flex flex-col items-center gap-1">
-                                <span
-                                  className={`badge ${q.questionType === 1 ? 'badge-purple' : 'badge-blue'
-                                    }`}
-                                >
-                                  {q.questionType === 1 ? 'MCQ' : 'DQ'}
-                                </span>
-                                {q.universityExamType !== undefined && q.universityExamType !== null && (
-                                  <span className={`badge ${q.universityExamType === 1 ? 'badge-amber' : 'badge-cyan'} text-[10px] font-bold`}>
-                                    {q.universityExamType === 1 ? 'Practical' : 'Theory'}
-                                  </span>
-                                )}
-                              </div>
+                              <span
+                                className={`badge ${q.questionType === 1 ? 'badge-purple' : 'badge-blue'
+                                  }`}
+                              >
+                                {q.questionType === 1 ? 'MCQ' : 'DQ'}
+                              </span>
                             </td>
 
                             {/* Question Text */}

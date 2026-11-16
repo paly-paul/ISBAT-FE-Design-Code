@@ -96,20 +96,10 @@ export function ExistingQuestionsTable({
             Category: <strong className="text-slate-800">{categoryName || 'Category'}</strong>
             {' • '}
             Intake: <strong className="text-slate-800">{intakeCode || 'Active Intake'}</strong>
-            {hasUeTypes && (
+            {hasUeTypes && selectedUeType !== undefined && selectedUeType !== null && (
               <>
                 {' • '}
-                <span>UE Banks:{' '}
-                  {showTheoryBank && <strong className="text-cyan-700 font-semibold">{theoryCount} Theory</strong>}
-                  {showTheoryBank && showPracticalBank && ', '}
-                  {showPracticalBank && <strong className="text-amber-700 font-semibold">{practicalCount} Practical</strong>}
-                </span>
-                {selectedUeType !== undefined && selectedUeType !== null && (
-                  <>
-                    {' • '}
-                    <span>Viewing: <strong className={selectedUeType === 1 ? 'text-amber-700 font-semibold' : 'text-cyan-700 font-semibold'}>{selectedUeType === 1 ? 'Practical' : 'Theory'}</strong></span>
-                  </>
-                )}
+                <span>Exam Type: <strong className={selectedUeType === 1 ? 'text-amber-700 font-semibold' : 'text-cyan-700 font-semibold'}>{selectedUeType === 1 ? 'Practical' : 'Theory'}</strong></span>
               </>
             )}
           </div>
@@ -264,16 +254,9 @@ export function ExistingQuestionsTable({
 
                   {/* Type */}
                   <td style={{ textAlign: 'center' }}>
-                    <div className="flex flex-col items-center gap-1">
-                      <span className={`badge ${q.questionType === 1 ? 'badge-purple' : 'badge-blue'} text-xs font-bold`}>
-                        {q.questionType === 1 ? 'MCQ' : 'DQ'}
-                      </span>
-                      {q.universityExamType !== undefined && q.universityExamType !== null && (
-                        <span className={`badge ${q.universityExamType === 1 ? 'badge-amber' : 'badge-cyan'} text-[10px] font-bold`}>
-                          {q.universityExamType === 1 ? 'Practical' : 'Theory'}
-                        </span>
-                      )}
-                    </div>
+                    <span className={`badge ${q.questionType === 1 ? 'badge-purple' : 'badge-blue'} text-xs font-bold`}>
+                      {q.questionType === 1 ? 'MCQ' : 'DQ'}
+                    </span>
                   </td>
 
                   {/* Question */}
