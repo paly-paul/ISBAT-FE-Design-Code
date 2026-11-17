@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Toast } from '@/components/Toast'
+import { StudentAvatar } from '@/components/StudentAvatar'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
 import { Pagination } from '@/components/Pagination'
@@ -587,7 +588,7 @@ export default function NcheGuildPaymentPage() {
             <section className="card pcx-student" aria-label="Student">
               <div className="pcx-student-top">
                 <div className="pcx-student-id">
-                  <div className="pcx-avatar" aria-hidden="true">{initialsFor(fullName)}</div>
+                  <StudentAvatar className="pcx-avatar" photoUrl={profile?.photoUrl} initials={initialsFor(fullName)} />
                   <div className="min-w-0">
                     <div className="pcx-name-row">
                       <h2 className="pcx-name">{fullName}</h2>

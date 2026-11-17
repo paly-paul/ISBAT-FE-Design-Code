@@ -2,6 +2,7 @@
 import { Suspense, useEffect, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Toast } from '@/components/Toast'
+import { StudentAvatar } from '@/components/StudentAvatar'
 import { SearchSelect } from '@/components/SearchSelect'
 import { useSearchStudentsInfinite, useStudentProfile } from '@/hooks/finance/usePaymentConsole'
 import { refugeeLabel, studCategoryLabel, searchStudents } from '@/lib/api/finance/paymentConsole'
@@ -539,7 +540,7 @@ function DiscountAllocationContent() {
               <div className="card p-0 overflow-hidden">
                 <div className="pc-hero">
                   <div className="pc-hero-top">
-                    <div className="pc-hero-avatar">{initialsFor(applicantName(profile))}</div>
+                    <StudentAvatar className="pc-hero-avatar" photoUrl={profile.photoUrl} initials={initialsFor(applicantName(profile))} />
                     <div className="flex-1 min-w-0">
                       <div className="pc-hero-name truncate">{applicantName(profile)}</div>
                       <div className="pc-hero-sub truncate">{programName ?? '—'}</div>

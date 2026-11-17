@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Toast } from '@/components/Toast'
+import { StudentAvatar } from '@/components/StudentAvatar'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
 import { Pagination } from '@/components/Pagination'
@@ -1847,7 +1848,7 @@ export default function PaymentConsolePage() {
             <section className="card pcx-student" aria-label="Student" ref={mainAreaRef}>
               <div className="pcx-student-top">
                 <div className="pcx-student-id">
-                  <div className="pcx-avatar" aria-hidden="true">{initialsFor(fullName)}</div>
+                  <StudentAvatar className="pcx-avatar" photoUrl={profile.photoUrl} initials={initialsFor(fullName)} />
                   <div className="min-w-0">
                     <div className="pcx-name-row">
                       <h2 className="pcx-name">{fullName}</h2>
