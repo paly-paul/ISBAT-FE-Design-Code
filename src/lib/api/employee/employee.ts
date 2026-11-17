@@ -386,3 +386,30 @@ export function approveEmployee(employeeGuid: string): Promise<void> {
   }
   return apiPost<void>(`/api/v1/users/employees/${employeeGuid}/approve`, {})
 }
+
+// PUT /users/employees/{guid}/block, no body (users.employee.edit). Only an
+// Active employee can be blocked; anything else 404s "Employee not found or
+// not active". Switches their login off and revokes their sessions, so they
+// are sent to the login screen on their next request.
+export function blockEmployee(employeeGuid: string): Promise<boolean> {
+  if (MOCK_AUTH) {
+    const listItem = mockEmployees.find(e => e.employeeGuid === employeeGuid)
+    if (listItem) listItem.isApproved = false
+    return Promise.resolve(true)
+  }
+  return apiPut<boolean>(`/api/v1/users/employees/${employeeGuid}/block`, undefined)
+}
+
+// PUT /users/employees/{guid}/unblock, no body (users.employee.edit, same as
+// Block). 200 data: true; 404 not_found "Employee not found or not blocked"
+// when they aren't blocked. Afterwards they can log in with their existing
+// password straight away.
+export function unblockEmployee(employeeGuid: string): Promise<boolean> {
+  if (MOCK_AUTH) {
+    const listItem = mockEmployees.find(e => e.employeeGuid === employeeGuid)
+    if (listItem) listItem.isApproved = true
+    return Promise.resolve(true)
+  }
+  // undefined → JSON.stringify gives undefined → the request has no body.
+  return apiPut<boolean>(`/api/v1/users/employees/${employeeGuid}/unblock`, undefined)
+}

@@ -12,7 +12,8 @@ import { FilterTh } from '@/components/FilterTh'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
-import { useEmployeesPaged } from '@/hooks/employee/useEmployees'
+import { useBlockEmployee, useEmployeesPaged, useUnblockEmployee } from '@/hooks/employee/useEmployees'
+import { AuthError } from '@/lib/api/client'
 import { EmployeeListItem } from '@/lib/api/employee/employee'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { sameOriginApiUrl } from '@/lib/apiFileUrl'
@@ -60,6 +61,52 @@ function EmployeeMasterContent() {
   const [viewingEmployeeGuid, setViewingEmployeeGuid] = useState<string | null>(null)
   const [assigningPermissionsEmployee, setAssigningPermissionsEmployee] = useState<EmployeeListItem | null>(null)
   const [editingPermissionsEmployee, setEditingPermissionsEmployee] = useState<EmployeeListItem | null>(null)
+
+  // Block / Unblock (both users.employee.edit). The list only has
+  // isApproved: an approved row is Active, so it can be blocked; a
+  // not-approved row is either Pending or Blocked (the list can't tell),
+  // so it offers Unblock and the server 404s if it wasn't actually blocked.
+  const block = useBlockEmployee()
+  const unblock = useUnblockEmployee()
+  const [accessAction, setAccessAction] = useState<{ kind: 'block' | 'unblock'; employee: EmployeeListItem } | null>(null)
+  const accessBusy = block.isPending || unblock.isPending
+
+  function employeeLabel(e: EmployeeListItem) {
+    return `${normalizeTitle(e.title)} ${e.firstName} ${e.surname}`.trim()
+  }
+
+  function confirmAccessAction() {
+    if (!accessAction) return
+    const { kind, employee } = accessAction
+    const name = employeeLabel(employee)
+    const mutation = kind === 'block' ? block : unblock
+    mutation.mutate(employee.employeeGuid, {
+      onSuccess: () => {
+        setAccessAction(null)
+        showToast(
+          kind === 'block'
+            ? `${name} blocked. They've been signed out and can't log in until unblocked.`
+            : `${name} unblocked. They can log in again with their existing password.`,
+          'success'
+        )
+      },
+      onError: (error: Error) => {
+        setAccessAction(null)
+        if (error instanceof AuthError && error.code === 'not_found') {
+          showToast(
+            kind === 'block'
+              ? `${name} isn't active (pending or already blocked), so they can't be blocked.`
+              : `${name} isn't blocked, so there was nothing to unblock.`,
+            'info'
+          )
+        } else if (error instanceof AuthError && error.code === 'forbidden') {
+          showToast(`You don’t have permission to ${kind} employees.`, 'error')
+        } else {
+          showToast(error.message || `Couldn’t ${kind} this employee. Please try again.`, 'error')
+        }
+      },
+    })
+  }
 
   function openModal(id: string) { setOpenModals(prev => new Set(prev).add(id)) }
   function closeModal(id: string) { setOpenModals(prev => { const s = new Set(prev); s.delete(id); return s }) }
@@ -244,6 +291,19 @@ function EmployeeMasterContent() {
                               <i className="lni lni-pencil-alt"></i> Edit Permissions
                             </button>
                           )}
+                          {/* Permission gate turned off for now (2026-11-17): Block /
+                              Unblock show for everyone. The API still requires
+                              users.employee.edit and a 403 shows a toast. Restore:
+                              {permissions.edit && (r.isApproved ? ( … ))} */}
+                          {(r.isApproved ? (
+                            <button className="btn btn-neu btn-sm" onClick={() => setAccessAction({ kind: 'block', employee: r })}>
+                              <i className="lni lni-ban"></i> Block
+                            </button>
+                          ) : (
+                            <button className="btn btn-neu btn-sm" onClick={() => setAccessAction({ kind: 'unblock', employee: r })}>
+                              <i className="lni lni-unlock"></i> Unblock
+                            </button>
+                          ))}
                         </ActionMenu>
                       )}
                     </td>
@@ -256,7 +316,10 @@ function EmployeeMasterContent() {
                     </td>
                     <td>{r.sex === 1 ? 'Male' : 'Female'}</td>
                     <td>
-                      <span className={`badge ${r.isApproved ? 'badge-green' : 'badge-amber'}`}>
+                      <span
+                        className={`badge ${r.isApproved ? 'badge-green' : 'badge-amber'}`}
+                        title={r.isApproved ? undefined : 'Awaiting approval, or blocked. The list can’t tell these apart yet.'}
+                      >
                         <span className="bdot"></span>{r.isApproved ? 'Approved' : 'Pending'}
                       </span>
                     </td>
@@ -311,6 +374,39 @@ function EmployeeMasterContent() {
         showToast={showToast}
         employee={editingPermissionsEmployee}
       />
+
+      {accessAction && (
+        <div className="modal-overlay open confirm-modal-overlay">
+          <div className="modal modal-sm confirm-modal-pop" onClick={e => e.stopPropagation()}>
+            <div className="modal-hdr modal-hdr-blue">
+              <div className="modal-title">{accessAction.kind === 'block' ? 'Block Employee' : 'Unblock Employee'}</div>
+              <button className="modal-close" onClick={() => setAccessAction(null)} disabled={accessBusy}>
+                <i className="lni lni-close"></i>
+              </button>
+            </div>
+            <div style={{ padding: '18px 20px', fontSize: 13.5, color: 'var(--g700)', lineHeight: 1.6 }}>
+              {accessAction.kind === 'block' ? 'Block' : 'Unblock'}{' '}
+              <strong>{employeeLabel(accessAction.employee)}</strong> ({accessAction.employee.shortCode})?{' '}
+              {accessAction.kind === 'block'
+                ? 'They’ll be signed out everywhere and won’t be able to log in or reset their password until they’re unblocked.'
+                : 'They’ll be able to log in again straight away with their existing password.'}
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-neu" onClick={() => setAccessAction(null)} disabled={accessBusy}>Cancel</button>
+              <button
+                className={`btn ${accessAction.kind === 'block' ? 'btn-danger' : 'btn-primary'}`}
+                disabled={accessBusy}
+                onClick={confirmAccessAction}
+              >
+                {accessAction.kind === 'block'
+                  ? <><i className="lni lni-ban"></i> {block.isPending ? 'Blocking…' : 'Block'}</>
+                  : <><i className="lni lni-unlock"></i> {unblock.isPending ? 'Unblocking…' : 'Unblock'}</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <Toast toast={toast} />
     </div>
   )

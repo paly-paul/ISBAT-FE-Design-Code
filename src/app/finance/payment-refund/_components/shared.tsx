@@ -4,6 +4,7 @@ import { stripLeadingZeros } from '@/lib/errorMessages'
 import { ScrollTable } from '@/components/ScrollTable'
 import DatePicker from '@/components/DatePicker'
 import { SearchSelect } from '@/components/SearchSelect'
+import { StudentAvatar } from '@/components/StudentAvatar'
 import {
   useCreateRefund,
   useLedgerDetailsBatch,
@@ -33,18 +34,21 @@ export function initialsFor(name: string) {
 
 // The selected student's card — the same .pcx-student card as Payment Console,
 // minus its fee figures, which don't apply to a refund.
-export function RefundStudentCard({ name, status, subtitle, chips, facts }: {
+// photoUrl: the student's photo where the tab's API returns one (Passout
+// Library Deposit's detail); initials otherwise.
+export function RefundStudentCard({ name, status, subtitle, chips, facts, photoUrl }: {
   name: string
   status?: string
   subtitle?: string | null
   chips: { label: string; value: string }[]
   facts: { label: string; value: string | null | undefined }[]
+  photoUrl?: string | null
 }) {
   return (
     <section className="card pcx-student" aria-label="Student">
       <div className="pcx-student-top">
         <div className="pcx-student-id">
-          <div className="pcx-avatar" aria-hidden="true">{initialsFor(name)}</div>
+          <StudentAvatar className="pcx-avatar" photoUrl={photoUrl} initials={initialsFor(name)} />
           <div className="min-w-0">
             <div className="pcx-name-row">
               <h2 className="pcx-name">{name}</h2>

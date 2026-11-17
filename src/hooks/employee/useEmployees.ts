@@ -1,5 +1,5 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
-import { approveEmployee, assignEmployeePermissionGroups, createEmployee, CreateEmployeeInput, Employee, EmployeeListItem, EmployeeListResponse, getEmployee, getEmployeePermissionGroups, getEmployees, getEmployeesPaged, getPendingEmployees, updateEmployee, getEmployeeDropdown, EmployeeDropdownItemDto } from '@/lib/api/employee/employee'
+import { approveEmployee, blockEmployee, unblockEmployee, assignEmployeePermissionGroups, createEmployee, CreateEmployeeInput, Employee, EmployeeListItem, EmployeeListResponse, getEmployee, getEmployeePermissionGroups, getEmployees, getEmployeesPaged, getPendingEmployees, updateEmployee, getEmployeeDropdown, EmployeeDropdownItemDto } from '@/lib/api/employee/employee'
 import { MENU_KEY } from '@/hooks/users/useMenu'
 import { getNextPageParam } from '@/lib/pagination'
 
@@ -134,6 +134,24 @@ export function useApproveEmployee() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (employeeGuid: string) => approveEmployee(employeeGuid),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: EMPLOYEES_KEY }),
+  })
+}
+
+// Block / Unblock flip the employee between Active (isApproved: true) and
+// Blocked (isApproved: false) on the list, so both refresh it.
+export function useBlockEmployee() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (employeeGuid: string) => blockEmployee(employeeGuid),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: EMPLOYEES_KEY }),
+  })
+}
+
+export function useUnblockEmployee() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (employeeGuid: string) => unblockEmployee(employeeGuid),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: EMPLOYEES_KEY }),
   })
 }

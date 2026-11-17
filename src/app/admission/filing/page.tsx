@@ -17,6 +17,7 @@ import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { sanitizePhoneInput, sanitizeNameInput } from '@/lib/errorMessages'
 import { consumeFilingPrefill } from '@/lib/filingHandoff'
 import { getEnquiryById, getEnquiries } from '@/lib/api/admission/enquiry'
+import { AuthError } from '@/lib/api/client'
 import { flattenUniquePages } from '@/lib/pagination'
 import { scrollToFirstError } from '@/lib/scrollToFirstError'
 import {
@@ -332,9 +333,13 @@ export default function FilingPage() {
   const {
     data: applicantPages, fetchNextPage: fetchNextApplicantPage, hasNextPage: hasMoreApplicants,
     isFetchingNextPage: isFetchingMoreApplicants, isFetching: isSearchingApplicants, isError: isApplicantSearchError,
+    error: applicantSearchError,
   } = useSearchApplicationsForFilingInfinite(
     committedApplicantSearch, APPLICANT_PAGE_SIZE, showApplicantDropdown && !!committedApplicantSearch,
   )
+  // A 403 from the search (the user's role lacks the search permission) is
+  // explained in plain words instead of the generic "Search failed".
+  const applicantSearchForbidden = applicantSearchError instanceof AuthError && applicantSearchError.code === 'forbidden'
   const loadedApplicants = applicantPages?.pages.flatMap(p => p.items) ?? []
   // Server already filtered by committedApplicantSearch — no client-side
   // re-filter needed (the server is the source of truth for what matches).
@@ -1385,7 +1390,13 @@ export default function FilingPage() {
                   ) : (isSearchingApplicants || applicantSearch.trim() !== committedApplicantSearch) && loadedApplicants.length === 0 ? (
                     <div className="text-g400 px-3 py-2" style={{ fontSize: 12.5 }}>Searching…</div>
                   ) : isApplicantSearchError && loadedApplicants.length === 0 ? (
-                    <div className="text-clr-red px-3 py-2" style={{ fontSize: 12.5 }}><i className="lni lni-warning"></i> Search failed. Please try again.</div>
+                    applicantSearchForbidden ? (
+                      <div className="text-clr-red px-3 py-2" style={{ fontSize: 12.5 }}>
+                        <i className="lni lni-lock"></i> You don&apos;t have permission to search applications. Ask your administrator to give your role access.
+                      </div>
+                    ) : (
+                      <div className="text-clr-red px-3 py-2" style={{ fontSize: 12.5 }}><i className="lni lni-warning"></i> Search failed. Please try again.</div>
+                    )
                   ) : loadedApplicants.length === 0 ? (
                     <div className="text-g400 px-3 py-2" style={{ fontSize: 12.5 }}>No matching applications found.</div>
                   ) : (

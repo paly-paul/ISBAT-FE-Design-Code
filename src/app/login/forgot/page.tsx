@@ -172,7 +172,10 @@ export default function ForgotPage() {
           <p style={{ color: 'var(--isb-muted)', fontSize: 13.5, margin: '0 0 14px', lineHeight: 1.55 }}>
             {maskedEmail
               ? <>We&apos;ve sent a 6-digit code to <b style={{ color: 'var(--isb-ink)' }}>{maskedEmail}</b>.</>
-              : 'If this username exists, a code has been sent to its registered email.'}
+              // Empty maskedEmail = no email was sent: unknown username, or a
+              // blocked / deleted / inactive account. Same generic wording
+              // for all of them, so it doesn't reveal which.
+              : 'If this username belongs to an active account, a code has been sent to its registered email.'}
             {' '}It expires in 10 minutes.
           </p>
 

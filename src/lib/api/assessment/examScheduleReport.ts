@@ -47,6 +47,24 @@ export const QUESTION_VERIFICATION = {
   Verified: 2,
 } as const
 
+// Whether to list dated schedules, undated ones, or both (2026-11-17).
+// Scheduled is the API's default when the param is left out.
+export const SCHEDULING_STATUS = {
+  Scheduled: 0,
+  NotScheduled: 1,
+  All: 2,
+} as const
+
+export const SCHEDULING_STATUS_LABELS: Record<number, string> = {
+  0: 'Scheduled',
+  1: 'Not scheduled',
+  2: 'All',
+}
+
+// Only these types can exist without a date; Mock Exam and the resits
+// always have one, so they never appear under Not scheduled.
+export const UNDATABLE_SCHEDULE_TYPES: number[] = [SCHEDULE_TYPE.UniversityExam, SCHEDULE_TYPE.Coursework, SCHEDULE_TYPE.Test]
+
 export interface ExamScheduleReportFilters {
   scheduleTypes?: number[]
   intakeGuids?: string[]
@@ -58,14 +76,20 @@ export interface ExamScheduleReportFilters {
   publishStatuses?: number[]
   modes?: number[]
   ueTypes?: number[]
+  // 0 Scheduled (default), 1 Not scheduled, 2 All. With Not scheduled the
+  // dates are ignored; with All they only limit the dated rows.
+  schedulingStatus?: number
 }
 
 export interface ExamScheduleReportRow {
   scheduleType: number
   scheduleTypeName: string
   scheduleGuid: string
-  date: string                   // plain date, no TZ
-  dayOfWeek: string              // Monday, Tuesday...
+  // false for a schedule never given a date: date, dayOfWeek, startTime
+  // and endTime are then null. Undated rows come last.
+  isScheduled?: boolean
+  date: string | null            // plain date, no TZ
+  dayOfWeek: string | null       // Monday, Tuesday...
   startTime: string | null       // HH:mm:ss, plain time
   endTime: string | null         // HH:mm:ss, plain time
   intakeName: string | null
@@ -138,6 +162,7 @@ function buildPreviewQueryString(
   appendListParams(params, 'publishStatuses', filters.publishStatuses)
   appendListParams(params, 'modes', filters.modes)
   appendListParams(params, 'ueTypes', filters.ueTypes)
+  params.set('schedulingStatus', String(filters.schedulingStatus ?? SCHEDULING_STATUS.Scheduled))
 
   return params.toString()
 }
@@ -166,6 +191,8 @@ export function exportExamScheduleReport(
     publishStatuses: filters.publishStatuses?.length ? filters.publishStatuses : null,
     modes: filters.modes?.length ? filters.modes : null,
     ueTypes: filters.ueTypes?.length ? filters.ueTypes : null,
+    // Same value as the preview, so the file matches what's on screen.
+    schedulingStatus: filters.schedulingStatus ?? SCHEDULING_STATUS.Scheduled,
   }
 
   return apiPostWithMessage<any>('/api/v1/assessment/reports/exam-schedule/export', body)

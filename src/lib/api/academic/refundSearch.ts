@@ -81,6 +81,10 @@ export interface PassoutLibraryDepositRefundCandidateDto {
   studentRegNo: string
   studentNum: string
   studentName: string
+  // Signed, expiring link to the application photo (added 2026-11-17);
+  // null with no linked application or no photo. Use as returned, don't
+  // store it. Only on this detail endpoint, not the list.
+  photoUrl?: string | null
   programGuid: string | null
   programName: string | null
   batchGuid: string | null
