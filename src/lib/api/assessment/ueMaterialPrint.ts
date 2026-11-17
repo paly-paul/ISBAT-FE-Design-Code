@@ -24,16 +24,30 @@ export interface UeBookletResponse {
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
+// UE paper types a unit can be printed as: 0 = Theory, 1 = Practical.
+export const UE_TYPE = { Theory: 0, Practical: 1 } as const
+
+export interface UeQuestionPrintCourseUnit {
+  courseUnitGuid: string
+  courseUnitCode: string
+  courseUnitName: string
+  unitTypeName?: string
+  // [0] Theory, [1] Practical, [0, 1] Combined, null for Project / no type
+  // (get-course-units.md, 2026-11-17). Only a unit with both offers the
+  // Theory/Practical choice.
+  allowedUeTypes?: number[] | null
+}
+
 // -- Dropdowns --
 export function getUeQuestionPrintCourseUnits(
   programGuid: string,
   semesterGuid: string,
   intakeGuid?: string,
   unitTypes?: string[]
-) {
+): Promise<UeQuestionPrintCourseUnit[]> {
   if (MOCK_AUTH) return Promise.resolve([
-    { courseUnitGuid: 'cu-1', courseUnitCode: 'CS101', courseUnitName: 'Introduction to CS', unitTypeName: 'Theory' },
-    { courseUnitGuid: 'cu-2', courseUnitCode: 'CS103', courseUnitName: 'Advanced CS', unitTypeName: 'Theory' }
+    { courseUnitGuid: 'cu-1', courseUnitCode: 'CS101', courseUnitName: 'Introduction to CS', unitTypeName: 'Theory', allowedUeTypes: [0] },
+    { courseUnitGuid: 'cu-2', courseUnitCode: 'CS103', courseUnitName: 'Advanced CS', unitTypeName: 'Combined', allowedUeTypes: [0, 1] }
   ])
   const params = new URLSearchParams({
     programGuid: programGuid?.toUpperCase() || '',
@@ -45,7 +59,7 @@ export function getUeQuestionPrintCourseUnits(
   if (unitTypes && unitTypes.length > 0) {
     unitTypes.forEach(ut => params.append('unitTypes', ut))
   }
-  return apiGet<{ courseUnitGuid: string; courseUnitCode: string; courseUnitName: string; unitTypeName?: string }[]>(`/api/v1/assessment/ue-question-print/course-units?${params.toString()}`)
+  return apiGet<UeQuestionPrintCourseUnit[]>(`/api/v1/assessment/ue-question-print/course-units?${params.toString()}`)
 }
 
 // -- Theory Actions --

@@ -8,6 +8,7 @@ import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { ActionMenu } from '@/components/ActionMenu'
 import { Toast } from '@/components/Toast'
+import { StudentAvatar } from '@/components/StudentAvatar'
 import { ViewPaymentReceiptModal } from '@/components/modals/finance/ViewPaymentReceiptModal'
 import { useStudentStatementSearch, useStudentStatement, useStudentFeeSummary } from '@/hooks/student/useStudentStatement'
 import { getStudentStatementPdfUrl, type StudentStatementPaymentDto } from '@/lib/api/student/studentStatement'
@@ -829,7 +830,7 @@ export default function StudentStatementPage() {
                 <section className="card pcx-student" aria-label="Student">
                   <div className="pcx-student-top">
                     <div className="pcx-student-id">
-                      <div className="pcx-avatar" aria-hidden="true">{initials}</div>
+                      <StudentAvatar className="pcx-avatar" photoUrl={header.photoUrl} initials={initials} />
                       <div className="min-w-0">
                         <div className="pcx-name-row">
                           <h2 className="pcx-name">{name}</h2>

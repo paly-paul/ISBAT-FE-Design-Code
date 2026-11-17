@@ -20,6 +20,13 @@ import {
   useDownloadUeBookletCover,
   useDownloadUeConsolidatedMarkSheet,
 } from '@/hooks/assessment/useUeMaterialPrint'
+import {
+  usePrintUeQuestionPractical,
+  useDownloadUeQuestionPracticalPdf,
+  useDownloadUeQuestionPracticalWord,
+  useDeleteUeQuestionPractical,
+} from '@/hooks/assessment/useUePracticalPrint'
+import { UE_TYPE } from '@/lib/api/assessment/ueMaterialPrint'
 import { extractApiErrorMessage } from '@/lib/errorMessages'
 
 const OUTCOME_NAMES = ['Printed', 'Reprinted', 'ExamRuleNotSet', 'QuestionsNotAvailable', 'ConfirmationRequired'] as const
@@ -59,6 +66,9 @@ export default function UniversityExamMaterialPrintPage() {
   const [programGuid, setProgramGuid] = useState('')
   const [semesterGuid, setSemesterGuid] = useState('')
   const [courseUnitGuid, setCourseUnitGuid] = useState('')
+  // Theory/Practical choice for a Combined unit's question paper. Reset to
+  // Theory whenever the unit changes.
+  const [qpType, setQpType] = useState<'theory' | 'practical'>('theory')
   const [confirmation, setConfirmation] = useState<{ message: string; action: () => void } | null>(null)
   const [activeAction, setActiveAction] = useState<string | null>(null)
 
@@ -115,6 +125,19 @@ export default function UniversityExamMaterialPrintPage() {
 
   const formComplete = Boolean(intakeGuid && programGuid && semesterGuid && courseUnitGuid)
 
+  // allowedUeTypes (get-course-units.md): [0] Theory, [1] Practical,
+  // [0, 1] Combined, null Project / no type. Only a Combined unit offers the
+  // Theory/Practical radio; a Practical-only unit uses the practical calls
+  // with no radio, and everything else prints theory. The choice only
+  // affects the question paper (print, Word, PDF, delete); the answer key is
+  // theory-only, and booklet, attendance, cover letter and mark sheet keep
+  // the theory layout.
+  const selectedUnit = courseUnits?.find(u => u.courseUnitGuid?.toLowerCase() === courseUnitGuid.toLowerCase()) ?? null
+  const allowsTheory = !!selectedUnit?.allowedUeTypes?.includes(UE_TYPE.Theory)
+  const allowsPractical = !!selectedUnit?.allowedUeTypes?.includes(UE_TYPE.Practical)
+  const isCombinedUnit = allowsTheory && allowsPractical
+  const isPracticalQp = isCombinedUnit ? qpType === 'practical' : allowsPractical
+
   // Permissions mapping
   const canPrint = permissions.print !== false && Boolean(
     permissions.print || permissions.generate || permissions.add || permissions.view || permissions.get
@@ -139,7 +162,7 @@ export default function UniversityExamMaterialPrintPage() {
   const canPrintQuestionPaperWord = formComplete && canPrint
   const canPrintQuestionPaperPdf = formComplete && canPrint
   const canDeleteQuestionPaper = formComplete && canDelete
-  const canGetAnswerKey = formComplete && canGetAnswerKeyPermission
+  const canGetAnswerKey = formComplete && canGetAnswerKeyPermission && !isPracticalQp
   const canGetAttendance = formComplete && canGetAttendancePermission
   const canGetCoverLetter = formComplete && canGetCoverLetterPermission
   const canGetConsolidated = formComplete && canGetConsolidatedPermission
@@ -157,11 +180,26 @@ export default function UniversityExamMaterialPrintPage() {
   const deleteTheory = useDeleteUeQuestionTheory()
   const downloadTheoryAnswerKey = useDownloadUeQuestionTheoryAnswerKey()
 
+  const printPractical = usePrintUeQuestionPractical()
+  const downloadPracticalWord = useDownloadUeQuestionPracticalWord()
+  const downloadPracticalPdf = useDownloadUeQuestionPracticalPdf()
+  const deletePractical = useDeleteUeQuestionPractical()
+
+  // The question-paper calls for the chosen paper type — same params and
+  // the same confirm-then-reprint flow for both.
+  const qpPrint = isPracticalQp ? printPractical : printTheory
+  const qpWord = isPracticalQp ? downloadPracticalWord : downloadTheoryWord
+  const qpPdf = isPracticalQp ? downloadPracticalPdf : downloadTheoryPdf
+  const qpDelete = isPracticalQp ? deletePractical : deleteTheory
+  const qpLabel = isPracticalQp ? 'Practical' : 'Theory'
+
   const isWorking = activeAction !== null ||
     printBooklet.isPending || downloadBooklet.isPending ||
     downloadAttendance.isPending || downloadCover.isPending || downloadConsolidated.isPending ||
     printTheory.isPending || downloadTheoryWord.isPending || downloadTheoryPdf.isPending ||
-    deleteTheory.isPending || downloadTheoryAnswerKey.isPending
+    deleteTheory.isPending || downloadTheoryAnswerKey.isPending ||
+    printPractical.isPending || downloadPracticalWord.isPending || downloadPracticalPdf.isPending ||
+    deletePractical.isPending
 
   const request = (confirm = false) => ({
     programGuid,
@@ -175,6 +213,7 @@ export default function UniversityExamMaterialPrintPage() {
     setProgramGuid('')
     setSemesterGuid('')
     setCourseUnitGuid('')
+    setQpType('theory')
     setValidationError(null)
     setActiveAction(null)
     if (intakeOptions.length > 0) {
@@ -223,14 +262,15 @@ export default function UniversityExamMaterialPrintPage() {
     }
   }
 
-  // 2. Question Paper Print (Word or PDF — Theory)
+  // 2. Question Paper Print (Word or PDF — Theory, or Practical for a Combined unit)
   const handleQuestionPaperPrint = async (format: 'word' | 'pdf', confirm = false) => {
     const allowed = format === 'word' ? canPrintQuestionPaperWord : canPrintQuestionPaperPdf
     if (!allowed || isWorking) return
     setValidationError(null)
     setActiveAction(format === 'word' ? 'qp-word' : 'qp-pdf')
+    const fallbackName = `${qpLabel}QuestionPaper`
     try {
-      const result = await printTheory.mutateAsync(request(confirm))
+      const result = await qpPrint.mutateAsync(request(confirm))
       const { outcome, message } = parseOutcome(result)
 
       if (outcome === 'ConfirmationRequired') {
@@ -256,11 +296,11 @@ export default function UniversityExamMaterialPrintPage() {
       if (outcome === 'Printed' || outcome === 'Reprinted') {
         setValidationError(null)
         if (format === 'pdf') {
-          const file = await downloadTheoryPdf.mutateAsync(request())
-          download(file.blob, file.filename, 'QuestionPaper.pdf')
+          const file = await qpPdf.mutateAsync(request())
+          download(file.blob, file.filename, `${fallbackName}.pdf`)
         } else {
-          const file = await downloadTheoryWord.mutateAsync(request())
-          download(file.blob, file.filename, 'QuestionPaper.doc')
+          const file = await qpWord.mutateAsync(request())
+          download(file.blob, file.filename, `${fallbackName}.doc`)
         }
         showToast(
           message || (outcome === 'Reprinted' ? 'Question paper reprinted successfully.' : 'Question paper downloaded successfully.'),
@@ -271,11 +311,11 @@ export default function UniversityExamMaterialPrintPage() {
 
       // Fallback when 200 OK completes without an explicit blocking outcome
       if (format === 'pdf') {
-        const file = await downloadTheoryPdf.mutateAsync(request())
-        download(file.blob, file.filename, 'QuestionPaper.pdf')
+        const file = await qpPdf.mutateAsync(request())
+        download(file.blob, file.filename, `${fallbackName}.pdf`)
       } else {
-        const file = await downloadTheoryWord.mutateAsync(request())
-        download(file.blob, file.filename, 'QuestionPaper.doc')
+        const file = await qpWord.mutateAsync(request())
+        download(file.blob, file.filename, `${fallbackName}.doc`)
       }
       showToast(message || 'Question paper downloaded successfully.', 'success')
     } catch (error: any) {
@@ -287,13 +327,13 @@ export default function UniversityExamMaterialPrintPage() {
     }
   }
 
-  // 3. Delete Question Paper (Theory)
+  // 3. Delete Question Paper (Theory, or Practical for a Combined unit)
   const handleQuestionPaperDelete = async (confirm = false) => {
     if (!canDeleteQuestionPaper || isWorking) return
     setValidationError(null)
     setActiveAction('qp-delete')
     try {
-      const res = await deleteTheory.mutateAsync(request(confirm))
+      const res = await qpDelete.mutateAsync(request(confirm))
 
       if (res.data === false && !confirm) {
         setActiveAction(null)
@@ -393,7 +433,9 @@ export default function UniversityExamMaterialPrintPage() {
   const qpPdfHint = formHint || (!canPrint ? 'You do not have permission to print question papers.' : '')
   const qpWordHint = formHint || (!canPrint ? 'You do not have permission to download question papers in Word.' : '')
   const qpDeleteHint = formHint || (!canDelete ? 'You do not have permission to delete question papers.' : '')
-  const answerKeyHint = formHint || (!canGetAnswerKeyPermission ? 'You do not have permission to download answer key.' : '')
+  const answerKeyHint = formHint
+    || (isPracticalQp ? 'There is no answer key for practical papers. Select Theory to download it.' : '')
+    || (!canGetAnswerKeyPermission ? 'You do not have permission to download answer key.' : '')
   const attendanceHint = formHint || (!canGetAttendancePermission ? 'You do not have permission to download attendance sheet.' : '')
   const coverLetterHint = formHint || (!canGetCoverLetterPermission ? 'You do not have permission to download cover letter.' : '')
   const consolidatedHint = formHint || (!canGetConsolidatedPermission ? 'You do not have permission to download consolidated mark sheet.' : '')
@@ -431,6 +473,7 @@ export default function UniversityExamMaterialPrintPage() {
                 setProgramGuid(guid)
                 setSemesterGuid('')
                 setCourseUnitGuid('')
+                setQpType('theory')
                 setValidationError(null)
               }}
               disabled={programsLoading || intakeLoading}
@@ -445,6 +488,7 @@ export default function UniversityExamMaterialPrintPage() {
               onChange={guid => {
                 setSemesterGuid(guid)
                 setCourseUnitGuid('')
+                setQpType('theory')
                 setValidationError(null)
               }}
               disabled={!programGuid || semestersLoading}
@@ -458,6 +502,7 @@ export default function UniversityExamMaterialPrintPage() {
               value={courseUnitGuid}
               onChange={guid => {
                 setCourseUnitGuid(guid)
+                setQpType('theory')
                 setValidationError(null)
               }}
               disabled={!semesterGuid || unitsLoading}
@@ -500,9 +545,39 @@ export default function UniversityExamMaterialPrintPage() {
               </div>
               <div>
                 <h3 className="font-semibold text-gray-800 text-sm m-0">Question Paper Materials</h3>
-                <p className="text-xs text-gray-500 m-0">Generate &amp; download theory QP</p>
+                <p className="text-xs text-gray-500 m-0">
+                  {isPracticalQp ? 'Generate & download practical QP · one page per student' : 'Generate & download theory QP'}
+                </p>
               </div>
             </div>
+            {/* Combined units only: which paper the QP buttons print and delete. */}
+            {isCombinedUnit && (
+              <div className="px-5 pt-4 flex flex-wrap items-center gap-x-5 gap-y-2" role="radiogroup" aria-label="Question paper type">
+                <span className="lbl mb-0">Paper type</span>
+                <label className="flex items-center gap-2 text-sm cursor-pointer font-medium text-slate-700">
+                  <input
+                    type="radio"
+                    name="qpTypeRadio"
+                    value="theory"
+                    checked={qpType === 'theory'}
+                    onChange={() => { setQpType('theory'); setValidationError(null) }}
+                    disabled={isWorking}
+                  />
+                  Theory
+                </label>
+                <label className="flex items-center gap-2 text-sm cursor-pointer font-medium text-slate-700">
+                  <input
+                    type="radio"
+                    name="qpTypeRadio"
+                    value="practical"
+                    checked={qpType === 'practical'}
+                    onChange={() => { setQpType('practical'); setValidationError(null) }}
+                    disabled={isWorking}
+                  />
+                  Practical
+                </label>
+              </div>
+            )}
             <div className="p-5 grid grid-cols-2 sm:grid-cols-2 gap-3">
               <button
                 className="flex flex-col items-center justify-center p-4 border rounded-xl gap-2 text-sm font-medium transition-all hover:border-primary hover:text-primary hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-gray-200 disabled:hover:shadow-none disabled:hover:text-gray-700 bg-blue-50 border-blue-100"

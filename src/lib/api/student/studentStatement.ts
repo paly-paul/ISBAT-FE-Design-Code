@@ -43,6 +43,9 @@ export interface StudentStatementHeaderDto {
   batchGuid: string | null
   batchCode: string | null
   admissionTypeLabel: string | null
+  // Signed, expiring link to the application's photo (added 2026-11-17);
+  // null when none was uploaded. Use as returned, don't store it.
+  photoUrl?: string | null
 }
 
 // The ledgers one payment was allocated to. NCHE / Guild / Advance rows send

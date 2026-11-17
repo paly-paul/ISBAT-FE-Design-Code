@@ -90,6 +90,9 @@ export interface StudentProfile {
   exemptionTypeGuid: string | null
   regStatus: number | null
   regStatusName: string | null
+  // Signed, expiring link to the application's photo (added 2026-11-17);
+  // null when none was uploaded. Use as returned, don't store it.
+  photoUrl?: string | null
   // Type genuinely unconfirmed — null on every live sample seen so far, no
   // spec coverage, and the name isn't self-explanatory enough to guess a
   // shape for. Left as unknown rather than assuming string; narrow it once

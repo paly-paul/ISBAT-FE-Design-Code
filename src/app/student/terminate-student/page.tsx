@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
 import { Toast } from '@/components/Toast'
+import { StudentAvatar } from '@/components/StudentAvatar'
 import { SearchSelect } from '@/components/SearchSelect'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { SuccessPopup } from '@/components/modals/shared/SuccessPopup'
@@ -260,7 +261,7 @@ export default function TerminateStudentPage() {
               <div className="card p-0 overflow-hidden">
                 <div className="pc-hero">
                   <div className="pc-hero-top">
-                    <div className="pc-hero-avatar">{initialsFor(applicantName(profile))}</div>
+                    <StudentAvatar className="pc-hero-avatar" photoUrl={profile.photoUrl} initials={initialsFor(applicantName(profile))} />
                     <div className="flex-1 min-w-0">
                       <div className="pc-hero-name truncate">{applicantName(profile)}</div>
                       <div className="pc-hero-sub truncate">{profile.programName ?? '—'}</div>
