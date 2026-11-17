@@ -567,6 +567,7 @@ export function PassoutLibraryDepositTab({ showToast, permissionsCreate, useMock
               <>
                 <RefundStudentCard
                   name={selectedStudent.studentName}
+                  photoUrl={selectedStudent.photoUrl}
                   subtitle={selectedStudent.programName ?? '—'}
                   chips={[{ label: 'Reg. No', value: selectedStudent.studentRegNo }]}
                   facts={[{ label: 'Batch', value: selectedStudent.batchCode }, { label: 'Campus', value: selectedStudent.campusName }]}

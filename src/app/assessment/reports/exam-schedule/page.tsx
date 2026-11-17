@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useInfiniteQuery, useQueries } from '@tanstack/react-query'
 import { ScrollTable } from '@/components/ScrollTable'
 import { MultiSelect } from '@/components/MultiSelect'
+import { SearchSelect } from '@/components/SearchSelect'
 import DatePicker from '@/components/DatePicker'
 import { LoadingState } from '@/components/TableLoadingState'
 import { useIntakesDropdown } from '@/hooks/academic/useIntakes'
@@ -24,6 +25,9 @@ import {
   MODE,
   UE_TYPE,
   QUESTION_VERIFICATION,
+  SCHEDULING_STATUS,
+  SCHEDULING_STATUS_LABELS,
+  UNDATABLE_SCHEDULE_TYPES,
 } from '@/lib/api/assessment/examScheduleReport'
 
 // Exam Schedule Report — erp-docs/pages/assessment/exam-schedule-report-page.md
@@ -41,6 +45,7 @@ interface FormState {
   publishStatuses: string[]
   modes: string[]
   ueTypes: string[]
+  schedulingStatus: string
 }
 
 const EMPTY_FORM: FormState = {
@@ -54,6 +59,7 @@ const EMPTY_FORM: FormState = {
   publishStatuses: [],
   modes: [],
   ueTypes: [],
+  schedulingStatus: String(SCHEDULING_STATUS.Scheduled),
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -129,6 +135,7 @@ function toFilters(f: FormState): ExamScheduleReportFilters {
     publishStatuses: f.publishStatuses.length ? f.publishStatuses.map(Number) : undefined,
     modes: f.modes.length ? f.modes.map(Number) : undefined,
     ueTypes: f.ueTypes.length ? f.ueTypes.map(Number) : undefined,
+    schedulingStatus: Number(f.schedulingStatus || SCHEDULING_STATUS.Scheduled),
   }
 }
 
@@ -282,7 +289,14 @@ export default function ExamScheduleReportPage() {
     []
   )
 
-  // Dynamic Exclusion Hints
+  const schedulingStatusOptions = useMemo(
+    () => [SCHEDULING_STATUS.Scheduled, SCHEDULING_STATUS.NotScheduled, SCHEDULING_STATUS.All]
+      .map(s => ({ value: String(s), label: SCHEDULING_STATUS_LABELS[s] })),
+    []
+  )
+  const formScheduling = Number(form.schedulingStatus || SCHEDULING_STATUS.Scheduled)
+
+  // ── Dynamic Exclusion Hints ────────────────────────────────────────────────
   // Page doc business rules: filters can hide whole types. Show hint so missing types are not mistaken for missing data.
   // Note: Course unit filter no longer hides resit types as they are now broken down per unit.
   const exclusionHints = useMemo(() => {
@@ -296,8 +310,17 @@ export default function ExamScheduleReportPage() {
     if (form.publishStatuses.length > 0 || form.modes.length > 0) {
       hints.push('Publish status and mode filters hide Mock Exams (mock exams do not have mode or publish status).')
     }
+    if (formScheduling === SCHEDULING_STATUS.NotScheduled) {
+      const undatable = UNDATABLE_SCHEDULE_TYPES.map(t => SCHEDULE_TYPE_LABELS[t]).join(', ').replace(/, ([^,]*)$/, ' and $1')
+      hints.push(`Not scheduled shows only ${undatable} (Mock Exams and resits always have a date). From / To dates are ignored.`)
+    } else if (formScheduling === SCHEDULING_STATUS.All && (form.fromDate || form.toDate)) {
+      hints.push('From / To dates only limit scheduled rows. Not-scheduled rows have no date, so they are always included, listed last.')
+    }
+    if (formScheduling !== SCHEDULING_STATUS.Scheduled && form.intakeGuids.length === 0) {
+      hints.push('There are thousands of not-scheduled records (mostly from the bulk import on 11 Oct 2026). Pick an intake to narrow the list.')
+    }
     return hints
-  }, [form.programGuids, form.semesterGuids, form.ueTypes, form.publishStatuses, form.modes])
+  }, [form.programGuids, form.semesterGuids, form.ueTypes, form.publishStatuses, form.modes, form.fromDate, form.toDate, form.intakeGuids, formScheduling])
 
   // ── Process & Frozen Filters ───────────────────────────────────────────────
   const [saved, setSaved] = useState<ExamScheduleReportFilters | null>(null)
@@ -360,6 +383,11 @@ export default function ExamScheduleReportPage() {
   const isEmpty = hasResult && totalCount === 0
   const firstPageFailed = preview.isError && !hasResult
   const nextPageFailed = preview.isFetchNextPageError
+  // The Scheduling column only adds information when undated rows can appear.
+  const showSchedulingCol = !!saved && saved.schedulingStatus != null && saved.schedulingStatus !== SCHEDULING_STATUS.Scheduled
+  // 24 base columns (incl. the resit-readiness Applicants / Required /
+  // Available / Ready), plus Scheduling when it's shown.
+  const columnCount = showSchedulingCol ? 25 : 24
 
   // Sentinel row for infinite scrolling near bottom of .tbl-wrap
   const sentinelRef = useRef<HTMLTableRowElement>(null)
@@ -392,7 +420,11 @@ export default function ExamScheduleReportPage() {
           : `${saved.scheduleTypes.length} selected`,
       })
     }
-    if (saved.fromDate || saved.toDate) {
+    if (saved.schedulingStatus != null && saved.schedulingStatus !== SCHEDULING_STATUS.Scheduled) {
+      chips.push({ label: 'Scheduling', value: SCHEDULING_STATUS_LABELS[saved.schedulingStatus] ?? String(saved.schedulingStatus) })
+    }
+    // Dates don't apply under Not scheduled (the API ignores them).
+    if ((saved.fromDate || saved.toDate) && saved.schedulingStatus !== SCHEDULING_STATUS.NotScheduled) {
       chips.push({
         label: 'Dates',
         value: `${saved.fromDate ? fmtYmd(saved.fromDate) : 'Start'} – ${saved.toDate ? fmtYmd(saved.toDate) : 'Today'}`,
@@ -605,13 +637,23 @@ export default function ExamScheduleReportPage() {
                 />
               </div>
 
-              <div className="fg m-0 span2">
+              <div className="fg m-0">
                 <label className="lbl">Theory / Practical</label>
                 <MultiSelect
                   placeholder="All"
                   options={ueTypeOptions}
                   value={form.ueTypes}
                   onChange={v => setField('ueTypes', v)}
+                />
+              </div>
+
+              {/* Single choice, always set: no placeholder, so it can't be cleared. */}
+              <div className="fg m-0">
+                <label className="lbl">Scheduling</label>
+                <SearchSelect
+                  options={schedulingStatusOptions}
+                  value={form.schedulingStatus}
+                  onChange={v => setField('schedulingStatus', v || String(SCHEDULING_STATUS.Scheduled))}
                 />
               </div>
             </div>
@@ -767,6 +809,7 @@ export default function ExamScheduleReportPage() {
                 <thead>
                   <tr>
                     <th>Type</th>
+                    {showSchedulingCol && <th>Scheduling</th>}
                     <th>Date</th>
                     <th>Day</th>
                     <th>Start</th>
@@ -796,6 +839,13 @@ export default function ExamScheduleReportPage() {
                   {rows.map((r, i) => (
                     <tr key={`${r.scheduleGuid}-${r.courseUnitGuid ?? 'none'}-${i}`}>
                       <td style={{ fontWeight: 600 }}>{r.scheduleTypeName}</td>
+                      {showSchedulingCol && (
+                        <td>
+                          {r.isScheduled === false
+                            ? <span className="badge badge-amber">Not scheduled</span>
+                            : <span className="badge badge-green">Scheduled</span>}
+                        </td>
+                      )}
                       <td>{fmtPlainDate(r.date)}</td>
                       <td>{r.dayOfWeek || '—'}</td>
                       <td>{fmtPlainTime(r.startTime)}</td>
@@ -861,7 +911,7 @@ export default function ExamScheduleReportPage() {
                     </tr>
                   ))}
                   <tr ref={sentinelRef} className="rpt-foot-row">
-                    <td colSpan={24}>
+                    <td colSpan={columnCount}>
                       {nextPageFailed ? (
                         <span className="inline-flex items-center gap-3">
                           <span style={{ color: 'var(--red)' }}>Couldn’t load more rows.</span>
