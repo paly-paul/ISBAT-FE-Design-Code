@@ -17,8 +17,9 @@ export interface StudentDto {
   // null when no photo was uploaded.
   photoUrl?: string | null
   // Intake code (e.g. 20241) — on /students/filter list items since
-  // 2026-09-30; absent on older responses.
-  academicIntake?: number | null
+  // 2026-09-30; absent on older responses. GET /students/{guid} instead
+  // returns the intake's description here ("Spring 2027"), not the code.
+  academicIntake?: number | string | null
   // Registration status as text ("Registered", "YetToRegister", "DropOut",
   // "YetToClear", "Passout") from the active history row — on
   // /students/filter list items (get-students-filter.md, 2026-09-29).
@@ -79,6 +80,9 @@ export interface StudentDetailDto extends StudentDto {
   feeStructure?: string | null
   // Display name of how the student was admitted, e.g. "Lateral Entry Student".
   registrationType?: string | null
+  // Rejoin history. Only ever seen empty — item shape not confirmed yet, so
+  // nothing renders it.
+  rejoins?: unknown[] | null
   // A third live shape, confirmed against students/students/get-student-by-guid.md
   // (2026-08-17 doc) — that response has no top-level nationalityGuid at all;
   // the actual country identifier lives here instead, nested under the

@@ -3,7 +3,7 @@
 Reference for the permission-driven sidebar menu API, `GET /api/v1/users/me/menu`.
 Each node has the shape `{ name, icon, url, permissions, children }`.
 
-**Last updated: 2026-11-11.** The tree below matches the frontend's mock menu
+**Last updated: 2026-11-17.** The tree below matches the frontend's mock menu
 (`mockMenu` in `src/lib/api/users/menu.ts`), so it lists every page that is in the
 sidebar today. The events on each page come from reading the buttons and actions in
 that page's code.
@@ -14,6 +14,9 @@ hidden from the sidebar, and opening its URL shows the Access Denied screen. Eve
 in this doc must be registered in the menu API for a role to reach it. The frontend
 still removes and renames a few entries itself (see
 [Pages hidden from the sidebar](#pages-hidden-from-the-sidebar) and the change notes).
+One temporary exception: if the response has no **Assessment › Reports › Exam Schedule
+Report**, the frontend adds it under Assessment with full permissions until the menu API
+sends it (see the 2026-11-17 change notes).
 
 ## Node shapes
 
@@ -64,6 +67,7 @@ details. Every page with a URL has `get`.
 | `download` | Download a template or document |
 | `generate` | Generate a document or result |
 | `publish` | Publish or push results and marks |
+| `withdraw` | Withdraw published results from students |
 
 Student Master also uses its own per-row flags: `view`, `learningmode`, `refugee` and
 `sponsor`. The page already reads these keys, so they keep their existing names. Note
@@ -79,7 +83,7 @@ ignored and the button falls back to `edit`.
   send `"approve": false` explicitly.
 - **Some buttons stay visible.** On a few pages (Payment Console, Payment History,
   Student Statement, and the Discount, Transaction, Outstanding,
-  Enquiry, Application Status and Students in Programme reports) the print/export button is always shown, and
+  Enquiry, Application Status, Students in Programme and Exam Schedule reports) the print/export button is always shown, and
   clicking it without the permission shows a "You don't have permission…" message
   instead of running it.
 - **Menu call fails:** nothing is granted. The sidebar shows "Couldn't load menu" and
@@ -1197,7 +1201,7 @@ New module (2026-10-28). Its rail sits between Student and Employee.
 | Mark Entry & Results | Mark Verify — UE | `/assessment/mark-ue-verify` | `get` `edit` `verify` | `get` `edit` | `edit` = correct a mark; `verify` = verify the exam (locks it for mark entry) |
 | Mark Entry & Results | Result & Moderation | `/assessment/moderation` | `get` `edit` | none |  |
 | Mark Entry & Results | Exam Mark Import | `/assessment/exam-mark-import` | `get` `import` `download` `publish` | none |  |
-| Mark Entry & Results | Generate Result | `/assessment/generate-result` | `get` `edit` `delete` `export` `generate` `publish` | none | `edit` = apply moderation; `publish` also covers withdraw |
+| Mark Entry & Results | Generate Result | `/assessment/generate-result` | `get` `generate` `publish` `withdraw` `delete` | `get` `generate` `publish` `withdraw` `delete` | Per programme / semester / batch. `withdraw` = take published results back. A missing `generate`, `publish` or `withdraw` key counts as allowed, so send `false` to deny; a missing `delete` follows `edit` |
 | Mark Entry & Results | Transcript Print | `/assessment/transcript-print` | `get` `print` | none |  |
 | Mark Entry & Results | Graduate Transcript | `/assessment/graduate-transcript` | `get` `generate` | none |  |
 | Mark Entry & Results | HEC Graduate Transcript | `/assessment/hec-graduate-transcript` | `get` `generate` | none |  |
@@ -1212,6 +1216,7 @@ New module (2026-10-28). Its rail sits between Student and Employee.
 | Resit & Disputes | Resit UE Mark Import | `/assessment/resit-ue-mark-import` | `get` `import` `download` | none |  |
 | Resit & Disputes | Resit Mark Update | `/assessment/resit-mark-update` | `get` `publish` | none | `publish` = push marks |
 | Resit & Disputes | Exam Grievances | `/assessment/exam-grievances` | `get` `edit` | none | `edit` = respond (save & email) |
+| Reports | Exam Schedule Report | `/assessment/reports/exam-schedule` | `get` `export` | `export` | Scheduled UE, coursework, test, mock and resit exams, filtered by type, intake, dates, programme, semester, course unit, status and mode; preview + Excel export; exports land in the shared Downloads list. The APIs check `assessment.examschedulereport.get` (preview) |
 
 ```json
 {
@@ -1466,7 +1471,7 @@ New module (2026-10-28). Its rail sits between Student and Employee.
           "name": "Generate Result",
           "icon": "lni lni-cogs",
           "url": "/assessment/generate-result",
-          "permissions": { "get": true, "edit": true, "delete": true, "export": true, "generate": true, "publish": true },
+          "permissions": { "get": true, "generate": true, "publish": true, "withdraw": true, "delete": true },
           "children": []
         },
         {
@@ -1573,6 +1578,21 @@ New module (2026-10-28). Its rail sits between Student and Employee.
           "icon": "lni lni-files",
           "url": "/assessment/exam-grievances",
           "permissions": { "get": true, "edit": true },
+          "children": []
+        }
+      ]
+    },
+    {
+      "name": "Reports",
+      "icon": null,
+      "url": null,
+      "permissions": null,
+      "children": [
+        {
+          "name": "Exam Schedule Report",
+          "icon": "lni lni-bar-chart",
+          "url": "/assessment/reports/exam-schedule",
+          "permissions": { "get": true, "export": true },
           "children": []
         }
       ]
@@ -1866,7 +1886,23 @@ removes any "Lecturer Master" / "Lecture Master" node (`stripLectureMaster`).
 | Assessment | Pending QP Upload | `/assessment/rpt-pending-qp` |
 | Assessment | Faculty Summary | `/assessment/rpt-faculty` |
 
-## Changes since the previous version (2026-11-10)
+## Changes since the previous version (2026-11-11)
+
+- **Added Assessment › Reports › Exam Schedule Report**
+  (`/assessment/reports/exam-schedule`, icon `lni lni-bar-chart`), events `get`
+  `export`. It's a new **Reports** section at the end of Assessment, after Resit &
+  Disputes. **Please register it in the menu API.** Until the response includes it, the
+  frontend adds it itself with full permissions, so every role that can open Assessment
+  sees it. Once it's registered, the role's own permissions apply. Pending QP Upload and
+  Faculty Summary stay hidden.
+- **New event key `withdraw`**, used by **Generate Result**. The page was reworked to
+  act per programme, semester or batch, and its Withdraw button now checks `withdraw`
+  instead of `publish`. Its events are now `get` `generate` `publish` `withdraw`
+  `delete`; `edit` (apply moderation) and `export` are no longer used by the page and
+  can be dropped from its bag. A missing `generate`, `publish` or `withdraw` key counts
+  as allowed, so send `false` to deny one.
+
+## Changes in the 2026-11-11 version (since 2026-11-10)
 
 - **Removed Finance › Reports & Statements › Financial Reports**
   (`/finance/financial-reports`). The page showed fixed sample figures and called no

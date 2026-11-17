@@ -154,17 +154,20 @@ function StudentProfileContent() {
   const semester = student?.semesterName || detail?.semester || '—'
 
   // Intakes arrive as bare codes (joinedIntake "20222" on the detail,
-  // academicIntake 20241 on Student Master's list rows) — resolved to their
-  // description via the intakes dropdown. A code missing from it still shows
-  // as the raw code rather than nothing.
+  // academicIntake 20241 on Student Master's list rows) or, for the detail's
+  // academicIntake, as the description itself ("Spring 2027"). Either is
+  // resolved against the intakes dropdown to "Spring 2027 (20271)"; a value
+  // missing from it still shows raw rather than nothing.
   const { data: intakes = [] } = useIntakesDropdown()
-  function intakeInfo(code: string | number | null | undefined) {
-    if (code === null || code === undefined || code === '') return null
-    const match = intakes.find(i => String(i.intakeCode) === String(code))
-    return { code: String(code), label: match?.description ? `${match.description} (${code})` : String(code), isCurrent: !!match?.currentIntake }
+  function intakeInfo(value: string | number | null | undefined) {
+    if (value === null || value === undefined || value === '') return null
+    const v = String(value).trim()
+    const match = intakes.find(i => String(i.intakeCode) === v)
+      ?? intakes.find(i => i.description?.trim().toLowerCase() === v.toLowerCase())
+    return { label: match ? `${match.description} (${match.intakeCode})` : v, isCurrent: !!match?.currentIntake }
   }
   const joinedIntake = intakeInfo(detail?.joinedIntake)
-  const academicIntake = intakeInfo(student?.academicIntake ?? detail?.academicIntake)
+  const academicIntake = intakeInfo(detail?.academicIntake ?? student?.academicIntake)
 
   // Real ID-card record — GET /students/id-cards/{studentGuid}. Resolves to
   // null when the student has no card yet (404 not_found is the common case,
@@ -600,6 +603,7 @@ function StudentProfileContent() {
                       <div className="mp-born-main">
                         <span className="mp-born-lbl">Programme</span>
                         <span className="mp-born-val sp-born-val">{programme}</span>
+                        {detail?.faculty && <span className="sp-born-sub">{detail.faculty}</span>}
                       </div>
                     </div>
                     {/* 2 × 2: the two intakes, then how and when the student registered. */}
