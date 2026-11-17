@@ -149,11 +149,11 @@ export default function Page() {
   const hasColumnFilters = Object.values(filters).some(v => v.length > 0)
   const refetching = listQ.isPlaceholderData
 
-  // No scope-wide fetch any more (it pulled every batch at pageSize 10000):
-  // Total Batches is the list's own totalCount; Total Students and Avg Batch
-  // Size need head counts across every batch, so they show "—" until the
-  // backend returns totals (requested: e.g. totalStudents on GET /batches).
-  const totalBatches = listQ.data ? totalCount : null
+  // Summary totals across every batch matching the scope & filters
+  const summary = listQ.data?.summary
+  const totalBatches = summary?.totalBatches ?? (listQ.data ? totalCount : null)
+  const totalStudents = summary?.totalStudents ?? null
+  const avgBatchSize = summary?.averageBatchSize ?? null
 
   // bInChargeName/pHeadName come pre-resolved on the row; the employee list
   // is only fetched if a row on this page has a guid without its name.
@@ -279,8 +279,8 @@ export default function Page() {
 
         <div className="stats-row" style={{ opacity: refetching ? 0.45 : 1, transition: 'opacity .15s ease' }}>
           <div className="stat-card"><div className="stat-lbl">Total Batches</div><div className="stat-num" style={{ color: 'var(--b700)' }}>{totalBatches != null ? totalBatches.toLocaleString() : '—'}</div><div className="stat-sub">{hasColumnFilters || debouncedSearch ? `${scopeLabel} · filtered` : scopeLabel}</div></div>
-          <div className="stat-card [--b700:var(--green)] [--b400:#34d399]"><div className="stat-lbl">Total Students</div><div className="stat-num" style={{ color: 'var(--green)' }}>—</div><div className="stat-sub" title="Needs a total from the batches API">Not available yet</div></div>
-          <div className="stat-card"><div className="stat-lbl">Avg Batch Size</div><div className="stat-num">—</div><div className="stat-sub" title="Needs a total from the batches API">Not available yet</div></div>
+          <div className="stat-card [--b700:var(--green)] [--b400:#34d399]"><div className="stat-lbl">Total Students</div><div className="stat-num" style={{ color: 'var(--green)' }}>{totalStudents != null ? totalStudents.toLocaleString() : '—'}</div><div className="stat-sub up">{hasColumnFilters || debouncedSearch ? `${scopeLabel} · filtered` : 'Across all batches'}</div></div>
+          <div className="stat-card"><div className="stat-lbl">Avg Batch Size</div><div className="stat-num">{avgBatchSize != null ? avgBatchSize : '—'}</div><div className="stat-sub">{hasColumnFilters || debouncedSearch ? `${scopeLabel} · filtered` : 'students / batch'}</div></div>
         </div>
 
         <div className="card">

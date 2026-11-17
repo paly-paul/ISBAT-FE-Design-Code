@@ -49,11 +49,18 @@ export interface Batch {
   headCount?: number | null
 }
 
+export interface BatchListSummary {
+  totalBatches?: number
+  totalStudents?: number
+  averageBatchSize?: number
+}
+
 export interface BatchListResult {
   items: Batch[]
   totalCount: number
   pageNumber: number
   pageSize: number
+  summary?: BatchListSummary
 }
 
 // Confirmed via a real GET /api/v1/academic/batches/:guid response — this
