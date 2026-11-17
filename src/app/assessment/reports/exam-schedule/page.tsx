@@ -8,6 +8,7 @@ import DatePicker from '@/components/DatePicker'
 import { LoadingState } from '@/components/TableLoadingState'
 import { useIntakesDropdown } from '@/hooks/academic/useIntakes'
 import { useProgramDropdown } from '@/hooks/academic/useProgramMaster'
+import { useCourseUnitDropdown } from '@/hooks/academic/useCourseUnits'
 import { getSemestersForProgram } from '@/lib/api/academic/semester'
 import { getProgramCourseUnitsDropdown } from '@/lib/api/academic/programCourseUnits'
 import { scrollToFirstError } from '@/lib/scrollToFirstError'
@@ -179,7 +180,18 @@ export default function ExamScheduleReportPage() {
     return Array.from(map.entries()).map(([value, label]) => ({ value, label }))
   }, [semesterQueries])
 
-  // Course units for selected programmes
+  // Search-as-you-type for course units when no programme is selected
+  const [unitSearch, setUnitSearch] = useState('')
+  const [debouncedUnitSearch, setDebouncedUnitSearch] = useState('')
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedUnitSearch(unitSearch), 250)
+    return () => clearTimeout(t)
+  }, [unitSearch])
+
+  // Full course units dropdown (GET /api/v1/academic/courseunits/dropdown?search=)
+  const allCourseUnitsQuery = useCourseUnitDropdown(debouncedUnitSearch, form.programGuids.length === 0)
+
+  // Course units for selected programmes (GET /api/v1/academic/program-course-units/dropdown)
   const courseUnitQueries = useQueries({
     queries: form.programGuids.map(pGuid => ({
       queryKey: ['academic', 'program-course-units', 'dropdown', pGuid],
@@ -190,31 +202,47 @@ export default function ExamScheduleReportPage() {
     })),
   })
 
+  // Course unit options: programme-scoped if programme selected, otherwise full global dropdown
   const courseUnitOptions = useMemo(() => {
-    const map = new Map<string, { code: string; name: string; semesterGuid: string }>()
-    for (const q of courseUnitQueries) {
-      for (const u of q.data ?? []) {
-        if (!map.has(u.courseUnitGuid)) {
-          map.set(u.courseUnitGuid, {
-            code: u.courseUnitCode,
-            name: u.courseUnitName,
-            semesterGuid: u.semesterGuid,
-          })
+    if (form.programGuids.length > 0) {
+      const map = new Map<string, { code: string; name: string; semesterGuid: string }>()
+      for (const q of courseUnitQueries) {
+        for (const u of q.data ?? []) {
+          if (!map.has(u.courseUnitGuid)) {
+            map.set(u.courseUnitGuid, {
+              code: u.courseUnitCode,
+              name: u.courseUnitName,
+              semesterGuid: u.semesterGuid,
+            })
+          }
         }
       }
+
+      let entries = Array.from(map.entries())
+      // If semesters are selected, filter units belonging to those semesters
+      if (form.semesterGuids.length > 0) {
+        entries = entries.filter(([, u]) => form.semesterGuids.includes(u.semesterGuid))
+      }
+
+      return entries.map(([guid, u]) => ({
+        value: guid,
+        label: `${u.code} — ${u.name}`,
+      }))
     }
 
-    let entries = Array.from(map.entries())
-    // If semesters are selected, filter units belonging to those semesters
-    if (form.semesterGuids.length > 0) {
-      entries = entries.filter(([, u]) => form.semesterGuids.includes(u.semesterGuid))
-    }
-
-    return entries.map(([guid, u]) => ({
-      value: guid,
-      label: `${u.code} — ${u.name}`,
+    return (allCourseUnitsQuery.data ?? []).map(u => ({
+      value: u.courseUnitGuid,
+      label: u.courseUnitCode ? `${u.courseUnitCode} — ${u.courseUnitName || '—'}` : (u.courseUnitName || '—'),
     }))
-  }, [courseUnitQueries, form.semesterGuids])
+  }, [form.programGuids.length, courseUnitQueries, form.semesterGuids, allCourseUnitsQuery.data])
+
+  // Cache unit labels so selected chips in recap preserve their text even when search filter changes
+  const knownCourseUnits = useRef(new Map<string, string>())
+  useEffect(() => {
+    for (const o of courseUnitOptions) {
+      knownCourseUnits.current.set(o.value, o.label)
+    }
+  }, [courseUnitOptions])
 
   // Fixed enums
   const scheduleTypeOptions = useMemo(
@@ -254,15 +282,13 @@ export default function ExamScheduleReportPage() {
     []
   )
 
-  // ── Dynamic Exclusion Hints ────────────────────────────────────────────────
+  // Dynamic Exclusion Hints
   // Page doc business rules: filters can hide whole types. Show hint so missing types are not mistaken for missing data.
+  // Note: Course unit filter no longer hides resit types as they are now broken down per unit.
   const exclusionHints = useMemo(() => {
     const hints: string[] = []
     if (form.programGuids.length > 0 || form.semesterGuids.length > 0) {
       hints.push('Programme and semester filters hide Resit University Exam, Resit Class Test and Resit Coursework (resits are not stored per programme).')
-    }
-    if (form.courseUnitGuids.length > 0) {
-      hints.push('Course unit filter hides Resit Class Test and Resit Coursework (these resits are intake-wide).')
     }
     if (form.ueTypes.length > 0) {
       hints.push('Theory / Practical filter hides all schedule types except University Exam and Resit University Exam.')
@@ -271,7 +297,7 @@ export default function ExamScheduleReportPage() {
       hints.push('Publish status and mode filters hide Mock Exams (mock exams do not have mode or publish status).')
     }
     return hints
-  }, [form.programGuids, form.semesterGuids, form.courseUnitGuids, form.ueTypes, form.publishStatuses, form.modes])
+  }, [form.programGuids, form.semesterGuids, form.ueTypes, form.publishStatuses, form.modes])
 
   // ── Process & Frozen Filters ───────────────────────────────────────────────
   const [saved, setSaved] = useState<ExamScheduleReportFilters | null>(null)
@@ -310,6 +336,7 @@ export default function ExamScheduleReportPage() {
   function handleReset() {
     setForm(EMPTY_FORM)
     setErrors({})
+    setUnitSearch('')
   }
 
   // ── Infinite Query (Preview) ───────────────────────────────────────────────
@@ -393,10 +420,12 @@ export default function ExamScheduleReportPage() {
       })
     }
     if (saved.courseUnitGuids?.length) {
-      const match = saved.courseUnitGuids.length === 1 ? courseUnitOptions.find(o => o.value === saved.courseUnitGuids![0]) : null
+      const match = saved.courseUnitGuids.length === 1
+        ? knownCourseUnits.current.get(saved.courseUnitGuids[0]) || courseUnitOptions.find(o => o.value === saved.courseUnitGuids![0])?.label
+        : null
       chips.push({
         label: 'Course Unit',
-        value: match ? match.label : `${saved.courseUnitGuids.length} selected`,
+        value: match ? match : `${saved.courseUnitGuids.length} selected`,
       })
     }
     if (saved.publishStatuses?.length) {
@@ -508,7 +537,6 @@ export default function ExamScheduleReportPage() {
                   onChange={v => {
                     setField('programGuids', v)
                     setField('semesterGuids', [])
-                    setField('courseUnitGuids', [])
                   }}
                   isLoading={programsQuery.isLoading}
                 />
@@ -528,7 +556,6 @@ export default function ExamScheduleReportPage() {
                   value={form.semesterGuids}
                   onChange={v => {
                     setField('semesterGuids', v)
-                    setField('courseUnitGuids', [])
                   }}
                   disabled={form.programGuids.length === 0}
                   isLoading={semesterQueries.some(q => q.isLoading)}
@@ -543,12 +570,12 @@ export default function ExamScheduleReportPage() {
               <div className="fg m-0 span2">
                 <label className="lbl">Course unit</label>
                 <MultiSelect
-                  placeholder={form.programGuids.length === 0 ? 'Select Programme first' : 'All units'}
+                  placeholder="All units"
                   options={courseUnitOptions}
                   value={form.courseUnitGuids}
                   onChange={v => setField('courseUnitGuids', v)}
-                  disabled={form.programGuids.length === 0}
-                  isLoading={courseUnitQueries.some(q => q.isLoading)}
+                  onSearch={form.programGuids.length === 0 ? setUnitSearch : undefined}
+                  isLoading={form.programGuids.length > 0 ? courseUnitQueries.some(q => q.isLoading) : allCourseUnitsQuery.isLoading}
                 />
                 {errors.courseUnitGuids && (
                   <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>
@@ -759,11 +786,15 @@ export default function ExamScheduleReportPage() {
                     <th>Last Uploaded</th>
                     <th>Uploaded By</th>
                     <th>Verified</th>
+                    <th className="num">Applicants</th>
+                    <th className="num">Required</th>
+                    <th className="num">Available</th>
+                    <th>Ready</th>
                   </tr>
                 </thead>
                 <tbody>
                   {rows.map((r, i) => (
-                    <tr key={`${r.scheduleGuid}-${r.scheduleType}-${i}`}>
+                    <tr key={`${r.scheduleGuid}-${r.courseUnitGuid ?? 'none'}-${i}`}>
                       <td style={{ fontWeight: 600 }}>{r.scheduleTypeName}</td>
                       <td>{fmtPlainDate(r.date)}</td>
                       <td>{r.dayOfWeek || '—'}</td>
@@ -806,10 +837,31 @@ export default function ExamScheduleReportPage() {
                           '—'
                         )}
                       </td>
+                      <td className="num">{r.applicantCount != null ? fmtCount(r.applicantCount) : '—'}</td>
+                      <td className="num">{r.questionsRequired != null ? fmtCount(r.questionsRequired) : '—'}</td>
+                      <td className="num">{r.questionsAvailable != null ? fmtCount(r.questionsAvailable) : '—'}</td>
+                      <td>
+                        {r.questionsReady != null ? (
+                          <div className="inline-flex items-center gap-1.5 whitespace-nowrap">
+                            {r.questionsReady ? (
+                              <span className="badge badge-green">Ready</span>
+                            ) : (
+                              <span className="badge badge-red">Not ready</span>
+                            )}
+                            {r.questionsAvailable != null && r.questionsRequired != null && (
+                              <span className="text-slate-600 text-xs font-normal">
+                                {r.questionsAvailable} of {r.questionsRequired}
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          '—'
+                        )}
+                      </td>
                     </tr>
                   ))}
                   <tr ref={sentinelRef} className="rpt-foot-row">
-                    <td colSpan={20}>
+                    <td colSpan={24}>
                       {nextPageFailed ? (
                         <span className="inline-flex items-center gap-3">
                           <span style={{ color: 'var(--red)' }}>Couldn’t load more rows.</span>

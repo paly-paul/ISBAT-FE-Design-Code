@@ -83,6 +83,11 @@ export interface ExamScheduleReportRow {
   questionsLastUploadedDate: string | null // UTC without Z
   questionsLastUploadedByName: string | null
   questionVerification: number | null     // 0 NotVerified, 1 PartiallyVerified, 2 Verified
+  courseUnitGuid: string | null
+  applicantCount: number | null
+  questionsRequired: number | null
+  questionsAvailable: number | null
+  questionsReady: boolean | null
 }
 
 export interface ExamScheduleReportTypeCount {

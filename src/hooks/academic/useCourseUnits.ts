@@ -1,6 +1,7 @@
 import { useInfiniteQuery, useMutation, useQueries, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import {
   createCourseUnit, deleteCourseUnit, getCourseUnitById, getCourseUnits, getCourseUnitWithDetails, updateCourseUnit,
+  getCourseUnitDropdown, CourseUnitDropdownItem,
   CourseUnit, CourseUnitInput, CourseUnitListResponse, CourseUnitWithDetails, CourseUnitOutlineDetail, CourseUnitTopicDetail,
 } from '@/lib/api/academic/courseUnit'
 import { upsertCourseUnitOutlines, UpsertCourseUnitOutlineInput } from '@/lib/api/academic/courseUnitOutlines'
@@ -47,6 +48,16 @@ export function useAllCourseUnits(enabled = true) {
     staleTime: Infinity,
     gcTime: Infinity,
     enabled,
+  })
+}
+
+// Lightweight dropdown query for course units (unpaginated, optional server-side search)
+export function useCourseUnitDropdown(search?: string, enabled = true) {
+  return useQuery({
+    queryKey: [...COURSE_UNITS_KEY, 'dropdown', search ?? ''],
+    queryFn: () => getCourseUnitDropdown(search),
+    enabled,
+    staleTime: 60_000,
   })
 }
 
@@ -155,4 +166,4 @@ export function useDeleteCourseUnit() {
   })
 }
 
-export type { CourseUnit, CourseUnitInput, CourseUnitListResponse, CourseUnitWithDetails, CourseUnitOutlineDetail, CourseUnitTopicDetail, UpsertCourseUnitOutlineInput }
+export type { CourseUnit, CourseUnitInput, CourseUnitListResponse, CourseUnitWithDetails, CourseUnitOutlineDetail, CourseUnitTopicDetail, UpsertCourseUnitOutlineInput, CourseUnitDropdownItem }
