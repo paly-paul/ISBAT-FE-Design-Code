@@ -33,9 +33,16 @@ export interface SessionListItemDto {
   // they're not always the same intake (a batch can carry students admitted
   // in an earlier cycle than the academic session currently being managed).
   intakeText: string
+  // Batches this session row covers — usually one. Optional until every
+  // environment returns it.
+  batchCodes?: string[] | null
   // true once already moved — disables the row's action.
   sessionMoved: boolean
   schedulingStatus: SchedulingStatus
+  // Server-side check for whether this row can be moved now. isEligible
+  // false disables Move Session; reason is shown in the Remarks column.
+  // Optional until every environment returns it.
+  movementEligibility?: { isEligible: boolean; reason: string | null } | null
 }
 
 export interface SessionListResponse {

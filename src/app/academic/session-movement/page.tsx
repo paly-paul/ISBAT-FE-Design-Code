@@ -266,7 +266,7 @@ export default function SessionMovementPage() {
             <>
               <ScrollTable>
                 <table>
-                  <thead><tr><th style={{ textAlign: 'left' }}>Admission Intake</th><th>Programme</th><th>Semester</th><th>Session Movement</th></tr></thead>
+                  <thead><tr><th style={{ textAlign: 'left' }}>Admission Intake</th><th>Programme</th><th>Batch</th><th>Semester</th><th style={{ textAlign: 'left' }}>Remarks</th><th>Session Movement</th></tr></thead>
                   <tbody>
                     {isLoading
                       ? <TableLoadingState colSpan={999} title="Loading sessions…" subtitle="Fetching the latest sessions, just a moment." />
@@ -278,6 +278,8 @@ export default function SessionMovementPage() {
                     {!isLoading && !isError && rows.map(r => {
                       const blocked = blockedResults[r.sessionGuid]
                       const isChecking = checkingGuid === r.sessionGuid
+                      const ineligible = r.movementEligibility?.isEligible === false
+                      const reason = r.movementEligibility?.reason?.trim() || ''
                       return (
                         <tr key={r.sessionGuid}>
                           <td className="font-bold" style={{ textAlign: 'left' }}>{r.intakeText}</td>
@@ -285,7 +287,13 @@ export default function SessionMovementPage() {
                             {r.programName?.trim() || (r.programCode?.trim() ? null : <span className="text-g400">—</span>)}
                             {r.programCode?.trim() && <> <span className="text-g400">({r.programCode.trim()})</span></>}
                           </td>
+                          <td className="font-mono">
+                            {r.batchCodes?.filter(c => c?.trim()).map(c => c.trim()).join(', ') || <span className="text-g400">—</span>}
+                          </td>
                           <td className="font-bold">{r.semesterCode}</td>
+                          <td style={{ textAlign: 'left' }} className={ineligible ? 'text-clr-amber' : 'text-g400'}>
+                            {reason || '—'}
+                          </td>
                           <td>
                             {r.sessionMoved || blocked === 'AlreadyMoved' ? (
                               <span className="badge badge-blue" style={{ width: '100%', justifyContent: 'center', padding: '8px 10px', display: 'flex' }}>
@@ -302,7 +310,8 @@ export default function SessionMovementPage() {
                               <button
                                 className="btn btn-primary btn-sm"
                                 style={{ width: '100%', justifyContent: 'center', borderRadius: 999 }}
-                                disabled={isChecking}
+                                disabled={isChecking || ineligible}
+                                title={ineligible ? reason || 'Not eligible for session movement' : undefined}
                                 onClick={() => handleMoveClick(r)}
                               >
                                 <i className="lni lni-reload"></i> {isChecking ? 'Checking…' : 'Move Session'}
