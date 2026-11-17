@@ -157,6 +157,22 @@ export function getCourseUnits(pageNumber = 1, pageSize = 10, search = ''): Prom
     .then(data => data ?? { items: [], totalCount: 0, pageNumber, pageSize })
 }
 
+// Lightweight course unit dropdown — GET /api/v1/academic/courseunits/dropdown?search=
+// Documented in erp-docs/api/academic-service/academic/courseunits/get-courseunit-dropdown.md
+export interface CourseUnitDropdownItem {
+  courseUnitGuid: string
+  courseUnitCode: string | null
+  courseUnitName: string | null
+}
+
+export function getCourseUnitDropdown(search?: string): Promise<CourseUnitDropdownItem[]> {
+  const params = new URLSearchParams()
+  if (search && search.trim()) params.set('search', search.trim())
+  const qs = params.toString() ? `?${params.toString()}` : ''
+  return apiGet<CourseUnitDropdownItem[]>(`/api/v1/academic/courseunits/dropdown${qs}`)
+    .then(data => data ?? [])
+}
+
 // CONFIRMED per post-courseunit.md / put-courseunit.md: outlines are NOT
 // part of either the create or update request at all — they're written
 // separately via PUT /courseunit-outlines/by-courseunit/{courseUnitGuid}

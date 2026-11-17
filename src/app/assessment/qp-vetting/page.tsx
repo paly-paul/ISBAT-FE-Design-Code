@@ -74,18 +74,32 @@ export default function QpUploadVettingPage() {
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const showToast = (msg: string, type = 'success') => {
     setToast({ msg, type })
-    setTimeout(() => setToast(null), 3500)
+    setTimeout(() => setToast(null), 4500)
   }
 
   // ── Data Queries ──────────────────────────────────────────────────────────
   const { data: courseUnits = [], isLoading: isCuLoading, isError: isCuError, error: cuError } = useUeCourseUnits()
 
   // Auto-select first unit
+  const hasAnnouncedInitialCombined = React.useRef(false)
   useEffect(() => {
     if (courseUnits.length > 0 && !selectedCourseUnitGuid) {
-      setSelectedCourseUnitGuid(courseUnits[0].courseUnitGuid)
+      const first = courseUnits[0]
+      setSelectedCourseUnitGuid(first.courseUnitGuid)
+      if (unitUeTypes(first).length > 1 && !hasAnnouncedInitialCombined.current) {
+        hasAnnouncedInitialCombined.current = true
+        showToast('This is a Combined Course Unit. Both Theory and Practical questions need to be verified.', 'warn')
+      }
     }
   }, [courseUnits, selectedCourseUnitGuid])
+
+  const handleCourseUnitSelect = (guid: string) => {
+    setSelectedCourseUnitGuid(guid)
+    const cu = courseUnits.find(u => u.courseUnitGuid === guid)
+    if (cu && unitUeTypes(cu).length > 1) {
+      showToast('This is a Combined Course Unit. Both Theory and Practical questions need to be verified.', 'warn')
+    }
+  }
 
   const selectedUnit = useMemo(() => {
     return courseUnits.find(cu => cu.courseUnitGuid === selectedCourseUnitGuid)
@@ -235,9 +249,12 @@ export default function QpUploadVettingPage() {
       {
         onSuccess: (count) => {
           setIsVerifyDialogOpen(false)
+          const otherTypeName = ueType === 0 ? 'Practical' : 'Theory'
           setSuccessModal({
             title: 'Question Paper Verified & Locked',
-            subtitle: `${count} questions across Sections A, B, and C have been officially verified and locked against edits.`,
+            subtitle: showUeSelector
+              ? `${count} questions for ${ueType === 0 ? 'Theory' : 'Practical'} have been officially verified and locked. Note: This is a Combined Course Unit — please ensure you also verify the ${otherTypeName} paper.`
+              : `${count} questions across Sections A, B, and C have been officially verified and locked against edits.`,
           })
           refetchSummary()
           refetchQuestions()
@@ -351,7 +368,7 @@ export default function QpUploadVettingPage() {
                   <SearchSelect
                     options={courseUnitOptions}
                     value={selectedCourseUnitGuid}
-                    onChange={setSelectedCourseUnitGuid}
+                    onChange={handleCourseUnitSelect}
                     placeholder="Select Course Unit"
                     className="w-full"
                     disabled={isCuLoading}
@@ -370,7 +387,10 @@ export default function QpUploadVettingPage() {
                           type="button"
                           className={`btn btn-sm flex-1 justify-center ${ueType === t ? 'btn-primary' : 'btn-neu'}`}
                           aria-pressed={ueType === t}
-                          onClick={() => setUeChoice(t)}
+                          onClick={() => {
+                            setUeChoice(t)
+                            showToast(`Switched to ${t === 1 ? 'Practical' : 'Theory'}. Both Theory and Practical questions need to be verified for combined units.`, 'warn')
+                          }}
                         >
                           {t === 1 ? 'Practical' : 'Theory'}
                         </button>
@@ -405,13 +425,13 @@ export default function QpUploadVettingPage() {
                 </div>
               </div>
               <div className="card p-3 sm:p-4 text-center cursor-pointer hover:border-blue-300 flex flex-col items-center justify-center transition-colors" onClick={() => setActiveLevel(2)}>
-                <div className="text-[11px] font-bold text-blue-700 uppercase">Sec B (15m)</div>
+                <div className="text-[11px] font-bold text-blue-700 uppercase">Sec B</div>
                 <div className="text-[22px] font-extrabold text-blue-900 mt-1">
                   {isSummaryLoading ? '—' : summary.sectionBCount}
                 </div>
               </div>
               <div className="card p-3 sm:p-4 text-center cursor-pointer hover:border-indigo-300 flex flex-col items-center justify-center transition-colors" onClick={() => setActiveLevel(3)}>
-                <div className="text-[11px] font-bold text-indigo-700 uppercase">Sec C (20m)</div>
+                <div className="text-[11px] font-bold text-indigo-700 uppercase">Sec C</div>
                 <div className="text-[22px] font-extrabold text-indigo-900 mt-1">
                   {isSummaryLoading ? '—' : summary.sectionCCount}
                 </div>
@@ -721,6 +741,9 @@ export default function QpUploadVettingPage() {
                         setSelectedCourseUnitGuid(guid)
                         setUeChoice(type)
                         setActiveTab('faculty')
+                        if (unitUeTypes(cu).length > 1) {
+                          showToast('This is a Combined Course Unit. Both Theory and Practical questions need to be verified.', 'warn')
+                        }
                       }}
                     />
                   ))
@@ -800,11 +823,11 @@ export default function QpUploadVettingPage() {
                   <strong>{summary.sectionACount} questions</strong>
                 </div>
                 <div className="flex justify-between">
-                  <span>Section B (Level 2 — 15m):</span>
+                  <span>Section B (Level 2):</span>
                   <strong>{summary.sectionBCount} questions</strong>
                 </div>
                 <div className="flex justify-between">
-                  <span>Section C (Level 3 — 20m):</span>
+                  <span>Section C (Level 3):</span>
                   <strong>{summary.sectionCCount} questions</strong>
                 </div>
                 <div className="border-t border-slate-200 pt-1.5 flex justify-between font-bold text-slate-900">
@@ -812,6 +835,18 @@ export default function QpUploadVettingPage() {
                   <span className="text-emerald-700 font-bold">{summary.totalCount}</span>
                 </div>
               </div>
+
+              {showUeSelector && (
+                <div className="bg-purple-50 border border-purple-200 text-purple-900 rounded-lg p-3 text-xs flex items-start gap-2">
+                  <i className="lni lni-information text-purple-600 text-base shrink-0 mt-0.5"></i>
+                  <div>
+                    <strong className="text-purple-950 font-semibold block mb-0.5">Combined Course Unit:</strong>
+                    <span>
+                      Verifying now will sign off the <strong>{ueType === 0 ? 'Theory' : 'Practical'}</strong> paper. Please ensure you also verify the <strong>{ueType === 0 ? 'Practical' : 'Theory'}</strong> questions.
+                    </span>
+                  </div>
+                </div>
+              )}
 
               <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-lg p-3 text-xs flex items-start gap-2">
                 <i className="lni lni-warning text-amber-600 text-base shrink-0 mt-0.5"></i>

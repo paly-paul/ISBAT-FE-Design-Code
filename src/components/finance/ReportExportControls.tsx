@@ -40,6 +40,7 @@ export function ReportExportControls({ startExport, resetKey, mockFileName, hide
   const [jobGuid, setJobGuid] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
   const [downloading, setDownloading] = useState(false)
+  const [autoDownloaded, setAutoDownloaded] = useState(false)
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
 
   function showToast(msg: string, type = 'error') {
@@ -49,7 +50,10 @@ export function ReportExportControls({ startExport, resetKey, mockFileName, hide
   const showError = (msg: string) => showToast(msg, 'error')
   const guard = useActionGuard(showToast)
 
-  useEffect(() => { setJobGuid(null) }, [resetKey])
+  useEffect(() => {
+    setJobGuid(null)
+    setAutoDownloaded(false)
+  }, [resetKey])
   useEffect(() => (jobGuid ? trackInline(jobGuid) : undefined), [jobGuid])
 
   const job = jobGuid ? jobsQuery.data?.items.find(j => j.reportJobGuid === jobGuid) : undefined
@@ -59,12 +63,21 @@ export function ReportExportControls({ startExport, resetKey, mockFileName, hide
     : job?.status.value === REPORT_STATUS.Failed ? 'failed'
     : 'idle'
 
+  // Auto-download as soon as the file finishes building
+  useEffect(() => {
+    if (phase === 'ready' && jobGuid && !autoDownloaded && !downloading) {
+      setAutoDownloaded(true)
+      handleDownload()
+    }
+  }, [phase, jobGuid, autoDownloaded, downloading])
+
   // A failed job reports its reason once, as a toast.
   const failedReason = phase === 'failed' ? (job?.errorMessage || 'The report could not be generated.') : null
   useEffect(() => { if (failedReason) showError(failedReason) }, [failedReason])
 
   async function runExport() {
     setExporting(true)
+    setAutoDownloaded(false)
     try {
       const { job: started } = await startExport()
       upsertReportJob(queryClient, started)   // same guid on a duplicate export → updated, not added twice
@@ -90,6 +103,7 @@ export function ReportExportControls({ startExport, resetKey, mockFileName, hide
     try {
       const opened = await downloadReportJob(jobGuid)
       if (!opened) showError('Mock mode: there’s no real file to download.')
+      else showToast('Download started.', 'success')
     } catch (err) {
       if (err instanceof AuthError && err.code === 'report_expired') {
         setJobGuid(null)
