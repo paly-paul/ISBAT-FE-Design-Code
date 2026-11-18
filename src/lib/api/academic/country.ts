@@ -71,20 +71,45 @@ export type CountryInput = Omit<Country, 'countryGuid'>
 // 3-digit code. Strips that padding back to the real code; used by the
 // admission enquiry forms' phone-code dropdown (online/kiosk/ondesk-enquiry)
 // instead of countryPrefix.
-export function dialCode(country: Pick<Country, 'countryCode'>): string {
-  return `+${country.countryCode.replace(/^0+(?=\d)/, '')}`
+export function dialCode(country: { countryCode?: string; countryPrefix?: string | null }): string {
+  if (country.countryPrefix && country.countryPrefix.trim()) {
+    const trimmed = country.countryPrefix.trim()
+    return trimmed.startsWith('+') ? trimmed : `+${trimmed.replace(/^0+(?=\d)/, '')}`
+  }
+  if (country.countryCode && country.countryCode.trim()) {
+    return `+${country.countryCode.trim().replace(/^0+(?=\d)/, '')}`
+  }
+  return ''
 }
 
 // The home country (Uganda). Never "first row" — the list's order isn't
 // meaningful. The defaultCountry flag alone isn't enough either: the live
 // master has it set on BOTH Equatorial Guinea and Uganda, with Equatorial
 // Guinea returned first. So Uganda wins whenever it's flagged (or nothing
-// is); otherwise the first flagged country. countryCode is the dialling
-// code ("256"), not an ISO code.
-export function findDefaultCountry(countryList: Country[]): Country | undefined {
-  const isUganda = (c: Country) => c.countryName?.trim().toLowerCase() === 'uganda' || c.countryCode?.replace(/^0+/, '') === '256'
-  const flagged = countryList.filter(c => Number(c.defaultCountry) === 1)
-  return flagged.find(isUganda) ?? flagged[0] ?? countryList.find(isUganda)
+// is); otherwise the first flagged country.
+export function findDefaultCountry(countryList: Array<Country | CountryDropdownItemDto>): Country | undefined {
+  const isUganda = (c: { countryName?: string; countryCode?: string; countryPrefix?: string | null }) =>
+    c.countryName?.trim().toLowerCase() === 'uganda' ||
+    c.countryCode?.replace(/^0+/, '') === '256' ||
+    c.countryPrefix?.replace(/^\+/, '').replace(/^0+/, '') === '256'
+  const flagged = countryList.filter(c =>
+    ('isDefault' in c && (c as CountryDropdownItemDto).isDefault) ||
+    ('defaultCountry' in c && Number((c as Country).defaultCountry) === 1)
+  )
+  const found = flagged.find(isUganda) ?? flagged[0] ?? countryList.find(isUganda)
+  if (!found) return undefined
+
+  if ('countryCode' in found) return found as Country
+  const dto = found as CountryDropdownItemDto
+  const dial = (dto.countryPrefix ?? '').replace(/^\+/, '').replace(/^0+(?=\d)/, '')
+  return {
+    countryGuid: dto.countryGuid,
+    countryCode: dial || dto.countryPrefix || '',
+    countryName: dto.countryName,
+    nationality: dto.nationality,
+    defaultCountry: dto.isDefault ? 1 : 0,
+    countryPrefix: dto.countryPrefix ?? '',
+  }
 }
 
 // Options for a phone dial-code picker whose value is the country's GUID
@@ -160,31 +185,94 @@ export function getCountriesDropdown(search = ''): Promise<CountryDropdownItemDt
   return apiGet<CountryDropdownItemDto[] | null>(url).then(data => data ?? [])
 }
 
-export function getCountries(page = 1, pageSize = 10): Promise<Country[]> {
-  if (MOCK_AUTH) return Promise.resolve(mockCountries)
-  return apiGet<CountryListResponse | null>(`/api/v1/users/countries?page=${page}&pageSize=${pageSize}`).then(data => data?.items ?? [])
+export async function getCountries(page = 1, pageSize = 10): Promise<Country[]> {
+  if (MOCK_AUTH) return mockCountries
+  try {
+    const data = await apiGet<CountryListResponse | null>(`/api/v1/users/countries?page=${page}&pageSize=${pageSize}`)
+    if (data?.items && data.items.length > 0) return data.items
+  } catch (err: any) {
+    if (err?.code === 'forbidden' || err?.status === 403 || err?.message?.includes('403') || err?.message?.includes('permission')) {
+      const dtos = await getCountriesDropdown()
+      return dtos.map(dto => {
+        const dial = (dto.countryPrefix ?? '').replace(/^\+/, '').replace(/^0+(?=\d)/, '')
+        return {
+          countryGuid: dto.countryGuid,
+          countryCode: dial || dto.countryPrefix || '',
+          countryName: dto.countryName,
+          nationality: dto.nationality,
+          defaultCountry: dto.isDefault ? 1 : 0,
+          countryPrefix: dto.countryPrefix ?? '',
+        }
+      })
+    }
+    throw err
+  }
+  return []
 }
 
-export function getCountriesPaged(page = 1, pageSize = 20, search = ''): Promise<CountryListResponse> {
+export async function getCountriesPaged(page = 1, pageSize = 20, search = ''): Promise<CountryListResponse> {
   if (MOCK_AUTH) {
     const query = search.trim().toLowerCase()
     const filtered = query
       ? mockCountries.filter(c => `${c.countryCode} ${c.countryName} ${c.nationality}`.toLowerCase().includes(query))
       : mockCountries
     const start = (page - 1) * pageSize
-    return Promise.resolve({ items: filtered.slice(start, start + pageSize), totalCount: filtered.length, pageNumber: page, pageSize })
+    return { items: filtered.slice(start, start + pageSize), totalCount: filtered.length, pageNumber: page, pageSize }
   }
-  const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) })
-  if (search.trim()) params.set('search', search.trim())
-  return apiGet<CountryListResponse | null>(`/api/v1/users/countries?${params.toString()}`)
-    .then(data => data ?? { items: [], totalCount: 0, pageNumber: page, pageSize })
+  try {
+    const dtos = await getCountriesDropdown(search)
+    const items: Country[] = dtos.map(dto => {
+      const dial = (dto.countryPrefix ?? '').replace(/^\+/, '').replace(/^0+(?=\d)/, '')
+      return {
+        countryGuid: dto.countryGuid,
+        countryCode: dial || dto.countryPrefix || '',
+        countryName: dto.countryName,
+        nationality: dto.nationality,
+        defaultCountry: dto.isDefault ? 1 : 0,
+        countryPrefix: dto.countryPrefix ?? '',
+      }
+    })
+    const start = (page - 1) * pageSize
+    return {
+      items: items.slice(start, start + pageSize),
+      totalCount: items.length,
+      pageNumber: page,
+      pageSize,
+    }
+  } catch {
+    const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) })
+    if (search.trim()) params.set('search', search.trim())
+    return apiGet<CountryListResponse | null>(`/api/v1/users/countries?${params.toString()}`)
+      .then(data => data ?? { items: [], totalCount: 0, pageNumber: page, pageSize })
+  }
 }
 
 // POST /users/countries/by-guids (get-countries-by-guids.md): a raw array of
 // guids; unknown ones are dropped, and the order isn't guaranteed.
-export function getCountriesByGuids(guids: string[]): Promise<Country[]> {
-  if (MOCK_AUTH) return Promise.resolve(mockCountries.filter(c => guids.includes(c.countryGuid)))
-  return apiPost<Country[] | null>('/api/v1/users/countries/by-guids', guids).then(data => data ?? [])
+export async function getCountriesByGuids(guids: string[]): Promise<Country[]> {
+  if (MOCK_AUTH) return mockCountries.filter(c => guids.includes(c.countryGuid))
+  try {
+    const data = await apiPost<Country[] | null>('/api/v1/users/countries/by-guids', guids)
+    if (data && data.length > 0) return data
+  } catch {
+    // fall through to dropdown
+  }
+  try {
+    const all = await getCountriesDropdown()
+    return all.filter(c => guids.includes(c.countryGuid)).map(dto => {
+      const dial = (dto.countryPrefix ?? '').replace(/^\+/, '').replace(/^0+(?=\d)/, '')
+      return {
+        countryGuid: dto.countryGuid,
+        countryCode: dial || dto.countryPrefix || '',
+        countryName: dto.countryName,
+        nationality: dto.nationality,
+        defaultCountry: dto.isDefault ? 1 : 0,
+        countryPrefix: dto.countryPrefix ?? '',
+      }
+    })
+  } catch {
+    return []
+  }
 }
 
 export function createCountry(input: CountryInput): Promise<Country> {
