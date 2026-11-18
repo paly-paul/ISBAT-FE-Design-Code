@@ -104,7 +104,7 @@ function ApplicantProfileContent() {
               alt={fullName}
               onError={() => setPhotoError(true)}
               className="rounded-full object-cover shrink-0"
-              style={{ width: 64, height: 64 }}
+              style={{ width: 64, height: 64, objectPosition: 'center 20%' }}
             />
           ) : (
             <div className="flex items-center justify-center rounded-full font-bold text-white shrink-0" style={{ width: 64, height: 64, background: 'var(--b500)', fontSize: 22 }}>

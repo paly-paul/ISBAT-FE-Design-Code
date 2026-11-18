@@ -2212,6 +2212,7 @@ body {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: center 20%;
   display: none
 }
 
@@ -10077,6 +10078,7 @@ body {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: center 20%;
 }
 
 .id-name {
@@ -14055,7 +14057,7 @@ body:has(.drawer-overlay) {
 .filing-photo.drag-active { border-color: var(--b500); background: var(--b50); }
 .filing-photo.has-error { border-color: var(--red); }
 .filing-photo-thumb { width: 72px; height: 88px; flex-shrink: 0; display: grid; place-items: center; overflow: hidden; border-radius: var(--rsm); background: var(--white); border: 1px solid var(--g200); color: var(--g400); font-size: 26px; }
-.filing-photo-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.filing-photo-thumb img { width: 100%; height: 100%; object-fit: cover; object-position: center 20%; }
 .filing-photo-body { flex: 1; min-width: 0; }
 .filing-photo-title { display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; color: var(--g800); }
 .filing-photo-sub { margin-top: 2px; font-size: 12.5px; color: var(--g500); overflow-wrap: anywhere; }
@@ -15029,7 +15031,9 @@ body:has(.drawer-overlay) {
   font-size: 32px; font-weight: 800; letter-spacing: -0.02em;
 }
 .mp-avatar > span:not(.mp-avatar-cam) { display: grid; place-items: center; width: 100%; height: 100%; border-radius: 50%; overflow: hidden; }
-.mp-avatar img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+/* Portraits are taller than the circle: crop from near the top so the face
+   stays in frame instead of centring on the chest. */
+.mp-avatar img { display: block; width: 100%; height: 100%; border-radius: 50%; object-fit: cover; object-position: center 20%; }
 .mp-avatar input[type=file] { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .mp-avatar:focus-within { outline: 2px solid var(--b500); outline-offset: 3px; }
 .mp-avatar-cam {
@@ -17200,7 +17204,7 @@ button.sp-link:hover .sp-link-go { color: var(--b700); transform: translateX(3px
 }
 /* Student photo (StudentAvatar) filling the avatar box. */
 .pcx-avatar, .pc-hero-avatar { overflow: hidden; }
-.pcx-avatar > img, .pc-hero-avatar > img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pcx-avatar > img, .pc-hero-avatar > img { width: 100%; height: 100%; object-fit: cover; object-position: center 20%; display: block; }
 .pcx-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px }
 .pcx-meta-chip {
   display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 999px;

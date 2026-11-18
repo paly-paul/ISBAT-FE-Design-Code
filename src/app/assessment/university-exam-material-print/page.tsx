@@ -511,6 +511,35 @@ export default function UniversityExamMaterialPrintPage() {
           </div>
         </div>
 
+        {/* Combined units only: which paper the QP buttons print and delete. */}
+        {isCombinedUnit && (
+          <div className="px-5 pb-1 -mt-1 flex flex-wrap items-center gap-x-5 gap-y-2" role="radiogroup" aria-label="Question paper type">
+            <span className="lbl mb-0">Paper type <span className="text-red-500">*</span></span>
+            <label className="flex items-center gap-2 text-sm cursor-pointer font-medium text-slate-700">
+              <input
+                type="radio"
+                name="qpTypeRadio"
+                value="theory"
+                checked={qpType === 'theory'}
+                onChange={() => { setQpType('theory'); setValidationError(null) }}
+                disabled={isWorking}
+              />
+              Theory
+            </label>
+            <label className="flex items-center gap-2 text-sm cursor-pointer font-medium text-slate-700">
+              <input
+                type="radio"
+                name="qpTypeRadio"
+                value="practical"
+                checked={qpType === 'practical'}
+                onChange={() => { setQpType('practical'); setValidationError(null) }}
+                disabled={isWorking}
+              />
+              Practical
+            </label>
+          </div>
+        )}
+
         {/* Real Backend API Validation Banner */}
         {validationError && (
           <div className="mx-5 mb-4 p-3.5 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm flex items-center justify-between gap-3">
@@ -550,34 +579,6 @@ export default function UniversityExamMaterialPrintPage() {
                 </p>
               </div>
             </div>
-            {/* Combined units only: which paper the QP buttons print and delete. */}
-            {isCombinedUnit && (
-              <div className="px-5 pt-4 flex flex-wrap items-center gap-x-5 gap-y-2" role="radiogroup" aria-label="Question paper type">
-                <span className="lbl mb-0">Paper type</span>
-                <label className="flex items-center gap-2 text-sm cursor-pointer font-medium text-slate-700">
-                  <input
-                    type="radio"
-                    name="qpTypeRadio"
-                    value="theory"
-                    checked={qpType === 'theory'}
-                    onChange={() => { setQpType('theory'); setValidationError(null) }}
-                    disabled={isWorking}
-                  />
-                  Theory
-                </label>
-                <label className="flex items-center gap-2 text-sm cursor-pointer font-medium text-slate-700">
-                  <input
-                    type="radio"
-                    name="qpTypeRadio"
-                    value="practical"
-                    checked={qpType === 'practical'}
-                    onChange={() => { setQpType('practical'); setValidationError(null) }}
-                    disabled={isWorking}
-                  />
-                  Practical
-                </label>
-              </div>
-            )}
             <div className="p-5 grid grid-cols-2 sm:grid-cols-2 gap-3">
               <button
                 className="flex flex-col items-center justify-center p-4 border rounded-xl gap-2 text-sm font-medium transition-all hover:border-primary hover:text-primary hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-gray-200 disabled:hover:shadow-none disabled:hover:text-gray-700 bg-blue-50 border-blue-100"

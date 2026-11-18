@@ -185,7 +185,7 @@ export function CompleteRegistrationModal({ isOpen, onClose, showToast, applicat
           <div className="vd-hero">
             <div className="vd-avatar overflow-hidden" aria-hidden="true">
               {photoUrl && !photoError ? (
-                <img src={photoUrl} alt="" onError={() => setPhotoError(true)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                <img src={photoUrl} alt="" onError={() => setPhotoError(true)} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 20%' }} />
               ) : (
                 initials
               )}
