@@ -463,7 +463,11 @@ body {
   place-items: center;
   font-size: 11px;
   font-weight: 700;
+  position: relative;
+  overflow: hidden;
 }
+/* Pinned to the 32px circle so a tall portrait can't stretch the grid row. */
+.hdr-avatar img { position: absolute; inset: 0; display: block; }
 
 /* ── HEADER BELL ── */
 .hdr-bell {
@@ -15031,9 +15035,11 @@ body:has(.drawer-overlay) {
   font-size: 32px; font-weight: 800; letter-spacing: -0.02em;
 }
 .mp-avatar > span:not(.mp-avatar-cam) { display: grid; place-items: center; width: 100%; height: 100%; border-radius: 50%; overflow: hidden; }
-/* Portraits are taller than the circle: crop from near the top so the face
-   stays in frame instead of centring on the chest. */
-.mp-avatar img { display: block; width: 100%; height: 100%; border-radius: 50%; object-fit: cover; object-position: center 20%; }
+/* Pinned to the circle: as a grid item its % height resolved against an auto
+   row that grew to the photo's natural height, so tall portraits overflowed
+   as an oval. Crop from near the top so the face stays in frame. The camera
+   badge comes later in the DOM, so it still paints on top. */
+.mp-avatar img { position: absolute; inset: 0; display: block; width: 100%; height: 100%; border-radius: 50%; object-fit: cover; object-position: center 20%; }
 .mp-avatar input[type=file] { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .mp-avatar:focus-within { outline: 2px solid var(--b500); outline-offset: 3px; }
 .mp-avatar-cam {
