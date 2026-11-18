@@ -9,7 +9,7 @@ import { useSearchIntakesInfinite } from '@/hooks/academic/useIntakes'
 import { useSearchCampusesInfinite } from '@/hooks/config/useCampuses'
 import { useKnownCountries, useSearchCountriesInfinite } from '@/hooks/config/useCountries'
 import { countryPickerOptions, phoneCountryOptions } from '@/lib/api/academic/country'
-import { useSearchProgramMastersByCampusInfinite } from '@/hooks/academic/useProgramMaster'
+import { useApprovedProgramsByCampus } from '@/hooks/academic/useProgramMaster'
 import { useEnquirySourceMastersDropdown } from '@/hooks/admission/useEnquirySourceMasters'
 import { useEnquirySourcesDropdown } from '@/hooks/admission/useEnquirySources'
 import { useCreateEnquiry, useEnquiryGenders, useReloadEnquiryDropdowns } from '@/hooks/admission/useEnquiries'
@@ -119,11 +119,13 @@ export default function KioskEnquiryPage() {
 
   const intakeQuery = useSearchIntakesInfinite(committedIntakeSearch, 20, intakePickerOpen)
   const campusQuery = useSearchCampusesInfinite(committedCampusSearch, 20, campusPickerOpen)
-  const programQuery = useSearchProgramMastersByCampusInfinite(campusGuid, committedProgramSearch, 20, programPickerOpen)
+  // Approved programmes only (GET /program-master/dropdown?campusGuid=) — by-campus
+  // also listed ones still pending approval.
+  const programQuery = useApprovedProgramsByCampus(campusGuid, committedProgramSearch, programPickerOpen)
   const countryQuery = useSearchCountriesInfinite(committedCountrySearch, 20, countryPickerOpen || phoneCodePickerOpen)
   const intakes = useMemo(() => flattenUniquePages(intakeQuery.data?.pages ?? [], i => i.intakeGuid), [intakeQuery.data])
   const campuses = useMemo(() => flattenUniquePages(campusQuery.data?.pages ?? [], c => c.campusGuid), [campusQuery.data])
-  const programsByCampus = useMemo(() => flattenUniquePages(programQuery.data?.pages ?? [], p => p.programGuid), [programQuery.data])
+  const programsByCampus = programQuery.data ?? []
   const countries = useMemo(() => flattenUniquePages(countryQuery.data?.pages ?? [], c => c.countryGuid), [countryQuery.data])
   // The default dial-code country and the selected one's label can't rely on
   // the picker's 20-row search page, so they come from this small lookup.
@@ -392,9 +394,6 @@ export default function KioskEnquiryPage() {
               onSearch={setProgramSearch}
               onOpenChange={setProgramPickerOpen}
               isLoading={programQuery.isLoading}
-              hasNextPage={programQuery.hasNextPage}
-              isFetchingNextPage={programQuery.isFetchingNextPage}
-              onLoadMore={() => programQuery.fetchNextPage()}
             />
             {errors.programGuid && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.programGuid}</p>}
           </div>

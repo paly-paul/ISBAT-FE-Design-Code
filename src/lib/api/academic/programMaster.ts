@@ -439,6 +439,25 @@ export function getProgramDropdown(facultyGuid?: string): Promise<ProgramDropdow
     .then((data: any) => Array.isArray(data) ? data : (data && typeof data === 'object' ? (data.items || data.data || Object.values(data).find(Array.isArray) || []) : []))
 }
 
+// GET /api/v1/academic/program-master/dropdown?campusGuid=…&search=…
+// (get-program-dropdown.md): only APPROVED programmes whose faculty belongs
+// to the campus. Unpaged; search matches name and code; an unknown campus is
+// 200 with []. Items carry only guid/code/name — no applicationFee or
+// programLevelName (by-campus has those; Payment/Finance stay on by-campus).
+// Backs the enquiry create pages, so a pending programme can't be enquired on.
+export function getApprovedProgramsByCampus(campusGuid: string, search = ''): Promise<ProgramDropdownItem[]> {
+  const q = search.trim().toLowerCase()
+  if (MOCK_AUTH) {
+    return Promise.resolve(mockProgramMasters
+      .map(p => ({ programGuid: p.programGuid, programCode: p.programCode, programName: p.programName }))
+      .filter(p => !q || `${p.programName} ${p.programCode}`.toLowerCase().includes(q)))
+  }
+  const params = new URLSearchParams({ campusGuid })
+  if (q) params.set('search', search.trim())
+  return apiGet<ProgramDropdownItem[] | null>(`/api/v1/academic/program-master/dropdown?${params.toString()}`)
+    .then(data => Array.isArray(data) ? data : [])
+}
+
 // GET /api/v1/academic/program-master/{programGuid} — per get-program-by-guid.md.
 // Single-record counterpart to getProgramMasters() above: used right after
 // Step 1 of ProgrammeModal's Add-mode wizard creates a programme, to merge
