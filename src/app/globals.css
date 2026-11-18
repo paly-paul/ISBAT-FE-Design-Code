@@ -502,13 +502,20 @@ body {
   height: 16px;
   padding: 0 4px;
   border-radius: 999px;
-  background: linear-gradient(135deg, #f87171, var(--red));
+  /* Solid red under the gradient: the badge's endless scale animation puts it
+     on its own GPU layer, and Chrome (Windows especially) sometimes repaints
+     that layer black after a tab switch / sleep / GPU reset. A solid colour
+     plus a stable, pre-promoted layer keeps it red. */
+  background-color: var(--red);
+  background-image: linear-gradient(135deg, #f87171, var(--red));
   color: #fff;
   font-size: 10px;
   font-weight: 700;
   line-height: 16px;
   text-align: center;
   box-shadow: 0 0 0 1px rgba(239, 68, 68, .25);
+  will-change: transform;
+  backface-visibility: hidden;
 }
 
 /* Breathing/bouncing badge instead of shaking the whole bell — a soft
@@ -526,6 +533,9 @@ body {
   0%, 55%, 100% { transform: scale(1) translateY(0) }
   20% { transform: scale(1.18) translateY(-2px) }
   38% { transform: scale(1) translateY(0) }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hdr-bell.has-unread .hdr-bell-badge { animation: none; }
 }
 
 /* ── HEADER BELL: hover preview dropdown ── */

@@ -8,6 +8,7 @@ import {
   getProgramMasters,
   getProgramMastersPage,
   getProgramDropdown,
+  getApprovedProgramsByCampus,
   getProgramsByGuids,
   getProgramMastersByCampus,
   getProgramMastersByCampusPaged,
@@ -154,6 +155,18 @@ export function useProgramMastersByCampus(campusGuid: string, enabled: boolean) 
     queryKey: [...PROGRAM_MASTERS_KEY, 'byCampus', campusGuid],
     queryFn: () => getProgramMastersByCampus(campusGuid),
     enabled: enabled && !!campusGuid,
+  })
+}
+
+// Approved programmes of one campus (GET /dropdown?campusGuid=). Unpaged, so
+// a plain query; the key includes campus + search, so changing the campus
+// reloads the list. Disabled until a campus is picked.
+export function useApprovedProgramsByCampus(campusGuid: string, search: string, enabled: boolean) {
+  return useQuery({
+    queryKey: [...PROGRAM_MASTERS_KEY, 'dropdown-approved', campusGuid, search],
+    queryFn: () => getApprovedProgramsByCampus(campusGuid, search),
+    enabled: enabled && !!campusGuid,
+    placeholderData: keepPreviousData,
   })
 }
 
