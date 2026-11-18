@@ -725,27 +725,6 @@ export default function QuestionBankUploadPage() {
                   ? 'Question Repository Scope & Filters'
                   : 'Bulk Import Scope & Target'}
               </span>
-              <span
-                className={`badge ${
-                  activeTab === 'repository' ? 'badge-indigo' : 'badge-green'
-                } text-[11px] font-semibold`}
-              >
-                {activeTab === 'repository' ? 'Single Questions Mode' : 'Bulk Excel Mode'}
-              </span>
-            </div>
-
-            <div className="flex items-center gap-2 text-xs">
-              {(loggedInUserName || loggedInUserGuid) && (
-                <span className="flex items-center gap-1.5 bg-slate-50 text-slate-600 px-2.5 py-1 rounded-md border border-slate-200">
-                  <i className="lni lni-user text-indigo-600 text-xs"></i>
-                  <span>
-                    Faculty: <strong className="text-slate-800">{loggedInUserName || 'Current User'}</strong>
-                  </span>
-                </span>
-              )}
-              {currentIntake && (
-                <span className="badge badge-green text-[10px] font-semibold">Active Session</span>
-              )}
             </div>
           </div>
 
@@ -1096,35 +1075,11 @@ export default function QuestionBankUploadPage() {
                           {selectedRepoUnit.courseUnitCode}
                         </span>
                       )}
-                      {selectedRepoCategoryObj && (
-                        <span className="badge badge-purple text-xs">
-                          {selectedRepoCategoryObj.name}
-                        </span>
-                      )}
-                      {isRepoUniversityExam && repoUeTypeInfo && (
-                        <span className={`badge ${
-                          repoUeFilterType === 'THEORY'
-                            ? 'badge-cyan'
-                            : 'badge-amber'
-                        } text-xs font-semibold`}>
-                          {repoUeFilterType === 'THEORY' ? 'Theory' : 'Practical'}
-                        </span>
-                      )}
                     </div>
                     <div className="text-xs text-slate-500 leading-relaxed">
                       Course: <strong className="text-slate-800">{selectedRepoUnit?.courseUnitName || 'Select a course unit'}</strong>
                       {' • '}
                       Intake: <strong className="text-slate-800">{selectedIntake?.intakeCode || 'Active Intake'}</strong>
-                      {isRepoUniversityExam && repoUeTypeInfo && (
-                        <>
-                          {' • '}
-                          <span>Exam Type: <strong className={
-                            repoUeFilterType === 'THEORY'
-                              ? 'text-cyan-700 font-semibold'
-                              : 'text-amber-700 font-semibold'
-                          }>{repoUeFilterType === 'THEORY' ? 'Theory' : 'Practical'}</strong></span>
-                        </>
-                      )}
                     </div>
                   </div>
 
@@ -1472,16 +1427,6 @@ export default function QuestionBankUploadPage() {
                         <div className="card-title mb-0">Upload Questions via Excel (.xlsx)</div>
                         <div className="text-xs text-slate-500">
                           Target: <strong className="text-slate-800 font-mono">{selectedImportUnit?.courseUnitCode || 'Select Course Unit'}</strong>
-                          {' • '}
-                          Category: <strong className="text-slate-800">{selectedImportCategoryObj?.name || 'Select Category'}</strong>
-                          {isImportUniversityExam && effectiveImportUeType !== null && (
-                            <>
-                              {' • '}
-                              <span>Exam Type: <strong className={effectiveImportUeType === 1 ? 'text-amber-700 font-semibold' : 'text-cyan-700 font-semibold'}>
-                                {effectiveImportUeType === 1 ? 'Practical' : 'Theory'}
-                              </strong></span>
-                            </>
-                          )}
                         </div>
                       </div>
                     </div>
