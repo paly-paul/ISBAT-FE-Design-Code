@@ -11,7 +11,8 @@ import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { useProgramFeeStructuresPaged, ProgramFeeStructureHeader } from '@/hooks/academic/useProgramFeeStructure'
-import { useProgramsByGuids } from '@/hooks/academic/useProgramMaster'
+import { useProgramDropdown, useProgramsByGuids } from '@/hooks/academic/useProgramMaster'
+import type { ProgramDropdownItem } from '@/lib/api/academic/programMaster'
 import { useIntakesDropdown } from '@/hooks/academic/useIntakes'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
@@ -34,6 +35,10 @@ export default function Page() {
   const [viewRecord, setViewRecord] = useState<ProgramFeeStructureHeader | null>(null)
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
+  // Picked from the search suggestions: narrows the table to one
+  // programme's fee structures via the list endpoint's ?programGuid=.
+  const [programFilter, setProgramFilter] = useState<ProgramDropdownItem | null>(null)
+  const { data: allPrograms = [] } = useProgramDropdown()
 
   const searchTrimmed = search.trim()
   const activeSearch = searchTrimmed.length >= MIN_SEARCH_CHARS ? searchTrimmed : ''
@@ -41,7 +46,7 @@ export default function Page() {
   // requested for the page on screen (see useProgramFeeStructuresPaged),
   // not the whole table in one 1000-row shot, same conversion Programme
   // Master's own table already went through.
-  const { data, isLoading, isFetching } = useProgramFeeStructuresPaged(page, PAGE_SIZE, activeSearch)
+  const { data, isLoading, isFetching } = useProgramFeeStructuresPaged(page, PAGE_SIZE, activeSearch, programFilter?.programGuid)
   const records = data?.items ?? []
   const totalCount = data?.totalCount ?? 0
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
@@ -80,6 +85,8 @@ export default function Page() {
   // programme comes from a separate by-guids lookup; until it resolves the
   // row is kept, trusting the server's own ?search= match.
   function matchesSearch(r: ProgramFeeStructureHeader) {
+    // Kept client-side too, in case the backend ignores ?programGuid=.
+    if (programFilter && r.programGuid !== programFilter.programGuid) return false
     if (searchTrimmed.length < MIN_SEARCH_CHARS) return true
     const programme = programsByGuid.get(r.programGuid)
     if (!programme && r.programGuid) return true
@@ -88,6 +95,31 @@ export default function Page() {
   }
 
   const searchMatches = searchTrimmed.length >= MIN_SEARCH_CHARS ? records.filter(matchesSearch).slice(0, 8) : []
+
+  // Programmes whose name or code matches — listed first in the suggestions.
+  // Picking one shows every fee structure under it, not just this page's.
+  const programMatches = searchTrimmed.length >= MIN_SEARCH_CHARS && !programFilter
+    ? allPrograms
+      .filter(p => `${p.programName} ${p.programCode}`.toLowerCase().includes(searchTrimmed.toLowerCase()))
+      .slice(0, 5)
+    : []
+
+  const suggestions = [
+    ...programMatches.map(p => ({ id: `prog:${p.programGuid}`, primary: p.programName, secondary: `Programme · ${p.programCode}` })),
+    ...searchMatches.map(r => ({ id: `fee:${r.feeHdGuid}`, primary: r.feeCode, secondary: suggestionSecondary(r) })),
+  ]
+
+  function selectSuggestion(id: string) {
+    if (id.startsWith('prog:')) {
+      const prog = allPrograms.find(p => p.programGuid === id.slice(5))
+      if (prog) { setProgramFilter(prog); setSearch(''); setPage(1) }
+      return
+    }
+    const rec = records.find(x => x.feeHdGuid === id.slice(4))
+    if (rec) openViewModal(rec)
+  }
+
+  function clearProgramFilter() { setProgramFilter(null); setPage(1) }
 
   // Re-filter client-side on top of whatever the server sent back, so
   // results stay correct even if the backend doesn't actually honor
@@ -132,19 +164,24 @@ export default function Page() {
           </div>
         </div>
 
-        <div className="flex justify-end mb-3">
+        <div className="flex flex-wrap items-center justify-end gap-2 mb-3">
+          {programFilter && (
+            <span className="badge badge-blue inline-flex items-center gap-1.5">
+              Programme: {programFilter.programName}
+              <button type="button" onClick={clearProgramFilter} aria-label="Clear programme filter" title="Clear programme filter" className="inline-flex" style={{ background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', color: 'inherit' }}>
+                <i className="lni lni-close" style={{ fontSize: 10 }}></i>
+              </button>
+            </span>
+          )}
           <TableSearch
-            className="w-56"
-            placeholder="Search by fee code, description or programme…"
+            className="w-72"
+            placeholder={programFilter ? 'Search this programme’s fee structures…' : 'Search by fee code, description or programme…'}
             value={search}
             onChange={v => { setSearch(v); setPage(1) }}
-            results={searchMatches.map(r => ({ id: r.feeHdGuid, primary: r.feeCode, secondary: suggestionSecondary(r) }))}
-            loading={searchPending}
+            results={suggestions}
+            loading={searchPending && programMatches.length === 0}
             minChars={MIN_SEARCH_CHARS}
-            onSelect={(r) => {
-              const rec = records.find(x => x.feeHdGuid === r.id)
-              if (rec) openViewModal(rec)
-            }}
+            onSelect={r => selectSuggestion(r.id)}
           />
         </div>
 
@@ -165,7 +202,7 @@ export default function Page() {
               {(isLoading || searchPending)
                 ? <TableLoadingState colSpan={999} />
                 : pageItems.length === 0
-                  ? <EmptyState colSpan={999} hasFilters={!!search} onClearFilters={() => { setSearch(''); setPage(1) }} />
+                  ? <EmptyState colSpan={999} hasFilters={!!search || !!programFilter} onClearFilters={() => { setSearch(''); setProgramFilter(null); setPage(1) }} />
                   : null}
               {!(isLoading || searchPending) && pageItems.map(r => {
                 const programme = programsByGuid.get(r.programGuid)
