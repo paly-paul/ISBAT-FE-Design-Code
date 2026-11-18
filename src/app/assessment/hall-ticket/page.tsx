@@ -7,6 +7,8 @@ import { Pagination } from '@/components/Pagination'
 import { Toast } from '@/components/Toast'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { TableLoadingState } from '@/components/TableLoadingState'
+import { StudentAvatar } from '@/components/StudentAvatar'
+import { useStudent } from '@/hooks/student/useStudents'
 import { useIntakesDropdown } from '@/hooks/academic/useIntakes'
 import { useProgramDropdown } from '@/hooks/academic/useProgramMaster'
 import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
@@ -113,6 +115,9 @@ export default function HallTicketIssuancePage() {
   const [selected, setSelected] = useState<HallTicketSearchResultDto | null>(null)
   const { data: elig, isFetching: checking, isError: eligError, error: eligErr } = useHallTicketEligibility(selected?.studentGuid ?? null, intakeGuid || null, termParam)
   const issue = useIssueHallTicket()
+  // The search row has no photo; the student record (GET /students/{guid})
+  // carries the uploaded one. Initials show until it loads or if it fails.
+  const { data: selectedDetail } = useStudent(selected?.studentGuid ?? null, !!selected)
 
   useEffect(() => {
     issue.reset()
@@ -222,7 +227,7 @@ export default function HallTicketIssuancePage() {
                 <button type="button" className="modal-close" onClick={() => setSelected(null)} aria-label="Close"><i className="lni lni-close"></i></button>
               </div>
               <header className="ht-id">
-                <div className="ht-avatar" aria-hidden="true">{initials(name)}</div>
+                <StudentAvatar className="ht-avatar" photoUrl={selectedDetail?.photoUrl} initials={initials(name)} />
                 <div className="ht-id-main">
                   <div className="ht-name-row">
                     <h2 className="ht-name" id="ht-student-name">{name}</h2>
