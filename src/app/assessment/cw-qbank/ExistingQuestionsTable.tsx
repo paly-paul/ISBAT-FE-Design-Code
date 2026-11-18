@@ -78,34 +78,23 @@ export function ExistingQuestionsTable({
 
   return (
     <div className="card p-5">
-      <div className="flex flex-wrap items-center justify-between pb-3 mb-4 border-b border-slate-100 gap-2">
-        <div>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 mb-4 border-b border-slate-100 gap-3">
+        <div className="flex-1 min-w-0">
           <div className="card-title flex items-center gap-2 mb-1">
             <span className="ctitle-icon">
               <i className="lni lni-library"></i>
             </span>
             <span>Questions Already Uploaded in Bank</span>
-            <span className={`badge ${selectedUeType === 1 ? 'badge-amber' : selectedUeType === 0 ? 'badge-cyan' : 'badge-green'} ml-2 font-bold`}>
-              {questions.length} {selectedUeType === 1 ? 'Practical ' : selectedUeType === 0 ? 'Theory ' : ''}Questions
-            </span>
           </div>
           <div className="text-xs text-slate-500">
             Course Unit: <strong className="text-slate-800 font-mono">{courseUnitCode || 'Selected Unit'}</strong>
             {courseUnitName && <span> — {courseUnitName}</span>}
             {' • '}
-            Category: <strong className="text-slate-800">{categoryName || 'Category'}</strong>
-            {' • '}
             Intake: <strong className="text-slate-800">{intakeCode || 'Active Intake'}</strong>
-            {hasUeTypes && selectedUeType !== undefined && selectedUeType !== null && (
-              <>
-                {' • '}
-                <span>Exam Type: <strong className={selectedUeType === 1 ? 'text-amber-700 font-semibold' : 'text-cyan-700 font-semibold'}>{selectedUeType === 1 ? 'Practical' : 'Theory'}</strong></span>
-              </>
-            )}
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0 ml-auto">
           {canAdd && (
           <button
             type="button"
