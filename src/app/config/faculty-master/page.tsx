@@ -7,13 +7,14 @@ import { TableSearch } from '@/components/TableSearch'
 import { FacultyFormModal } from '@/components/modals/config/FacultyFormModal'
 import { ViewFacultyModal } from '@/components/modals/config/ViewFacultyModal'
 import { Toast } from '@/components/Toast'
-import { FilterTh } from '@/components/FilterTh'
+import { LazyFilterTh } from '@/components/LazyFilterTh'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
-import { usePagination } from '@/hooks/usePagination'
-import { useFaculties, useCreateFaculty, useUpdateFaculty, useDeleteFaculty, Faculty } from '@/hooks/config/useFaculties'
-import { useEmployees } from '@/hooks/employee/useEmployees'
+import { useServerTable } from '@/hooks/useServerTable'
+import { FACULTIES_KEY, useCreateFaculty, useUpdateFaculty, useDeleteFaculty, Faculty } from '@/hooks/config/useFaculties'
+import { getFacultiesPaged } from '@/lib/api/academic/faculty'
+import { useEmployeeDropdown } from '@/hooks/employee/useEmployees'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
@@ -27,27 +28,28 @@ export default function Page() {
   const permissions = usePagePermissions()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
-  const [filters, setFilters] = useState<Record<string, string[]>>({})
   const [openFilter, setOpenFilter] = useState<string | null>(null)
   const [editingFaculty, setEditingFaculty] = useState<Faculty | null>(null)
   const [viewingFaculty, setViewingFaculty] = useState<Faculty | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Faculty | null>(null)
-  const [search, setSearch] = useState('')
 
-  const { data: rows = [], isLoading } = useFaculties()
+  // One page at a time from the server (?page=&pageSize=&search=). The search
+  // box and the Faculty Name filter share the API's one `search` term (it
+  // matches code and name), so using one clears the other.
+  const table = useServerTable({ queryKey: FACULTIES_KEY, fetchPage: getFacultiesPaged, pageSize: PAGE_SIZE, minSearch: MIN_SEARCH_CHARS })
+  const { items: rows, search, setSearch, page, setPage, totalPages, totalCount } = table
+  const isLoading = table.isLoading || table.searchPending
   const createFaculty = useCreateFaculty()
   const updateFaculty = useUpdateFaculty()
   const deleteFaculty = useDeleteFaculty()
 
   // The backend doesn't always resolve deanName for a faculty even when
-  // deanEmployeeGuid is set (seen in the real GET response) — fall back to
-  // resolving it client-side from the employees list already used elsewhere
-  // in this app for dean selection.
-  const { data: employees = [] } = useEmployees()
+  // deanEmployeeGuid is set (seen in the real GET response), so it's looked
+  // up in the employee dropdown (GET /employees/dropdown, approved staff).
+  const { data: employees = [] } = useEmployeeDropdown()
   function deanDisplayName(r: Faculty): string {
     if (r.deanName) return r.deanName
-    const dean = employees.find(e => e.employeeGuid === r.deanEmployeeGuid)
-    return dean ? `${dean.firstName} ${dean.surname}` : '—'
+    return employees.find(e => e.employeeGuid === r.deanEmployeeGuid)?.displayName ?? '—'
   }
 
   function nav(id: string) { router.push('/config/' + id) }
@@ -83,41 +85,26 @@ export default function Page() {
     return () => document.removeEventListener('click', closeFilter)
   }, [])
 
-  // Live preview shown in the search dropdown as the user types — matches
-  // the same code/name test as the table's own search filter below, capped
-  // to a handful of rows.
-  const searchTrimmed = search.trim()
-  const searchMatches = searchTrimmed.length >= MIN_SEARCH_CHARS
-    ? rows.filter(r => `${r.facultyCode} ${r.facultyName}`.toLowerCase().includes(searchTrimmed.toLowerCase())).slice(0, 8)
-    : []
+  // Search-box preview: the first of the server's matches.
+  const searchMatches = search.trim().length >= MIN_SEARCH_CHARS && !table.searchPending ? rows.slice(0, 8) : []
+  const pageItems = table.searchPending ? [] : rows
 
-  const filteredRows = rows.filter(r => {
-    if (searchTrimmed.length >= MIN_SEARCH_CHARS && !`${r.facultyCode} ${r.facultyName}`.toLowerCase().includes(searchTrimmed.toLowerCase())) return false
-    return Object.entries(filters).every(([k, v]) => {
-      if (!v.length) return true
-      const cell = k === 'deanName' ? deanDisplayName(r) : String((r as unknown as Record<string, unknown>)[k])
-      return v.includes(cell)
-    })
-  })
-
-  // No dedicated dean lookup endpoint yet — derive filter options from the
-  // (resolved) deans present in the currently loaded page instead of a
-  // hardcoded list.
-  const deanOptions = Array.from(new Set(rows.map(deanDisplayName).filter(name => name !== '—')))
-
-  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
-
-  function fth(label: string, col: string, opts: string[]) {
+  // Header filter whose options load from the faculty list as you scroll it;
+  // picking one narrows the table on the server. (The Dean filter is gone:
+  // the faculty list API has no way to filter by dean.)
+  function fth(label: string, col: string, toValue: (f: Faculty) => string | null | undefined) {
     return (
-      <FilterTh
+      <LazyFilterTh<Faculty>
         label={label}
-        opts={opts}
         isOpen={openFilter === col}
-        activeFilter={filters[col] ?? []}
-        onToggle={(e) => { e.stopPropagation(); setOpenFilter(p => p === col ? null : col) }}
-        onSelect={(vals) => { setFilters(f => ({ ...f, [col]: vals })); setOpenFilter(null) }}
-        onClear={() => { setFilters(f => ({ ...f, [col]: [] })); setOpenFilter(null) }}
+        onToggle={e => { e.stopPropagation(); setOpenFilter(p => p === col ? null : col) }}
         onClose={() => setOpenFilter(null)}
+        value={table.filter?.column === col ? table.filter.value : null}
+        onSelect={v => { table.setFilter(col, v); setOpenFilter(null) }}
+        onClear={() => { table.setFilter(col, null); setOpenFilter(null) }}
+        queryKey={[...FACULTIES_KEY, 'filter', col]}
+        fetchPage={getFacultiesPaged}
+        toValue={toValue}
       />
     )
   }
@@ -140,18 +127,19 @@ export default function Page() {
                 onChange={setSearch}
                 results={searchMatches.map(r => ({ id: r.facultyGuid, primary: r.facultyCode, secondary: r.facultyName }))}
                 minChars={MIN_SEARCH_CHARS}
+                loading={table.searchPending}
                 onSelect={(res) => { const row = rows.find(x => x.facultyGuid === res.id); if (row) openViewModal(row) }}
               />
             </div>
           </div>
-          <ScrollTable filters={filters} onResetFilters={() => setFilters({})}>
+          <ScrollTable filters={table.filter ? { [table.filter.column]: [table.filter.value] } : {}} onResetFilters={() => table.setFilter('', null)}>
             <table>
-              <thead><tr><th style={{ width: 48 }}></th><th>Faculty Code</th><th>Faculty Name</th><th>Campus</th>{fth('Dean', 'deanName', deanOptions)}{/* <th>Programmes</th> — not returned by GET /api/v1/academic/faculties */}{/* <th>Course Units</th> */}</tr></thead>
+              <thead><tr><th style={{ width: 48 }}></th><th>Faculty Code</th>{fth('Faculty Name', 'facultyName', f => f.facultyName)}<th>Campus</th><th>Dean</th>{/* <th>Programmes</th> — not returned by GET /api/v1/academic/faculties */}{/* <th>Course Units</th> */}</tr></thead>
               <tbody>
                 {isLoading
                   ? <TableLoadingState colSpan={999} />
-                  : filteredRows.length === 0
-                    ? <EmptyState colSpan={999} hasFilters={Object.values(filters).some(v => v.length > 0)} onClearFilters={() => setFilters({})} />
+                  : pageItems.length === 0
+                    ? <EmptyState colSpan={999} hasFilters={!!table.term} onClearFilters={() => setSearch('')} />
                     : null}
                 {/* Previous row markup (pre GET /api/v1/academic/faculties integration) —
                     kept for reference. `id`/`code`/`name`/`dean` are now

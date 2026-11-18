@@ -9,7 +9,7 @@ import {
   updateSponsorCategory,
 } from '@/lib/api/student/sponsor'
 
-const SPONSOR_CATEGORIES_KEY = ['sponsor-categories']
+export const SPONSOR_CATEGORIES_KEY = ['sponsor-categories']
 const SPONSOR_DETAILS_KEY = ['sponsor-details']
 
 export function useSponsorCategories(enabled = true) {

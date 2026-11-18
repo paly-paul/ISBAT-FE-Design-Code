@@ -6,7 +6,7 @@ import { FailurePopup } from '../shared/FailurePopup'
 import { SearchSelect } from '@/components/SearchSelect'
 import { Faculty, FacultyInput } from '@/lib/api/academic/faculty'
 import { useCampusDropdown } from '@/hooks/config/useCampuses'
-import { useEmployees } from '@/hooks/employee/useEmployees'
+import { useEmployeeDropdown } from '@/hooks/employee/useEmployees'
 import { AuthError } from '@/lib/api/client'
 
 interface FacultyFormModalProps extends ModalProps {
@@ -34,8 +34,8 @@ export function FacultyFormModal({ isOpen, onClose, showToast, mode, faculty, cr
   const { data: campusDropdown = [] } = useCampusDropdown(isOpen)
   const campusOptions = campusDropdown.map(c => ({ value: c.campusGuid, label: c.campusName }))
 
-  const { data: employees = [] } = useEmployees(isOpen)
-  const deanOptions = employees.map(e => ({ value: e.employeeGuid, label: `${e.empName} (${e.shortCode})` }))
+  const { data: employees = [] } = useEmployeeDropdown(isOpen)
+  const deanOptions = employees.map(e => ({ value: e.employeeGuid, label: e.displayName }))
 
   useEffect(() => {
     if (!isOpen) return

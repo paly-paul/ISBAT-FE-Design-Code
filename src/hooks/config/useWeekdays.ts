@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createWeekday, deleteWeekday, getWeekdayById, getWeekdays, updateWeekday, Weekday, WeekdayInput } from '@/lib/api/academic/weekday'
 
-const WEEKDAYS_KEY = ['weekdays']
+export const WEEKDAYS_KEY = ['weekdays']
 
 export function useWeekdays() {
   return useQuery({

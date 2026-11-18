@@ -5,14 +5,15 @@ import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
 import { TableSearch } from '@/components/TableSearch'
 import { Toast } from '@/components/Toast'
-import { FilterTh } from '@/components/FilterTh'
+import { LazyFilterTh } from '@/components/LazyFilterTh'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
-import { usePagination } from '@/hooks/usePagination'
+import { useServerTable } from '@/hooks/useServerTable'
 import { CampusFormModal } from '@/components/modals/config/CampusFormModal'
 import { ViewCampusModal } from '@/components/modals/config/ViewCampusModal'
-import { useCampuses, useCampusDropdown, useCreateCampus, useUpdateCampus, useDeleteCampus, Campus } from '@/hooks/config/useCampuses'
+import { CAMPUSES_KEY, useCreateCampus, useUpdateCampus, useDeleteCampus, Campus } from '@/hooks/config/useCampuses'
+import { getCampusesPaged } from '@/lib/api/academic/campus'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
@@ -26,15 +27,17 @@ export default function Page() {
   const permissions = usePagePermissions()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast]           = useState<{ msg: string; type: string } | null>(null)
-  const [filters, setFilters]       = useState<Record<string, string[]>>({})
   const [openFilter, setOpenFilter] = useState<string | null>(null)
   const [editingCampus, setEditingCampus] = useState<Campus | null>(null)
   const [viewingCampus, setViewingCampus] = useState<Campus | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Campus | null>(null)
-  const [search, setSearch] = useState('')
 
-  const { data: rows = [], isLoading } = useCampuses()
-  const { data: campusDropdown = [] } = useCampusDropdown()
+  // One page at a time from the server (?page=&pageSize=&search=). The search
+  // box and the header filters share the API's one `search` term (it matches
+  // code, name and location), so using one clears the other.
+  const table = useServerTable({ queryKey: CAMPUSES_KEY, fetchPage: getCampusesPaged, pageSize: PAGE_SIZE, minSearch: MIN_SEARCH_CHARS })
+  const { items: rows, search, setSearch, page, setPage, totalPages, totalCount } = table
+  const isLoading = table.isLoading || table.searchPending
   const createCampus = useCreateCampus()
   const updateCampus = useUpdateCampus()
   const deleteCampus = useDeleteCampus()
@@ -72,33 +75,25 @@ export default function Page() {
     return () => document.removeEventListener('click', closeFilter)
   }, [])
 
-  // Live preview shown in the search dropdown as the user types — matches
-  // the same code/name test as the table's own search filter below, just
-  // capped to a handful of rows and ignoring the column filters so it always
-  // reflects "what search alone would find".
-  const searchTrimmed = search.trim()
-  const searchMatches = searchTrimmed.length >= MIN_SEARCH_CHARS
-    ? (rows as Campus[]).filter(r => `${r.campusCode} ${r.campusName}`.toLowerCase().includes(searchTrimmed.toLowerCase())).slice(0, 8)
-    : []
+  // Search-box preview: the first of the server's matches.
+  const searchMatches = search.trim().length >= MIN_SEARCH_CHARS && !table.searchPending ? rows.slice(0, 8) : []
+  const pageItems = table.searchPending ? [] : rows
 
-  const filteredRows = (rows as Campus[]).filter((r: Campus) => {
-    if (searchTrimmed.length >= MIN_SEARCH_CHARS && !`${r.campusCode} ${r.campusName}`.toLowerCase().includes(searchTrimmed.toLowerCase())) return false
-    return Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((r as unknown as Record<string, unknown>)[k])))
-  })
-
-  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
-
-  function fth(label: string, col: string, opts: string[]) {
+  // Header filter whose options load from the campus list as you scroll it;
+  // picking one narrows the table on the server.
+  function fth(label: string, col: string, toValue: (c: Campus) => string | null | undefined) {
     return (
-      <FilterTh
+      <LazyFilterTh<Campus>
         label={label}
-        opts={opts}
         isOpen={openFilter === col}
-        activeFilter={filters[col] ?? []}
         onToggle={e => { e.stopPropagation(); setOpenFilter(p => p === col ? null : col) }}
-        onSelect={vals => { setFilters(f => ({ ...f, [col]: vals })); setOpenFilter(null) }}
-        onClear={() => { setFilters(f => ({ ...f, [col]: [] })); setOpenFilter(null) }}
         onClose={() => setOpenFilter(null)}
+        value={table.filter?.column === col ? table.filter.value : null}
+        onSelect={v => { table.setFilter(col, v); setOpenFilter(null) }}
+        onClear={() => { table.setFilter(col, null); setOpenFilter(null) }}
+        queryKey={[...CAMPUSES_KEY, 'filter', col]}
+        fetchPage={getCampusesPaged}
+        toValue={toValue}
       />
     )
   }
@@ -128,18 +123,19 @@ export default function Page() {
                 onChange={setSearch}
                 results={searchMatches.map(r => ({ id: r.campusGuid, primary: r.campusCode, secondary: r.campusName }))}
                 minChars={MIN_SEARCH_CHARS}
-                onSelect={(res) => { const row = (rows as Campus[]).find(x => x.campusGuid === res.id); if (row) openViewModal(row) }}
+                loading={table.searchPending}
+                onSelect={(res) => { const row = rows.find(x => x.campusGuid === res.id); if (row) openViewModal(row) }}
               />
             </div>
           </div>
-          <ScrollTable filters={filters} onResetFilters={() => setFilters({})}>
+          <ScrollTable filters={table.filter ? { [table.filter.column]: [table.filter.value] } : {}} onResetFilters={() => table.setFilter('', null)}>
             <table>
               <thead>
                 <tr>
                   <th style={{ width: 48 }}></th>
                   <th>Campus Code</th>
-                  {fth('Campus Name', 'campusName', campusDropdown.map(c => c.campusName))}
-                  {fth('Location', 'location', ['Kampala', 'Mbarara', 'Gulu'])}
+                  {fth('Campus Name', 'campusName', c => c.campusName)}
+                  {fth('Location', 'location', c => c.location)}
                   <th>Address</th>
                   <th>Contact</th>
                 </tr>
@@ -147,8 +143,8 @@ export default function Page() {
               <tbody>
                 {isLoading
                   ? <TableLoadingState colSpan={999} />
-                  : filteredRows.length === 0
-                    ? <EmptyState colSpan={999} hasFilters={Object.values(filters).some(v => v.length > 0)} onClearFilters={() => setFilters({})} />
+                  : pageItems.length === 0
+                    ? <EmptyState colSpan={999} hasFilters={!!table.term} onClearFilters={() => setSearch('')} />
                     : null}
                 {/* Previous row markup (pre GET /api/v1/academic/campus integration) —
                     kept for reference. Columns are unchanged; only the row key

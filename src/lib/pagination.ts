@@ -23,6 +23,16 @@ export function getNextPageParam<T extends PaginatedItems<unknown>>(
   return allPages.length + 1
 }
 
+// Presents an unpaged dropdown endpoint (one call, server-side ?search=) as
+// the paged fetchPage InfiniteSearchSelect expects: everything on page 1, and
+// a pageSize no result can fill, so getNextPageParam never asks for page 2.
+export function dropdownAsPage<T>(fetchAll: (search: string) => Promise<T[]>) {
+  return (page: number, _pageSize: number, search: string): Promise<PaginatedItems<T>> =>
+    page > 1
+      ? Promise.resolve({ items: [], totalCount: 0 })
+      : fetchAll(search).then(items => ({ items, totalCount: items.length, pageNumber: 1, pageSize: Number.MAX_SAFE_INTEGER }))
+}
+
 export function flattenUniquePages<T>(
   pages: Array<{ items: T[] }>,
   getKey: (item: T) => string,

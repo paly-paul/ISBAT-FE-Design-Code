@@ -114,15 +114,17 @@ export function ModuleAccessMatrix({ module, sections, isGranted, onEdit }: {
                   {verbs.map(v => (
                     <td key={v} className="pm-mx-verb">
                       {!(v in r.cells)
-                        ? <span className="pm-mx-na" aria-label="Not applicable"></span>
+                        ? <span className="pm-mx-na" title={`This page has no ${v} action`}>N/A</span>
                         : r.cells[v]
                           ? <span className={`pm-mx-yes${v === 'Delete' ? ' danger' : ''}`} aria-label={`${v} granted`}><i className="lni lni-checkmark"></i></span>
-                          : <span className="pm-mx-no" aria-label={`${v} not granted`}></span>}
+                          : <span className="pm-mx-no" title={`No ${v.toLowerCase()} access`} aria-label={`No ${v.toLowerCase()} access`}><i className="lni lni-close" aria-hidden="true"></i></span>}
                     </td>
                   ))}
                   {hasOther && (
                     <td>
-                      <GrantList names={r.others.filter(o => o.granted).map(o => o.name)} />
+                      {r.others.some(o => o.granted)
+                        ? <GrantList names={r.others.filter(o => o.granted).map(o => o.name)} />
+                        : <span className="pm-mx-none"><i className="lni lni-lock" aria-hidden="true"></i>No access</span>}
                     </td>
                   )}
                 </tr>

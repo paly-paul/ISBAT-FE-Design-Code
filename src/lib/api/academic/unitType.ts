@@ -1,4 +1,6 @@
 import { apiDelete, apiGet, apiPost, apiPut } from '../client'
+import { getPagedList } from '../pagedList'
+import type { PaginatedItems } from '@/lib/pagination'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
@@ -23,6 +25,11 @@ const mockUnitTypes: UnitType[] = [
 export function getUnitTypes(): Promise<UnitType[]> {
   if (MOCK_AUTH) return Promise.resolve(mockUnitTypes)
   return apiGet<UnitType[] | null>('/api/v1/academic/unit-types').then((data: any) => Array.isArray(data) ? data : (data && typeof data === 'object' ? (data.items || Object.values(data).find(Array.isArray) || []) : []))
+}
+
+// One page for the master table (get-unit-types.md): ?page=&pageSize=&search=.
+export function getUnitTypesPaged(page: number, pageSize: number, search = ''): Promise<PaginatedItems<UnitType>> {
+  return getPagedList<UnitType>('/api/v1/academic/unit-types', page, pageSize, search, { rows: mockUnitTypes, text: r => r.unitTypeName })
 }
 
 // GET /unit-types/dropdown (get-unit-type-dropdown.md). Soft-deleted rows are

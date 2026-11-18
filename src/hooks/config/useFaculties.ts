@@ -1,27 +1,8 @@
 import { useMutation, useQuery, useQueryClient, useInfiniteQuery, useQueries } from '@tanstack/react-query'
-import { Faculty, FacultyInput, createFaculty, deleteFaculty, getFaculties, getFacultiesPaged, getFacultyById, getFacultyDropdown, updateFaculty } from '@/lib/api/academic/faculty'
+import { Faculty, FacultyInput, createFaculty, deleteFaculty, getFacultiesPaged, getFacultyById, getFacultyDropdown, updateFaculty } from '@/lib/api/academic/faculty'
 import { getNextPageParam } from '@/lib/pagination'
 
-const FACULTIES_KEY = ['faculties']
-
-// Load enough rows to cover the full faculty list in one request.
-const FACULTIES_PAGE_SIZE = 1000
-
-// enabled defaults to true so every existing call site keeps eagerly
-// fetching exactly as before — only a caller that shouldn't hit the network
-// until it's actually needed (e.g. a modal that's always mounted regardless
-// of isOpen, or a table column resolver deferred until that modal opens)
-// needs to pass enabled explicitly.
-export function useFaculties(enabled = true) {
-  return useQuery({
-    queryKey: FACULTIES_KEY,
-    queryFn: () => getFaculties(1, FACULTIES_PAGE_SIZE),
-    // Keep the list cached until a mutation invalidates it.
-    staleTime: Infinity,
-    gcTime: Infinity,
-    enabled,
-  })
-}
+export const FACULTIES_KEY = ['faculties']
 
 // Faculties scoped to a campus (or all, when campusGuid is empty) — the
 // lightweight dropdown endpoint, used by cascading filter panels.
@@ -31,8 +12,7 @@ export function useFacultyDropdown(campusGuid: string | null, enabled = true) {
     queryFn: () => getFacultyDropdown(campusGuid ?? undefined),
     staleTime: Infinity,
     gcTime: Infinity,
-    enabled,
-  })
+    enabled })
 }
 
 // Search-as-you-type/scroll picker (2026-09-10), backing FacultySearchPicker
@@ -50,8 +30,7 @@ export function useSearchFacultiesInfinite(search: string, pageSize: number, ena
     getNextPageParam,
     enabled,
     staleTime: Infinity,
-    gcTime: Infinity,
-  })
+    gcTime: Infinity })
 }
 
 // Batched-by-guid lookup — same convention as useCourseUnitsByGuids/
@@ -65,9 +44,7 @@ export function useFacultiesByGuids(guids: string[]) {
       queryKey: [...FACULTIES_KEY, guid],
       queryFn: () => getFacultyById(guid),
       staleTime: Infinity,
-      gcTime: Infinity,
-    })),
-  })
+      gcTime: Infinity })) })
   const byGuid = new Map<string, Faculty>()
   results.forEach((r, i) => { if (r.data) byGuid.set(unique[i], r.data) })
   return byGuid
@@ -77,24 +54,21 @@ export function useCreateFaculty() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (input: FacultyInput) => createFaculty(input),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: FACULTIES_KEY }),
-  })
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: FACULTIES_KEY }) })
 }
 
 export function useUpdateFaculty() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: ({ id, input }: { id: string; input: FacultyInput }) => updateFaculty(id, input),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: FACULTIES_KEY }),
-  })
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: FACULTIES_KEY }) })
 }
 
 export function useDeleteFaculty() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (id: string) => deleteFaculty(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: FACULTIES_KEY }),
-  })
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: FACULTIES_KEY }) })
 }
 
 export type { Faculty, FacultyInput }

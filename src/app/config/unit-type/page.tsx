@@ -7,10 +7,11 @@ import { Toast } from '@/components/Toast'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
-import { usePagination } from '@/hooks/usePagination'
+import { useServerTable } from '@/hooks/useServerTable'
+import { getUnitTypesPaged } from '@/lib/api/academic/unitType'
 import { UnitTypeFormModal } from '@/components/modals/config/UnitTypeFormModal'
 import { ViewUnitTypeModal } from '@/components/modals/config/ViewUnitTypeModal'
-import { useUnitTypes, useCreateUnitType, useUpdateUnitType, useDeleteUnitType, UnitType } from '@/hooks/config/useUnitTypes'
+import { UNIT_TYPES_KEY, useCreateUnitType, useUpdateUnitType, useDeleteUnitType, UnitType } from '@/hooks/config/useUnitTypes'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
@@ -26,23 +27,19 @@ export default function Page() {
   const [editingUnitTypeGuid, setEditingUnitTypeGuid] = useState<string | null>(null)
   const [viewingUnitTypeGuid, setViewingUnitTypeGuid] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<UnitType | null>(null)
-  const [search, setSearch] = useState('')
 
-  const { data: rows = [], isLoading } = useUnitTypes()
+  // One page at a time from the server (?page=&pageSize=&search=), so the
+  // search box narrows the whole list, not just the rows on screen.
+  const table = useServerTable({ queryKey: UNIT_TYPES_KEY, fetchPage: getUnitTypesPaged, pageSize: PAGE_SIZE, minSearch: MIN_SEARCH_CHARS })
+  const { items: rows, search, setSearch, page, setPage, totalPages, totalCount } = table
+  const isLoading = table.isLoading || table.searchPending
   const createUnitType = useCreateUnitType()
   const updateUnitType = useUpdateUnitType()
   const deleteUnitType = useDeleteUnitType()
 
-  const searchTrimmed = search.trim()
-  const searchMatches = searchTrimmed.length >= MIN_SEARCH_CHARS
-    ? rows.filter(r => r.unitTypeName.toLowerCase().includes(searchTrimmed.toLowerCase())).slice(0, 8)
-    : []
-
-  const filteredRows = rows.filter(r =>
-    searchTrimmed.length < MIN_SEARCH_CHARS || r.unitTypeName.toLowerCase().includes(searchTrimmed.toLowerCase())
-  )
-
-  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
+  // Search-box preview: the first of the server's matches.
+  const searchMatches = search.trim().length >= MIN_SEARCH_CHARS && !table.searchPending ? rows.slice(0, 8) : []
+  const pageItems = table.searchPending ? [] : rows
 
   function openModal(id: string)  { setOpenModals(prev => new Set(prev).add(id)) }
   function closeModal(id: string) { setOpenModals(prev => { const s = new Set(prev); s.delete(id); return s }) }
@@ -92,6 +89,7 @@ export default function Page() {
                 onChange={setSearch}
                 results={searchMatches.map(r => ({ id: r.unitTypeGuid, primary: r.unitTypeName }))}
                 minChars={MIN_SEARCH_CHARS}
+                loading={table.searchPending}
                 onSelect={(r) => openViewModal(r.id)}
               />
             </div>
@@ -107,7 +105,7 @@ export default function Page() {
               <tbody>
                 {isLoading
                   ? <TableLoadingState colSpan={999} />
-                  : filteredRows.length === 0
+                  : pageItems.length === 0
                     ? <EmptyState colSpan={999} hasFilters={false} onClearFilters={() => {}} />
                     : null}
                 {pageItems.map((r) => (

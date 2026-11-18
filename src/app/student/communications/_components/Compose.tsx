@@ -5,9 +5,10 @@ import { RichTextEditor, isHtmlEmpty } from '@/components/RichTextEditor'
 import { SearchSelect } from '@/components/SearchSelect'
 import { InfiniteSearchSelect } from '@/components/InfiniteSearchSelect'
 import { AuthError } from '@/lib/api/client'
-import { getCampusesPaged } from '@/lib/api/academic/campus'
-import { getCountriesPaged } from '@/lib/api/academic/country'
-import { getIntakesPaged } from '@/lib/api/academic/intake'
+import { searchCampusDropdown } from '@/lib/api/academic/campus'
+import { getCountriesDropdown } from '@/lib/api/academic/country'
+import { searchIntakesDropdown } from '@/lib/api/academic/intake'
+import { dropdownAsPage } from '@/lib/pagination'
 import { getProgramMastersByCampusPaged, getProgramMastersPage } from '@/lib/api/academic/programMaster'
 import { getSponsorCategories } from '@/lib/api/student/sponsor'
 import { useFacultyDropdown } from '@/hooks/config/useFaculties'
@@ -27,6 +28,12 @@ import {
   useSendBulkEmail,
 } from '@/hooks/student/useBulkEmail'
 import { StudentSearchFilters } from '@/lib/api/student/studentSearch'
+
+// Campus, Intake and Nationality read their dropdown APIs (GET /campus,
+// /intakes, /countries .../dropdown) — one call per search, no paging.
+const campusDropdownPage = dropdownAsPage(searchCampusDropdown)
+const intakeDropdownPage = dropdownAsPage(searchIntakesDropdown)
+const countryDropdownPage = dropdownAsPage(getCountriesDropdown)
 
 const STUDENT_PAGE_SIZE = 25
 // The search API's maximum page size — used for "Select all matching".
@@ -281,7 +288,7 @@ export function Compose({ onCancel, onSent, showToast, allowSend }: Props) {
           <div className="fg"><label className="lbl">Campus</label>
             <InfiniteSearchSelect
               queryKey={['campuses', 'bulk-email']}
-              fetchPage={getCampusesPaged}
+              fetchPage={campusDropdownPage}
               toOption={c => ({ value: c.campusGuid, label: c.campusName })}
               allLabel="All campuses"
               value={form.campusGuid}
@@ -316,7 +323,7 @@ export function Compose({ onCancel, onSent, showToast, allowSend }: Props) {
           <div className="fg"><label className="lbl">Intake</label>
             <InfiniteSearchSelect
               queryKey={['intakes', 'bulk-email']}
-              fetchPage={getIntakesPaged}
+              fetchPage={intakeDropdownPage}
               toOption={i => ({ value: String(i.intakeCode), label: i.description || String(i.intakeCode) })}
               allLabel="All intakes"
               selectedOption={currentIntakeOption}
@@ -339,7 +346,7 @@ export function Compose({ onCancel, onSent, showToast, allowSend }: Props) {
           <div className="fg"><label className="lbl">Nationality</label>
             <InfiniteSearchSelect
               queryKey={['countries', 'bulk-email']}
-              fetchPage={getCountriesPaged}
+              fetchPage={countryDropdownPage}
               toOption={c => ({ value: c.countryGuid, label: c.nationality || c.countryName })}
               allLabel="All nationalities"
               value={form.countryGuid}

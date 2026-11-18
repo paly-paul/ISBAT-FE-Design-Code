@@ -7,7 +7,7 @@ import {
   updateServiceCategory,
 } from '@/lib/api/student/serviceCategories'
 
-const SERVICE_CATEGORIES_KEY = ['service-categories']
+export const SERVICE_CATEGORIES_KEY = ['service-categories']
 
 export function useServiceCategories() {
   return useQuery({

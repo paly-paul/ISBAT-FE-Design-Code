@@ -112,6 +112,22 @@ export function findDefaultCountry(countryList: Array<Country | CountryDropdownI
   }
 }
 
+// A countries/dropdown row in the full Country shape the pickers and
+// findDefaultCountry/dialCode work with. The dropdown has no countryCode, so
+// it's derived from countryPrefix (the dial code) the same way
+// findDefaultCountry does — dialCode() reads countryPrefix first anyway.
+export function countryFromDropdown(dto: CountryDropdownItemDto): Country {
+  const dial = (dto.countryPrefix ?? '').replace(/^\+/, '').replace(/^0+(?=\d)/, '')
+  return {
+    countryGuid: dto.countryGuid,
+    countryCode: dial,
+    countryName: dto.countryName,
+    nationality: dto.nationality,
+    defaultCountry: dto.isDefault ? 1 : 0,
+    countryPrefix: dto.countryPrefix ?? '',
+  }
+}
+
 // Options for a phone dial-code picker whose value is the country's GUID
 // (sent as e.g. mobileCountryGuid), labelled "+256 · Uganda". Built from the
 // picker's current search page; the selected country is kept listed (from

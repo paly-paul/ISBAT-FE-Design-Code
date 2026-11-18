@@ -1,20 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createFollowUpMode, deleteFollowUpMode, FollowUpMode, FollowUpModeInput, getFollowUpModesDropdown, getFollowUpModeById, getFollowUpModes, updateFollowUpMode } from '@/lib/api/admission/followUpMode'
+import { createFollowUpMode, deleteFollowUpMode, FollowUpMode, FollowUpModeInput, getFollowUpModesDropdown, getFollowUpModeById, updateFollowUpMode } from '@/lib/api/admission/followUpMode'
 
-const FOLLOWUP_MODES_KEY = ['followup-modes']
-
-export function useFollowUpModes(enabled = true) {
-  return useQuery({
-    queryKey: FOLLOWUP_MODES_KEY,
-    queryFn: () => getFollowUpModes(),
-    // Never treat the cached list as stale on its own — only refetch when a
-    // mutation (create/update/delete) explicitly invalidates this key below,
-    // instead of on every remount/window focus.
-    staleTime: Infinity,
-    gcTime: Infinity,
-    enabled,
-  })
-}
+export const FOLLOWUP_MODES_KEY = ['followup-modes']
 
 export function useFollowUpModesDropdown(enabled = true) {
   return useQuery({
@@ -22,16 +9,14 @@ export function useFollowUpModesDropdown(enabled = true) {
     queryFn: () => getFollowUpModesDropdown(),
     staleTime: Infinity,
     gcTime: Infinity,
-    enabled,
-  })
+    enabled })
 }
 
 export function useCreateFollowUpMode() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (input: FollowUpModeInput) => createFollowUpMode(input),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: FOLLOWUP_MODES_KEY }),
-  })
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: FOLLOWUP_MODES_KEY }) })
 }
 
 // Fetches a single followup mode for the Edit modal. Only enabled while the
@@ -41,8 +26,7 @@ export function useFollowUpMode(guid: string | null, enabled: boolean) {
   return useQuery({
     queryKey: [...FOLLOWUP_MODES_KEY, guid],
     queryFn: () => getFollowUpModeById(guid as string),
-    enabled: enabled && !!guid,
-  })
+    enabled: enabled && !!guid })
 }
 
 export function useUpdateFollowUpMode() {
@@ -52,16 +36,14 @@ export function useUpdateFollowUpMode() {
     onSuccess: (_data, { guid }) => {
       queryClient.invalidateQueries({ queryKey: FOLLOWUP_MODES_KEY })
       queryClient.invalidateQueries({ queryKey: [...FOLLOWUP_MODES_KEY, guid] })
-    },
-  })
+    } })
 }
 
 export function useDeleteFollowUpMode() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (guid: string) => deleteFollowUpMode(guid),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: FOLLOWUP_MODES_KEY }),
-  })
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: FOLLOWUP_MODES_KEY }) })
 }
 
 export type { FollowUpMode, FollowUpModeInput }
