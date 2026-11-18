@@ -1,6 +1,7 @@
 'use client'
 import { Dispatch, SetStateAction, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useMenu } from '@/hooks/users/useMenu'
 import { MenuNode } from '@/lib/api/users/menu'
 
@@ -149,6 +150,7 @@ function getItemDisplayName(item: MenuNode): string {
 export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSections, toggleCollapse, activeRail, setActiveRail }: SidebarProps) {
   const [menuSearch, setMenuSearch] = useState('')
   const { data, isLoading, isError, refetch } = useMenu()
+  const router = useRouter()
   const menu = data?.menu
 
   // At ≤900px the panel lies over the page instead of pushing it aside (see
@@ -212,8 +214,19 @@ export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSection
       // With ~15-20 items visible in one module's panel at once, that's the
       // same burst-of-requests problem the removed router.prefetch() loop
       // caused, just coming from Link's own built-in behavior instead. Only
-      // the item the user actually points at needs warming.
-      <Link key={href} href={href} prefetch={false} className={`sb-item${currentPage === id ? ' active' : ''}`}>
+      // the item the user actually points at needs warming: prefetch={false}
+      // also turns off Link's hover prefetch in the App Router, so it's done
+      // here — one request for the hovered/focused item, deduped by the
+      // router. That makes the click (a cross-module one especially, which
+      // swaps the whole layout) start from a warm route instead of a cold one.
+      <Link
+        key={href}
+        href={href}
+        prefetch={false}
+        onMouseEnter={() => router.prefetch(href)}
+        onFocus={() => router.prefetch(href)}
+        className={`sb-item${currentPage === id ? ' active' : ''}`}
+      >
         <span className="sb-icon"><i className={iconClass}></i></span>
         {displayName}
       </Link>

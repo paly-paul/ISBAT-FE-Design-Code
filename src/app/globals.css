@@ -16973,7 +16973,11 @@ button.sp-link:hover .sp-link-go { color: var(--b700); transform: translateX(3px
   color: var(--b800);
   background: var(--b50);
   border: 1.5px solid var(--b200);
+  position: relative;
+  overflow: hidden;
 }
+/* Pinned to the circle so a tall portrait can't stretch the grid row. */
+.ht-avatar > img { position: absolute; inset: 0; display: block; width: 100%; height: 100%; object-fit: cover; object-position: center 20%; }
 
 .ht-id-main { flex: 1; min-width: 0 }
 

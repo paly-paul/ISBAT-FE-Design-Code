@@ -91,6 +91,15 @@ function localPartsToUtc(date: string, time: string) {
 }
 
 // yyyy-mm-dd → "16 Oct 2026"
+// A resit exam has ended once its date + end time (local, as entered) is in
+// the past. Ended exams can't be rescheduled — view only.
+const RESIT_ENDED_MSG = 'This resit exam has already ended and cannot be rescheduled.'
+function resitExamEnded(examDate: string | null | undefined, endTime: string | null | undefined) {
+  if (!examDate || !endTime) return false
+  const end = new Date(`${examDate.slice(0, 10)}T${endTime.slice(0, 5)}:00`)
+  return !isNaN(end.getTime()) && end.getTime() < Date.now()
+}
+
 function fmtDate(day: string | null | undefined) {
   if (!day) return '—'
   const d = new Date(`${day.slice(0, 10)}T00:00:00`)
@@ -561,7 +570,11 @@ function ExamTab({ readOnly, readOnlyReason, units, unitsLoading, showToast, onF
             ) : items.length === 0 ? (
               <EmptyState colSpan={11} hasFilters={!!search} onClearFilters={doClear} />
             ) : (
-              items.map(s => (
+              items.map(s => {
+                const ended = resitExamEnded(s.examDate, s.endTime)
+                const viewOnly = readOnly || !permissions.edit || ended
+                const actionLabel = viewOnly ? 'View' : 'Edit'
+                return (
                 <tr key={s.resitScheduleGuid}>
                   <td className="font-mono text-slate-700">{s.unitCode}</td>
                   <td>{s.unitName}</td>
@@ -581,14 +594,15 @@ function ExamTab({ readOnly, readOnlyReason, units, unitsLoading, showToast, onF
                     <button
                       className="btn btn-neu btn-sm"
                       onClick={() => setDrawer({ mode: 'edit', guid: s.resitScheduleGuid })}
-                      title={readOnly || !permissions.edit ? 'View' : 'Edit'}
-                      aria-label={`${readOnly || !permissions.edit ? 'View' : 'Edit'} ${s.unitCode} ${s.ueType === 1 ? 'Practical' : 'Theory'}`}
+                      title={ended && !readOnly && permissions.edit ? 'Resit has ended — view only' : actionLabel}
+                      aria-label={`${actionLabel} ${s.unitCode} ${s.ueType === 1 ? 'Practical' : 'Theory'}`}
                     >
-                      <i className={`lni ${readOnly || !permissions.edit ? 'lni-eye' : 'lni-pencil'}`}></i>
+                      <i className={`lni ${viewOnly ? 'lni-eye' : 'lni-pencil'}`}></i>
                     </button>
                   </td>
                 </tr>
-              ))
+                )
+              })
             )}
           </tbody>
         </table>
@@ -655,7 +669,7 @@ function validateExam(f: ExamForm, isAdd: boolean): string[] {
   return out
 }
 
-function ExamScheduleDrawer({ mode, guid, readOnly, readOnlyReason, units, unitsLoading, onClose, onSaved, onStale, onConflict, onForbidden, onDirtyChange }: {
+function ExamScheduleDrawer({ mode, guid, readOnly: readOnlyProp, readOnlyReason: readOnlyReasonProp, units, unitsLoading, onClose, onSaved, onStale, onConflict, onForbidden, onDirtyChange }: {
   mode: 'add' | 'edit'
   guid: string | null
   readOnly: boolean
@@ -675,6 +689,11 @@ function ExamScheduleDrawer({ mode, guid, readOnly, readOnlyReason, units, units
   const createMut = useCreateResitSchedule()
   const updateMut = useUpdateResitSchedule()
   const saving = createMut.isPending || updateMut.isPending
+
+  // Ended (date + end time passed, per the saved schedule): view only.
+  const ended = !isAdd && !!detail && resitExamEnded(detail.examDate, detail.endTime)
+  const readOnly = readOnlyProp || ended
+  const readOnlyReason = ended ? RESIT_ENDED_MSG : readOnlyReasonProp
 
   const [form, setForm] = useState<ExamForm>(EXAM_DEFAULTS)
   const [baseline, setBaseline] = useState<ExamForm>(EXAM_DEFAULTS)
@@ -756,7 +775,9 @@ function ExamScheduleDrawer({ mode, guid, readOnly, readOnlyReason, units, units
   }
 
   function handleSave() {
-    if (readOnly || saving) return
+    if (saving) return
+    if (ended) return showErrors([RESIT_ENDED_MSG])
+    if (readOnly) return
     const invalid = validateExam(form, isAdd)
     if (invalid.length) return showErrors(invalid)
     setErrors([])

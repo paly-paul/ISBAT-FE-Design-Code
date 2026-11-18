@@ -1,5 +1,5 @@
 'use client'
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { FeeStructureModal } from '@/components/modals/academic/FeeStructureModal'
 import { ViewFeeStructureModal } from '@/components/modals/academic/ViewFeeStructureModal'
@@ -76,20 +76,28 @@ export default function Page() {
   // MIN_SEARCH_CHARS, matching TableSearch's own minChars gate on when the
   // dropdown is even allowed to open. Same "reflects the current page only"
   // trade-off Programme Master's own search preview accepted.
-  const searchMatches = useMemo(
-    () => searchTrimmed.length >= MIN_SEARCH_CHARS
-      ? records.filter(r => `${r.feeCode} ${r.feeDesc}`.toLowerCase().includes(searchTrimmed.toLowerCase())).slice(0, 8)
-      : [],
-    [records, searchTrimmed],
-  )
+  // Matches fee code, description, and the programme's name and code. The
+  // programme comes from a separate by-guids lookup; until it resolves the
+  // row is kept, trusting the server's own ?search= match.
+  function matchesSearch(r: ProgramFeeStructureHeader) {
+    if (searchTrimmed.length < MIN_SEARCH_CHARS) return true
+    const programme = programsByGuid.get(r.programGuid)
+    if (!programme && r.programGuid) return true
+    const haystack = `${r.feeCode} ${r.feeDesc} ${programme?.programName ?? ''} ${programme?.programCode ?? ''}`
+    return haystack.toLowerCase().includes(searchTrimmed.toLowerCase())
+  }
+
+  const searchMatches = searchTrimmed.length >= MIN_SEARCH_CHARS ? records.filter(matchesSearch).slice(0, 8) : []
 
   // Re-filter client-side on top of whatever the server sent back, so
   // results stay correct even if the backend doesn't actually honor
   // ?search= (see the note on getProgramFeeStructures).
-  const pageItems = useMemo(
-    () => records.filter(r => searchTrimmed.length < MIN_SEARCH_CHARS || `${r.feeCode} ${r.feeDesc}`.toLowerCase().includes(searchTrimmed.toLowerCase())),
-    [records, searchTrimmed],
-  )
+  const pageItems = records.filter(matchesSearch)
+
+  function suggestionSecondary(r: ProgramFeeStructureHeader) {
+    const programme = programsByGuid.get(r.programGuid)
+    return programme ? `${r.feeDesc} · ${programme.programName}` : r.feeDesc
+  }
 
   // Intake column — the dropdown carries every intake's code in one cached
   // request, and there's no by-guids endpoint for intakes.
@@ -127,10 +135,10 @@ export default function Page() {
         <div className="flex justify-end mb-3">
           <TableSearch
             className="w-56"
-            placeholder="Search by fee code or description…"
+            placeholder="Search by fee code, description or programme…"
             value={search}
             onChange={v => { setSearch(v); setPage(1) }}
-            results={searchMatches.map(r => ({ id: r.feeHdGuid, primary: r.feeCode, secondary: r.feeDesc }))}
+            results={searchMatches.map(r => ({ id: r.feeHdGuid, primary: r.feeCode, secondary: suggestionSecondary(r) }))}
             loading={searchPending}
             minChars={MIN_SEARCH_CHARS}
             onSelect={(r) => {
