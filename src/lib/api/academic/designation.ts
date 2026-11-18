@@ -1,4 +1,6 @@
 import { apiDelete, apiGet, apiPost, apiPut } from '../client'
+import { getPagedList } from '../pagedList'
+import type { PaginatedItems } from '@/lib/pagination'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
@@ -42,6 +44,9 @@ export interface Designation {
   intDesignation: number
   designationName: string
   intDept: number
+  // GUID of the same department as intDept (get-designations.md, 2026-10-15)
+  // — no department name either; resolve it via departments/dropdown.
+  deptGuid?: string | null
 }
 
 // Payload used when creating or updating a designation.
@@ -71,18 +76,14 @@ export function getDesignations(page = 1, pageSize = 10): Promise<Designation[]>
   return apiGet<DesignationListResponse | null>(`/api/v1/users/designations?page=${page}&pageSize=${pageSize}`).then(data => data?.items ?? [])
 }
 
-// Same list endpoint, envelope kept intact — backs a server-paginated
-// infinite-scroll picker (useSearchDesignationsInfinite) in place of loading
-// the whole list in one eager fetch. get-designations.md documents no
-// `search` param and no department-filter param either, so this can't be
-// narrowed server-side by either text or department — only page/pageSize.
-export function getDesignationsPaged(page = 1, pageSize = 20): Promise<DesignationListResponse> {
-  if (MOCK_AUTH) {
-    const start = (page - 1) * pageSize
-    return Promise.resolve({ items: mockDesignations.slice(start, start + pageSize), totalCount: mockDesignations.length, pageNumber: page, pageSize })
-  }
-  return apiGet<DesignationListResponse | null>(`/api/v1/users/designations?page=${page}&pageSize=${pageSize}`)
-    .then(data => data ?? { items: [], totalCount: 0, pageNumber: page, pageSize })
+// Same list endpoint, one page at a time (get-designations.md): ?page=
+// &pageSize=&search=, search matching the designation name. There's no
+// department filter param.
+export function getDesignationsPaged(page = 1, pageSize = 20, search = ''): Promise<PaginatedItems<Designation>> {
+  return getPagedList<Designation>('/api/v1/users/designations', page, pageSize, search, {
+    rows: mockDesignations.map(d => ({ ...d, deptGuid: mockDeptGuidByInt[d.intDept] ?? null })),
+    text: r => r.designationName,
+  })
 }
 
 // Picker shape from GET /api/v1/users/designations/dropdown

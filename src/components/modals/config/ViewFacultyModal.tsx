@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { ModalProps } from '../types'
 import { Faculty } from '@/lib/api/academic/faculty'
 import { useCampusDropdown } from '@/hooks/config/useCampuses'
-import { useEmployees } from '@/hooks/employee/useEmployees'
+import { useEmployeeDropdown } from '@/hooks/employee/useEmployees'
 
 interface ViewFacultyModalProps extends ModalProps {
   faculty: Faculty | null
@@ -19,8 +19,8 @@ export function ViewFacultyModal({ isOpen, onClose, faculty, onEdit }: ViewFacul
   const { data: campusDropdown = [] } = useCampusDropdown(isOpen)
   const campusOptions = campusDropdown.map(c => ({ value: c.campusGuid, label: c.campusName }))
 
-  const { data: employees = [] } = useEmployees(isOpen)
-  const deanOptions = employees.map(e => ({ value: e.employeeGuid, label: `${e.empName} (${e.shortCode})` }))
+  const { data: employees = [] } = useEmployeeDropdown(isOpen)
+  const deanOptions = employees.map(e => ({ value: e.employeeGuid, label: e.displayName }))
 
   useEffect(() => {
     if (isOpen && faculty) {

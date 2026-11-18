@@ -8,10 +8,11 @@ import { Toast } from '@/components/Toast'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
-import { usePagination } from '@/hooks/usePagination'
+import { useServerTable } from '@/hooks/useServerTable'
+import { getEnquirySourcesPaged } from '@/lib/api/admission/enquirySource'
 import { EnquirySourceFormModal } from '@/components/modals/config/EnquirySourceFormModal'
 import { ViewEnquirySourceModal } from '@/components/modals/config/ViewEnquirySourceModal'
-import { useEnquirySources, useCreateEnquirySource, useUpdateEnquirySource, useDeleteEnquirySource, EnquirySource } from '@/hooks/admission/useEnquirySources'
+import { ENQUIRY_SOURCES_KEY, useCreateEnquirySource, useUpdateEnquirySource, useDeleteEnquirySource, EnquirySource } from '@/hooks/admission/useEnquirySources'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
@@ -28,25 +29,19 @@ export default function Page() {
   const [editingSourceGuid, setEditingSourceGuid] = useState<string | null>(null)
   const [viewingSourceGuid, setViewingSourceGuid] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<EnquirySource | null>(null)
-  const [search, setSearch] = useState('')
 
-  const { data: rows = [], isLoading } = useEnquirySources()
+  // One page at a time from the server (?page=&pageSize=&search=), so the
+  // search box narrows the whole list, not just the rows on screen.
+  const table = useServerTable({ queryKey: ENQUIRY_SOURCES_KEY, fetchPage: getEnquirySourcesPaged, pageSize: PAGE_SIZE, minSearch: MIN_SEARCH_CHARS })
+  const { items: rows, search, setSearch, page, setPage, totalPages, totalCount } = table
+  const isLoading = table.isLoading || table.searchPending
   const createEnquirySource = useCreateEnquirySource()
   const updateEnquirySource = useUpdateEnquirySource()
   const deleteEnquirySource = useDeleteEnquirySource()
 
-  // Live preview shown in the search dropdown as the user types — matches
-  // the same source-name test as the table's own search filter below.
-  const searchTrimmed = search.trim()
-  const searchMatches = searchTrimmed.length >= MIN_SEARCH_CHARS
-    ? rows.filter(r => r.sourceName.toLowerCase().includes(searchTrimmed.toLowerCase())).slice(0, 8)
-    : []
-
-  const filteredRows = rows.filter(r =>
-    searchTrimmed.length < MIN_SEARCH_CHARS || r.sourceName.toLowerCase().includes(searchTrimmed.toLowerCase())
-  )
-
-  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
+  // Search-box preview: the first of the server's matches.
+  const searchMatches = search.trim().length >= MIN_SEARCH_CHARS && !table.searchPending ? rows.slice(0, 8) : []
+  const pageItems = table.searchPending ? [] : rows
 
   function nav(id: string) { router.push('/config/' + id) }
   function openModal(id: string)  { setOpenModals(prev => new Set(prev).add(id)) }
@@ -97,6 +92,7 @@ export default function Page() {
                 onChange={setSearch}
                 results={searchMatches.map(r => ({ id: r.isbatSourceGuid, primary: r.sourceName }))}
                 minChars={MIN_SEARCH_CHARS}
+                loading={table.searchPending}
                 onSelect={(r) => openViewModal(r.id)}
               />
             </div>
@@ -112,7 +108,7 @@ export default function Page() {
               <tbody>
                 {isLoading
                   ? <TableLoadingState colSpan={999} />
-                  : filteredRows.length === 0
+                  : pageItems.length === 0
                     ? <EmptyState colSpan={999} hasFilters={false} onClearFilters={() => {}} />
                     : null}
                 {pageItems.map((r) => (

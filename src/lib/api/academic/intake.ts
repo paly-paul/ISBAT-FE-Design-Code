@@ -523,3 +523,16 @@ export function getIntakesDropdown(): Promise<IntakeDropdownItem[]> {
   }
   return apiGet<IntakeDropdownItem[] | null>('/api/v1/academic/intakes/dropdown').then(data => data || [])
 }
+
+// Same endpoint with its optional ?search= (get-intakes-dropdown.md: contains-
+// match on code and description). For InfiniteSearchSelect pickers, via
+// dropdownAsPage. getIntakesDropdown stays argument-free — it's passed straight
+// to useQuery as queryFn, which would hand it the query context.
+export function searchIntakesDropdown(search = ''): Promise<IntakeDropdownItem[]> {
+  const q = search.trim()
+  if (MOCK_AUTH) {
+    return getIntakesDropdown().then(rows => rows.filter(i => !q || `${i.intakeCode} ${i.description}`.toLowerCase().includes(q.toLowerCase())))
+  }
+  const url = q ? `/api/v1/academic/intakes/dropdown?search=${encodeURIComponent(q)}` : '/api/v1/academic/intakes/dropdown'
+  return apiGet<IntakeDropdownItem[] | null>(url).then(data => data || [])
+}

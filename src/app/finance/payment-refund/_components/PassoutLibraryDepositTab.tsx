@@ -12,10 +12,10 @@ import {
   BulkRefundLineInput,
   BulkRefundLineResultDto,
 } from '@/hooks/finance/usePaymentRefund'
-import { useSearchCampusesInfinite } from '@/hooks/config/useCampuses'
+import { useCampusDropdown } from '@/hooks/config/useCampuses'
 import { useSearchProgramMastersInfinite, useSearchProgramMastersByCampusInfinite } from '@/hooks/academic/useProgramMaster'
 import { useFilteredBatches } from '@/hooks/academic/useBatches'
-import { useSearchIntakesInfinite } from '@/hooks/academic/useIntakes'
+import { useIntakesDropdown } from '@/hooks/academic/useIntakes'
 import { flattenUniquePages } from '@/lib/pagination'
 import { AuthError } from '@/lib/api/client'
 import { fmtAmt, RefundStudentCard, todayYmd } from './shared'
@@ -194,17 +194,15 @@ export function PassoutLibraryDepositTab({ showToast, permissionsCreate, useMock
   const [batchGuid, setBatchGuid] = useState('')
   const [campusGuid, setCampusGuid] = useState('')
   const [batchSearch, setBatchSearch] = useState('')
-  const [intakeSearch, setIntakeSearch] = useState('')
   const [programSearch, setProgramSearch] = useState('')
-  const [campusSearch, setCampusSearch] = useState('')
-  const [intakePickerOpen, setIntakePickerOpen] = useState(false)
   const [programPickerOpen, setProgramPickerOpen] = useState(false)
-  const [campusPickerOpen, setCampusPickerOpen] = useState(false)
-  const [selectedLabels, setSelectedLabels] = useState({ intake: '', program: '', batch: '', campus: '' })
+  const [selectedLabels, setSelectedLabels] = useState({ program: '', batch: '' })
   const [page, setPage] = useState(1)
 
-  const intakeQuery = useSearchIntakesInfinite(intakeSearch, 20, intakePickerOpen)
-  const campusQuery = useSearchCampusesInfinite(campusSearch, 20, campusPickerOpen)
+  // Intake and Campus from their dropdown APIs (GET /intakes/dropdown,
+  // /campus/dropdown): one cached call each, filtered in the browser.
+  const { data: intakes = [], isLoading: intakesLoading } = useIntakesDropdown()
+  const { data: campuses = [], isLoading: campusesLoading } = useCampusDropdown()
   // Programme is scoped to whichever Campus is currently picked — same
   // cascading-dropdown convention Application Payment uses (see
   // useProgramMastersByCampus's own comment). Falls back to the unscoped
@@ -212,7 +210,6 @@ export function PassoutLibraryDepositTab({ showToast, permissionsCreate, useMock
   // filtering by Programme first if they want to.
   const programByCampusQuery = useSearchProgramMastersByCampusInfinite(campusGuid, programSearch, 20, programPickerOpen && !!campusGuid)
   const programAllQuery = useSearchProgramMastersInfinite(programSearch, 20, programPickerOpen && !campusGuid)
-  const intakes = useMemo(() => flattenUniquePages(intakeQuery.data?.pages ?? [], i => i.intakeGuid), [intakeQuery.data])
   const programsByCampus = useMemo(() => flattenUniquePages(programByCampusQuery.data?.pages ?? [], p => p.programGuid), [programByCampusQuery.data])
   const programsAll = useMemo(() => flattenUniquePages(programAllQuery.data?.pages ?? [], p => p.programGuid), [programAllQuery.data])
   const programs = campusGuid ? programsByCampus : programsAll
@@ -220,7 +217,6 @@ export function PassoutLibraryDepositTab({ showToast, permissionsCreate, useMock
   // only its own isLoading/hasNextPage/fetchNextPage should drive the
   // dropdown's own loading/scroll state.
   const programQuery = campusGuid ? programByCampusQuery : programAllQuery
-  const campuses = useMemo(() => flattenUniquePages(campusQuery.data?.pages ?? [], c => c.campusGuid), [campusQuery.data])
   // GET /batches lists one intake at a time and defaults to the current
   // admission intake, so the picked intake/campus is passed through — passout
   // students are mostly in older intakes' batches. The server narrows to the
@@ -292,14 +288,14 @@ export function PassoutLibraryDepositTab({ showToast, permissionsCreate, useMock
   function clearFilters() {
     updateFilters(() => {
       setIntakeGuid(''); setCampusGuid(''); setProgramGuid(''); setBatchGuid('')
-      setSelectedLabels({ intake: '', program: '', batch: '', campus: '' })
+      setSelectedLabels({ program: '', batch: '' })
     })
   }
 
-  const intakeOptions = pinSelected(intakes.map(i => ({ value: i.intakeGuid, label: `${i.month} ${i.financialYear}` })), intakeGuid, selectedLabels.intake)
+  const intakeOptions = intakes.map(i => ({ value: i.intakeGuid, label: i.description ? `${i.description} (${i.intakeCode})` : String(i.intakeCode) }))
   const programOptions = pinSelected(programs.map(p => ({ value: p.programGuid, label: p.programName })), programGuid, selectedLabels.program)
   const batchOptions = pinSelected(batches.map(b => ({ value: b.batchGuid, label: b.batchCode })), batchGuid, selectedLabels.batch)
-  const campusOptions = pinSelected(campuses.map(c => ({ value: c.campusGuid, label: c.campusName })), campusGuid, selectedLabels.campus)
+  const campusOptions = campuses.map(c => ({ value: c.campusGuid, label: c.campusName }))
 
   // Bumped after a mock submit to force a re-render — the mock helpers
   // mutate MOCK_PASSOUT_STUDENTS' embedded ledger arrays in place, which
@@ -599,17 +595,8 @@ export function PassoutLibraryDepositTab({ showToast, permissionsCreate, useMock
               placeholder="All intakes"
               options={intakeOptions}
               value={intakeGuid}
-              onChange={v => updateFilters(() => {
-                setIntakeGuid(v)
-                const intake = intakes.find(i => i.intakeGuid === v)
-                if (intake) setSelectedLabels(prev => ({ ...prev, intake: `${intake.month} ${intake.financialYear}` }))
-              })}
-              onSearch={setIntakeSearch}
-              onOpenChange={setIntakePickerOpen}
-              isLoading={intakeQuery.isLoading}
-              hasNextPage={intakeQuery.hasNextPage}
-              isFetchingNextPage={intakeQuery.isFetchingNextPage}
-              onLoadMore={() => intakeQuery.fetchNextPage()}
+              onChange={v => updateFilters(() => setIntakeGuid(v))}
+              isLoading={intakesLoading}
             />
           </div>
           <div className="fg" style={{ marginBottom: 0 }}>
@@ -620,8 +607,7 @@ export function PassoutLibraryDepositTab({ showToast, permissionsCreate, useMock
               value={campusGuid}
               onChange={v => updateFilters(() => {
                 setCampusGuid(v)
-                const campus = campuses.find(c => c.campusGuid === v)
-                setSelectedLabels(prev => ({ ...prev, campus: campus?.campusName ?? '', program: '', batch: '' }))
+                setSelectedLabels({ program: '', batch: '' })
                 // Cascade reset — a Programme (and its own downstream Batch)
                 // picked under the old Campus may not exist under the new
                 // one, so both clear rather than silently keep filtering by
@@ -629,12 +615,7 @@ export function PassoutLibraryDepositTab({ showToast, permissionsCreate, useMock
                 setProgramGuid('')
                 setBatchGuid('')
               })}
-              onSearch={setCampusSearch}
-              onOpenChange={setCampusPickerOpen}
-              isLoading={campusQuery.isLoading}
-              hasNextPage={campusQuery.hasNextPage}
-              isFetchingNextPage={campusQuery.isFetchingNextPage}
-              onLoadMore={() => campusQuery.fetchNextPage()}
+              isLoading={campusesLoading}
             />
           </div>
           <div className="fg" style={{ marginBottom: 0 }}>

@@ -1,13 +1,13 @@
 'use client'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { SearchSelect } from '@/components/SearchSelect'
 import DatePicker from '@/components/DatePicker'
 import { SuccessPopup } from '@/components/modals/shared/SuccessPopup'
 import { FailurePopup } from '@/components/modals/shared/FailurePopup'
-import { useSearchIntakesInfinite } from '@/hooks/academic/useIntakes'
-import { useSearchCampusesInfinite } from '@/hooks/config/useCampuses'
-import { useKnownCountries, useSearchCountriesInfinite } from '@/hooks/config/useCountries'
+import { useCurrentAdmissionIntake } from '@/hooks/academic/useIntakes'
+import { useCampusDropdown } from '@/hooks/config/useCampuses'
+import { useCountriesForPicker } from '@/hooks/config/useCountries'
 import { countryPickerOptions, phoneCountryOptions } from '@/lib/api/academic/country'
 import { useApprovedProgramsByCampus } from '@/hooks/academic/useProgramMaster'
 import { useEnquirySourceMastersDropdown } from '@/hooks/admission/useEnquirySourceMasters'
@@ -18,7 +18,6 @@ import { EnquirySponsorFields, EMPTY_SPONSOR, SponsorValues, sponsorErrorField, 
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { AuthError } from '@/lib/api/client'
 import { ENQUIRY_NAME_MESSAGE, isValidEnquiryName, sanitizeNameInput } from '@/lib/errorMessages'
-import { flattenUniquePages } from '@/lib/pagination'
 import { scrollToFirstError } from '@/lib/scrollToFirstError'
 import { formatLongYmd, isWithinRecentWindow, monthsAgoYmd, RECENT_DATE_MONTHS, todayYmd, yearsAgoYmd } from '@/lib/date'
 
@@ -80,7 +79,6 @@ export default function KioskEnquiryPage() {
   const [email, setEmail]         = useState('')
   const [dob, setDob]             = useState('')
   const [enquiryDate, setEnquiryDate] = useState(() => todayAtMidnight().slice(0, 10))
-  const [intakeGuid, setIntakeGuid]   = useState('')
   const [campusGuid, setCampusGuid]   = useState('')
   const [programGuid, setProgramGuid] = useState('')
   const [sourceGuid, setSourceGuid]   = useState('')
@@ -98,38 +96,26 @@ export default function KioskEnquiryPage() {
   // const [enquiryTag, setEnquiryTag] = useState('')
   const [sponsor, setSponsor] = useState<SponsorValues>(EMPTY_SPONSOR)
   const [errors, setErrors]       = useState<Record<string, string>>({})
-  const [intakeSearch, setIntakeSearch] = useState('')
-  const [campusSearch, setCampusSearch] = useState('')
   const [programSearch, setProgramSearch] = useState('')
-  const [countrySearch, setCountrySearch] = useState('')
-  const [committedIntakeSearch, setCommittedIntakeSearch] = useState('')
-  const [committedCampusSearch, setCommittedCampusSearch] = useState('')
   const [committedProgramSearch, setCommittedProgramSearch] = useState('')
-  const [committedCountrySearch, setCommittedCountrySearch] = useState('')
-  const [intakePickerOpen, setIntakePickerOpen] = useState(false)
-  const [campusPickerOpen, setCampusPickerOpen] = useState(false)
   const [programPickerOpen, setProgramPickerOpen] = useState(false)
-  const [countryPickerOpen, setCountryPickerOpen] = useState(false)
-  const [phoneCodePickerOpen, setPhoneCodePickerOpen] = useState(false)
 
-  useEffect(() => { const t = setTimeout(() => setCommittedIntakeSearch(intakeSearch.trim()), 300); return () => clearTimeout(t) }, [intakeSearch])
-  useEffect(() => { const t = setTimeout(() => setCommittedCampusSearch(campusSearch.trim()), 300); return () => clearTimeout(t) }, [campusSearch])
   useEffect(() => { const t = setTimeout(() => setCommittedProgramSearch(programSearch.trim()), 300); return () => clearTimeout(t) }, [programSearch])
-  useEffect(() => { const t = setTimeout(() => setCommittedCountrySearch(countrySearch.trim()), 300); return () => clearTimeout(t) }, [countrySearch])
 
-  const intakeQuery = useSearchIntakesInfinite(committedIntakeSearch, 20, intakePickerOpen)
-  const campusQuery = useSearchCampusesInfinite(committedCampusSearch, 20, campusPickerOpen)
+  // Preferred Intake is fixed to the current admission intake (the one
+  // flagged currentAdmissionIntake) and shown read-only — enquiries are
+  // always for the intake admissions is open for.
+  const { data: admissionIntake, isLoading: admissionIntakeLoading } = useCurrentAdmissionIntake()
+  const intakeGuid = admissionIntake?.intakeGuid ?? ''
+  const intakeLabel = admissionIntake ? `${admissionIntake.intakeCode} — ${admissionIntake.description}` : ''
+  // Campus and Country come from their dropdown APIs (GET /campus/dropdown,
+  // /countries/dropdown): one cached call each, filtered in the browser.
+  const { data: campuses = [], isLoading: campusesLoading } = useCampusDropdown()
   // Approved programmes only (GET /program-master/dropdown?campusGuid=) — by-campus
   // also listed ones still pending approval.
   const programQuery = useApprovedProgramsByCampus(campusGuid, committedProgramSearch, programPickerOpen)
-  const countryQuery = useSearchCountriesInfinite(committedCountrySearch, 20, countryPickerOpen || phoneCodePickerOpen)
-  const intakes = useMemo(() => flattenUniquePages(intakeQuery.data?.pages ?? [], i => i.intakeGuid), [intakeQuery.data])
-  const campuses = useMemo(() => flattenUniquePages(campusQuery.data?.pages ?? [], c => c.campusGuid), [campusQuery.data])
+  const { countries, home: homeCountry, known: allCountries, isLoading: countriesLoading } = useCountriesForPicker()
   const programsByCampus = programQuery.data ?? []
-  const countries = useMemo(() => flattenUniquePages(countryQuery.data?.pages ?? [], c => c.countryGuid), [countryQuery.data])
-  // The default dial-code country and the selected one's label can't rely on
-  // the picker's 20-row search page, so they come from this small lookup.
-  const { home: homeCountry, known: allCountries } = useKnownCountries(countries)
   useEffect(() => {
     if (mobileCountryGuid || !homeCountry) return
     setMobileCountryGuid(homeCountry.countryGuid)
@@ -143,18 +129,6 @@ export default function KioskEnquiryPage() {
   // Same "programmes scoped to the selected campus" convention as Payment,
   // Filing, and the On-Desk/Online Enquiry forms — a programme belongs to
   // one campus, so the list is empty/disabled until a Campus is chosen.
-  // Only offer intakes that are actually "live" right now — flagged as the
-  // current academic intake and/or the current admission intake — rather
-  // than every intake the backend has ever recorded (which includes past
-  // ones like "2024 Semester 1"). Falls back to the full list if nothing
-  // is currently flagged either way — confirmed the dropdown otherwise goes
-  // silently empty (no error, no options) whenever the backend doesn't have
-  // any intake marked current, which fully blocks this form with no
-  // indication why. Preferring the flagged rows when they exist, but never
-  // leaving the picker with zero options, matches the original intent
-  // without making the form's usability depend on that flag always being set.
-  const currentIntakes = intakes.filter(i => i.currentIntake || i.currentAdmissionIntake)
-  const intakeOptions  = (currentIntakes.length ? currentIntakes : intakes).map(i => ({ value: i.intakeGuid, label: `${i.intakeCode} — ${i.description}` }))
   const campusOptions  = campuses.map(c => ({ value: c.campusGuid, label: c.campusName }))
   const programOptions = programsByCampus.map(p => ({ value: p.programGuid, label: `${p.programName} (${p.programCode})` }))
   const sourceOptions  = enquirySources.map(s => ({ value: s.enquirySourceGuid, label: s.enquirySourceName }))
@@ -202,7 +176,7 @@ export default function KioskEnquiryPage() {
     if (notes.trim().length > REMARKS_MAX) e.notes = `Notes must be ${REMARKS_MAX} characters or fewer`
     if (!enquiryDate)       e.enquiryDate = 'Enquiry date is required.'
     else if (!isWithinRecentWindow(enquiryDate)) e.enquiryDate = ENQUIRY_DATE_RANGE_MESSAGE
-    if (!intakeGuid)        e.intakeGuid = 'Please select an Intake'
+    if (!intakeGuid)        e.intakeGuid = 'No admission intake is open right now. Please contact the admissions office.'
     if (!programGuid)       e.programGuid = 'Programme is required.'
     if (!campusGuid)        e.campusGuid = 'Please select a Campus'
     if (!sourceGuid)        e.sourceGuid = 'Please select an Enquiry Source'
@@ -216,7 +190,7 @@ export default function KioskEnquiryPage() {
   function resetForm() {
     setFirstName(''); setLastName(''); setGender(''); setMobileCountryGuid(homeCountry?.countryGuid ?? ''); setPhone(''); setEmail(''); setVerifiedEmail(null); setDob('')
     setEnquiryDate(todayAtMidnight().slice(0, 10))
-    setIntakeGuid(''); setCampusGuid(''); setProgramGuid(''); setSourceGuid(''); setCountryGuid(homeCountry?.countryGuid ?? ''); setNotes('')
+    setCampusGuid(''); setProgramGuid(''); setSourceGuid(''); setCountryGuid(homeCountry?.countryGuid ?? ''); setNotes('')
     setIsbatSourceGuid(''); setSourceName('')
     setSponsor(EMPTY_SPONSOR)
     setPhoneCodeTouched(false)
@@ -334,7 +308,7 @@ export default function KioskEnquiryPage() {
           <div className="fg">
             <label className="lbl">Phone <span className="text-clr-red">*</span></label>
             <div className="flex gap-2">
-              <SearchSelect options={phoneCodeOptions} value={mobileCountryGuid} onChange={v => { setMobileCountryGuid(v); setPhoneCodeTouched(true); clearError('phone') }} onSearch={setCountrySearch} onOpenChange={setPhoneCodePickerOpen} isLoading={countryQuery.isLoading} hasNextPage={countryQuery.hasNextPage} isFetchingNextPage={countryQuery.isFetchingNextPage} onLoadMore={() => countryQuery.fetchNextPage()} style={{ width: 108, flexShrink: 0 }} />
+              <SearchSelect options={phoneCodeOptions} value={mobileCountryGuid} onChange={v => { setMobileCountryGuid(v); setPhoneCodeTouched(true); clearError('phone') }} isLoading={countriesLoading} style={{ width: 108, flexShrink: 0 }} />
               <input className="ctrl flex-1" type="tel" inputMode="numeric" placeholder="e.g. 772123456" maxLength={PHONE_MAX} value={phone} onChange={e => { setPhone(e.target.value.replace(/\D/g, '').slice(0, PHONE_MAX)); clearError('phone') }} style={errors.phone ? { borderColor: 'var(--red)' } : undefined} />
             </div>
             {errors.phone && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.phone}</p>}
@@ -370,7 +344,7 @@ export default function KioskEnquiryPage() {
           </div>
           <div className="fg">
             <label className="lbl">Campus <span className="text-clr-red">*</span></label>
-            <SearchSelect placeholder="— select —" options={campusOptions} value={campusGuid} onChange={setCampus} onSearch={setCampusSearch} onOpenChange={setCampusPickerOpen} isLoading={campusQuery.isLoading} hasNextPage={campusQuery.hasNextPage} isFetchingNextPage={campusQuery.isFetchingNextPage} onLoadMore={() => campusQuery.fetchNextPage()} />
+            <SearchSelect placeholder="— select —" options={campusOptions} value={campusGuid} onChange={setCampus} isLoading={campusesLoading} />
             {errors.campusGuid && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.campusGuid}</p>}
           </div>
           <div className="fg">
@@ -380,7 +354,7 @@ export default function KioskEnquiryPage() {
           </div>
           <div className="fg">
             <label className="lbl">Country <span className="text-clr-red">*</span></label>
-            <SearchSelect placeholder="— select —" options={countryOptions} value={countryGuid} onChange={selectCountry} onSearch={setCountrySearch} onOpenChange={setCountryPickerOpen} isLoading={countryQuery.isLoading} hasNextPage={countryQuery.hasNextPage} isFetchingNextPage={countryQuery.isFetchingNextPage} onLoadMore={() => countryQuery.fetchNextPage()} />
+            <SearchSelect placeholder="— select —" options={countryOptions} value={countryGuid} onChange={selectCountry} isLoading={countriesLoading} />
             {errors.countryGuid && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.countryGuid}</p>}
           </div>
           <div className="fg">
@@ -399,7 +373,7 @@ export default function KioskEnquiryPage() {
           </div>
           <div className="fg">
             <label className="lbl">Preferred Intake <span className="text-clr-red">*</span></label>
-            <SearchSelect placeholder="— select —" options={intakeOptions} value={intakeGuid} onChange={val => { setIntakeGuid(val); clearError('intakeGuid') }} onSearch={setIntakeSearch} onOpenChange={setIntakePickerOpen} isLoading={intakeQuery.isLoading} hasNextPage={intakeQuery.hasNextPage} isFetchingNextPage={intakeQuery.isFetchingNextPage} onLoadMore={() => intakeQuery.fetchNextPage()} />
+            <input className="ctrl" readOnly value={intakeLabel} placeholder={admissionIntakeLoading ? 'Loading intake…' : 'No admission intake open'} title="Set to the current admission intake" />
             {errors.intakeGuid && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.intakeGuid}</p>}
           </div>
           <div className="fg">

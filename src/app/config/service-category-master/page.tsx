@@ -3,9 +3,13 @@ import { useState } from 'react'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
 import { Toast } from '@/components/Toast'
-import { useServiceCategories, useCreateServiceCategory, useUpdateServiceCategory, useDeleteServiceCategory } from '@/hooks/student/useServiceCategories'
-import { ServiceCategoryDto } from '@/lib/api/student/serviceCategories'
+import { Pagination } from '@/components/Pagination'
+import { SERVICE_CATEGORIES_KEY, useCreateServiceCategory, useUpdateServiceCategory, useDeleteServiceCategory } from '@/hooks/student/useServiceCategories'
+import { ServiceCategoryDto, getServiceCategories } from '@/lib/api/student/serviceCategories'
+import { useServerTable } from '@/hooks/useServerTable'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
+
+const PAGE_SIZE = 10
 
 // Split out of the old combined "Category Masters" page (student/masters/)
 // per request — this half owns Service Category Master only (the ticketing
@@ -18,8 +22,11 @@ export default function Page() {
   const permissions = usePagePermissions()
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
 
-  const { data: serviceCatsPage, isLoading: serviceCatsLoading } = useServiceCategories()
-  const serviceCats = serviceCatsPage?.items ?? []
+  // One page at a time from the server (?page=&pageSize=; this endpoint has
+  // no search). Used to show only the API's first page.
+  const table = useServerTable({ queryKey: SERVICE_CATEGORIES_KEY, fetchPage: (page, size) => getServiceCategories(page, size), pageSize: PAGE_SIZE })
+  const serviceCats = table.items
+  const serviceCatsLoading = table.isLoading
   const createServiceCategory = useCreateServiceCategory()
   const updateServiceCategory = useUpdateServiceCategory()
   const deleteServiceCategory = useDeleteServiceCategory()
@@ -79,6 +86,7 @@ export default function Page() {
               </tbody>
             </table>
           </ScrollTable>
+          <Pagination page={table.page} totalPages={table.totalPages} totalCount={table.totalCount} itemLabel="categories" onPageChange={table.setPage} />
         </div>
       </div>
 

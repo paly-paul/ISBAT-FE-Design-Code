@@ -1,43 +1,24 @@
-import { useEffect, useMemo, useState } from 'react'
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMemo } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Country,
   CountryInput,
   CountryDropdownItemDto,
+  countryFromDropdown,
   createCountry,
   deleteCountry,
   findDefaultCountry,
-  getCountries,
   getCountriesByGuids,
   getCountriesDropdown,
-  getCountriesPaged,
-  updateCountry,
-} from '@/lib/api/academic/country'
-import { getNextPageParam } from '@/lib/pagination'
+  updateCountry } from '@/lib/api/academic/country'
 
-const COUNTRIES_KEY = ['countries']
-
-// Load enough rows to cover the full country list in one request for Country Master.
-const COUNTRIES_PAGE_SIZE = 1000
-// One search page, for looking up specific countries by name.
-const COUNTRY_LOOKUP_PAGE_SIZE = 20
-const HOME_COUNTRY_NAME = 'Uganda'
+export const COUNTRIES_KEY = ['countries']
 
 /**
  * Full countries list for Country Master (/config/country-master).
  * Calls GET /api/v1/users/countries?page=1&pageSize=1000 to preserve
  * countryCode, countryPrefix, defaultCountry, and nationality.
  */
-export function useCountries(enabled = true) {
-  return useQuery({
-    queryKey: COUNTRIES_KEY,
-    queryFn: () => getCountries(1, COUNTRIES_PAGE_SIZE),
-    // Keep the list cached until a mutation invalidates it.
-    staleTime: Infinity,
-    gcTime: Infinity,
-    enabled,
-  })
-}
 
 /**
  * Lightweight dropdown list specifically for form pickers (Employee form, Refugee, Student profile, ODeL).
@@ -66,20 +47,7 @@ export function useCountryDropdown(
     queryFn: () => getCountriesDropdown(q),
     staleTime: Infinity,
     gcTime: Infinity,
-    enabled,
-  })
-}
-
-export function useSearchCountriesInfinite(search: string, pageSize: number, enabled: boolean) {
-  return useInfiniteQuery({
-    queryKey: [...COUNTRIES_KEY, 'search-infinite', search, pageSize],
-    queryFn: ({ pageParam }) => getCountriesPaged(pageParam, pageSize, search),
-    initialPageParam: 1,
-    getNextPageParam,
-    enabled,
-    staleTime: Infinity,
-    gcTime: Infinity,
-  })
+    enabled })
 }
 
 const NO_COUNTRIES: Country[] = []
@@ -92,60 +60,45 @@ export function useCountriesByGuids(guids: string[]) {
     queryKey: [...COUNTRIES_KEY, 'by-guids', unique],
     queryFn: () => getCountriesByGuids(unique),
     enabled: unique.length > 0,
-    gcTime: Infinity,
-  })
+    gcTime: Infinity })
   return { countries: query.data ?? NO_COUNTRIES, isLoading: query.isLoading }
 }
 
-// For the country pickers on the enquiry forms, without loading the full list:
-// the home country to default to, plus every country seen so far (home and the
-// pickers' loaded pages). A selection made in the picker comes from one of
-// those, so its label stays available after the picker's search moves on.
-export function useKnownCountries(pageCountries: Country[]) {
-  // There's no guid to ask for yet, since the home country is what's being found.
-  const { data: homeMatches } = useQuery({
-    queryKey: [...COUNTRIES_KEY, 'by-name', HOME_COUNTRY_NAME],
-    queryFn: () => getCountriesPaged(1, COUNTRY_LOOKUP_PAGE_SIZE, HOME_COUNTRY_NAME),
+// Every country for a form's pickers, from GET /countries/dropdown (one
+// cached call, filtered in the browser by SearchSelect), in the Country shape
+// the option helpers use. home = the default country (Uganda); known = the
+// whole list, so a selected country's label is always available.
+export function useCountriesForPicker(enabled = true) {
+  const { data, isLoading } = useQuery({
+    queryKey: [...COUNTRIES_KEY, 'dropdown', 'picker'],
+    queryFn: () => getCountriesDropdown().then(rows => rows.map(countryFromDropdown)),
+    staleTime: Infinity,
     gcTime: Infinity,
-  })
-  const home = findDefaultCountry(pageCountries) ?? findDefaultCountry(homeMatches?.items ?? NO_COUNTRIES)
-  const [seen, setSeen] = useState<Country[]>([])
-  useEffect(() => {
-    setSeen(prev => {
-      const have = new Set(prev.map(c => c.countryGuid))
-      const added = pageCountries.filter(c => !have.has(c.countryGuid))
-      return added.length ? [...prev, ...added] : prev
-    })
-  }, [pageCountries])
-  const known = useMemo(() => {
-    if (!home || seen.some(c => c.countryGuid === home.countryGuid)) return seen
-    return [home, ...seen]
-  }, [home, seen])
-  return { home, known }
+    enabled })
+  const countries = data ?? NO_COUNTRIES
+  const home = useMemo(() => findDefaultCountry(countries), [countries])
+  return { countries, home, known: countries, isLoading }
 }
 
 export function useCreateCountry() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (input: CountryInput) => createCountry(input),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: COUNTRIES_KEY }),
-  })
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: COUNTRIES_KEY }) })
 }
 
 export function useUpdateCountry() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: ({ id, input }: { id: string; input: CountryInput }) => updateCountry(id, input),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: COUNTRIES_KEY }),
-  })
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: COUNTRIES_KEY }) })
 }
 
 export function useDeleteCountry() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (id: string) => deleteCountry(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: COUNTRIES_KEY }),
-  })
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: COUNTRIES_KEY }) })
 }
 
 export type { Country, CountryInput, CountryDropdownItemDto }

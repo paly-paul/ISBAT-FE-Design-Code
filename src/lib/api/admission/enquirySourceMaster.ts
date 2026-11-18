@@ -1,4 +1,6 @@
 import { apiDelete, apiGet, apiPost, apiPut } from '../client'
+import { getPagedList } from '../pagedList'
+import type { PaginatedItems } from '@/lib/pagination'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
@@ -27,6 +29,11 @@ const mockEnquirySourceMasters: EnquirySourceMaster[] = [
 export function getEnquirySourceMasters(): Promise<EnquirySourceMaster[]> {
   if (MOCK_AUTH) return Promise.resolve(mockEnquirySourceMasters)
   return apiGet<EnquirySourceMaster[] | null>('/api/v1/admissions/enquiry-sources').then((data: any) => Array.isArray(data) ? data : (data && typeof data === 'object' ? (data.items || Object.values(data).find(Array.isArray) || []) : []))
+}
+
+// One page for the master table (get-enquiry-sources.md): ?page=&pageSize=&search=.
+export function getEnquirySourceMastersPaged(page: number, pageSize: number, search = ''): Promise<PaginatedItems<EnquirySourceMaster>> {
+  return getPagedList<EnquirySourceMaster>('/api/v1/admissions/enquiry-sources', page, pageSize, search, { rows: mockEnquirySourceMasters, text: r => r.enquirySourceName })
 }
 
 // GET /enquiry-sources/dropdown (get-enquiry-source-dropdown.md). Soft-deleted rows

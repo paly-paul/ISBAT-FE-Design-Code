@@ -1,29 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createBatchTime, deleteBatchTime, getBatchTimeById, getBatchTimes, updateBatchTime, getBatchTimesDropdown, BatchTime, BatchTimeInput, BatchTimeDropdownItem } from '@/lib/api/academic/batchTime'
+import { createBatchTime, deleteBatchTime, getBatchTimeById, updateBatchTime, getBatchTimesDropdown, BatchTime, BatchTimeInput, BatchTimeDropdownItem } from '@/lib/api/academic/batchTime'
 
-const BATCH_TIMES_KEY = ['batchTimes']
-
-// enabled defaults to true so every existing call site keeps eagerly
-// fetching exactly as before — only a caller that shouldn't hit the network
-// until it's actually needed (e.g. a modal that's always mounted regardless
-// of isOpen) needs to pass enabled={isOpen}.
-export function useBatchTimes(enabled = true) {
-  return useQuery({
-    queryKey: BATCH_TIMES_KEY,
-    queryFn: () => getBatchTimes(),
-    // Keep the cached list until a mutation explicitly refreshes it.
-    staleTime: Infinity,
-    gcTime: Infinity,
-    enabled,
-  })
-}
+export const BATCH_TIMES_KEY = ['batchTimes']
 
 export function useCreateBatchTime() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (input: BatchTimeInput) => createBatchTime(input),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: BATCH_TIMES_KEY }),
-  })
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: BATCH_TIMES_KEY }) })
 }
 
 // Fetches a single batch time for the Edit modal. Only enabled while the
@@ -33,8 +17,7 @@ export function useBatchTime(guid: string | null, enabled: boolean) {
   return useQuery({
     queryKey: [...BATCH_TIMES_KEY, guid],
     queryFn: () => getBatchTimeById(guid as string),
-    enabled: enabled && !!guid,
-  })
+    enabled: enabled && !!guid })
 }
 
 export function useUpdateBatchTime() {
@@ -44,16 +27,14 @@ export function useUpdateBatchTime() {
     onSuccess: (_data, { guid }) => {
       queryClient.invalidateQueries({ queryKey: BATCH_TIMES_KEY })
       queryClient.invalidateQueries({ queryKey: [...BATCH_TIMES_KEY, guid] })
-    },
-  })
+    } })
 }
 
 export function useDeleteBatchTime() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (guid: string) => deleteBatchTime(guid),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: BATCH_TIMES_KEY }),
-  })
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: BATCH_TIMES_KEY }) })
 }
 
 export type { BatchTime, BatchTimeInput }
@@ -64,6 +45,5 @@ export function useBatchTimesDropdown(enabled = true) {
     queryFn: () => getBatchTimesDropdown(),
     staleTime: Infinity,
     gcTime: Infinity,
-    enabled,
-  })
+    enabled })
 }

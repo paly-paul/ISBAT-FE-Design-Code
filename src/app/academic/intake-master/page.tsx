@@ -11,7 +11,7 @@ import { FilterTh } from '@/components/FilterTh'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
-import { useIntakesPaged, useCreateIntake, useUpdateIntake, useDeleteIntake, useCurrentAcademicIntake, useCurrentAdmissionIntake, Intake } from '@/hooks/academic/useIntakes'
+import { useIntakesPaged, useCreateIntake, useUpdateIntake, useDeleteIntake, useCurrentAcademicIntake, useCurrentAdmissionIntake, useIntake, Intake } from '@/hooks/academic/useIntakes'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { formatDate } from '@/lib/date'
 
@@ -161,8 +161,16 @@ export default function Page() {
   // guess. There isn't always a current admission intake (or even a current
   // teaching intake), so both can come back undefined and the cards fall
   // back to a neutral "not set" message instead of crashing.
-  const { data: currentAcademicIntake } = useCurrentAcademicIntake()
-  const { data: currentAdmissionIntake } = useCurrentAdmissionIntake()
+  // Those two only say WHICH intake is current — they're built from the
+  // dropdown, which has no dates (every date null, calendar []). The cards'
+  // dates come from each intake's full record (GET /intakes/{guid}); the
+  // summary shows until it loads, so the name/code never flash blank.
+  const { data: currentAcademicSummary } = useCurrentAcademicIntake()
+  const { data: currentAdmissionSummary } = useCurrentAdmissionIntake()
+  const { data: currentAcademicDetail } = useIntake(currentAcademicSummary?.intakeGuid ?? null, !!currentAcademicSummary)
+  const { data: currentAdmissionDetail } = useIntake(currentAdmissionSummary?.intakeGuid ?? null, !!currentAdmissionSummary)
+  const currentAcademicIntake = currentAcademicDetail ?? currentAcademicSummary
+  const currentAdmissionIntake = currentAdmissionDetail ?? currentAdmissionSummary
 
   return (
     <>

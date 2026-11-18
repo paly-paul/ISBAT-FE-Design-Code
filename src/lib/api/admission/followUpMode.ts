@@ -1,4 +1,6 @@
 import { apiDelete, apiGet, apiPost, apiPut } from '../client'
+import { getPagedList } from '../pagedList'
+import type { PaginatedItems } from '@/lib/pagination'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
@@ -20,6 +22,11 @@ const mockFollowUpModes: FollowUpMode[] = [
 export function getFollowUpModes(): Promise<FollowUpMode[]> {
   if (MOCK_AUTH) return Promise.resolve(mockFollowUpModes)
   return apiGet<FollowUpMode[] | null>('/api/v1/admissions/followup-modes').then((data: any) => Array.isArray(data) ? data : (data && typeof data === 'object' ? (data.items || Object.values(data).find(Array.isArray) || []) : []))
+}
+
+// One page for the master table (get-followup-modes.md): ?page=&pageSize=&search=.
+export function getFollowUpModesPaged(page: number, pageSize: number, search = ''): Promise<PaginatedItems<FollowUpMode>> {
+  return getPagedList<FollowUpMode>('/api/v1/admissions/followup-modes', page, pageSize, search, { rows: mockFollowUpModes, text: r => r.followUpModeName })
 }
 
 // GET /followup-modes/dropdown (get-followup-mode-dropdown.md). Soft-deleted rows

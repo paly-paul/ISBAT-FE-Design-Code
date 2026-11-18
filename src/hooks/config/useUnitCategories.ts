@@ -1,21 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createUnitCategory, deleteUnitCategory, getUnitCategories, getUnitCategoriesDropdown, getUnitCategoryById, updateUnitCategory, UnitCategory, UnitCategoryInput } from '@/lib/api/academic/unitCategory'
+import { createUnitCategory, deleteUnitCategory, getUnitCategoriesDropdown, getUnitCategoryById, updateUnitCategory, UnitCategory, UnitCategoryInput } from '@/lib/api/academic/unitCategory'
 
-const UNIT_CATEGORIES_KEY = ['unit-categories']
-
-// enabled defaults to true so every existing call site keeps eagerly
-// fetching exactly as before — only a caller that shouldn't hit the network
-// until it's actually open (e.g. a modal) needs to pass enabled={isOpen}.
-export function useUnitCategories(enabled = true) {
-  return useQuery({
-    queryKey: UNIT_CATEGORIES_KEY,
-    queryFn: () => getUnitCategories(),
-    // Keep the cached list until a mutation explicitly refreshes it.
-    staleTime: Infinity,
-    gcTime: Infinity,
-    enabled,
-  })
-}
+export const UNIT_CATEGORIES_KEY = ['unit-categories']
 
 export function useUnitCategoriesDropdown(enabled = true) {
   return useQuery({
@@ -23,16 +9,14 @@ export function useUnitCategoriesDropdown(enabled = true) {
     queryFn: () => getUnitCategoriesDropdown(),
     staleTime: Infinity,
     gcTime: Infinity,
-    enabled,
-  })
+    enabled })
 }
 
 export function useCreateUnitCategory() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (input: UnitCategoryInput) => createUnitCategory(input),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: UNIT_CATEGORIES_KEY }),
-  })
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: UNIT_CATEGORIES_KEY }) })
 }
 
 // Fetches a single unit category for the Edit modal. Only enabled while the
@@ -42,8 +26,7 @@ export function useUnitCategory(guid: string | null, enabled: boolean) {
   return useQuery({
     queryKey: [...UNIT_CATEGORIES_KEY, guid],
     queryFn: () => getUnitCategoryById(guid as string),
-    enabled: enabled && !!guid,
-  })
+    enabled: enabled && !!guid })
 }
 
 export function useUpdateUnitCategory() {
@@ -53,16 +36,14 @@ export function useUpdateUnitCategory() {
     onSuccess: (_data, { guid }) => {
       queryClient.invalidateQueries({ queryKey: UNIT_CATEGORIES_KEY })
       queryClient.invalidateQueries({ queryKey: [...UNIT_CATEGORIES_KEY, guid] })
-    },
-  })
+    } })
 }
 
 export function useDeleteUnitCategory() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (guid: string) => deleteUnitCategory(guid),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: UNIT_CATEGORIES_KEY }),
-  })
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: UNIT_CATEGORIES_KEY }) })
 }
 
 export type { UnitCategory, UnitCategoryInput }
