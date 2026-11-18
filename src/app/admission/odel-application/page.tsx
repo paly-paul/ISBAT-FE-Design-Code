@@ -470,13 +470,25 @@ export default function OdelApplicationPage() {
   const { data: semesters = [] } = useSemestersForProgram(form.programGuid, started && !!form.programGuid)
   const { data: batchTimes = [] } = useBatchTimesDropdown(started)
 
+  // ODeL is distance learning: only online campuses are offered. The campus
+  // record has no online flag, so it's matched on the name ("… Online Campus").
   // The saved value is always listed, even when the paged list hasn't loaded it.
   const campusOptions = useMemo(() => {
     const m = new Map<string, string>()
-    for (const c of campuses) m.set(c.campusGuid, c.campusName)
+    for (const c of campuses) if (/\bonline\b/i.test(c.campusName)) m.set(c.campusGuid, c.campusName)
     if (form.campusGuid && !m.has(form.campusGuid)) m.set(form.campusGuid, savedLabels.campusName ?? 'Selected campus')
     return toOptions(m)
   }, [campuses, form.campusGuid, savedLabels.campusName])
+
+  // There's only the one online campus, so it's filled in and shown read-only
+  // rather than offered as a one-item choice. A saved application keeps the
+  // campus it was saved with.
+  const onlineCampusGuid = campuses.find(c => /\bonline\b/i.test(c.campusName))?.campusGuid ?? ''
+  useEffect(() => {
+    if (!started || !onlineCampusGuid) return
+    setForm(f => f.campusGuid ? f : { ...f, campusGuid: onlineCampusGuid })
+  }, [started, onlineCampusGuid, form.campusGuid])
+  const campusLabel = campusOptions.find(o => o.value === form.campusGuid)?.label ?? ''
   const programOptions = useMemo(() => {
     const m = new Map<string, string>()
     for (const p of programs) m.set(p.programGuid, `${p.programName} (${p.programCode})`)
@@ -1139,11 +1151,9 @@ export default function OdelApplicationPage() {
                     <div className="sec-divider mt-5">Programme Details</div>
                     <div className="g3 mt-3">
                       <Field label="Campus" req error={errors.campusGuid}>
-                        <SearchSelect options={campusOptions} value={form.campusGuid} placeholder="-- Select Campus --"
-                          onChange={v => patch({ campusGuid: v, programGuid: '', semesterGuid: '' })}
-                          onSearch={setCampusSearch}
-                          isLoading={campusQuery.isLoading} hasNextPage={campusQuery.hasNextPage}
-                          isFetchingNextPage={campusQuery.isFetchingNextPage} onLoadMore={() => campusQuery.fetchNextPage()} />
+                        <Input readOnly value={campusLabel}
+                          placeholder={campusQuery.isLoading ? 'Loading campus…' : 'No online campus available'}
+                          hasError={!!errors.campusGuid} />
                       </Field>
                       <Field label="Programme" req error={errors.programGuid}>
                         <SearchSelect options={programOptions} value={form.programGuid}
