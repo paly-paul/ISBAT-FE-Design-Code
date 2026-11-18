@@ -30,7 +30,7 @@ function EmployeeAvatar({ photoUrl, firstName, surname }: { photoUrl?: string | 
   const base: React.CSSProperties = { width: size, height: size, borderRadius: '50%', flexShrink: 0 }
   const src = sameOriginApiUrl(photoUrl)
   if (src && !failed) {
-    return <img src={src} alt="" loading="lazy" onError={() => setFailed(true)} style={{ ...base, objectFit: 'cover', border: '1px solid var(--g200)' }} />
+    return <img src={src} alt="" loading="lazy" onError={() => setFailed(true)} style={{ ...base, objectFit: 'cover', objectPosition: 'center 20%', border: '1px solid var(--g200)' }} />
   }
   return (
     <span aria-hidden="true" style={{ ...base, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'var(--b50)', color: 'var(--b700)', fontSize: 12, fontWeight: 700 }}>
