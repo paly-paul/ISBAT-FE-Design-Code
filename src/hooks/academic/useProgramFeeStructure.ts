@@ -40,10 +40,10 @@ export function useProgramFeeStructures(pageNumber = 1, pageSize = 1000, program
 // Lecturer Skills already went through. getProgramFeeStructures is already
 // confirmed to genuinely support pageNumber/pageSize/search together with a
 // real totalCount envelope — see its own comment.
-export function useProgramFeeStructuresPaged(page: number, pageSize: number, search: string) {
+export function useProgramFeeStructuresPaged(page: number, pageSize: number, search: string, programGuid?: string | null) {
   return useQuery({
-    queryKey: [...PROGRAM_FEE_STRUCTURES_KEY, 'paged', page, pageSize, search],
-    queryFn: () => getProgramFeeStructures(page, pageSize, undefined, search),
+    queryKey: [...PROGRAM_FEE_STRUCTURES_KEY, 'paged', page, pageSize, search, programGuid ?? ''],
+    queryFn: () => getProgramFeeStructures(page, pageSize, programGuid || undefined, search),
     placeholderData: keepPreviousData,
   })
 }
