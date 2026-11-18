@@ -108,7 +108,7 @@ export function useKnownCountries(pageCountries: Country[]) {
     queryFn: () => getCountriesPaged(1, COUNTRY_LOOKUP_PAGE_SIZE, HOME_COUNTRY_NAME),
     gcTime: Infinity,
   })
-  const home = findDefaultCountry(homeMatches?.items ?? NO_COUNTRIES)
+  const home = findDefaultCountry(pageCountries) ?? findDefaultCountry(homeMatches?.items ?? NO_COUNTRIES)
   const [seen, setSeen] = useState<Country[]>([])
   useEffect(() => {
     setSeen(prev => {
