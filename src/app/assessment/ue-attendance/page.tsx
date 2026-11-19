@@ -95,6 +95,41 @@ export default function UeAttendancePage() {
     retry: false,
   })
 
+  // Start check validation (Business clock: East Africa Time UTC+3)
+  const examScheduleStatus = useMemo(() => {
+    if (!schedule) return null
+    if (!schedule.examDate || !schedule.startTime) {
+      return {
+        hasStarted: false,
+        noSchedule: true,
+        message: 'This exam has no date / start time scheduled yet. Attendance cannot be marked.'
+      }
+    }
+
+    try {
+      const dateStr = schedule.examDate.slice(0, 10)
+      const timeStr = schedule.startTime.slice(0, 5)
+      const [year, month, day] = dateStr.split('-').map(Number)
+      const [hour, min] = timeStr.split(':').map(Number)
+      // East Africa Time is UTC+3 (hour - 3)
+      const examStartUtc = Date.UTC(year, month - 1, day, hour - 3, min, 0)
+      const nowUtc = Date.now()
+
+      if (nowUtc < examStartUtc) {
+        const timeText = `${formatDate(`${dateStr}T00:00:00`)} ${timeStr}`
+        return {
+          hasStarted: false,
+          noSchedule: false,
+          examStartTimeText: timeText,
+          message: `Attendance can be marked only after the exam has started (${timeText} EAT).`
+        }
+      }
+      return { hasStarted: true, noSchedule: false, message: null }
+    } catch {
+      return null
+    }
+  }, [schedule])
+
   // 5. Students
   const { data: students, isLoading: loadingStudents, isFetching: fetchingStudents, error: studentsError } = useQuery({
     queryKey: ['ueAttendanceStudents', programGuid, semesterGuid, unitGuid, intakeGuid, derivedUeType, selectedUnit?.unitCat],
@@ -122,7 +157,8 @@ export default function UeAttendancePage() {
       queryClient.invalidateQueries({ queryKey: ['ueAttendanceStudents'] })
     },
     onError: (err: any) => {
-      showToast(err?.message || 'Failed to save attendance', 'error')
+      const msg = err?.errors?.[0] || err?.message || 'Failed to save attendance'
+      showToast(msg, 'error')
     }
   })
 
@@ -139,12 +175,28 @@ export default function UeAttendancePage() {
         isPresent: !!attendanceState[s.studentGuid]
       }))
     }
-    saveMutate(payload)
+    saveMutate(payload, {
+      onError: (err: any) => {
+        // Rollback local state to match server's persisted state on refusal
+        if (students) {
+          const serverState: Record<string, boolean> = {}
+          students.forEach(s => {
+            serverState[s.studentGuid] = s.isPresent
+          })
+          setAttendanceState(serverState)
+        }
+        const msg = err?.errors?.[0] || err?.message || 'Failed to save attendance'
+        showToast(msg, 'error')
+      }
+    })
   }
 
   const handleSingleSave = (studentGuid: string, newStatus: boolean) => {
     if (!students) return
     
+    // Remember previous status for safe rollback on refusal
+    const previousStatus = !!attendanceState[studentGuid]
+
     // Update local state for immediate UI feedback
     setAttendanceState(prev => ({
       ...prev,
@@ -165,7 +217,17 @@ export default function UeAttendancePage() {
         return { studentGuid: s.studentGuid, isPresent: !!attendanceState[s.studentGuid] }
       })
     }
-    saveMutate(payload)
+    saveMutate(payload, {
+      onError: (err: any) => {
+        // Revert local state on refusal
+        setAttendanceState(prev => ({
+          ...prev,
+          [studentGuid]: previousStatus
+        }))
+        const msg = err?.errors?.[0] || err?.message || 'Failed to save attendance'
+        showToast(msg, 'error')
+      }
+    })
   }
 
   const handleToggleAttendance = (studentGuid: string) => {
@@ -295,18 +357,26 @@ export default function UeAttendancePage() {
                     <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1.5">
                       <i className="lni lni-alarm-clock text-blue-500"></i> Start Time
                     </div>
-                    <div className="font-bold text-slate-800 text-[16px]">{schedule.startTime}</div>
+                    <div className="font-bold text-slate-800 text-[16px]">{schedule.startTime || '—'}</div>
                   </div>
                   <div>
                     <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1.5">
                       <i className="lni lni-timer text-blue-500"></i> End Time
                     </div>
-                    <div className="font-bold text-slate-800 text-[16px]">{schedule.endTime}</div>
+                    <div className="font-bold text-slate-800 text-[16px]">{schedule.endTime || '—'}</div>
                   </div>
                 </div>
               </>
             ) : null}
           </div>
+          {examScheduleStatus && !examScheduleStatus.hasStarted && (
+            <div className="px-5 pb-5">
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-center gap-2.5 text-amber-800 text-sm">
+                <i className="lni lni-alarm-clock text-amber-600 text-lg shrink-0"></i>
+                <span>{examScheduleStatus.message}</span>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -317,7 +387,12 @@ export default function UeAttendancePage() {
           </div>
           <div className="card-hdr-actions">
             {permissions.edit && (
-            <button className="btn btn-primary" disabled={!isReadyForData || !students || students.length === 0 || saving} onClick={handleSave}>
+            <button 
+              className="btn btn-primary" 
+              disabled={!isReadyForData || !students || students.length === 0 || saving || examScheduleStatus?.noSchedule} 
+              onClick={handleSave}
+              title={examScheduleStatus && !examScheduleStatus.hasStarted ? (examScheduleStatus.message ?? undefined) : undefined}
+            >
               {saving ? <i className="lni lni-spinner-solid animate-spin mr-2"></i> : <i className="lni lni-save mr-2"></i>}
               Save Attendance
             </button>

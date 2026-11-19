@@ -10,6 +10,7 @@ import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { Toast } from '@/components/Toast'
 import { EmptyState } from '@/components/EmptyState'
+import { ActionMenu } from '@/components/ActionMenu'
 import { SearchSelect } from '@/components/SearchSelect'
 import DatePicker from '@/components/DatePicker'
 import TimePicker from '@/components/TimePicker'
@@ -239,7 +240,8 @@ function ResitSchedulingContent() {
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const showToast = useCallback((msg: string, type = 'success') => {
     setToast({ msg, type })
-    setTimeout(() => setToast(null), 3500)
+    const timeout = type === 'error' || type === 'danger' ? 5000 : 3500
+    setTimeout(() => setToast(null), timeout)
   }, [])
 
   // ── Page load: the three calls in parallel ──────────────────────────────
@@ -510,12 +512,12 @@ function ExamTab({ readOnly, readOnlyReason, units, unitsLoading, showToast, onF
   const items = listQuery.data?.schedules.items ?? []
   const totalCount = listQuery.data?.schedules.totalCount ?? 0
 
-  const [drawer, setDrawer] = useState<{ mode: 'add' | 'edit'; guid: string | null } | null>(null)
+  const [modal, setModal] = useState<{ mode: 'add' | 'edit'; guid: string | null; viewOnly?: boolean } | null>(null)
 
   function doSearch() { setSearch(searchInput.trim()); setPage(1) }
   function doClear() { setSearchInput(''); setSearch(''); setPage(1) }
 
-  function closeDrawer() { setDrawer(null); onDirtyChange(false) }
+  function closeModal() { setModal(null); onDirtyChange(false) }
 
   return (
     <>
@@ -535,7 +537,7 @@ function ExamTab({ readOnly, readOnlyReason, units, unitsLoading, showToast, onF
         <button className="btn btn-neu" onClick={doClear} disabled={!searchInput && !search}>Clear</button>
         {permissions.add && (
           <span className="sm:ml-auto" title={readOnlyReason}>
-            <button className="btn btn-primary" onClick={() => setDrawer({ mode: 'add', guid: null })} disabled={readOnly}>
+            <button className="btn btn-primary" onClick={() => setModal({ mode: 'add', guid: null, viewOnly: false })} disabled={readOnly}>
               <i className="lni lni-plus"></i> Add
             </button>
           </span>
@@ -546,6 +548,7 @@ function ExamTab({ readOnly, readOnlyReason, units, unitsLoading, showToast, onF
         <table>
           <thead>
             <tr>
+              <th style={{ width: 48 }}></th>
               <th>Code</th>
               <th>Unit</th>
               <th>Part</th>
@@ -556,7 +559,6 @@ function ExamTab({ readOnly, readOnlyReason, units, unitsLoading, showToast, onF
               <th>Test Type</th>
               <th>Published</th>
               <th>Exam Rule</th>
-              <th style={{ width: 52 }}></th>
             </tr>
           </thead>
           <tbody>
@@ -572,10 +574,27 @@ function ExamTab({ readOnly, readOnlyReason, units, unitsLoading, showToast, onF
             ) : (
               items.map(s => {
                 const ended = resitExamEnded(s.examDate, s.endTime)
-                const viewOnly = readOnly || !permissions.edit || ended
-                const actionLabel = viewOnly ? 'View' : 'Edit'
+                const canEdit = !readOnly && permissions.edit && !ended
                 return (
                 <tr key={s.resitScheduleGuid}>
+                  <td>
+                    <ActionMenu>
+                      <button
+                        className="btn btn-neu btn-sm"
+                        onClick={() => setModal({ mode: 'edit', guid: s.resitScheduleGuid, viewOnly: true })}
+                      >
+                        <i className="lni lni-eye"></i> View
+                      </button>
+                      {canEdit && (
+                        <button
+                          className="btn btn-neu btn-sm"
+                          onClick={() => setModal({ mode: 'edit', guid: s.resitScheduleGuid, viewOnly: false })}
+                        >
+                          <i className="lni lni-pencil"></i> Edit
+                        </button>
+                      )}
+                    </ActionMenu>
+                  </td>
                   <td className="font-mono text-slate-700">{s.unitCode}</td>
                   <td>{s.unitName}</td>
                   <td>{s.ueType === 1 ? 'Practical' : 'Theory'}</td>
@@ -590,16 +609,6 @@ function ExamTab({ readOnly, readOnlyReason, units, unitsLoading, showToast, onF
                       : <span className="badge badge-amber">Not published</span>}
                   </td>
                   <td className="text-[12px]" title={s.examRuleName ?? undefined}>{s.examRuleCode ?? '—'}</td>
-                  <td>
-                    <button
-                      className="btn btn-neu btn-sm"
-                      onClick={() => setDrawer({ mode: 'edit', guid: s.resitScheduleGuid })}
-                      title={ended && !readOnly && permissions.edit ? 'Resit has ended — view only' : actionLabel}
-                      aria-label={`${actionLabel} ${s.unitCode} ${s.ueType === 1 ? 'Practical' : 'Theory'}`}
-                    >
-                      <i className={`lni ${viewOnly ? 'lni-eye' : 'lni-pencil'}`}></i>
-                    </button>
-                  </td>
                 </tr>
                 )
               })
@@ -614,18 +623,19 @@ function ExamTab({ readOnly, readOnlyReason, units, unitsLoading, showToast, onF
         </div>
       )}
 
-      {drawer && (
-        <ExamScheduleDrawer
-          mode={drawer.mode}
-          guid={drawer.guid}
-          readOnly={readOnly || (drawer.mode === 'edit' && !permissions.edit)}
-          readOnlyReason={readOnlyReason ?? (drawer.mode === 'edit' && !permissions.edit ? 'You do not have permission to edit resit exam schedules.' : undefined)}
+      {modal && (
+        <ExamScheduleModal
+          mode={modal.mode}
+          guid={modal.guid}
+          readOnly={readOnly || !!modal.viewOnly || (modal.mode === 'edit' && !permissions.edit)}
+          readOnlyReason={readOnlyReason ?? (modal.viewOnly ? undefined : modal.mode === 'edit' && !permissions.edit ? 'You do not have permission to edit resit exam schedules.' : undefined)}
           units={units}
           unitsLoading={unitsLoading}
-          onClose={closeDrawer}
-          onSaved={msg => { closeDrawer(); showToast(msg) }}
+          showToast={showToast}
+          onClose={closeModal}
+          onSaved={msg => { closeModal(); showToast(msg) }}
           onStale={msg => {
-            closeDrawer()
+            closeModal()
             showToast(msg, 'error')
             qc.invalidateQueries({ queryKey: RESIT_SCHEDULING_KEYS.exams() })
           }}
@@ -669,13 +679,14 @@ function validateExam(f: ExamForm, isAdd: boolean): string[] {
   return out
 }
 
-function ExamScheduleDrawer({ mode, guid, readOnly: readOnlyProp, readOnlyReason: readOnlyReasonProp, units, unitsLoading, onClose, onSaved, onStale, onConflict, onForbidden, onDirtyChange }: {
+function ExamScheduleModal({ mode, guid, readOnly: readOnlyProp, readOnlyReason: readOnlyReasonProp, units, unitsLoading, showToast, onClose, onSaved, onStale, onConflict, onForbidden, onDirtyChange }: {
   mode: 'add' | 'edit'
   guid: string | null
   readOnly: boolean
   readOnlyReason?: string
   units: ResitScheduleCourseUnitDto[] | undefined
   unitsLoading: boolean
+  showToast: (msg: string, type?: string) => void
   onClose: () => void
   onSaved: (msg: string) => void
   onStale: (msg: string) => void
@@ -697,10 +708,10 @@ function ExamScheduleDrawer({ mode, guid, readOnly: readOnlyProp, readOnlyReason
 
   const [form, setForm] = useState<ExamForm>(EXAM_DEFAULTS)
   const [baseline, setBaseline] = useState<ExamForm>(EXAM_DEFAULTS)
-  const [errors, setErrors] = useState<string[]>([])
   const [confirmDiscard, setConfirmDiscard] = useState(false)
-  const bodyRef = useRef<HTMLDivElement>(null)
-  const set = <K extends keyof ExamForm>(k: K, v: ExamForm[K]) => setForm(prev => ({ ...prev, [k]: v }))
+  const set = <K extends keyof ExamForm>(k: K, v: ExamForm[K]) => {
+    setForm(prev => ({ ...prev, [k]: v }))
+  }
 
   // Edit: fill from GET /resit-schedule/{guid} (also after a 409 reload).
   useEffect(() => {
@@ -760,27 +771,32 @@ function ExamScheduleDrawer({ mode, guid, readOnly: readOnlyProp, readOnlyReason
     setForm(prev => ({ ...prev, courseUnitGuid: guidValue, ueType: u?.isTheoryPracticalUnit && u.theoryScheduled ? 1 : 0 }))
   }
 
-  function showErrors(list: string[]) {
-    setErrors(list)
-    bodyRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
-  }
-
   function handleError(err: unknown) {
     const code = errCode(err)
-    if (code === 'validation_error') return showErrors(errList(err, 'Please correct the highlighted fields.'))
+    if (code === 'validation_error') {
+      const list = errList(err, 'Please correct the highlighted fields.')
+      showToast(list[0], 'error')
+      return
+    }
     if (code === 'not_found' && !isAdd) return onStale(errMsg(err, 'Resit schedule not found.'))
     if (code === 'conflict') { onConflict(); if (!isAdd) detailQuery.refetch() }
     if (code === 'forbidden') onForbidden()
-    showErrors([errMsg(err, isAdd ? 'Could not create the resit schedule.' : 'Could not update the resit schedule.')])
+    const msg = (err as { errors?: string[] } | null)?.errors?.[0] || errMsg(err, isAdd ? 'Could not create the resit schedule.' : 'Could not update the resit schedule.')
+    showToast(msg, 'error')
   }
 
   function handleSave() {
     if (saving) return
-    if (ended) return showErrors([RESIT_ENDED_MSG])
+    if (ended) {
+      showToast(RESIT_ENDED_MSG, 'error')
+      return
+    }
     if (readOnly) return
     const invalid = validateExam(form, isAdd)
-    if (invalid.length) return showErrors(invalid)
-    setErrors([])
+    if (invalid.length) {
+      showToast(invalid[0], 'error')
+      return
+    }
     const data: ResitScheduleSaveCommand = {
       examDate: form.examDate,
       startTime: `${form.startTime}:00`,
@@ -810,21 +826,33 @@ function ExamScheduleDrawer({ mode, guid, readOnly: readOnlyProp, readOnlyReason
   // Portalled to <body>: the tab panel's enter animation leaves a transform
   // on its wrapper, which would otherwise trap this fixed overlay inside it.
   return createPortal(
-    <div className="drawer-overlay">
-      <div className="drawer" role="dialog" aria-modal="true" aria-label={title} onClick={e => e.stopPropagation()}>
-        <div className="drawer-hdr">
-          <div className="flex items-center gap-2">
+    <div className="modal-overlay open" onClick={requestClose}>
+      <div 
+        className="modal modal-lg" 
+        style={{ maxWidth: '640px', borderRadius: '12px', height: 'auto', maxHeight: '90vh', overflow: 'hidden' }} 
+        role="dialog" 
+        aria-modal="true" 
+        aria-label={title} 
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="modal-hdr modal-hdr-blue" style={{ display: 'flex', alignItems: 'center', padding: '16px 20px' }}>
+          <div className="modal-title text-white font-medium text-base" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <i className="lni lni-graduation" style={{ fontSize: 18 }}></i>
-            <div className="font-semibold text-[15px] flex-1">{title}</div>
-            <button onClick={requestClose} disabled={saving} aria-label="Close" style={{ background: 'transparent', border: 'none', color: 'var(--white)', cursor: 'pointer', padding: 2 }}>
-              <i className="lni lni-close" style={{ fontSize: 18 }}></i>
-            </button>
+            <span>{title}</span>
           </div>
+          <button 
+            className="modal-close text-white hover:text-white/80 transition-colors" 
+            onClick={requestClose} 
+            disabled={saving} 
+            aria-label="Close" 
+            style={{ marginLeft: 'auto', background: 'transparent', border: 'none', cursor: 'pointer' }}
+          >
+            <i className="lni lni-close" style={{ fontSize: 18 }}></i>
+          </button>
         </div>
 
-        <div className="drawer-body" ref={bodyRef}>
+        <div className="modal-body p-6 bg-white overflow-y-auto" style={{ maxHeight: 'calc(90vh - 130px)' }}>
           {readOnlyReason && <div className="warn-box mb-5 text-sm"><i className="lni lni-lock mt-0.5"></i><span>{readOnlyReason}</span></div>}
-          <FormErrors errors={errors} />
 
           {loadingDetail ? (
             <div className="py-10 text-center text-sm text-g500"><i className="lni lni-spinner-solid animate-spin mr-2"></i>Loading schedule…</div>
@@ -936,7 +964,7 @@ function ExamScheduleDrawer({ mode, guid, readOnly: readOnlyProp, readOnlyReason
           )}
         </div>
 
-        <div className="drawer-ftr">
+        <div className="modal-ftr flex justify-end gap-3 p-4 border-t border-slate-200 bg-slate-50">
           <button className="btn btn-neu" onClick={requestClose} disabled={saving}>{readOnly ? 'Close' : 'Cancel'}</button>
           {!readOnly && (
             <button className="btn btn-primary" onClick={handleSave} disabled={saving || loadingDetail || (!isAdd && !detail)}>
@@ -1093,7 +1121,7 @@ function WindowScheduleForm({ kind, query, saving, readOnly, readOnlyReason, sho
       const code = errCode(err)
       if (code === 'validation_error') { setErrors(errList(err, 'Please correct the highlighted fields.')); return }
       if (code === 'forbidden') onForbidden()
-      setErrors([errMsg(err, `Could not save the ${label.toLowerCase()} schedule.`)])
+      setErrors(errList(err, `Could not save the ${label.toLowerCase()} schedule.`))
       // Locked after start / changed by someone else — reload the tab.
       if (code === 'conflict') {
         const res = await query.refetch()
