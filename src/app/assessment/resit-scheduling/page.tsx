@@ -1099,6 +1099,11 @@ function WindowScheduleForm({ kind, query, saving, readOnly, readOnlyReason, sho
   const [form, setForm] = useState<WindowForm>(() => windowFormFrom(data?.schedule ?? null))
   const [baseline, setBaseline] = useState<WindowForm>(form)
   const [errors, setErrors] = useState<string[]>([])
+  // The tab opens on a read-only summary of the saved window; Edit (or
+  // "Schedule …" when nothing is saved yet) opens the form, and Save or
+  // Cancel goes back to the summary.
+  const [editing, setEditing] = useState(false)
+  const [confirmDiscard, setConfirmDiscard] = useState(false)
   const set = <K extends keyof WindowForm>(k: K, v: WindowForm[K]) => setForm(prev => ({ ...prev, [k]: v }))
 
   // Fill from the last loaded data — also what Reset does. Windows arrive in
@@ -1114,9 +1119,22 @@ function WindowScheduleForm({ kind, query, saving, readOnly, readOnlyReason, sho
   const schedule = data?.schedule ?? null
   useEffect(() => { fill(schedule) }, [schedule, fill])
 
-  const dirty = !readOnly && JSON.stringify(form) !== JSON.stringify(baseline)
+  const dirty = editing && !readOnly && JSON.stringify(form) !== JSON.stringify(baseline)
   useEffect(() => { onDirtyChange(dirty) }, [dirty, onDirtyChange])
   useEffect(() => () => onDirtyChange(false), [onDirtyChange])
+
+  // Back to the summary, dropping any edits.
+  function leaveEdit() {
+    fill(data?.schedule ?? null)
+    setErrors([])
+    setConfirmDiscard(false)
+    setEditing(false)
+  }
+  function requestCancel() {
+    if (saving) return
+    if (dirty) setConfirmDiscard(true)
+    else leaveEdit()
+  }
 
   async function handleSave() {
     if (readOnly || saving) return
@@ -1133,6 +1151,7 @@ function WindowScheduleForm({ kind, query, saving, readOnly, readOnlyReason, sho
         examRuleGuid: form.examRuleGuid,
       })
       showToast(`Resit ${label.toLowerCase()} schedule saved successfully.`)
+      setEditing(false)
     } catch (err) {
       const code = errCode(err)
       if (code === 'validation_error') { setErrors(errList(err, 'Please correct the highlighted fields.')); return }
@@ -1160,7 +1179,71 @@ function WindowScheduleForm({ kind, query, saving, readOnly, readOnlyReason, sho
   const fieldsOff = readOnly || saving
   const lockedOff = fieldsOff || locked
   const lockMsg = 'Locked — students have started.'
+  const saved = data.schedule
 
+  // ── Summary (not editing) ──
+  if (!editing) {
+    const summary: { label: string; value: string; icon: string }[] = saved ? [
+      { label: 'Opens', value: fmtLocalDateTime(saved.startDateTime), icon: 'lni-calendar' },
+      { label: 'Closes', value: fmtLocalDateTime(saved.endDateTime), icon: 'lni-calendar' },
+      ...(isCt && 'durationMinutes' in saved ? [{ label: 'Duration', value: `${saved.durationMinutes} min`, icon: 'lni-timer' }] : []),
+      { label: 'Test Type', value: testTypeLabel(saved.testType), icon: 'lni-display' },
+      { label: 'Publish', value: publishLabel(saved.publishStatus), icon: 'lni-eye' },
+      { label: 'Exam Rule', value: [saved.examRuleCode, saved.examRuleName].filter(Boolean).join(' · ') || '—', icon: 'lni-list' },
+    ] : []
+    return (
+      <div style={{ padding: 24, maxWidth: 860 }}>
+        <div className="flex items-center justify-between gap-3 flex-wrap mb-5">
+          <div className="card-title" style={{ marginBottom: 0 }}>
+            <span className="ctitle-icon"><i className={`lni ${isCt ? 'lni-pencil-alt' : 'lni-timer'}`}></i></span> {label} Schedule
+            {saved
+              ? <span className={`badge ${saved.publishStatus === 1 ? 'badge-green' : 'badge-amber'}`} style={{ marginLeft: 8 }}>{saved.publishStatus === 1 ? 'Scheduled' : 'Scheduled · Not published'}</span>
+              : <span className="badge badge-amber" style={{ marginLeft: 8 }}>Not scheduled</span>}
+          </div>
+          {!readOnly && saved && (
+            <button className="btn btn-primary btn-sm" onClick={() => setEditing(true)}>
+              <i className="lni lni-pencil"></i> Edit
+            </button>
+          )}
+        </div>
+
+        {readOnlyReason && <div className="warn-box mb-5 text-sm"><i className="lni lni-lock mt-0.5"></i><span>{readOnlyReason}</span></div>}
+
+        {saved ? (
+          <>
+            {locked && (
+              <div className="warn-box mb-5 text-sm">
+                <i className="lni lni-lock mt-0.5"></i>
+                <span><strong>{data.studentsStarted} student{data.studentsStarted === 1 ? ' has' : 's have'} started.</strong> {isCt ? 'Exam rule, duration and test type' : 'Exam rule and test type'} can no longer change.</span>
+              </div>
+            )}
+            <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
+              {summary.map(f => (
+                <div key={f.label} className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+                  <dt className="text-xs font-semibold uppercase tracking-wide text-g500"><i className={`lni ${f.icon} mr-1.5`} aria-hidden="true"></i>{f.label}</dt>
+                  <dd className="mt-1 text-sm font-semibold text-g900">{f.value}</dd>
+                </div>
+              ))}
+            </dl>
+            <div className="text-xs text-g500 mt-3">Times are in your local time.</div>
+          </>
+        ) : (
+          <div className="rounded-lg border border-dashed border-slate-300 px-6 py-10 text-center">
+            <i className={`lni ${isCt ? 'lni-pencil-alt' : 'lni-timer'} text-3xl text-g400`} aria-hidden="true"></i>
+            <div className="mt-2 font-semibold text-g800">No {label.toLowerCase()} window yet</div>
+            <div className="text-sm text-g500 mt-1">Set when the resit {label.toLowerCase()} opens and closes for students.</div>
+            {!readOnly && (
+              <button className="btn btn-primary btn-sm mt-4" onClick={() => setEditing(true)}>
+                <i className="lni lni-plus"></i> Schedule {label}
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // ── Form (editing) ──
   return (
     <div style={{ padding: 24, maxWidth: 860 }}>
       <div className="card-title mb-5">
@@ -1244,12 +1327,19 @@ function WindowScheduleForm({ kind, query, saving, readOnly, readOnlyReason, sho
 
       {!readOnly && (
         <div className="flex justify-end gap-3 mt-8 pt-6 border-t border-slate-200">
+          <button className="btn btn-neu" onClick={requestCancel} disabled={saving} style={{ marginRight: 'auto' }}>
+            <i className="lni lni-arrow-left"></i> Cancel
+          </button>
           <button className="btn btn-neu" onClick={() => { fill(data.schedule); setErrors([]) }} disabled={saving || !dirty}>Reset</button>
           <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
             {saving ? 'Saving…' : 'Save'}
           </button>
         </div>
       )}
+
+      {/* Portalled: the tab panel's enter animation leaves a transform that
+          would trap a fixed overlay inside it. */}
+      {confirmDiscard && createPortal(<DiscardConfirm onKeep={() => setConfirmDiscard(false)} onDiscard={leaveEdit} />, document.body)}
     </div>
   )
 }
