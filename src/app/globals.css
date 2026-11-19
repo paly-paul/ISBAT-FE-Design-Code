@@ -15371,7 +15371,9 @@ button.mp-avatar { padding: 0; font-family: inherit; }
 .mp-pw { position: relative; }
 .mp-pw .ctrl { padding-right: 42px; }
 .mp-pw-toggle {
-  position: absolute; right: 4px; top: 50%; transform: translateY(-50%); width: 34px; height: 34px;
+  /* Smaller than the input so its hover/shown background stays inside the
+     field's border instead of covering it. */
+  position: absolute; right: 6px; top: 50%; transform: translateY(-50%); width: 28px; height: 28px;
   display: grid; place-items: center; border: 0; border-radius: var(--rxs); background: none;
   color: var(--g400); cursor: pointer; transition: color var(--tr), background var(--tr);
 }
@@ -15470,6 +15472,21 @@ button.mp-avatar { padding: 0; font-family: inherit; }
 }
 .mp-signin-meta { display: flex; align-items: center; gap: 5px; margin-top: 3px; font-size: var(--fs-sm); color: var(--g500); }
 .mp-signin-meta i { font-size: 12px; color: var(--g400); }
+.mp-signin-badge.is-ended { background: var(--g100); color: var(--g500); }
+.mp-signin-more { display: flex; justify-content: center; gap: 8px; padding-top: 12px; border-top: 1px solid var(--g100); margin-top: 4px; }
+/* The Security cards share one height, set by the Change Password form: the
+   sign-in list has no height of its own (height: 0) and fills what's left
+   of its card, scrolling inside it. Stacked (≤900px, where .g2 goes to one
+   column) there's no neighbour to match, so it gets a max height instead. */
+.mp-signin-card { display: flex; flex-direction: column; }
+.mp-signin-scroll {
+  flex: 1 1 0; height: 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+  margin-right: -8px; padding-right: 8px; /* room for the scrollbar */
+}
+@media (max-width: 900px) {
+  .mp-signin-scroll { flex: none; height: auto; max-height: 420px; }
+}
+.mp-pw.is-err .ctrl { border-color: var(--red); }
 
 @media (prefers-reduced-motion: reduce) {
   .mp-panel, .mp-savebar-dot::after { animation: none; }

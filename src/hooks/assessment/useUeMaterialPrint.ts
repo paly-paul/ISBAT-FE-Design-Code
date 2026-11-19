@@ -13,6 +13,7 @@ import {
   downloadUeQuestionTheoryWord,
   deleteUeQuestionTheory,
   downloadUeQuestionTheoryAnswerKey,
+  downloadUePracticalAnswerKey,
   downloadUeConsolidatedMarkSheet,
   UePrintParams,
 } from '@/lib/api/assessment/ueMaterialPrint'
@@ -88,6 +89,11 @@ export function useDeleteUeQuestionTheory() {
 export function useDownloadUeQuestionTheoryAnswerKey() {
   return useMutation({
     mutationFn: (data: UePrintParams) => downloadUeQuestionTheoryAnswerKey(data)
+  })
+}
+export function useDownloadUePracticalAnswerKey() {
+  return useMutation({
+    mutationFn: (data: UePrintParams) => downloadUePracticalAnswerKey(data)
   })
 }
 

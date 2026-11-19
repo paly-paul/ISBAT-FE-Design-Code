@@ -16,6 +16,7 @@ import {
   useDownloadUeQuestionTheoryPdf,
   useDeleteUeQuestionTheory,
   useDownloadUeQuestionTheoryAnswerKey,
+  useDownloadUePracticalAnswerKey,
   useDownloadUeBookletAttendance,
   useDownloadUeBookletCover,
   useDownloadUeConsolidatedMarkSheet,
@@ -129,9 +130,9 @@ export default function UniversityExamMaterialPrintPage() {
   // [0, 1] Combined, null Project / no type. Only a Combined unit offers the
   // Theory/Practical radio; a Practical-only unit uses the practical calls
   // with no radio, and everything else prints theory. The choice only
-  // affects the question paper (print, Word, PDF, delete); the answer key is
-  // theory-only, and booklet, attendance, cover letter and mark sheet keep
-  // the theory layout.
+  // affects the question paper (print, Word, PDF, delete) and the answer key
+  // (theory key, or the practical key once the practical paper is printed);
+  // booklet, attendance, cover letter and mark sheet keep the theory layout.
   const selectedUnit = courseUnits?.find(u => u.courseUnitGuid?.toLowerCase() === courseUnitGuid.toLowerCase()) ?? null
   const allowsTheory = !!selectedUnit?.allowedUeTypes?.includes(UE_TYPE.Theory)
   const allowsPractical = !!selectedUnit?.allowedUeTypes?.includes(UE_TYPE.Practical)
@@ -162,7 +163,7 @@ export default function UniversityExamMaterialPrintPage() {
   const canPrintQuestionPaperWord = formComplete && canPrint
   const canPrintQuestionPaperPdf = formComplete && canPrint
   const canDeleteQuestionPaper = formComplete && canDelete
-  const canGetAnswerKey = formComplete && canGetAnswerKeyPermission && !isPracticalQp
+  const canGetAnswerKey = formComplete && canGetAnswerKeyPermission
   const canGetAttendance = formComplete && canGetAttendancePermission
   const canGetCoverLetter = formComplete && canGetCoverLetterPermission
   const canGetConsolidated = formComplete && canGetConsolidatedPermission
@@ -184,6 +185,7 @@ export default function UniversityExamMaterialPrintPage() {
   const downloadPracticalWord = useDownloadUeQuestionPracticalWord()
   const downloadPracticalPdf = useDownloadUeQuestionPracticalPdf()
   const deletePractical = useDeleteUeQuestionPractical()
+  const downloadPracticalAnswerKey = useDownloadUePracticalAnswerKey()
 
   // The question-paper calls for the chosen paper type — same params and
   // the same confirm-then-reprint flow for both.
@@ -191,6 +193,7 @@ export default function UniversityExamMaterialPrintPage() {
   const qpWord = isPracticalQp ? downloadPracticalWord : downloadTheoryWord
   const qpPdf = isPracticalQp ? downloadPracticalPdf : downloadTheoryPdf
   const qpDelete = isPracticalQp ? deletePractical : deleteTheory
+  const qpAnswerKey = isPracticalQp ? downloadPracticalAnswerKey : downloadTheoryAnswerKey
   const qpLabel = isPracticalQp ? 'Practical' : 'Theory'
 
   const isWorking = activeAction !== null ||
@@ -199,7 +202,7 @@ export default function UniversityExamMaterialPrintPage() {
     printTheory.isPending || downloadTheoryWord.isPending || downloadTheoryPdf.isPending ||
     deleteTheory.isPending || downloadTheoryAnswerKey.isPending ||
     printPractical.isPending || downloadPracticalWord.isPending || downloadPracticalPdf.isPending ||
-    deletePractical.isPending
+    deletePractical.isPending || downloadPracticalAnswerKey.isPending
 
   const request = (confirm = false) => ({
     programGuid,
@@ -361,11 +364,11 @@ export default function UniversityExamMaterialPrintPage() {
     setValidationError(null)
     setActiveAction('answer-key')
     try {
-      const file = await downloadTheoryAnswerKey.mutateAsync(request())
-      download(file.blob, file.filename, 'AnswerKey.pdf')
-      showToast('Answer key downloaded successfully.', 'success')
+      const file = await qpAnswerKey.mutateAsync(request())
+      download(file.blob, file.filename, isPracticalQp ? 'PracticalAnswerKey.pdf' : 'AnswerKey.pdf')
+      showToast(`${qpLabel} answer key downloaded successfully.`, 'success')
     } catch (error: any) {
-      const errMsg = extractApiErrorMessage(error, 'Failed to download answer key.')
+      const errMsg = extractApiErrorMessage(error, `Failed to download ${qpLabel.toLowerCase()} answer key.`)
       setValidationError(errMsg)
       showToast(errMsg, 'error')
     } finally {
@@ -434,8 +437,8 @@ export default function UniversityExamMaterialPrintPage() {
   const qpWordHint = formHint || (!canPrint ? 'You do not have permission to download question papers in Word.' : '')
   const qpDeleteHint = formHint || (!canDelete ? 'You do not have permission to delete question papers.' : '')
   const answerKeyHint = formHint
-    || (isPracticalQp ? 'There is no answer key for practical papers. Select Theory to download it.' : '')
     || (!canGetAnswerKeyPermission ? 'You do not have permission to download answer key.' : '')
+    || (isPracticalQp ? 'Practical answer key — available once the practical question paper has been printed.' : '')
   const attendanceHint = formHint || (!canGetAttendancePermission ? 'You do not have permission to download attendance sheet.' : '')
   const coverLetterHint = formHint || (!canGetCoverLetterPermission ? 'You do not have permission to download cover letter.' : '')
   const consolidatedHint = formHint || (!canGetConsolidatedPermission ? 'You do not have permission to download consolidated mark sheet.' : '')

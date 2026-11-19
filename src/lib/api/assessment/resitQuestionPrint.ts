@@ -125,6 +125,21 @@ export function getResitTheoryAnswerKey(paramsObj: ResitParams) {
   return apiGetBlob(`/api/v1/assessment/resit-question-print/theory/answer-key?${params.toString()}`)
 }
 
+// One PDF per unit listing every distinct practical question printed for at
+// least one student, with its answer (resit-question-print/
+// get-practical-answer-key.md). Same four query params as the other
+// downloads. 404 until the practical paper has been printed.
+export function getResitPracticalAnswerKey(paramsObj: ResitParams) {
+  if (MOCK_AUTH) return Promise.resolve({ blob: new Blob(['mock practical answer key'], { type: 'application/pdf' }), filename: 'ResitPracticalAnswerKey.pdf' })
+  const params = new URLSearchParams({
+    programGuid: paramsObj.programGuid?.toUpperCase() || '',
+    semesterGuid: paramsObj.semesterGuid?.toUpperCase() || '',
+    courseUnitGuid: paramsObj.courseUnitGuid?.toUpperCase() || '',
+    academicIntakeGuid: paramsObj.academicIntakeGuid?.toUpperCase() || ''
+  })
+  return apiGetBlob(`/api/v1/assessment/resit-question-print/practical/answer-key?${params.toString()}`)
+}
+
 // -- Practical Actions --
 export async function postResitPractical(data: ResitParams): Promise<ResitOutcomeResponse> {
   if (MOCK_AUTH) return { outcome: 'Printed' as const, message: '' }

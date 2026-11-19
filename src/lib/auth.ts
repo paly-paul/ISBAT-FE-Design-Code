@@ -220,3 +220,66 @@ export function changeExpiredPassword(
     }
   })
 }
+
+// Change password while signed in (post-change-password.md). Any signed-in
+// staff user, no permission. On success the backend sets fresh erp_access /
+// erp_refresh cookies (this device stays signed in) and signs out every
+// other device. "Confirm new password" is a UI-only check and isn't sent.
+// Errors (all checked by `code`): current_password_incorrect and
+// password_unchanged (400 — deliberately not 401, so a typo doesn't trigger
+// the refresh/logout handler), validation_error (400, messages in errors[]),
+// unauthorized (401, handled by the client: refresh, else back to login),
+// rate_limit_exceeded (429). The backend only enforces 8+ characters; the
+// other rules are checked in the UI.
+export function changePassword(currentPassword: string, newPassword: string): Promise<void> {
+  if (MOCK_AUTH) {
+    if (currentPassword !== MOCK_CREDENTIALS.staff.password) return Promise.reject(new AuthError('current_password_incorrect', 'Current password is incorrect.'))
+    if (newPassword === currentPassword) return Promise.reject(new AuthError('password_unchanged', 'New password must be different from the current password.'))
+    return new Promise(resolve => setTimeout(resolve, 400))
+  }
+  return apiPost<unknown>('/api/v1/users/auth/change-password', { currentPassword, newPassword }).then(() => undefined)
+}
+
+// Recent sign-ins for the signed-in user only, newest first
+// (get-sign-in-activity.md). One row per login / change-password /
+// change-expired-password; silent refreshes and failed logins don't appear.
+// History starts at deployment, so the list can be empty.
+export interface SignInActivity {
+  browser: string            // "Unknown" for rare browsers
+  os: string                 // device name for Apple mobiles, e.g. "iPhone"
+  deviceType: string         // "Desktop" | "Mobile" (tablets too) | "Unknown"
+  location: string | null    // always null for now
+  signedInAt: string         // UTC, with "Z"
+  isActive: boolean          // false once logged out, revoked or expired
+  isCurrentDevice: boolean
+}
+
+export interface SignInActivityPage {
+  items: SignInActivity[]
+  totalCount: number
+  pageNumber: number
+  pageSize: number
+}
+
+const MOCK_SIGN_INS: SignInActivity[] = [
+  { browser: 'Chrome', os: 'Windows', deviceType: 'Desktop', location: null, signedInAt: new Date().toISOString(), isActive: true, isCurrentDevice: true },
+  { browser: 'Safari', os: 'iPhone', deviceType: 'Mobile', location: null, signedInAt: new Date(Date.now() - 86_400_000).toISOString(), isActive: true, isCurrentDevice: false },
+  { browser: 'Chrome', os: 'Windows', deviceType: 'Desktop', location: null, signedInAt: new Date(Date.now() - 9 * 86_400_000).toISOString(), isActive: false, isCurrentDevice: false },
+]
+
+// pageSize is capped at 50 by the backend; bad values are corrected, not rejected.
+export function getSignInActivity(page = 1, pageSize = 10): Promise<SignInActivityPage> {
+  if (MOCK_AUTH) {
+    const start = (page - 1) * pageSize
+    return new Promise(resolve => setTimeout(() => resolve({
+      items: MOCK_SIGN_INS.slice(start, start + pageSize), totalCount: MOCK_SIGN_INS.length, pageNumber: page, pageSize,
+    }), 300))
+  }
+  return apiGet<SignInActivityPage | null>(`/api/v1/users/auth/sign-in-activity?page=${page}&pageSize=${pageSize}`)
+    .then(data => ({
+      items: data?.items ?? [],
+      totalCount: data?.totalCount ?? 0,
+      pageNumber: data?.pageNumber ?? page,
+      pageSize: data?.pageSize ?? pageSize,
+    }))
+}

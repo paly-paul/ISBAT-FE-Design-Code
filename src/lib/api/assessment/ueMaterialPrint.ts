@@ -131,6 +131,22 @@ export function downloadUeQuestionTheoryAnswerKey(paramsObj: UePrintParams) {
   return apiGetBlob(`/api/v1/assessment/ue-question-print/theory/answer-key?${params.toString()}`)
 }
 
+// One PDF per unit listing every distinct practical question printed for at
+// least one student, with its answer (get-practical-answer-key.md). Covers
+// Combined and Practical-only units. 404 until the practical paper has been
+// printed: "Practical question paper has not been printed for this
+// program/semester/unit."
+export function downloadUePracticalAnswerKey(paramsObj: UePrintParams) {
+  if (MOCK_AUTH) return Promise.resolve({ blob: new Blob(['mock practical answer key'], { type: 'application/pdf' }), filename: 'PracticalAnswerKey.pdf' })
+  const params = new URLSearchParams({
+    programGuid: paramsObj.programGuid?.toUpperCase() || '',
+    semesterGuid: paramsObj.semesterGuid?.toUpperCase() || '',
+    courseUnitGuid: paramsObj.courseUnitGuid?.toUpperCase() || '',
+    intakeGuid: paramsObj.intakeGuid?.toUpperCase() || ''
+  })
+  return apiGetBlob(`/api/v1/assessment/ue-question-print/practical/answer-key?${params.toString()}`)
+}
+
 // -- Booklet Actions --
 export async function printUeBooklet(data: UePrintParams): Promise<UeBookletResponse> {
   if (MOCK_AUTH) return { confirmationRequired: false, message: '', wasReprint: false, totalStudentCount: 42, addedStudentCount: 0 }
