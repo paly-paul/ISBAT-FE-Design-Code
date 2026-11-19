@@ -709,8 +709,15 @@ function ExamScheduleModal({ mode, guid, readOnly: readOnlyProp, readOnlyReason:
   const [form, setForm] = useState<ExamForm>(EXAM_DEFAULTS)
   const [baseline, setBaseline] = useState<ExamForm>(EXAM_DEFAULTS)
   const [confirmDiscard, setConfirmDiscard] = useState(false)
+  // The server's own message(s) from the last failed save, shown on the form
+  // as sent (e.g. "No student has applied for the Theory university exam
+  // resit of MT01. Choose the exam type the students applied for.") so staff
+  // can correct the exam type. Cleared once the unit or part changes.
+  const [serverErrors, setServerErrors] = useState<string[]>([])
+  const bodyRef = useRef<HTMLDivElement>(null)
   const set = <K extends keyof ExamForm>(k: K, v: ExamForm[K]) => {
     setForm(prev => ({ ...prev, [k]: v }))
+    if (k === 'ueType') setServerErrors([])
   }
 
   // Edit: fill from GET /resit-schedule/{guid} (also after a 409 reload).
@@ -769,20 +776,27 @@ function ExamScheduleModal({ mode, guid, readOnly: readOnlyProp, readOnlyReason:
   function changeUnit(guidValue: string) {
     const u = units?.find(x => x.courseUnitGuid === guidValue)
     setForm(prev => ({ ...prev, courseUnitGuid: guidValue, ueType: u?.isTheoryPracticalUnit && u.theoryScheduled ? 1 : 0 }))
+    setServerErrors([])
+  }
+
+  // Server messages go on the form, word for word, and also in a toast.
+  function showServerErrors(list: string[]) {
+    setServerErrors(list)
+    bodyRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
+    showToast(list[0], 'error')
   }
 
   function handleError(err: unknown) {
     const code = errCode(err)
     if (code === 'validation_error') {
-      const list = errList(err, 'Please correct the highlighted fields.')
-      showToast(list[0], 'error')
+      showServerErrors(errList(err, 'Please correct the highlighted fields.'))
       return
     }
     if (code === 'not_found' && !isAdd) return onStale(errMsg(err, 'Resit schedule not found.'))
     if (code === 'conflict') { onConflict(); if (!isAdd) detailQuery.refetch() }
     if (code === 'forbidden') onForbidden()
     const msg = (err as { errors?: string[] } | null)?.errors?.[0] || errMsg(err, isAdd ? 'Could not create the resit schedule.' : 'Could not update the resit schedule.')
-    showToast(msg, 'error')
+    showServerErrors([msg])
   }
 
   function handleSave() {
@@ -792,6 +806,7 @@ function ExamScheduleModal({ mode, guid, readOnly: readOnlyProp, readOnlyReason:
       return
     }
     if (readOnly) return
+    setServerErrors([])
     const invalid = validateExam(form, isAdd)
     if (invalid.length) {
       showToast(invalid[0], 'error')
@@ -851,8 +866,9 @@ function ExamScheduleModal({ mode, guid, readOnly: readOnlyProp, readOnlyReason:
           </button>
         </div>
 
-        <div className="modal-body p-6 bg-white overflow-y-auto" style={{ maxHeight: 'calc(90vh - 130px)' }}>
+        <div ref={bodyRef} className="modal-body p-6 bg-white overflow-y-auto" style={{ maxHeight: 'calc(90vh - 130px)' }}>
           {readOnlyReason && <div className="warn-box mb-5 text-sm"><i className="lni lni-lock mt-0.5"></i><span>{readOnlyReason}</span></div>}
+          {serverErrors.length > 0 && <div className="mb-5"><FormErrors errors={serverErrors} /></div>}
 
           {loadingDetail ? (
             <div className="py-10 text-center text-sm text-g500"><i className="lni lni-spinner-solid animate-spin mr-2"></i>Loading schedule…</div>

@@ -51,7 +51,10 @@ export interface ResitScheduleCourseUnitDto {
 
 export interface ResitScheduleSaveCommand {
   courseUnitGuid?: string // only for create
-  ueType?: number // only for create
+  // Only for create, and always sent: the server treats a missing value as
+  // 0 (Theory), and rejects a part no student applied for with a 400 whose
+  // message is shown on the form as-is.
+  ueType?: number
   examDate: string
   startTime: string
   endTime: string
@@ -240,9 +243,14 @@ export function createResitSchedule(data: ResitScheduleSaveCommand): Promise<Res
     const u = MOCK_UNITS.find(x => x.courseUnitGuid === data.courseUnitGuid)
     if (!u) return Promise.reject(mockError('not_found', 'Course unit not found.'))
     const ueType = data.ueType ?? 0
-    if (ueType === 1 && !u.isTheoryPracticalUnit) return Promise.reject(mockError('bad_request', 'Practical can be scheduled only for theory + practical units.'))
+    const typeName = ueType === 1 ? 'Practical' : 'Theory'
+    if (ueType === 1 && !u.isTheoryPracticalUnit) return Promise.reject(mockError('bad_request', 'Practical can only be scheduled for a combined (theory and practical) unit.'))
+    // Mock: nobody applied for the Practical resit of BIT2208, so it can't be scheduled.
+    if (u.unitCode === 'BIT2208' && ueType === 1) {
+      return Promise.reject(mockError('bad_request', `No student has applied for the ${typeName} university exam resit of ${u.unitCode}. Choose the exam type the students applied for.`))
+    }
     if (mockSchedules.some(s => s.courseUnitGuid === u.courseUnitGuid && s.ueType === ueType)) {
-      return Promise.reject(mockError('conflict', `${u.unitCode} ${ueType === 1 ? 'Practical' : 'Theory'} is already scheduled for this resit.`))
+      return Promise.reject(mockError('conflict', `${u.unitCode} is already scheduled for ${typeName} in the active resit.`))
     }
     const row: MockSchedule = {
       resitScheduleGuid: `rs-sch-${++mockSeq}`,
