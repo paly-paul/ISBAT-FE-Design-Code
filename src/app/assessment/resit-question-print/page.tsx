@@ -17,6 +17,7 @@ import {
   useDownloadResitTheoryWord,
   useDeleteResitTheory,
   useDownloadResitTheoryAnswerKey,
+  useDownloadResitPracticalAnswerKey,
   usePrintResitPractical,
   useDownloadResitPracticalPdf,
   useDownloadResitPracticalWord,
@@ -112,6 +113,7 @@ export default function ResitQuestionPrintPage() {
   const dlPracticalPdfMut = useDownloadResitPracticalPdf()
   const dlPracticalWordMut = useDownloadResitPracticalWord()
   const delPracticalMut = useDeleteResitPractical()
+  const dlPracticalAnswerKeyMut = useDownloadResitPracticalAnswerKey()
 
   const printBookletMut = usePrintResitBooklet()
   const dlBookletPdfMut = useDownloadResitBookletPdf()
@@ -176,7 +178,7 @@ export default function ResitQuestionPrintPage() {
   const canPrintQuestionPaperWord = formComplete && canPrint
   const canPrintQuestionPaperPdf = formComplete && canPrint
   const canDeleteQuestionPaper = formComplete && canDelete
-  const canGetAnswerKey = formComplete && canGetAnswerKeyPermission && effectiveType !== 'Practical'
+  const canGetAnswerKey = formComplete && canGetAnswerKeyPermission
   const canGetAttendance = formComplete && canGetAttendancePermission
   const canGetCoverLetter = formComplete && canGetCoverLetterPermission
   const canGetConsolidated = formComplete && canGetConsolidatedPermission
@@ -192,7 +194,7 @@ export default function ResitQuestionPrintPage() {
     printTheoryMut.isPending || dlTheoryPdfMut.isPending || dlTheoryWordMut.isPending ||
     delTheoryMut.isPending || dlAnswerKeyMut.isPending ||
     printPracticalMut.isPending || dlPracticalPdfMut.isPending || dlPracticalWordMut.isPending ||
-    delPracticalMut.isPending ||
+    delPracticalMut.isPending || dlPracticalAnswerKeyMut.isPending ||
     printBookletMut.isPending || dlBookletPdfMut.isPending ||
     dlAttendanceMut.isPending || dlCoverMut.isPending || dlConsolidatedMut.isPending
 
@@ -387,17 +389,20 @@ export default function ResitQuestionPrintPage() {
     }
   }
 
-  // 4. Download Answer Key (Theory only)
+  // 4. Download Answer Key — theory key, or the practical key for practical
+  // units / the Practical side of a Combined unit (404 until that paper has
+  // been printed; the server's message is shown as-is).
   const handleAnswerKeyDownload = async () => {
     if (!canGetAnswerKey || isWorking) return
     setValidationError(null)
     setActiveAction('answer-key')
+    const label = isPractical ? 'Practical' : 'Theory'
     try {
-      const file = await dlAnswerKeyMut.mutateAsync(buildRequest())
-      downloadFile(file.blob, file.filename, 'AnswerKey.pdf')
-      showToast('Answer key downloaded successfully.', 'success')
+      const file = await (isPractical ? dlPracticalAnswerKeyMut : dlAnswerKeyMut).mutateAsync(buildRequest())
+      downloadFile(file.blob, file.filename, isPractical ? 'ResitPracticalAnswerKey.pdf' : 'AnswerKey.pdf')
+      showToast(`${label} answer key downloaded successfully.`, 'success')
     } catch (error: any) {
-      const errMsg = extractApiErrorMessage(error, 'Failed to download answer key.')
+      const errMsg = extractApiErrorMessage(error, `Failed to download ${label.toLowerCase()} answer key.`)
       setValidationError(errMsg)
       showToast(errMsg, 'error')
     } finally {
@@ -465,7 +470,9 @@ export default function ResitQuestionPrintPage() {
   const qpPdfHint = formHint || (!canPrint ? 'You do not have permission to print question papers.' : '')
   const qpWordHint = formHint || (!canPrint ? 'You do not have permission to download question papers in Word.' : '')
   const qpDeleteHint = formHint || (!canDelete ? 'You do not have permission to delete question papers.' : '')
-  const answerKeyHint = formHint || (effectiveType === 'Practical' ? 'Answer Key is only applicable for Theory components.' : (!canGetAnswerKeyPermission ? 'You do not have permission to download answer key.' : ''))
+  const answerKeyHint = formHint
+    || (!canGetAnswerKeyPermission ? 'You do not have permission to download answer key.' : '')
+    || (isPractical ? 'Practical answer key — available once the practical question paper has been printed.' : '')
   const attendanceHint = formHint || (!canGetAttendancePermission ? 'You do not have permission to download attendance sheet.' : '')
   const coverLetterHint = formHint || (!canGetCoverLetterPermission ? 'You do not have permission to download cover letter.' : '')
   const consolidatedHint = formHint || (!canGetConsolidatedPermission ? 'You do not have permission to download consolidated mark sheet.' : '')
@@ -633,17 +640,15 @@ export default function ResitQuestionPrintPage() {
                 {activeAction === 'qp-word' ? 'Downloading...' : 'QP Print in MS Word'}
               </button>
 
-              {!isPractical && (
-                <button
-                  className="flex flex-col items-center justify-center p-4 border rounded-xl gap-2 text-sm font-medium transition-all hover:border-primary hover:text-primary hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-gray-200 disabled:hover:shadow-none disabled:hover:text-gray-700 bg-sky-50 border-sky-100"
-                  onClick={handleAnswerKeyDownload}
-                  disabled={!canGetAnswerKey || isWorking}
-                  title={answerKeyHint}
-                >
-                  <i className={`lni ${activeAction === 'answer-key' ? 'lni-spinner lni-is-spinning' : 'lni-key'} text-3xl text-amber-500`}></i>
-                  {activeAction === 'answer-key' ? 'Downloading...' : 'Answer Key'}
-                </button>
-              )}
+              <button
+                className="flex flex-col items-center justify-center p-4 border rounded-xl gap-2 text-sm font-medium transition-all hover:border-primary hover:text-primary hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-gray-200 disabled:hover:shadow-none disabled:hover:text-gray-700 bg-sky-50 border-sky-100"
+                onClick={handleAnswerKeyDownload}
+                disabled={!canGetAnswerKey || isWorking}
+                title={answerKeyHint}
+              >
+                <i className={`lni ${activeAction === 'answer-key' ? 'lni-spinner lni-is-spinning' : 'lni-key'} text-3xl text-amber-500`}></i>
+                {activeAction === 'answer-key' ? 'Downloading...' : 'Answer Key'}
+              </button>
 
               <button
                 className="flex flex-col items-center justify-center p-4 border rounded-xl gap-2 text-sm font-medium transition-all hover:border-red-500 hover:text-red-600 hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-gray-200 disabled:hover:shadow-none disabled:hover:text-gray-700 bg-red-50 border-red-100"

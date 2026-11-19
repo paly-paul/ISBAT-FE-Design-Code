@@ -6,6 +6,7 @@ import {
   getResitTheoryWord,
   deleteResitTheory,
   getResitTheoryAnswerKey,
+  getResitPracticalAnswerKey,
   postResitPractical,
   getResitPracticalPdf,
   getResitPracticalWord,
@@ -49,6 +50,11 @@ export function useDeleteResitTheory() {
 export function useDownloadResitTheoryAnswerKey() {
   return useMutation({
     mutationFn: (data: ResitParams) => getResitTheoryAnswerKey(data)
+  })
+}
+export function useDownloadResitPracticalAnswerKey() {
+  return useMutation({
+    mutationFn: (data: ResitParams) => getResitPracticalAnswerKey(data)
   })
 }
 

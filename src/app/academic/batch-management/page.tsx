@@ -373,6 +373,9 @@ export default function Page() {
           batchGuid={null}
           createBatch={createBatch}
           updateBatch={updateBatch}
+          // The list shows one intake at a time and defaults to the admission
+          // intake, so switch to the new batch's intake to show it.
+          onCreated={guid => { setIntakeGuid(guid); setFilters({}); setSearch(''); setPage(1) }}
         />
       )}
       {openModals.has('edit-batch-modal') && (

@@ -326,6 +326,8 @@ export async function apiPostWithMessage<T>(path: string, body: unknown, retried
     return { data: envelope.data as T, message: envelope.message }
   }
 
+  // The rate limiter can answer 429 with no JSON body.
+  if (res.status === 429 && !envelope?.code) throw new AuthError(RATE_LIMIT_CODE, RATE_LIMIT_MESSAGE)
   const { code, message } = extractErrorInfo(envelope)
   throw new AuthError(code, message, Array.isArray(envelope?.errors) ? envelope.errors : undefined)
 }
@@ -531,6 +533,7 @@ export async function apiPatch<T>(path: string, body: unknown, retried = false):
     return envelope.data as T
   }
 
+  if (res.status === 429 && !envelope?.code) throw new AuthError(RATE_LIMIT_CODE, RATE_LIMIT_MESSAGE)
   const { code, message } = extractErrorInfo(envelope)
   throw new AuthError(code, message)
 }
@@ -637,6 +640,7 @@ export async function apiGet<T>(path: string, retried = false): Promise<T> {
     return envelope.data as T
   }
 
+  if (res.status === 429 && !envelope?.code) throw new AuthError(RATE_LIMIT_CODE, RATE_LIMIT_MESSAGE)
   const { code, message } = extractErrorInfo(envelope)
   throw new AuthError(code, message)
 }

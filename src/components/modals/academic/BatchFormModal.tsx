@@ -25,6 +25,10 @@ interface BatchFormModalProps extends ModalProps {
     mutate: (input: BatchCreateInput, options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => void
     isPending: boolean
   }
+  // Called after a successful create with the batch's intake. The list only
+  // shows one intake at a time, so the page switches to it; otherwise a batch
+  // made for the current or next intake seems not to have saved.
+  onCreated?: (intakeGuid: string) => void
   updateBatch: {
     mutate: (variables: { guid: string; input: BatchUpdateInput }, options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => void
     isPending: boolean
@@ -58,14 +62,28 @@ function earliestBatchStart(intake: { financialYear?: number; intakes?: number }
   return null
 }
 
+// The intake after a given one, as POST /batches derives it (post-batch.md):
+// codes are YYYYS — Spring 20261 is followed by Fall 20262, and Fall 20262
+// by Spring 20271 of the next year. null for a code in another shape.
+function nextIntakeCode(code: number): number | null {
+  const season = code % 10
+  if (season === 1) return code + 1
+  if (season === 2) return (Math.floor(code / 10) + 1) * 10 + 1
+  return null
+}
+
 // Server "not found" messages (all HTTP 400) → the field the user should fix.
 // The third value replaces the server's wording; null shows the server's own
 // message under the field.
 const NOT_FOUND_FIELDS: [RegExp, string, string | null][] = [
   [/intake not found/i,     'intakeGuid',    'This intake no longer exists, or has no month / financial year set. Pick another intake.'],
-  // The picked intake isn't the current one: "Batches can only be created for
-  // the current intake." — shown as the server sends it.
-  [/only be created for the current intake/i, 'intakeGuid', null],
+  // The picked intake isn't one create accepts: "Batches can only be created
+  // for the current, next or admission intake." (validation_error), or the
+  // current / admission intake isn't set up at all ("No current intake is
+  // configured." not_found / "No admission intake is configured.") — all
+  // shown as the server sends them.
+  [/only be created for the current/i, 'intakeGuid', null],
+  [/no (current|admission) intake is configured/i, 'intakeGuid', null],
   [/program not found/i,    'programGuid',   'This programme no longer exists. Pick another programme.'],
   [/semester not found/i,   'semesterGuid',  'This semester no longer exists. Pick another semester.'],
   [/stream not found/i,     'streamGuid',    'This specialization no longer exists. Pick another one.'],
@@ -75,7 +93,7 @@ const NOT_FOUND_FIELDS: [RegExp, string, string | null][] = [
 // Programme/Semester/Stream/Batch Time/Batch In-Charge/Intake are all real guids (BatchCreateInput/
 // BatchUpdateInput in lib/api/academic/batch.ts). bInCharge/pHead come back as the all-zero sentinel
 // guid from GET /batches/:guid when unassigned — treated as unset.
-export function BatchFormModal({ isOpen, onClose, showToast, mode, batchGuid, createBatch, updateBatch }: BatchFormModalProps) {
+export function BatchFormModal({ isOpen, onClose, showToast, mode, batchGuid, createBatch, updateBatch, onCreated }: BatchFormModalProps) {
   const isEdit = mode === 'edit'
   const { data: batch, isLoading, isError, error } = useBatch(batchGuid, isOpen && isEdit)
   const [programGuid, setProgramGuid] = useState('')
@@ -106,11 +124,12 @@ export function BatchFormModal({ isOpen, onClose, showToast, mode, batchGuid, cr
   const selectedHead = useEmployee(pHeadGuid || null)
 
   const { data: programDropdownItems = [], isLoading: isProgramLoading } = useProgramDropdown(undefined, isOpen)
-  // Create offers the current intake and any upcoming one (a higher intake
-  // code), with the current one preselected. post-batch.md still documents
-  // POST /batches as rejecting anything but the current intake, so an upcoming
-  // pick needs that rule lifted on the backend. Edit keeps the batch's own
-  // (locked) intake, whatever it is.
+  // Create offers exactly the intakes POST /batches accepts (post-batch.md,
+  // 2026-11-18): the current intake, the next one after it (see
+  // nextIntakeCode) and the admission intake, with the current one preselected.
+  // There's no "next intake" endpoint, so all three are picked out of the
+  // intakes dropdown by its flags. Edit keeps the batch's own (locked)
+  // intake, whatever it is.
   const currentIntake = useCurrentAcademicIntake(isOpen && !isEdit)
   const { data: intakeDropdownItems = [] } = useIntakesDropdown(isOpen && !isEdit)
   const { data: specializationDropdownItems = [], isLoading: isSpecializationLoading } = useSpecializationsDropdown(isOpen)
@@ -127,13 +146,23 @@ export function BatchFormModal({ isOpen, onClose, showToast, mode, batchGuid, cr
   const intakeOptions = useMemo(() => {
     const toOption = (i: { intakeGuid: string; intakeCode: number; description: string }) => ({ value: i.intakeGuid, label: `${i.intakeCode} — ${i.description}` })
     if (isEdit) return selectedIntake.data ? [toOption(selectedIntake.data)] : []
-    const current = currentIntake.data
-    if (!current) return []
-    return intakeDropdownItems
-      .filter(i => i.intakeCode >= current.intakeCode)
-      .sort((a, b) => a.intakeCode - b.intakeCode)
-      .map(toOption)
-  }, [isEdit, selectedIntake.data, currentIntake.data, intakeDropdownItems])
+    const current = intakeDropdownItems.find(i => i.currentIntake)
+    const nextCode = current ? nextIntakeCode(current.intakeCode) : null
+    const next = nextCode != null ? intakeDropdownItems.find(i => i.intakeCode === nextCode) : undefined
+    const admission = intakeDropdownItems.find(i => i.currentAdmissionIntake)
+    // One option per intake, tagged with every role it has (the admission
+    // intake is often also the current or next one).
+    const tagged = new Map<string, { item: typeof intakeDropdownItems[number]; tags: string[] }>()
+    for (const [item, tag] of [[current, 'Current'], [next, 'Next'], [admission, 'Admission']] as const) {
+      if (!item) continue
+      const entry = tagged.get(item.intakeGuid) ?? { item, tags: [] }
+      entry.tags.push(tag)
+      tagged.set(item.intakeGuid, entry)
+    }
+    return [...tagged.values()]
+      .sort((a, b) => a.item.intakeCode - b.item.intakeCode)
+      .map(({ item, tags }) => ({ ...toOption(item), label: `${toOption(item).label} · ${tags.join(' & ')}` }))
+  }, [isEdit, selectedIntake.data, intakeDropdownItems])
 
   // Preselect the current intake on create as soon as it loads.
   useEffect(() => {
@@ -243,7 +272,7 @@ export function BatchFormModal({ isOpen, onClose, showToast, mode, batchGuid, cr
   function validate() {
     const e: Record<string, string> = {}
     if (!programGuid)    e.programGuid = 'Please select a Programme'
-    if (!intakeGuid)     e.intakeGuid = isEdit || currentIntake.data
+    if (!intakeGuid)     e.intakeGuid = isEdit || currentIntake.data || intakeOptions.length
       ? 'Please select an Intake'
       : currentIntake.isError
         ? 'The current intake couldn’t be loaded. Reload the page and try again.'
@@ -258,12 +287,17 @@ export function BatchFormModal({ isOpen, onClose, showToast, mode, batchGuid, cr
     if (!isEdit && intakeGuid && intake && (!intake.month || !intake.financialYear)) {
       e.intakeGuid = 'This intake has no month or financial year set. Update it in Intake Master first.'
     }
-    // Same rules as POST and PUT (ACD-006/007, post-batch.md / put-batch.md):
-    // both dates required, end strictly after start (equal is rejected).
-    if (!startDate) e.startDate = 'Please select a Start Date'
-    else if (minStart && startChanged && startDate < minStart) e.startDate = `Start date can't be before ${displayDdMmmYyyy(minStart)} for this intake`
-    if (!endDate)   e.endDate = 'Please select an End Date'
-    if (startDate && endDate && endDate <= startDate) e.endDate = 'End date must be after the start date'
+    // Both dates are optional on create and edit (post-batch.md / put-batch.md,
+    // 2026-11-18). On edit an omitted date keeps the stored one rather than
+    // clearing it, so clearing a saved date is refused here instead of
+    // silently doing nothing. End must be strictly after start, checked on
+    // the dates the batch will end up with.
+    if (isEdit && !startDate && originalStart) e.startDate = 'A saved start date can’t be removed. Pick a new date instead.'
+    else if (startDate && minStart && startChanged && startDate < minStart) e.startDate = `Start date can't be before ${displayDdMmmYyyy(minStart)} for this intake`
+    if (isEdit && !endDate && originalEnd) e.endDate = 'A saved end date can’t be removed. Pick a new date instead.'
+    const resultingStart = startDate || originalStart
+    const resultingEnd = endDate || originalEnd
+    if (!e.endDate && resultingStart && resultingEnd && resultingEnd <= resultingStart) e.endDate = 'End date must be after the start date'
     if (isEnded && (!endDate || endDate <= todayUtcYmd())) {
       e.endDate = 'This batch has ended. Extend the end date to a date after today to save.'
     }
@@ -297,6 +331,7 @@ export function BatchFormModal({ isOpen, onClose, showToast, mode, batchGuid, cr
     }
     const onSuccess = () => {
       setSaved(true)
+      if (!isEdit) onCreated?.(intakeGuid)
       showToast(isEdit ? 'Batch updated successfully' : 'Batch created successfully', 'success')
     }
     const onError = (error: Error) => {
@@ -309,9 +344,7 @@ export function BatchFormModal({ isOpen, onClose, showToast, mode, batchGuid, cr
       for (const msg of messages) {
         const fieldHit = NOT_FOUND_FIELDS.find(([re]) => re.test(msg))
         if (fieldHit) fieldErrors[fieldHit[1]] = fieldHit[2] ?? msg
-        else if (/start ?date is required/i.test(msg)) fieldErrors.startDate = 'Please select a Start Date'
         else if (/start ?date cannot be before/i.test(msg)) fieldErrors.startDate = msg
-        else if (/end ?date is required/i.test(msg)) fieldErrors.endDate = 'Please select an End Date'
         else if (/end ?date must be after/i.test(msg)) fieldErrors.endDate = 'End date must be after the start date'
         else if (msg) unmatched.push(msg)
       }
@@ -424,7 +457,7 @@ export function BatchFormModal({ isOpen, onClose, showToast, mode, batchGuid, cr
           <div className="fg">
             <div className="lbl">Intake <span className="req">*</span></div>
             <SearchSelect
-              placeholder={isEdit || currentIntake.isLoading || currentIntake.data
+              placeholder={isEdit || currentIntake.isLoading || currentIntake.data || intakeOptions.length
                 ? '— Select intake —'
                 : currentIntake.isError ? 'Couldn’t load the current intake' : 'No current intake set'}
               options={intakeOptions}
@@ -435,7 +468,7 @@ export function BatchFormModal({ isOpen, onClose, showToast, mode, batchGuid, cr
             />
             {errors.intakeGuid
               ? <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.intakeGuid}</p>
-              : !isEdit && <p className="text-xs text-g500 mt-1">Showing the current intake and upcoming intakes.</p>}
+              : !isEdit && <p className="text-xs text-g500 mt-1">Batches can be created for the current, next or admission intake.</p>}
           </div>
           <div className="fg">
             <div className="lbl">Programme <span className="req">*</span></div>
@@ -495,7 +528,7 @@ export function BatchFormModal({ isOpen, onClose, showToast, mode, batchGuid, cr
             />
           </div>
           <div className="fg">
-            <div className="lbl">Start Date <span className="req">*</span></div>
+            <div className="lbl">Start Date</div>
             {isEnded
               // DatePicker has no disabled mode — show the locked value read-only.
               ? <input className="ctrl" readOnly value={displayYmd(startDate)} style={{ background: 'var(--surface)', color: 'var(--g700)', cursor: 'default' }} aria-label="Start date (locked)" />
@@ -509,7 +542,7 @@ export function BatchFormModal({ isOpen, onClose, showToast, mode, batchGuid, cr
             {errors.startDate && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.startDate}</p>}
           </div>
           <div className="fg">
-            <div className="lbl">End Date <span className="req">*</span></div>
+            <div className="lbl">End Date</div>
             <DatePicker value={endDate} onChange={v => { setEndDate(v); clearError('endDate') }} hasError={!!errors.endDate} />
             {errors.endDate && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.endDate}</p>}
           </div>
