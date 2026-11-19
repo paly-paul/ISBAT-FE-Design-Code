@@ -5,20 +5,45 @@
 // the short-lived download links pushed with a Completed event, and which
 // finished files haven't been downloaded yet this session (the green dot).
 import type { QueryClient } from '@tanstack/react-query'
-import { fixLocalDownloadUrl, getReportJobDownload, type ReportJob } from '@/lib/api/finance/discountReport'
+import { fixLocalDownloadUrl, getReportJobDownload, REPORT_STATUS, type ReportJob } from '@/lib/api/finance/discountReport'
 
 export const REPORT_JOBS_KEY = ['finance', 'report-jobs'] as const
 
 type JobsCache = { items: ReportJob[]; totalCount: number }
 
-// Add a job, or replace the one with the same reportJobGuid (an identical
+// Completed / Failed are final; Queued / Processing are not.
+function isFinal(job: ReportJob) {
+  return job.status.value === REPORT_STATUS.Completed || job.status.value === REPORT_STATUS.Failed
+}
+
+// A job's status only moves forward. A small export can finish, and its
+// Completed push arrive over the hub, before the POST that started it has
+// returned; that POST's response still says Queued. Letting it replace the
+// Completed entry left the page on "Processing…" until a reload, since no
+// further event comes for a finished job. So a non-final status never
+// replaces a final one for the same job; fields the newer entry lacks are
+// filled from the older one.
+function mergeJob(existing: ReportJob, incoming: ReportJob): ReportJob {
+  if (isFinal(existing) && !isFinal(incoming)) {
+    return {
+      ...existing,
+      fileSizeBytes: existing.fileSizeBytes ?? incoming.fileSizeBytes,
+      rowCount: existing.rowCount ?? incoming.rowCount,
+      requestedAt: existing.requestedAt || incoming.requestedAt,
+      reportType: existing.reportType || incoming.reportType,
+    }
+  }
+  return incoming
+}
+
+// Add a job, or update the one with the same reportJobGuid (an identical
 // export clicked twice returns the job already running).
 export function upsertReportJob(queryClient: QueryClient, job: ReportJob) {
   queryClient.setQueryData<JobsCache>(REPORT_JOBS_KEY, prev => {
     const items = prev?.items ?? []
     const exists = items.some(j => j.reportJobGuid === job.reportJobGuid)
     return exists
-      ? { items: items.map(j => (j.reportJobGuid === job.reportJobGuid ? job : j)), totalCount: prev?.totalCount ?? items.length }
+      ? { items: items.map(j => (j.reportJobGuid === job.reportJobGuid ? mergeJob(j, job) : j)), totalCount: prev?.totalCount ?? items.length }
       : { items: [job, ...items], totalCount: (prev?.totalCount ?? items.length) + 1 }
   })
 }
