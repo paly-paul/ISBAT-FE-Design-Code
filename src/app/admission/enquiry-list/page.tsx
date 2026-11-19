@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useMemo, useState } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Toast } from '@/components/Toast'
 import { ScrollTable } from '@/components/ScrollTable'
@@ -14,12 +14,11 @@ import type { Enquiry } from '@/hooks/admission/useEnquiries'
 import { useEnquiries, useEnquiryCounts, useUpdateEnquiry } from '@/hooks/admission/useEnquiries'
 import { useEnquirySourceMastersDropdown } from '@/hooks/admission/useEnquirySourceMasters'
 import { useProgramDropdown } from '@/hooks/academic/useProgramMaster'
-import { useSearchIntakesInfinite } from '@/hooks/academic/useIntakes'
+import { useIntakesDropdown } from '@/hooks/academic/useIntakes'
 import { useEnquiryStatusesDropdown } from '@/hooks/config/useEnquiryStatuses'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { useCountriesByGuids } from '@/hooks/config/useCountries'
 import { formatEnquiryPhone } from '@/lib/api/admission/enquiry'
-import { flattenUniquePages } from '@/lib/pagination'
 
 // Real server-side pagination — only DISPLAY_PAGE_SIZE rows are ever
 // requested for the page currently on screen (see useEnquiries), not the
@@ -64,14 +63,6 @@ export default function EnquiryListPage() {
   // the current page. '' = All (param left out).
   const [statusGuid, setStatusGuid] = useState('')
   const [page, setPage] = useState(1)
-  const [intakeSearch, setIntakeSearch] = useState('')
-  const [committedIntakeSearch, setCommittedIntakeSearch] = useState('')
-  const [intakePickerOpen, setIntakePickerOpen] = useState(false)
-
-  useEffect(() => {
-    const timer = setTimeout(() => setCommittedIntakeSearch(intakeSearch.trim()), 300)
-    return () => clearTimeout(timer)
-  }, [intakeSearch])
 
   const searchTrimmed = search.trim()
   // Server-side search (see getEnquiries) — only actually queried once the
@@ -106,11 +97,8 @@ export default function EnquiryListPage() {
     return programs.find(p => p.programGuid === row.programGuid)?.programName ?? '—'
   }
 
-  const intakeQuery = useSearchIntakesInfinite(committedIntakeSearch, 20, intakePickerOpen)
-  const intakes = useMemo(
-    () => flattenUniquePages(intakeQuery.data?.pages ?? [], i => i.intakeGuid),
-    [intakeQuery.data],
-  )
+  // GET /intakes/dropdown — one cached call, filtered in the browser.
+  const { data: intakes = [], isLoading: intakesLoading } = useIntakesDropdown()
   const intakeOptions = [
     { value: '', label: 'All Intakes' },
     ...intakes.map(i => ({ value: i.intakeGuid, label: `${i.intakeCode} — ${i.description}` })),
@@ -232,12 +220,7 @@ export default function EnquiryListPage() {
               options={intakeOptions}
               value={intakeGuid}
               onChange={v => { setIntakeGuid(v); setPage(1) }}
-              onSearch={setIntakeSearch}
-              onOpenChange={setIntakePickerOpen}
-              isLoading={intakeQuery.isLoading}
-              hasNextPage={intakeQuery.hasNextPage}
-              isFetchingNextPage={intakeQuery.isFetchingNextPage}
-              onLoadMore={() => intakeQuery.fetchNextPage()}
+              isLoading={intakesLoading}
             />
             <SearchSelect className="w-40" options={statusOptions} value={statusGuid} onChange={v => { setStatusGuid(v); setPage(1) }} />
           </div>

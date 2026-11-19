@@ -14,11 +14,17 @@ import { RevertRejectionModal } from '@/components/modals/admission/RevertReject
 import { useVettingQueue, useVettingRejections, useVettingWaitingList, useVetApplication } from '@/hooks/admission/useVetting'
 import { useCurrentAdmissionIntake } from '@/hooks/academic/useIntakes'
 import { VettingQueueItem, VettingRejectionItem } from '@/lib/api/admission/vetting'
-import { getIntakesPaged } from '@/lib/api/academic/intake'
-import { getCampusesPaged } from '@/lib/api/academic/campus'
+import { searchIntakesDropdown } from '@/lib/api/academic/intake'
+import { searchCampusDropdown } from '@/lib/api/academic/campus'
+import { dropdownAsPage } from '@/lib/pagination'
 import { getProgramMastersPage } from '@/lib/api/academic/programMaster'
 import { formatDate } from '@/lib/date'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
+
+// Intake and Campus filters read their dropdown APIs (GET /intakes/dropdown,
+// /campus/dropdown) — one call per search, no paging.
+const intakeDropdownPage = dropdownAsPage(searchIntakesDropdown)
+const campusDropdownPage = dropdownAsPage(searchCampusDropdown)
 
 // Real server-side pagination — only DISPLAY_PAGE_SIZE rows are ever
 // requested for the page currently on screen (studentName search is also a
@@ -380,7 +386,7 @@ export default function VettingPage() {
               <div style={{ width: 200 }}>
                 <InfiniteSearchSelect
                   queryKey={['intakes', 'vetting-waiting']}
-                  fetchPage={getIntakesPaged}
+                  fetchPage={intakeDropdownPage}
                   toOption={i => ({ value: i.intakeGuid, label: `${i.intakeCode} — ${i.description}` })}
                   allLabel="All intakes"
                   value={waitIntake}
@@ -390,7 +396,7 @@ export default function VettingPage() {
               <div style={{ width: 200 }}>
                 <InfiniteSearchSelect
                   queryKey={['campuses', 'vetting-waiting']}
-                  fetchPage={getCampusesPaged}
+                  fetchPage={campusDropdownPage}
                   toOption={c => ({ value: c.campusGuid, label: c.campusName })}
                   allLabel="All campuses"
                   value={waitCampus}
@@ -474,7 +480,7 @@ export default function VettingPage() {
               <div style={{ width: 200 }}>
                 <InfiniteSearchSelect
                   queryKey={['intakes', 'vetting-rejections']}
-                  fetchPage={getIntakesPaged}
+                  fetchPage={intakeDropdownPage}
                   toOption={i => ({ value: i.intakeGuid, label: `${i.intakeCode} — ${i.description}` })}
                   allLabel="All intakes"
                   value={rejIntake}
@@ -484,7 +490,7 @@ export default function VettingPage() {
               <div style={{ width: 200 }}>
                 <InfiniteSearchSelect
                   queryKey={['campuses', 'vetting-rejections']}
-                  fetchPage={getCampusesPaged}
+                  fetchPage={campusDropdownPage}
                   toOption={c => ({ value: c.campusGuid, label: c.campusName })}
                   allLabel="All campuses"
                   value={rejCampus}

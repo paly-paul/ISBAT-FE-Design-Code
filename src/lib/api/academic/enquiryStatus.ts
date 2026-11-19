@@ -1,4 +1,6 @@
 import { apiDelete, apiGet, apiPost, apiPut } from '../client'
+import { getPagedList } from '../pagedList'
+import type { PaginatedItems } from '@/lib/pagination'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
@@ -24,6 +26,11 @@ const mockEnquiryStatuses: EnquiryStatus[] = [
 export function getEnquiryStatuses(): Promise<EnquiryStatus[]> {
   if (MOCK_AUTH) return Promise.resolve(mockEnquiryStatuses)
   return apiGet<EnquiryStatus[] | null>('/api/v1/admissions/enquiry-statuses').then((data: any) => Array.isArray(data) ? data : (data && typeof data === 'object' ? (data.items || Object.values(data).find(Array.isArray) || []) : []))
+}
+
+// One page for the master table (get-enquiry-statuses.md): ?page=&pageSize=&search=.
+export function getEnquiryStatusesPaged(page: number, pageSize: number, search = ''): Promise<PaginatedItems<EnquiryStatus>> {
+  return getPagedList<EnquiryStatus>('/api/v1/admissions/enquiry-statuses', page, pageSize, search, { rows: mockEnquiryStatuses, text: r => `${r.enquiryStatusCode} ${r.enquiryStatusName}` })
 }
 
 // GET /enquiry-statuses/dropdown (get-enquiry-status-dropdown.md). Soft-deleted rows

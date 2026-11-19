@@ -6,12 +6,12 @@ import { SearchSelect } from '@/components/SearchSelect'
 import DatePicker from '@/components/DatePicker'
 import { FailurePopup } from '@/components/modals/shared/FailurePopup'
 import { DocumentPreviewModal } from '@/components/modals/shared/DocumentPreviewModal'
-import { useSearchCampusesInfinite } from '@/hooks/config/useCampuses'
+import { useCampusDropdown } from '@/hooks/config/useCampuses'
 import { useProgramMaster, useProgramMasterByGuid, useSearchProgramMastersInfinite } from '@/hooks/academic/useProgramMaster'
 import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
 import { useBatchTimesDropdown } from '@/hooks/config/useBatchTimes'
 import { useBatch, useFilteredBatches } from '@/hooks/academic/useBatches'
-import { useCountriesByGuids, useKnownCountries, useSearchCountriesInfinite } from '@/hooks/config/useCountries'
+import { useCountriesForPicker } from '@/hooks/config/useCountries'
 import { useProgramFeeStructures } from '@/hooks/academic/useProgramFeeStructure'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { sanitizePhoneInput, sanitizeNameInput } from '@/lib/errorMessages'
@@ -304,9 +304,6 @@ export default function FilingPage() {
   const [showApplicantDropdown, setShowApplicantDropdown] = useState(false)
   const [selectedApplication, setSelectedApplication] = useState<FilingApplicationSearchResult | null>(null)
   const [submitted, setSubmitted] = useState(false)
-  const [countrySearch, setCountrySearch] = useState('')
-  const [countryPickerOpen, setCountryPickerOpen] = useState(false)
-  const [committedCountrySearch, setCommittedCountrySearch] = useState('')
   // searchTerm is CONFIRMED real server-side on this endpoint (2026-09-08) —
   // debounced the same 300ms as the other real-server-search pickers in this
   // app (CourseUnitSearchPicker, Payment Console's student search) so it
@@ -316,10 +313,6 @@ export default function FilingPage() {
     const t = setTimeout(() => setCommittedApplicantSearch(applicantSearchTerm(applicantSearch)), 300)
     return () => clearTimeout(t)
   }, [applicantSearch])
-  useEffect(() => {
-    const t = setTimeout(() => setCommittedCountrySearch(countrySearch.trim()), 300)
-    return () => clearTimeout(t)
-  }, [countrySearch])
 
   // Real server-paginated, scroll-to-load-more applicant search — replaces
   // the old single pageSize=12000 "fetch nearly everything up front, filter
@@ -503,10 +496,10 @@ export default function FilingPage() {
   const [generalSaved, setGeneralSaved] = useState(false)
   const [intApplication, setIntApplication] = useState<number | null>(null)
 
-  const countryQuery = useSearchCountriesInfinite(committedCountrySearch, 20, countryPickerOpen)
-  const countrySearchResults = useMemo(() => flattenUniquePages(countryQuery.data?.pages ?? [], c => c.countryGuid), [countryQuery.data])
-  const campusQuery = useSearchCampusesInfinite('', 20, !!selectedApplication)
-  const campuses = useMemo(() => flattenUniquePages(campusQuery.data?.pages ?? [], c => c.campusGuid), [campusQuery.data])
+  // Country and Campus from their dropdown APIs (GET /countries/dropdown,
+  // /campus/dropdown): one cached call each, filtered in the browser.
+  const { home: homeCountry, known: knownCountries, isLoading: countriesLoading } = useCountriesForPicker()
+  const { data: campuses = [] } = useCampusDropdown(!!selectedApplication)
   const programQuery = useSearchProgramMastersInfinite('', 20, !!selectedApplication)
   const programs = useMemo(() => flattenUniquePages(programQuery.data?.pages ?? [], p => p.programGuid), [programQuery.data])
   const { data: singleProgram }   = useProgramMaster(
@@ -543,7 +536,6 @@ export default function FilingPage() {
   // fix as applied there.
   const { data: feeStructuresData } = useProgramFeeStructures(1, 100, programGuid, !!selectedApplication && !!programGuid)
   const fees = (feeStructuresData?.items ?? []).filter(f => f.programGuid === programGuid && f.status)
-  const { home: homeCountry, known: knownCountries } = useKnownCountries(countrySearchResults)
 
   // CONFIRMED live: a real selected application's programGuid (locked/
   // prefilled from the payment record, see selectApplication above) can
@@ -589,7 +581,7 @@ export default function FilingPage() {
   ]
 
   // Passport/Visa/Refugee sections only apply to non-home-country nationals.
-  // findDefaultCountry (in useKnownCountries), not "first flagged": the live
+  // findDefaultCountry (in useCountriesForPicker), not "first flagged": the live
   // master flags BOTH Equatorial Guinea and Uganda as default (EG first), which
   // made Uganda look foreign and Equatorial Guinea look like home.
   const homeCountryGuid = homeCountry?.countryGuid
@@ -648,28 +640,13 @@ export default function FilingPage() {
     !!selectedApplication,
   )
 
-  // Country pickers: the home country, whatever the picker has loaded, and a
-  // lookup for a saved country that's neither of those, so the field never
-  // looks blank while set.
-  const { countries: savedCountries } = useCountriesByGuids(
-    [countryGuid, spCountryGuid].filter(guid => !knownCountries.some(c => c.countryGuid === guid)),
+  // Country pickers: the full country dropdown, so a saved country (the
+  // applicant's or the sponsor's) is always in the list.
+  const countryOptions = useMemo(
+    () => knownCountries.map(c => ({ value: c.countryGuid, label: c.countryName })),
+    [knownCountries],
   )
-  const countryOptions = useMemo(() => {
-    const map = new Map<string, string>()
-    for (const c of [...knownCountries, ...savedCountries]) map.set(c.countryGuid, c.countryName)
-    return Array.from(map.entries()).map(([value, label]) => ({ value, label }))
-  }, [knownCountries, savedCountries])
-
-  // Sponsor details can now come pre-filled from the enquiry (sponsor
-  // fallback, 2026-10-15). by-payment sends spCountryName alongside the
-  // guid, so seed it as an option — the paged country picker may not have
-  // loaded that country yet, which would leave the field looking blank.
-  const spCountryOptions = useMemo(() => {
-    const name = applicationDetail?.spCountryName
-    if (!spCountryGuid || spCountryGuid !== applicationDetail?.spCountryGuid || !name) return countryOptions
-    if (countryOptions.some(o => o.value === spCountryGuid)) return countryOptions
-    return [{ value: spCountryGuid, label: name }, ...countryOptions]
-  }, [countryOptions, spCountryGuid, applicationDetail?.spCountryGuid, applicationDetail?.spCountryName])
+  const spCountryOptions = countryOptions
 
   // The sponsor phone's dial-code country, when spPhone came from the
   // enquiry (null when it's the application's own). The save request has no
@@ -1510,12 +1487,7 @@ export default function FilingPage() {
                           value={countryGuid}
                           placeholder="-- Select Country --"
                           onChange={setCountryGuid}
-                          onSearch={setCountrySearch}
-                          onOpenChange={setCountryPickerOpen}
-                          isLoading={countryQuery.isLoading}
-                          hasNextPage={countryQuery.hasNextPage}
-                          isFetchingNextPage={countryQuery.isFetchingNextPage}
-                          onLoadMore={() => countryQuery.fetchNextPage()}
+                          isLoading={countriesLoading}
                         />
                       </Field>
                       <Field label="National ID"><Input placeholder="CM-XXXXX-XXXX" value={nationalId} onChange={setNationalId} /></Field>
@@ -1661,12 +1633,7 @@ export default function FilingPage() {
                           value={spCountryGuid}
                           placeholder="-- Select Country --"
                           onChange={setSpCountryGuid}
-                          onSearch={setCountrySearch}
-                          onOpenChange={setCountryPickerOpen}
-                          isLoading={countryQuery.isLoading}
-                          hasNextPage={countryQuery.hasNextPage}
-                          isFetchingNextPage={countryQuery.isFetchingNextPage}
-                          onLoadMore={() => countryQuery.fetchNextPage()}
+                          isLoading={countriesLoading}
                         />
                       </Field>
                       <div className="fg" />

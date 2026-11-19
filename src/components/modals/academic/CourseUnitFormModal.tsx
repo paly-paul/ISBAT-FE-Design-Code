@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ModalProps } from '../types'
 import { SuccessPopup } from '../shared/SuccessPopup'
 import { FailurePopup } from '../shared/FailurePopup'
@@ -9,10 +9,9 @@ import { UpsertCourseUnitOutlineInput } from '@/lib/api/academic/courseUnitOutli
 import { downloadDocument } from '@/lib/documentViewer'
 import { DocumentPreviewModal } from '../shared/DocumentPreviewModal'
 import { useCourseUnit, useUpsertCourseUnitOutlines } from '@/hooks/academic/useCourseUnits'
-import { useSearchRepetitionTagsInfinite } from '@/hooks/academic/useRepetitionTags'
+import { useRepetitionTagDropdown } from '@/hooks/academic/useRepetitionTags'
 import { AuthError } from '@/lib/api/client'
 import { checkCourseUnitAvailability } from '@/lib/api/academic/courseUnit'
-import { flattenUniquePages } from '@/lib/pagination'
 import { scrollToFirstError } from '@/lib/scrollToFirstError'
 
 // Add and Edit share this form — differ in prefill, whether Step 1 POSTs or
@@ -73,9 +72,6 @@ export function CourseUnitFormModal({ isOpen, onClose, showToast, mode, courseUn
   const [numChapters, setNumChapters]   = useState('')
   const [credits, setCredits]           = useState('')
   const [repetitionTagGuid, setRepetitionTagGuid] = useState('')
-  const [repetitionTagSearch, setRepetitionTagSearch] = useState('')
-  const [committedRepetitionTagSearch, setCommittedRepetitionTagSearch] = useState('')
-  const [repetitionTagPickerOpen, setRepetitionTagPickerOpen] = useState(false)
   const [syllabusFile, setSyllabusFile] = useState<File | null>(null)
   // Edit only: the attached syllabus is marked for removal on the next save.
   const [removeSyllabus, setRemoveSyllabus] = useState(false)
@@ -102,20 +98,8 @@ export function CourseUnitFormModal({ isOpen, onClose, showToast, mode, courseUn
   const [cbtFinal, setCbtFinal]         = useState('15')
   const [ueFinal, setUeFinal]           = useState('70')
 
-  const repetitionTagQuery = useSearchRepetitionTagsInfinite(
-    committedRepetitionTagSearch,
-    20,
-    isOpen && repetitionTagPickerOpen,
-  )
-  const repetitionTags = useMemo(
-    () => flattenUniquePages(repetitionTagQuery.data?.pages ?? [], tag => tag.courseUnitRepetitionGuid),
-    [repetitionTagQuery.data],
-  )
-
-  useEffect(() => {
-    const timer = setTimeout(() => setCommittedRepetitionTagSearch(repetitionTagSearch.trim()), 300)
-    return () => clearTimeout(timer)
-  }, [repetitionTagSearch])
+  // GET /course-unit-repetitions/dropdown — one cached call, filtered in the browser.
+  const { data: repetitionTags = [], isLoading: repetitionTagsLoading } = useRepetitionTagDropdown(isOpen)
 
   const finalTotal = (includeCW ? (+cwFinal || 0) : 0) + (includeCBT ? (+cbtFinal || 0) : 0) + (+ueFinal || 0)
   const totalOk    = finalTotal === 100
@@ -392,9 +376,6 @@ export function CourseUnitFormModal({ isOpen, onClose, showToast, mode, courseUn
   if (!isOpen) return null
 
   const repetitionTagOptions = repetitionTags.map(t => ({ value: t.courseUnitRepetitionGuid, label: `${t.tagCode} — ${t.tagName}` }))
-  if (isEdit && repetitionTagGuid && !repetitionTagOptions.some(option => option.value === repetitionTagGuid)) {
-    repetitionTagOptions.unshift({ value: repetitionTagGuid, label: courseUnit?.courseUnitRepetitionName || 'Selected repetition tag' })
-  }
 
   function handleClose() {
     prefilledForRef.current = null
@@ -791,12 +772,7 @@ export function CourseUnitFormModal({ isOpen, onClose, showToast, mode, courseUn
               <SearchSelect
                 placeholder="— Select repetition tag —"
                 value={repetitionTagGuid}
-                onSearch={setRepetitionTagSearch}
-                onOpenChange={setRepetitionTagPickerOpen}
-                isLoading={repetitionTagQuery.isLoading}
-                hasNextPage={repetitionTagQuery.hasNextPage}
-                isFetchingNextPage={repetitionTagQuery.isFetchingNextPage}
-                onLoadMore={() => repetitionTagQuery.fetchNextPage()}
+                isLoading={repetitionTagsLoading}
                 onChange={v => { setRepetitionTagGuid(v); if (errors.repetitionTag) setErrors(p => ({ ...p, repetitionTag: '' })) }}
                 options={repetitionTagOptions}
               />

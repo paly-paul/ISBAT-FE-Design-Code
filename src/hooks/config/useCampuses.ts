@@ -1,34 +1,7 @@
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Campus, CampusInput, createCampus, deleteCampus, getCampusDropdown, getCampuses, getCampusesPaged, updateCampus } from '@/lib/api/academic/campus'
-import { getNextPageParam } from '@/lib/pagination'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Campus, CampusInput, createCampus, deleteCampus, getCampusDropdown, updateCampus } from '@/lib/api/academic/campus'
 
-const CAMPUSES_KEY = ['campuses']
-
-// Load enough rows to cover the full campus list in one request.
-const CAMPUSES_PAGE_SIZE = 1000
-
-export function useCampuses(enabled = true) {
-  return useQuery({
-    queryKey: CAMPUSES_KEY,
-    queryFn: () => getCampuses(1, CAMPUSES_PAGE_SIZE),
-    // Keep the list cached until a mutation invalidates it.
-    staleTime: Infinity,
-    gcTime: Infinity,
-    enabled,
-  })
-}
-
-export function useSearchCampusesInfinite(search: string, pageSize: number, enabled: boolean) {
-  return useInfiniteQuery({
-    queryKey: [...CAMPUSES_KEY, 'search-infinite', search, pageSize],
-    queryFn: ({ pageParam }) => getCampusesPaged(pageParam, pageSize, search),
-    initialPageParam: 1,
-    getNextPageParam,
-    enabled,
-    staleTime: Infinity,
-    gcTime: Infinity,
-  })
-}
+export const CAMPUSES_KEY = ['campuses']
 
 // Small lookup for the Campus dropdown in New/EditFacultyModal (and the
 // filter dropdown in the campus table). enabled defaults to true for that
@@ -43,32 +16,28 @@ export function useCampusDropdown(enabled = true) {
     queryFn: () => getCampusDropdown(),
     staleTime: Infinity,
     gcTime: Infinity,
-    enabled,
-  })
+    enabled })
 }
 
 export function useCreateCampus() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (input: CampusInput) => createCampus(input),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: CAMPUSES_KEY }),
-  })
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: CAMPUSES_KEY }) })
 }
 
 export function useUpdateCampus() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: ({ id, input }: { id: string; input: CampusInput }) => updateCampus(id, input),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: CAMPUSES_KEY }),
-  })
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: CAMPUSES_KEY }) })
 }
 
 export function useDeleteCampus() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (id: string) => deleteCampus(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: CAMPUSES_KEY }),
-  })
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: CAMPUSES_KEY }) })
 }
 
 export type { Campus, CampusInput, CampusDropdownItem } from '@/lib/api/academic/campus'

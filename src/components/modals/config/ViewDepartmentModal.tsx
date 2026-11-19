@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { ModalProps } from '../types'
 import { Department } from '@/lib/api/academic/department'
-import { useEmployees } from '@/hooks/employee/useEmployees'
+import { useEmployeeDropdown } from '@/hooks/employee/useEmployees'
 
 interface ViewDepartmentModalProps extends ModalProps {
   department: Department | null
@@ -14,8 +14,8 @@ export function ViewDepartmentModal({ isOpen, onClose, department, onEdit }: Vie
   const [deptName, setDeptName]   = useState('')
   const [hod, setHod]             = useState('')
 
-  const { data: employees = [] } = useEmployees(isOpen)
-  const hodOptions = employees.map(e => ({ value: e.employeeGuid, label: `${e.empName} (${e.shortCode})` }))
+  const { data: employees = [] } = useEmployeeDropdown(isOpen)
+  const hodOptions = employees.map(e => ({ value: e.employeeGuid, label: e.displayName }))
 
   useEffect(() => {
     if (isOpen && department) {

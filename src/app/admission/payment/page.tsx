@@ -10,8 +10,8 @@ import { ImportOdelModal } from '@/components/modals/admission/ImportOdelModal'
 import { SearchSelect } from '@/components/SearchSelect'
 import DatePicker from '@/components/DatePicker'
 import { useCurrentAcademicIntake, useCurrentAdmissionIntake, useIntake } from '@/hooks/academic/useIntakes'
-import { useSearchCampusesInfinite } from '@/hooks/config/useCampuses'
-import { useCountriesByGuids, useKnownCountries, useSearchCountriesInfinite } from '@/hooks/config/useCountries'
+import { useCampusDropdown } from '@/hooks/config/useCampuses'
+import { useCountriesForPicker } from '@/hooks/config/useCountries'
 import { useSearchProgramMastersByCampusInfinite } from '@/hooks/academic/useProgramMaster'
 import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
 import { useProgramFeeStructures } from '@/hooks/academic/useProgramFeeStructure'
@@ -57,22 +57,6 @@ const PIPELINE = [
 // Source had no counterpart on POST /api/v1/admissions/application-payments
 // anyway; Receipt Type/No. are no longer user-entered at all, they come back
 // on the create response instead (see savedReceipt below).
-
-// UI-only — the confirmed payload's `mobile` field is raw digits with no
-// country prefix (see Create.bru's "700000000" example), so this dropdown
-// never feeds the API; it's here purely so the phone number reads naturally.
-const COUNTRY_CODES = [
-  { value: '+256', label: '+256 · Uganda' },
-  { value: '+254', label: '+254 · Kenya' },
-  { value: '+255', label: '+255 · Tanzania' },
-  { value: '+250', label: '+250 · Rwanda' },
-  { value: '+257', label: '+257 · Burundi' },
-  { value: '+211', label: '+211 · South Sudan' },
-  { value: '+243', label: '+243 · DR Congo' },
-  { value: '+91',  label: '+91 · India' },
-  { value: '+44',  label: '+44 · United Kingdom' },
-  { value: '+1',   label: '+1 · USA/Canada' },
-]
 
 // CONFIRMED via a live 400 — the ISO-style "yyyy-mm-ddT00:00:00" this used to
 // send was rejected outright ("Payment date must be in dd/MMM/yyyy format."),
@@ -247,16 +231,9 @@ function PaymentPageContent() {
   const [failure, setFailure] = useState<string | null>(null)
   const [form, setForm]         = useState<FormData>({ ...initialForm })
   const [enquirySearch, setEnquirySearch] = useState('')
-  const [campusSearch, setCampusSearch] = useState('')
   const [programSearch, setProgramSearch] = useState('')
-  const [countrySearch, setCountrySearch] = useState('')
-  const [committedCampusSearch, setCommittedCampusSearch] = useState('')
   const [committedProgramSearch, setCommittedProgramSearch] = useState('')
-  const [committedCountrySearch, setCommittedCountrySearch] = useState('')
-  const [campusPickerOpen, setCampusPickerOpen] = useState(false)
   const [programPickerOpen, setProgramPickerOpen] = useState(false)
-  const [countryPickerOpen, setCountryPickerOpen] = useState(false)
-  const [phoneCodePickerOpen, setPhoneCodePickerOpen] = useState(false)
   const [payProofFile, setPayProofFile] = useState<File | null>(null)
   // Per Application_Payment_Change_Requests_Final_Updated.md #6 — Receipt
   // Type/No. are no longer user-entered; populated from the create
@@ -403,17 +380,9 @@ function PaymentPageContent() {
   function setBatchTime(v: string) { setForm(prev => ({ ...prev, batchTimeGuid: v, batchGuid: '' })) }
 
   useEffect(() => {
-    const timer = setTimeout(() => setCommittedCampusSearch(campusSearch.trim()), 300)
-    return () => clearTimeout(timer)
-  }, [campusSearch])
-  useEffect(() => {
     const timer = setTimeout(() => setCommittedProgramSearch(programSearch.trim()), 300)
     return () => clearTimeout(timer)
   }, [programSearch])
-  useEffect(() => {
-    const timer = setTimeout(() => setCommittedCountrySearch(countrySearch.trim()), 300)
-    return () => clearTimeout(timer)
-  }, [countrySearch])
 
   // ── Real data ──────────────────────────────────────────────────────────
   // enquiryGuid is optional on Create — a payment can be taken without
@@ -434,18 +403,19 @@ function PaymentPageContent() {
   // then rejects the conversion with its "previous intake" message.
   const currentIntakeQuery = useCurrentAcademicIntake()
   const admissionIntakeQuery = useCurrentAdmissionIntake()
-  const campusQuery = useSearchCampusesInfinite(committedCampusSearch, 20, campusPickerOpen)
+  // Campus and Country from their dropdown APIs (GET /campus/dropdown,
+  // /countries/dropdown): one cached call each, filtered in the browser.
+  // Programme stays on by-campus, as the backend asked for this page.
+  const { data: campuses = [], isLoading: campusesLoading } = useCampusDropdown()
   const programQuery = useSearchProgramMastersByCampusInfinite(form.campusGuid, committedProgramSearch, 20, programPickerOpen)
-  const countryQuery = useSearchCountriesInfinite(committedCountrySearch, 20, countryPickerOpen || phoneCodePickerOpen)
+  const { countries, home: homeCountry, isLoading: countriesLoading } = useCountriesForPicker()
   const intakes = useMemo(() => {
     const list = [admissionIntakeQuery.data, currentIntakeQuery.data].filter((i): i is NonNullable<typeof i> => !!i)
     return list.filter((i, idx) => list.findIndex(x => x.intakeGuid === i.intakeGuid) === idx)
   }, [admissionIntakeQuery.data, currentIntakeQuery.data])
   const intakesLoading = currentIntakeQuery.isLoading || admissionIntakeQuery.isLoading
   const noOpenIntake = !intakesLoading && currentIntakeQuery.isSuccess && admissionIntakeQuery.isSuccess && intakes.length === 0
-  const campuses = useMemo(() => flattenUniquePages(campusQuery.data?.pages ?? [], c => c.campusGuid), [campusQuery.data])
   const programsByCampus = useMemo(() => flattenUniquePages(programQuery.data?.pages ?? [], p => p.programGuid), [programQuery.data])
-  const countries = useMemo(() => flattenUniquePages(countryQuery.data?.pages ?? [], c => c.countryGuid), [countryQuery.data])
   const { data: semesters = [] } = useSemestersForProgram(form.programGuid, !!form.programGuid)
   const { data: batchTimes = [] } = useBatchTimesDropdown()
   // The payment-scoped Dropdowns/Batches.bru endpoint returns a real 200
@@ -516,18 +486,8 @@ function PaymentPageContent() {
   // carry) and prefill the form from it, confirmed via a real GET
   // /api/v1/admissions/enquiries/:guid response.
   const { data: selectedEnquiry } = useEnquiry(form.enquiryGuid || null, !!form.enquiryGuid)
-  // `countries` above is only the picker's current search page, too partial to
-  // default from or match an enquiry against. These small lookups cover the
-  // home country and the enquiry's own countries, plus whatever pickers loaded.
-  const { home: homeCountry, known: knownCountries } = useKnownCountries(countries)
-  const countryLookup = useCountriesByGuids([
-    selectedEnquiry?.countryGuid && selectedEnquiry.countryGuid !== EMPTY_GUID ? selectedEnquiry.countryGuid : '',
-    selectedEnquiry?.mobileCountryGuid ?? '',
-  ])
-  const allCountries = useMemo(
-    () => [...new Map([...knownCountries, ...countryLookup.countries].map(c => [c.countryGuid, c])).values()],
-    [knownCountries, countryLookup.countries],
-  )
+  // The full country dropdown, so the enquiry's countries are always in it.
+  const allCountries = countries
   // Guards against re-applying the same enquiry's data over edits the user
   // has since made — e.g. a background refetch on window focus returning a
   // new object for the same guid shouldn't stomp on manual changes.
@@ -553,9 +513,9 @@ function PaymentPageContent() {
 
   useEffect(() => {
     if (!selectedEnquiry) return
-    // The prefill below runs once per enquiry, so wait for its countries: the
-    // dial code would otherwise fall back to the API's prefix (e.g. "IND").
-    if (countryLookup.isLoading) return
+    // The prefill below runs once per enquiry, so wait for the country list:
+    // the dial code would otherwise fall back to the API's prefix (e.g. "IND").
+    if (countriesLoading) return
 
     const enquiryGuid = selectedEnquiry.enquiryGuid
     const isNewEnquiry = appliedEnquiryGuidRef.current !== enquiryGuid
@@ -597,8 +557,6 @@ function PaymentPageContent() {
         lastName: rest.join(' '),
         phone: selectedEnquiry.mobile ?? prev.phone,
         email: selectedEnquiry.email ?? prev.email,
-        // Not in the cached list → keep the guid anyway; countryOptions
-        // labels it from the enquiry's countryName.
         countryGuid: matchedCountry?.countryGuid ?? enquiryCountryGuid,
         phoneCode: phoneDial ?? prev.phoneCode,
         remarks: selectedEnquiry.remarks ?? prev.remarks,
@@ -614,7 +572,7 @@ function PaymentPageContent() {
         }))
       }
     }
-  }, [selectedEnquiry, allCountries, form.countryGuid, countryLookup.isLoading])
+  }, [selectedEnquiry, allCountries, form.countryGuid, countriesLoading])
 
   // Pre-select the home country (Uganda) on page load once it's loaded
   useEffect(() => {
@@ -676,11 +634,7 @@ function PaymentPageContent() {
     form.intakeGuid,
     selectedIntakeDetail?.intakeGuid === form.intakeGuid ? `${selectedIntakeDetail.intakeCode} — ${selectedIntakeDetail.description}` : null,
   )
-  const campusOptions   = withSelected(
-    campuses.map(c => ({ value: c.campusGuid, label: c.campusName })),
-    form.campusGuid,
-    enquiryMatches('campusGuid', form.campusGuid) ? selectedEnquiry!.campusName : null,
-  )
+  const campusOptions   = campuses.map(c => ({ value: c.campusGuid, label: c.campusName }))
   const programOptions  = withSelected(
     programsByCampus.map(p => ({ value: p.programGuid, label: `${p.programName} (${p.programCode})` })),
     form.programGuid,
@@ -688,25 +642,19 @@ function PaymentPageContent() {
       ? `${selectedEnquiry!.programName}${selectedEnquiry!.programCode ? ` (${selectedEnquiry!.programCode})` : ''}`
       : null,
   )
-  const countryOptions  = withSelected(
-    countries.map(c => ({ value: c.countryGuid, label: c.countryName })),
-    form.countryGuid,
-    allCountries.find(c => c.countryGuid === form.countryGuid)?.countryName
-      ?? (enquiryMatches('countryGuid', form.countryGuid) ? selectedEnquiry!.countryName : null),
+  const countryOptions  = countries.map(c => ({ value: c.countryGuid, label: c.countryName }))
+  // The value is a dial code, which can come straight from an enquiry's own
+  // prefix — kept listed so the field shows it.
+  const phoneCodeOptions = withSelected(
+    Array.from(
+      new Map(countries.map(c => [dialCode(c), `${dialCode(c)} · ${c.countryName}`])).entries(),
+    ).map(([value, label]) => ({ value, label })),
+    form.phoneCode,
+    form.phoneCode,
   )
-  // The default +256 may not be on the picker's current page — keep it listed.
-  const phoneCodeOptions = countries.length
-    ? withSelected(
-        Array.from(
-          new Map(countries.map(c => [dialCode(c), `${dialCode(c)} · ${c.countryName}`])).entries(),
-        ).map(([value, label]) => ({ value, label })),
-        form.phoneCode,
-        form.phoneCode,
-      )
-    : COUNTRY_CODES
 
   function handleCountryChange(guid: string) {
-    const match = countries.find(c => c.countryGuid === guid) ?? allCountries.find(c => c.countryGuid === guid)
+    const match = countries.find(c => c.countryGuid === guid)
     setForm(prev => ({
       ...prev,
       countryGuid: guid,
@@ -1148,15 +1096,10 @@ function PaymentPageContent() {
               <Field label="Phone" req error={errorFor('phone')}>
                 <div className="flex gap-2">
                   <SearchSelect
-                    options={phoneCodeOptions.length ? phoneCodeOptions : COUNTRY_CODES}
+                    options={phoneCodeOptions}
                     value={form.phoneCode}
                     onChange={v => set('phoneCode', v)}
-                    onSearch={setCountrySearch}
-                    onOpenChange={setPhoneCodePickerOpen}
-                    isLoading={countryQuery.isLoading}
-                    hasNextPage={countryQuery.hasNextPage}
-                    isFetchingNextPage={countryQuery.isFetchingNextPage}
-                    onLoadMore={() => countryQuery.fetchNextPage()}
+                    isLoading={countriesLoading}
                     style={{ width: 108, flexShrink: 0 }}
                   />
                   <input className="ctrl flex-1" type="tel" inputMode="numeric" placeholder="700 000 000" value={form.phone} onChange={e => set('phone', sanitizePhoneInput(e.target.value, false))} />
@@ -1174,12 +1117,7 @@ function PaymentPageContent() {
                   value={form.countryGuid}
                   placeholder="-- Select Country --"
                   onChange={handleCountryChange}
-                  onSearch={setCountrySearch}
-                  onOpenChange={setCountryPickerOpen}
-                  isLoading={countryQuery.isLoading}
-                  hasNextPage={countryQuery.hasNextPage}
-                  isFetchingNextPage={countryQuery.isFetchingNextPage}
-                  onLoadMore={() => countryQuery.fetchNextPage()}
+                  isLoading={countriesLoading}
                 />
               </Field>
               <Field label="Campus" req error={errorFor('campusGuid')}>
@@ -1188,12 +1126,7 @@ function PaymentPageContent() {
                   value={form.campusGuid}
                   placeholder="-- Select Campus --"
                   onChange={setCampus}
-                  onSearch={setCampusSearch}
-                  onOpenChange={setCampusPickerOpen}
-                  isLoading={campusQuery.isLoading}
-                  hasNextPage={campusQuery.hasNextPage}
-                  isFetchingNextPage={campusQuery.isFetchingNextPage}
-                  onLoadMore={() => campusQuery.fetchNextPage()}
+                  isLoading={campusesLoading}
                 />
               </Field>
               <Field label="Interested Programme" req error={errorFor('programGuid')}>

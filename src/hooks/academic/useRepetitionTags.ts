@@ -1,6 +1,5 @@
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
-import { createRepetitionTag, deleteRepetitionTag, getRepetitionTagById, getRepetitionTags, getRepetitionTagsPaged, RepetitionTag, RepetitionTagInput, updateRepetitionTag } from '@/lib/api/academic/repetitionTag'
-import { getNextPageParam } from '@/lib/pagination'
+import { useMutation, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
+import { createRepetitionTag, deleteRepetitionTag, getRepetitionTagById, getRepetitionTagDropdown, getRepetitionTags, getRepetitionTagsPaged, RepetitionTag, RepetitionTagInput, updateRepetitionTag } from '@/lib/api/academic/repetitionTag'
 
 const REPETITION_TAGS_KEY = ['repetitionTags']
 
@@ -14,6 +13,19 @@ export function useRepetitionTags(enabled = true) {
     // Never treat the cached list as stale on its own — only refetch when a
     // mutation (create/update/delete) explicitly invalidates this key, once
     // those are wired up.
+    staleTime: Infinity,
+    gcTime: Infinity,
+    enabled,
+  })
+}
+
+// Picker list (GET /course-unit-repetitions/dropdown) — loaded once, cached,
+// and filtered in the browser by SearchSelect. Under REPETITION_TAGS_KEY so
+// the master page's mutations refresh it.
+export function useRepetitionTagDropdown(enabled = true) {
+  return useQuery({
+    queryKey: [...REPETITION_TAGS_KEY, 'dropdown'],
+    queryFn: () => getRepetitionTagDropdown(),
     staleTime: Infinity,
     gcTime: Infinity,
     enabled,
@@ -60,17 +72,6 @@ export function useRepetitionTagsPaged(page: number, pageSize: number, search: s
   })
 }
 
-export function useSearchRepetitionTagsInfinite(search: string, pageSize: number, enabled: boolean) {
-  return useInfiniteQuery({
-    queryKey: [...REPETITION_TAGS_KEY, 'search-infinite', search, pageSize],
-    queryFn: ({ pageParam }) => getRepetitionTagsPaged(pageParam, pageSize, search),
-    initialPageParam: 1,
-    getNextPageParam,
-    enabled,
-    staleTime: Infinity,
-    gcTime: Infinity,
-  })
-}
 
 // Fetches a single repetition tag for the Edit modal. Only enabled while
 // the modal is actually open with a guid, so it doesn't fire on every

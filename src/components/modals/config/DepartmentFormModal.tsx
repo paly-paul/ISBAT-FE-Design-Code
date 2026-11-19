@@ -5,7 +5,7 @@ import { SuccessPopup } from '../shared/SuccessPopup'
 import { FailurePopup } from '../shared/FailurePopup'
 import { SearchSelect } from '@/components/SearchSelect'
 import { Department, DepartmentInput } from '@/lib/api/academic/department'
-import { useEmployees } from '@/hooks/employee/useEmployees'
+import { useEmployeeDropdown } from '@/hooks/employee/useEmployees'
 import { AuthError } from '@/lib/api/client'
 import { scrollToFirstError } from '@/lib/scrollToFirstError'
 
@@ -42,8 +42,8 @@ export function DepartmentFormModal({ isOpen, onClose, showToast, mode, departme
   const [hod, setHod]             = useState('')
   const [errors, setErrors]       = useState<Record<string, string>>({})
 
-  const { data: employees = [] } = useEmployees(isOpen)
-  const hodOptions = employees.map(e => ({ value: e.employeeGuid, label: `${e.empName} (${e.shortCode})` }))
+  const { data: employees = [] } = useEmployeeDropdown(isOpen)
+  const hodOptions = employees.map(e => ({ value: e.employeeGuid, label: e.displayName }))
 
   useEffect(() => {
     if (!isOpen) return

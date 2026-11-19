@@ -1,9 +1,8 @@
 'use client'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect } from 'react'
 import { SearchSelect } from '@/components/SearchSelect'
-import { useKnownCountries, useSearchCountriesInfinite } from '@/hooks/config/useCountries'
+import { useCountriesForPicker } from '@/hooks/config/useCountries'
 import { countryPickerOptions, phoneCountryOptions } from '@/lib/api/academic/country'
-import { flattenUniquePages } from '@/lib/pagination'
 import type { EnquiryInput } from '@/lib/api/admission/enquiry'
 
 // Optional Sponsor section shared by the Online / Kiosk / On-Desk enquiry
@@ -68,15 +67,9 @@ export function EnquirySponsorFields({ value, onChange, errors, onClearError }: 
   errors: Record<string, string>
   onClearError: (field: string) => void
 }) {
-  const [search, setSearch] = useState('')
-  const [committedSearch, setCommittedSearch] = useState('')
-  const [countryPickerOpen, setCountryPickerOpen] = useState(false)
-  const [phoneCodePickerOpen, setPhoneCodePickerOpen] = useState(false)
-  useEffect(() => { const t = setTimeout(() => setCommittedSearch(search.trim()), 300); return () => clearTimeout(t) }, [search])
-
-  const countryQuery = useSearchCountriesInfinite(committedSearch, 20, countryPickerOpen || phoneCodePickerOpen)
-  const countries = useMemo(() => flattenUniquePages(countryQuery.data?.pages ?? [], c => c.countryGuid), [countryQuery.data])
-  const { home: homeCountry, known: allCountries } = useKnownCountries(countries)
+  // GET /countries/dropdown — one cached call (shared with the page's own
+  // country pickers), filtered in the browser by SearchSelect.
+  const { countries, home: homeCountry, known: allCountries, isLoading } = useCountriesForPicker()
 
   // Default the dial code to Uganda, like the student's phone.
   useEffect(() => {
@@ -97,13 +90,7 @@ export function EnquirySponsorFields({ value, onChange, errors, onClearError }: 
     onChange({ ...value, spCountryGuid: guid, ...(guid ? { spPhoneCountryGuid: guid } : {}) })
   }
 
-  const pickerProps = {
-    onSearch: setSearch,
-    isLoading: countryQuery.isLoading,
-    hasNextPage: countryQuery.hasNextPage,
-    isFetchingNextPage: countryQuery.isFetchingNextPage,
-    onLoadMore: () => countryQuery.fetchNextPage(),
-  }
+  const pickerProps = { isLoading }
 
   return (
     <>
@@ -116,7 +103,7 @@ export function EnquirySponsorFields({ value, onChange, errors, onClearError }: 
         <div className="fg">
           <label className="lbl">Sponsor Phone</label>
           <div className="flex gap-2">
-            <SearchSelect options={phoneCodeOptions} value={value.spPhoneCountryGuid} onChange={v => { set('spPhoneCountryGuid', v); onClearError('spPhone') }} onOpenChange={setPhoneCodePickerOpen} {...pickerProps} style={{ width: 108, flexShrink: 0 }} />
+            <SearchSelect options={phoneCodeOptions} value={value.spPhoneCountryGuid} onChange={v => { set('spPhoneCountryGuid', v); onClearError('spPhone') }} {...pickerProps} style={{ width: 108, flexShrink: 0 }} />
             <input className="ctrl flex-1" type="tel" inputMode="numeric" placeholder="e.g. 772123456" maxLength={PHONE_MAX} value={value.spPhone} onChange={e => { set('spPhone', e.target.value.replace(/\D/g, '').slice(0, PHONE_MAX)); onClearError('spPhone') }} style={errors.spPhone ? { borderColor: 'var(--red)' } : undefined} />
           </div>
           {errors.spPhone && <p className="field-err" style={errStyle}>{errors.spPhone}</p>}
@@ -128,7 +115,7 @@ export function EnquirySponsorFields({ value, onChange, errors, onClearError }: 
         </div>
         <div className="fg">
           <label className="lbl">Sponsor Country</label>
-          <SearchSelect placeholder="— select —" options={spCountryOptions} value={value.spCountryGuid} onChange={selectCountry} onOpenChange={setCountryPickerOpen} {...pickerProps} />
+          <SearchSelect placeholder="— select —" options={spCountryOptions} value={value.spCountryGuid} onChange={selectCountry} {...pickerProps} />
         </div>
       </div>
     </>

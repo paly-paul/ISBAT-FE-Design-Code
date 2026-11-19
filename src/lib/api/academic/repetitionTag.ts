@@ -55,6 +55,21 @@ export function getRepetitionTags(search = ''): Promise<RepetitionTag[]> {
   )
 }
 
+// GET /course-unit-repetitions/dropdown (get-course-unit-repetition-dropdown.md):
+// unpaged guid/code/name, optional ?search=. For the Course Unit form's picker.
+export interface RepetitionTagDropdownItem {
+  courseUnitRepetitionGuid: string
+  tagCode: string
+  tagName: string
+}
+
+export function getRepetitionTagDropdown(): Promise<RepetitionTagDropdownItem[]> {
+  if (MOCK_AUTH) {
+    return getRepetitionTags().then(rows => rows.map(t => ({ courseUnitRepetitionGuid: t.courseUnitRepetitionGuid, tagCode: t.tagCode, tagName: t.tagName })))
+  }
+  return apiGet<RepetitionTagDropdownItem[] | null>('/api/v1/academic/course-unit-repetitions/dropdown').then(data => data ?? [])
+}
+
 export interface RepetitionTagListResult {
   items: RepetitionTag[]
   totalCount: number

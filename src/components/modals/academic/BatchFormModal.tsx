@@ -59,10 +59,13 @@ function earliestBatchStart(intake: { financialYear?: number; intakes?: number }
 }
 
 // Server "not found" messages (all HTTP 400) → the field the user should fix.
-const NOT_FOUND_FIELDS: [RegExp, string, string][] = [
+// The third value replaces the server's wording; null shows the server's own
+// message under the field.
+const NOT_FOUND_FIELDS: [RegExp, string, string | null][] = [
   [/intake not found/i,     'intakeGuid',    'This intake no longer exists, or has no month / financial year set. Pick another intake.'],
-  // The picked intake isn't the current one, and the backend still requires it.
-  [/only be created for the current intake/i, 'intakeGuid', 'The server only accepts the current intake for new batches right now. Pick the current intake, or ask the backend team to allow upcoming intakes.'],
+  // The picked intake isn't the current one: "Batches can only be created for
+  // the current intake." — shown as the server sends it.
+  [/only be created for the current intake/i, 'intakeGuid', null],
   [/program not found/i,    'programGuid',   'This programme no longer exists. Pick another programme.'],
   [/semester not found/i,   'semesterGuid',  'This semester no longer exists. Pick another semester.'],
   [/stream not found/i,     'streamGuid',    'This specialization no longer exists. Pick another one.'],
@@ -305,7 +308,7 @@ export function BatchFormModal({ isOpen, onClose, showToast, mode, batchGuid, cr
       const unmatched: string[] = []
       for (const msg of messages) {
         const fieldHit = NOT_FOUND_FIELDS.find(([re]) => re.test(msg))
-        if (fieldHit) fieldErrors[fieldHit[1]] = fieldHit[2]
+        if (fieldHit) fieldErrors[fieldHit[1]] = fieldHit[2] ?? msg
         else if (/start ?date is required/i.test(msg)) fieldErrors.startDate = 'Please select a Start Date'
         else if (/start ?date cannot be before/i.test(msg)) fieldErrors.startDate = msg
         else if (/end ?date is required/i.test(msg)) fieldErrors.endDate = 'Please select an End Date'

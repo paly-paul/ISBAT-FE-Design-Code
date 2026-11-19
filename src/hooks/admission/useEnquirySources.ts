@@ -1,19 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createEnquirySource, deleteEnquirySource, EnquirySource, EnquirySourceInput, getEnquirySourcesDropdown, getEnquirySourceById, getEnquirySources, updateEnquirySource } from '@/lib/api/admission/enquirySource'
+import { createEnquirySource, deleteEnquirySource, EnquirySource, EnquirySourceInput, getEnquirySourcesDropdown, getEnquirySourceById, updateEnquirySource } from '@/lib/api/admission/enquirySource'
 
-const ENQUIRY_SOURCES_KEY = ['enquiry-sources']
-
-export function useEnquirySources() {
-  return useQuery({
-    queryKey: ENQUIRY_SOURCES_KEY,
-    queryFn: () => getEnquirySources(),
-    // Never treat the cached list as stale on its own — only refetch when a
-    // mutation (create/update/delete) explicitly invalidates this key below,
-    // instead of on every remount/window focus.
-    staleTime: Infinity,
-    gcTime: Infinity,
-  })
-}
+export const ENQUIRY_SOURCES_KEY = ['enquiry-sources']
 
 export function useEnquirySourcesDropdown(enabled = true) {
   return useQuery({
@@ -21,16 +9,14 @@ export function useEnquirySourcesDropdown(enabled = true) {
     queryFn: () => getEnquirySourcesDropdown(),
     staleTime: Infinity,
     gcTime: Infinity,
-    enabled,
-  })
+    enabled })
 }
 
 export function useCreateEnquirySource() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (input: EnquirySourceInput) => createEnquirySource(input),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ENQUIRY_SOURCES_KEY }),
-  })
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ENQUIRY_SOURCES_KEY }) })
 }
 
 // Fetches a single enquiry source for the Edit modal. Only enabled while the
@@ -40,8 +26,7 @@ export function useEnquirySource(guid: string | null, enabled: boolean) {
   return useQuery({
     queryKey: [...ENQUIRY_SOURCES_KEY, guid],
     queryFn: () => getEnquirySourceById(guid as string),
-    enabled: enabled && !!guid,
-  })
+    enabled: enabled && !!guid })
 }
 
 export function useUpdateEnquirySource() {
@@ -51,16 +36,14 @@ export function useUpdateEnquirySource() {
     onSuccess: (_data, { guid }) => {
       queryClient.invalidateQueries({ queryKey: ENQUIRY_SOURCES_KEY })
       queryClient.invalidateQueries({ queryKey: [...ENQUIRY_SOURCES_KEY, guid] })
-    },
-  })
+    } })
 }
 
 export function useDeleteEnquirySource() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (guid: string) => deleteEnquirySource(guid),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ENQUIRY_SOURCES_KEY }),
-  })
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ENQUIRY_SOURCES_KEY }) })
 }
 
 export type { EnquirySource, EnquirySourceInput }

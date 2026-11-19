@@ -8,10 +8,11 @@ import { Toast } from '@/components/Toast'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
-import { usePagination } from '@/hooks/usePagination'
+import { useServerTable } from '@/hooks/useServerTable'
+import { getWeekdaysPaged } from '@/lib/api/academic/weekday'
 import { WeekdayFormModal } from '@/components/modals/config/WeekdayFormModal'
 import { ViewWeekdayModal } from '@/components/modals/config/ViewWeekdayModal'
-import { useWeekdays, useCreateWeekday, useUpdateWeekday, useDeleteWeekday, Weekday } from '@/hooks/config/useWeekdays'
+import { WEEKDAYS_KEY, useCreateWeekday, useUpdateWeekday, useDeleteWeekday, Weekday } from '@/hooks/config/useWeekdays'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
@@ -28,23 +29,19 @@ export default function Page() {
   const [editingWeekdayGuid, setEditingWeekdayGuid] = useState<string | null>(null)
   const [viewingWeekdayGuid, setViewingWeekdayGuid] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Weekday | null>(null)
-  const [search, setSearch] = useState('')
 
-  const { data: rows = [], isLoading } = useWeekdays()
+  // One page at a time from the server (?page=&pageSize=&search=), so the
+  // search box narrows the whole list, not just the rows on screen.
+  const table = useServerTable({ queryKey: WEEKDAYS_KEY, fetchPage: getWeekdaysPaged, pageSize: PAGE_SIZE, minSearch: MIN_SEARCH_CHARS })
+  const { items: rows, search, setSearch, page, setPage, totalPages, totalCount } = table
+  const isLoading = table.isLoading || table.searchPending
   const createWeekday = useCreateWeekday()
   const updateWeekday = useUpdateWeekday()
   const deleteWeekday = useDeleteWeekday()
 
-  const searchTrimmed = search.trim()
-  const searchMatches = searchTrimmed.length >= MIN_SEARCH_CHARS
-    ? rows.filter(r => `${r.dayCode} ${r.dayName}`.toLowerCase().includes(searchTrimmed.toLowerCase())).slice(0, 8)
-    : []
-
-  const filteredRows = rows.filter(r =>
-    searchTrimmed.length < MIN_SEARCH_CHARS || `${r.dayCode} ${r.dayName}`.toLowerCase().includes(searchTrimmed.toLowerCase())
-  )
-
-  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
+  // Search-box preview: the first of the server's matches.
+  const searchMatches = search.trim().length >= MIN_SEARCH_CHARS && !table.searchPending ? rows.slice(0, 8) : []
+  const pageItems = table.searchPending ? [] : rows
 
   function nav(id: string) { router.push('/config/' + id) }
   function openModal(id: string)  { setOpenModals(prev => new Set(prev).add(id)) }
@@ -95,6 +92,7 @@ export default function Page() {
                 onChange={setSearch}
                 results={searchMatches.map(r => ({ id: r.weekDayGuid, primary: r.dayCode, secondary: r.dayName }))}
                 minChars={MIN_SEARCH_CHARS}
+                loading={table.searchPending}
                 onSelect={(r) => openViewModal(r.id)}
               />
             </div>
@@ -111,7 +109,7 @@ export default function Page() {
               <tbody>
                 {isLoading
                   ? <TableLoadingState colSpan={999} />
-                  : filteredRows.length === 0
+                  : pageItems.length === 0
                     ? <EmptyState colSpan={999} hasFilters={false} onClearFilters={() => {}} />
                     : null}
                 {pageItems.map((r) => (

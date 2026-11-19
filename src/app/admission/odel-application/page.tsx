@@ -9,11 +9,11 @@ import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { FailurePopup } from '@/components/modals/shared/FailurePopup'
 import { DocumentPreviewModal } from '@/components/modals/shared/DocumentPreviewModal'
-import { useSearchCampusesInfinite } from '@/hooks/config/useCampuses'
+import { useCampusDropdown } from '@/hooks/config/useCampuses'
 import { useSearchProgramMastersByCampusInfinite } from '@/hooks/academic/useProgramMaster'
 import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
 import { useBatchTimesDropdown } from '@/hooks/config/useBatchTimes'
-import { useCountriesByGuids, useKnownCountries, useSearchCountriesInfinite } from '@/hooks/config/useCountries'
+import { useCountriesForPicker } from '@/hooks/config/useCountries'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import {
   useDeleteOdelQualification,
@@ -407,44 +407,23 @@ export default function OdelApplicationPage() {
   }
 
   // ── Dropdown sources ──────────────────────────────────────────────────────
-  const [countrySearch, setCountrySearch] = useState('')
-  const committedCountrySearch = useDebounced(countrySearch.trim(), 300)
-  const [countryPickerOpen, setCountryPickerOpen] = useState(false)
-  const [phoneCodePickerOpen, setPhoneCodePickerOpen] = useState(false)
-  const [spPickerOpen, setSpPickerOpen] = useState(false)
-  const countryQuery = useSearchCountriesInfinite(committedCountrySearch, 20, countryPickerOpen || phoneCodePickerOpen || spPickerOpen)
-  const countries = useMemo(() => flattenUniquePages(countryQuery.data?.pages ?? [], c => c.countryGuid), [countryQuery.data])
-  const { home: homeCountry, known: knownCountries } = useKnownCountries(countries)
-  // Saved country guids that neither the home lookup nor the picker has loaded.
-  const { countries: savedCountries } = useCountriesByGuids(
-    [form.countryGuid, form.spCountryGuid].filter(g => g && !knownCountries.some(c => c.countryGuid === g)),
-  )
-  const allCountries = useMemo(() => {
-    const map = new Map(knownCountries.map(c => [c.countryGuid, c]))
-    for (const c of savedCountries) if (!map.has(c.countryGuid)) map.set(c.countryGuid, c)
-    return Array.from(map.values())
-  }, [knownCountries, savedCountries])
+  // Country and Campus from their dropdown APIs (GET /countries/dropdown,
+  // /campus/dropdown): one cached call each, filtered in the browser.
+  const { countries, home: homeCountry, isLoading: countriesLoading } = useCountriesForPicker(started)
 
-  const countryOptions = countryPickerOptions(countries, allCountries, form.countryGuid)
-  const spPhoneCountryOptions = phoneCountryOptions(countries, allCountries, form.spCountryGuid)
+  const countryOptions = countryPickerOptions(countries, countries, form.countryGuid)
+  const spPhoneCountryOptions = phoneCountryOptions(countries, countries, form.spCountryGuid)
   // The student's own dial code is stored as plain digits ("256"), not a GUID.
   const phoneCodeOptions = useMemo(() => {
     const map = new Map<string, string>()
-    for (const c of [...allCountries, ...countries]) {
+    for (const c of countries) {
       const code = dialCode(c).replace(/^\+/, '')
       if (code && !map.has(code)) map.set(code, `+${code} · ${c.countryName}`)
     }
-    if (form.phoneCode && !map.has(form.phoneCode)) map.set(form.phoneCode, `+${form.phoneCode}`)
     return toOptions(map)
-  }, [allCountries, countries, form.phoneCode])
+  }, [countries])
 
-  const pickerProps = {
-    onSearch: setCountrySearch,
-    isLoading: countryQuery.isLoading,
-    hasNextPage: countryQuery.hasNextPage,
-    isFetchingNextPage: countryQuery.isFetchingNextPage,
-    onLoadMore: () => countryQuery.fetchNextPage(),
-  }
+  const pickerProps = { isLoading: countriesLoading }
 
   // Default the dial codes to the home country (Uganda), like the enquiry forms.
   useEffect(() => {
@@ -457,10 +436,7 @@ export default function OdelApplicationPage() {
     })
   }, [homeCountry, form.phoneCode, form.spCountryGuid])
 
-  const [campusSearch, setCampusSearch] = useState('')
-  const committedCampusSearch = useDebounced(campusSearch.trim(), 300)
-  const campusQuery = useSearchCampusesInfinite(committedCampusSearch, 20, started)
-  const campuses = useMemo(() => flattenUniquePages(campusQuery.data?.pages ?? [], c => c.campusGuid), [campusQuery.data])
+  const { data: campuses = [], isLoading: campusesLoading } = useCampusDropdown(started)
 
   const [programSearch, setProgramSearch] = useState('')
   const committedProgramSearch = useDebounced(programSearch.trim(), 300)
@@ -470,25 +446,17 @@ export default function OdelApplicationPage() {
   const { data: semesters = [] } = useSemestersForProgram(form.programGuid, started && !!form.programGuid)
   const { data: batchTimes = [] } = useBatchTimesDropdown(started)
 
-  // ODeL is distance learning: only online campuses are offered. The campus
+  // ODeL is distance learning: only the online campus is offered. The campus
   // record has no online flag, so it's matched on the name ("… Online Campus").
-  // The saved value is always listed, even when the paged list hasn't loaded it.
-  const campusOptions = useMemo(() => {
-    const m = new Map<string, string>()
-    for (const c of campuses) if (/\bonline\b/i.test(c.campusName)) m.set(c.campusGuid, c.campusName)
-    if (form.campusGuid && !m.has(form.campusGuid)) m.set(form.campusGuid, savedLabels.campusName ?? 'Selected campus')
-    return toOptions(m)
-  }, [campuses, form.campusGuid, savedLabels.campusName])
-
-  // There's only the one online campus, so it's filled in and shown read-only
-  // rather than offered as a one-item choice. A saved application keeps the
-  // campus it was saved with.
+  // There's only the one, so it's filled in and shown read-only rather than
+  // offered as a one-item choice. A saved application keeps the campus it was
+  // saved with; the label comes from the full campus list either way.
   const onlineCampusGuid = campuses.find(c => /\bonline\b/i.test(c.campusName))?.campusGuid ?? ''
   useEffect(() => {
     if (!started || !onlineCampusGuid) return
     setForm(f => f.campusGuid ? f : { ...f, campusGuid: onlineCampusGuid })
   }, [started, onlineCampusGuid, form.campusGuid])
-  const campusLabel = campusOptions.find(o => o.value === form.campusGuid)?.label ?? ''
+  const campusLabel = campuses.find(c => c.campusGuid === form.campusGuid)?.campusName ?? ''
   const programOptions = useMemo(() => {
     const m = new Map<string, string>()
     for (const p of programs) m.set(p.programGuid, `${p.programName} (${p.programCode})`)
@@ -1119,7 +1087,7 @@ export default function OdelApplicationPage() {
                       </Field>
                       <Field label="Nationality" req error={errors.countryGuid}>
                         <SearchSelect options={countryOptions} value={form.countryGuid} placeholder="-- Select Country --"
-                          onChange={v => patch({ countryGuid: v })} onOpenChange={setCountryPickerOpen}
+                          onChange={v => patch({ countryGuid: v })}
                           {...pickerProps} />
                       </Field>
                       <Field label="National ID" req={nationalIdRequired} error={errors.nationalId}>
@@ -1135,7 +1103,7 @@ export default function OdelApplicationPage() {
                       <Field label="Phone" req error={errors.phone}>
                         <div className="flex gap-2">
                           <SearchSelect options={phoneCodeOptions} value={form.phoneCode}
-                            onChange={v => patch({ phoneCode: v, ...(errors.phone ? {} : {}) })} onOpenChange={setPhoneCodePickerOpen}
+                            onChange={v => patch({ phoneCode: v, ...(errors.phone ? {} : {}) })}
                             {...pickerProps} style={{ width: 108, flexShrink: 0 }} />
                           <input className="ctrl flex-1" type="tel" inputMode="numeric" placeholder="e.g. 772123456" maxLength={PHONE_MAX}
                             value={form.phone} style={errors.phone ? { borderColor: 'var(--red)' } : undefined}
@@ -1152,7 +1120,7 @@ export default function OdelApplicationPage() {
                     <div className="g3 mt-3">
                       <Field label="Campus" req error={errors.campusGuid}>
                         <Input readOnly value={campusLabel}
-                          placeholder={campusQuery.isLoading ? 'Loading campus…' : 'No online campus available'}
+                          placeholder={campusesLoading ? 'Loading campus…' : 'No online campus available'}
                           hasError={!!errors.campusGuid} />
                       </Field>
                       <Field label="Programme" req error={errors.programGuid}>
@@ -1243,7 +1211,7 @@ export default function OdelApplicationPage() {
                       <Field label="Sponsor Phone" error={errors.spPhone}>
                         <div className="flex gap-2">
                           <SearchSelect options={spPhoneCountryOptions} value={form.spCountryGuid}
-                            onChange={v => patch({ spCountryGuid: v })} onOpenChange={setSpPickerOpen}
+                            onChange={v => patch({ spCountryGuid: v })}
                             {...pickerProps} style={{ width: 108, flexShrink: 0 }} />
                           <input className="ctrl flex-1" type="tel" inputMode="numeric" placeholder="e.g. 772123456" maxLength={PHONE_MAX}
                             value={form.spPhone} style={errors.spPhone ? { borderColor: 'var(--red)' } : undefined}

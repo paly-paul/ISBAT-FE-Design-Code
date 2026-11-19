@@ -1,18 +1,18 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
 import { TableSearch } from '@/components/TableSearch'
 import { Toast } from '@/components/Toast'
-import { FilterTh } from '@/components/FilterTh'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
-import { usePagination } from '@/hooks/usePagination'
+import { useServerTable } from '@/hooks/useServerTable'
 import { DepartmentFormModal } from '@/components/modals/config/DepartmentFormModal'
 import { ViewDepartmentModal } from '@/components/modals/config/ViewDepartmentModal'
-import { useDepartments, useCreateDepartment, useUpdateDepartment, useDeleteDepartment, Department } from '@/hooks/config/useDepartments'
+import { DEPARTMENTS_KEY, useCreateDepartment, useUpdateDepartment, useDeleteDepartment, Department } from '@/hooks/config/useDepartments'
+import { getDepartmentsPaged } from '@/lib/api/academic/department'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
@@ -31,14 +31,15 @@ export default function Page() {
   const permissions = usePagePermissions()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast]           = useState<{ msg: string; type: string } | null>(null)
-  const [filters, setFilters]       = useState<Record<string, string[]>>({})
-  const [openFilter, setOpenFilter] = useState<string | null>(null)
   const [editingDepartment, setEditingDepartment] = useState<Department | null>(null)
   const [viewingDepartment, setViewingDepartment] = useState<Department | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Department | null>(null)
-  const [search, setSearch] = useState('')
 
-  const { data: rows = [], isLoading } = useDepartments()
+  // One page at a time from the server (?page=&pageSize=&search=; search
+  // matches name and short code), so it narrows the whole list.
+  const table = useServerTable({ queryKey: DEPARTMENTS_KEY, fetchPage: getDepartmentsPaged, pageSize: PAGE_SIZE, minSearch: MIN_SEARCH_CHARS })
+  const { items: rows, search, setSearch, page, setPage, totalPages, totalCount } = table
+  const isLoading = table.isLoading || table.searchPending
   const createDepartment = useCreateDepartment()
   const updateDepartment = useUpdateDepartment()
   const deleteDepartment = useDeleteDepartment()
@@ -67,45 +68,9 @@ export default function Page() {
     })
   }
 
-  useEffect(() => {
-    function closeFilter(e: MouseEvent) {
-      const target = e.target as HTMLElement
-      if (!target.closest('th')) setOpenFilter(null)
-    }
-    document.addEventListener('click', closeFilter)
-    return () => document.removeEventListener('click', closeFilter)
-  }, [])
-
-  // Live preview shown in the search dropdown as the user types — matches
-  // the same code/name test as the table's own search filter below, just
-  // capped to a handful of rows and ignoring the column filters so it always
-  // reflects "what search alone would find".
-  const searchTrimmed = search.trim()
-  const searchMatches = searchTrimmed.length >= MIN_SEARCH_CHARS
-    ? rows.filter(r => `${r.shortCode} ${r.deptName}`.toLowerCase().includes(searchTrimmed.toLowerCase())).slice(0, 8)
-    : []
-
-  const filteredRows = rows.filter(r => {
-    if (searchTrimmed.length >= MIN_SEARCH_CHARS && !`${r.shortCode} ${r.deptName}`.toLowerCase().includes(searchTrimmed.toLowerCase())) return false
-    return Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((r as unknown as Record<string, unknown>)[k])))
-  })
-
-  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
-
-  function fth(label: string, col: string, opts: string[]) {
-    return (
-      <FilterTh
-        label={label}
-        opts={opts}
-        isOpen={openFilter === col}
-        activeFilter={filters[col] ?? []}
-        onToggle={e => { e.stopPropagation(); setOpenFilter(p => p === col ? null : col) }}
-        onSelect={vals => { setFilters(f => ({ ...f, [col]: vals })); setOpenFilter(null) }}
-        onClear={() => { setFilters(f => ({ ...f, [col]: [] })); setOpenFilter(null) }}
-        onClose={() => setOpenFilter(null)}
-      />
-    )
-  }
+  // Search-box preview: the first of the server's matches.
+  const searchMatches = search.trim().length >= MIN_SEARCH_CHARS && !table.searchPending ? rows.slice(0, 8) : []
+  const pageItems = table.searchPending ? [] : rows
 
   return (
     <>
@@ -132,11 +97,12 @@ export default function Page() {
                 onChange={setSearch}
                 results={searchMatches.map(r => ({ id: String(r.intDept), primary: r.shortCode, secondary: r.deptName }))}
                 minChars={MIN_SEARCH_CHARS}
+                loading={table.searchPending}
                 onSelect={(res) => { const row = rows.find(x => String(x.intDept) === res.id); if (row) openViewModal(row) }}
               />
             </div>
           </div>
-          <ScrollTable filters={filters} onResetFilters={() => setFilters({})}>
+          <ScrollTable>
             <table>
               {/* Previous header (pre GET /api/v1/users/departments integration) — kept for reference.
               <thead>
@@ -159,8 +125,8 @@ export default function Page() {
               <tbody>
                 {isLoading
                   ? <TableLoadingState colSpan={999} />
-                  : filteredRows.length === 0
-                    ? <EmptyState colSpan={999} hasFilters={Object.values(filters).some(v => v.length > 0)} onClearFilters={() => setFilters({})} />
+                  : pageItems.length === 0
+                    ? <EmptyState colSpan={999} hasFilters={!!table.term} onClearFilters={() => setSearch('')} />
                     : null}
                 {/* Previous row markup (pre GET /api/v1/users/departments integration) — kept for reference.
                 {filteredRows.map((r) => (

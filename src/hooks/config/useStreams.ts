@@ -1,31 +1,7 @@
 import { useMutation, useQuery, useQueryClient, useInfiniteQuery, useQueries } from '@tanstack/react-query'
-import { Stream, StreamInput, createStream, deleteStream, getStreamById, getStreams, getStreamsPaged, updateStream, getSpecializationsDropdown, SpecializationDropdownItem } from '@/lib/api/academic/stream'
+import { Stream, StreamInput, createStream, deleteStream, getStreamById, getStreamsPaged, updateStream, getSpecializationsDropdown, SpecializationDropdownItem } from '@/lib/api/academic/stream'
 
-const STREAMS_KEY = ['streams']
-
-// Fetch a single page large enough to cover the whole list — nothing in
-// this codebase currently paginates the master lists client-side, so the
-// hook needs the full set in one request rather than the API's default
-// page=1/pageSize=10 (which was silently hiding any row past the 10th).
-const STREAMS_PAGE_SIZE = 1000
-
-// enabled defaults to true so every existing call site keeps eagerly
-// fetching exactly as before — only a caller that shouldn't hit the network
-// until it's actually needed (e.g. a rare client-side fallback lookup, only
-// consulted when a row's own pre-resolved streamName comes back null) needs
-// to pass enabled explicitly.
-export function useStreams(enabled = true) {
-  return useQuery({
-    queryKey: STREAMS_KEY,
-    queryFn: () => getStreams(1, STREAMS_PAGE_SIZE),
-    // Never treat the cached list as stale on its own — only refetch when a
-    // mutation (create/update) explicitly invalidates this key below,
-    // instead of on every remount/window focus.
-    staleTime: Infinity,
-    gcTime: Infinity,
-    enabled,
-  })
-}
+export const STREAMS_KEY = ['streams']
 
 // Search-as-you-type/scroll picker (2026-09-10), backing
 // StreamMultiSearchPicker — same useInfiniteQuery + fetch-next-on-scroll
@@ -46,8 +22,7 @@ export function useSearchStreamsInfinite(search: string, pageSize: number, enabl
     },
     enabled,
     staleTime: Infinity,
-    gcTime: Infinity,
-  })
+    gcTime: Infinity })
 }
 
 // Batched-by-guid lookup — same convention as useCourseUnitsByGuids/
@@ -62,9 +37,7 @@ export function useStreamsByGuids(guids: string[]) {
       queryKey: [...STREAMS_KEY, guid],
       queryFn: () => getStreamById(guid),
       staleTime: Infinity,
-      gcTime: Infinity,
-    })),
-  })
+      gcTime: Infinity })) })
   const byGuid = new Map<string, Stream>()
   results.forEach((r, i) => { if (r.data) byGuid.set(unique[i], r.data) })
   return byGuid
@@ -74,8 +47,7 @@ export function useCreateStream() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (input: StreamInput) => createStream(input),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: STREAMS_KEY }),
-  })
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: STREAMS_KEY }) })
 }
 
 // Fetches a single specialization for the Edit modal. Only enabled while the
@@ -85,8 +57,7 @@ export function useStream(guid: string | null, enabled: boolean) {
   return useQuery({
     queryKey: [...STREAMS_KEY, guid],
     queryFn: () => getStreamById(guid as string),
-    enabled: enabled && !!guid,
-  })
+    enabled: enabled && !!guid })
 }
 
 export function useUpdateStream() {
@@ -96,16 +67,14 @@ export function useUpdateStream() {
     onSuccess: (_data, { guid }) => {
       queryClient.invalidateQueries({ queryKey: STREAMS_KEY })
       queryClient.invalidateQueries({ queryKey: [...STREAMS_KEY, guid] })
-    },
-  })
+    } })
 }
 
 export function useDeleteStream() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (guid: string) => deleteStream(guid),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: STREAMS_KEY }),
-  })
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: STREAMS_KEY }) })
 }
 
 export type { Stream, StreamInput }
@@ -116,6 +85,5 @@ export function useSpecializationsDropdown(enabled = true) {
     queryFn: () => getSpecializationsDropdown(),
     staleTime: Infinity,
     gcTime: Infinity,
-    enabled,
-  })
+    enabled })
 }

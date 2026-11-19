@@ -8,10 +8,11 @@ import { Toast } from '@/components/Toast'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
-import { usePagination } from '@/hooks/usePagination'
+import { useServerTable } from '@/hooks/useServerTable'
+import { getFollowUpModesPaged } from '@/lib/api/admission/followUpMode'
 import { FollowUpModeFormModal } from '@/components/modals/config/FollowUpModeFormModal'
 import { ViewFollowUpModeModal } from '@/components/modals/config/ViewFollowUpModeModal'
-import { useFollowUpModes, useCreateFollowUpMode, useUpdateFollowUpMode, useDeleteFollowUpMode, FollowUpMode } from '@/hooks/admission/useFollowUpModes'
+import { FOLLOWUP_MODES_KEY, useCreateFollowUpMode, useUpdateFollowUpMode, useDeleteFollowUpMode, FollowUpMode } from '@/hooks/admission/useFollowUpModes'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
@@ -28,23 +29,19 @@ export default function Page() {
   const [editingModeGuid, setEditingModeGuid] = useState<string | null>(null)
   const [viewingModeGuid, setViewingModeGuid] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<FollowUpMode | null>(null)
-  const [search, setSearch] = useState('')
 
-  const { data: rows = [], isLoading } = useFollowUpModes()
+  // One page at a time from the server (?page=&pageSize=&search=), so the
+  // search box narrows the whole list, not just the rows on screen.
+  const table = useServerTable({ queryKey: FOLLOWUP_MODES_KEY, fetchPage: getFollowUpModesPaged, pageSize: PAGE_SIZE, minSearch: MIN_SEARCH_CHARS })
+  const { items: rows, search, setSearch, page, setPage, totalPages, totalCount } = table
+  const isLoading = table.isLoading || table.searchPending
   const createFollowUpMode = useCreateFollowUpMode()
   const updateFollowUpMode = useUpdateFollowUpMode()
   const deleteFollowUpMode = useDeleteFollowUpMode()
 
-  const searchTrimmed = search.trim()
-  const searchMatches = searchTrimmed.length >= MIN_SEARCH_CHARS
-    ? rows.filter(r => r.followUpModeName.toLowerCase().includes(searchTrimmed.toLowerCase())).slice(0, 8)
-    : []
-
-  const filteredRows = rows.filter(r =>
-    searchTrimmed.length < MIN_SEARCH_CHARS || r.followUpModeName.toLowerCase().includes(searchTrimmed.toLowerCase())
-  )
-
-  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
+  // Search-box preview: the first of the server's matches.
+  const searchMatches = search.trim().length >= MIN_SEARCH_CHARS && !table.searchPending ? rows.slice(0, 8) : []
+  const pageItems = table.searchPending ? [] : rows
 
   function nav(id: string) { router.push('/config/' + id) }
   function openModal(id: string)  { setOpenModals(prev => new Set(prev).add(id)) }
@@ -95,6 +92,7 @@ export default function Page() {
                 onChange={setSearch}
                 results={searchMatches.map(r => ({ id: r.followUpModeGuid, primary: r.followUpModeName }))}
                 minChars={MIN_SEARCH_CHARS}
+                loading={table.searchPending}
                 onSelect={(r) => openViewModal(r.id)}
               />
             </div>
@@ -110,7 +108,7 @@ export default function Page() {
               <tbody>
                 {isLoading
                   ? <TableLoadingState colSpan={999} />
-                  : filteredRows.length === 0
+                  : pageItems.length === 0
                     ? <EmptyState colSpan={999} hasFilters={false} onClearFilters={() => {}} />
                     : null}
                 {pageItems.map((r) => (

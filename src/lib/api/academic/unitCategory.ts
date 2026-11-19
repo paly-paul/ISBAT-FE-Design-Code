@@ -1,4 +1,6 @@
 import { apiDelete, apiGet, apiPost, apiPut } from '../client'
+import { getPagedList } from '../pagedList'
+import type { PaginatedItems } from '@/lib/pagination'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
@@ -35,6 +37,11 @@ export function getUnitCategoriesDropdown(): Promise<UnitCategoryDropdownItem[]>
 export function getUnitCategories(): Promise<UnitCategory[]> {
   if (MOCK_AUTH) return Promise.resolve(mockUnitCategories)
   return apiGet<UnitCategory[] | null>('/api/v1/academic/unit-categories').then((data: any) => Array.isArray(data) ? data : (data && typeof data === 'object' ? (data.items || Object.values(data).find(Array.isArray) || []) : []))
+}
+
+// One page for the master table (get-unit-categories.md): ?page=&pageSize=&search=.
+export function getUnitCategoriesPaged(page: number, pageSize: number, search = ''): Promise<PaginatedItems<UnitCategory>> {
+  return getPagedList<UnitCategory>('/api/v1/academic/unit-categories', page, pageSize, search, { rows: mockUnitCategories, text: r => r.unitCatName })
 }
 
 // Create a new unit category and return the saved record.

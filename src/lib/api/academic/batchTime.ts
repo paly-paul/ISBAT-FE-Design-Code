@@ -1,4 +1,6 @@
 import { apiDelete, apiGet, apiPost, apiPut } from '../client'
+import { getPagedList } from '../pagedList'
+import type { PaginatedItems } from '@/lib/pagination'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
@@ -24,6 +26,11 @@ const mockBatchTimes: BatchTime[] = [
 export function getBatchTimes(): Promise<BatchTime[]> {
   if (MOCK_AUTH) return Promise.resolve(mockBatchTimes)
   return apiGet<BatchTime[] | null>('/api/v1/academic/batchtimes').then((data: any) => Array.isArray(data) ? data : (data && typeof data === 'object' ? (data.items || Object.values(data).find(Array.isArray) || []) : []))
+}
+
+// One page for the master table (get-batch-times.md): ?page=&pageSize=&search=.
+export function getBatchTimesPaged(page: number, pageSize: number, search = ''): Promise<PaginatedItems<BatchTime>> {
+  return getPagedList<BatchTime>('/api/v1/academic/batchtimes', page, pageSize, search, { rows: mockBatchTimes, text: r => `${r.batchTimeCode} ${r.batchTime}` })
 }
 
 // Create a new batch time and return the saved record.

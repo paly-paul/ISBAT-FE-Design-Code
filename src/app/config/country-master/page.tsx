@@ -5,14 +5,15 @@ import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
 import { TableSearch } from '@/components/TableSearch'
 import { Toast } from '@/components/Toast'
-import { FilterTh } from '@/components/FilterTh'
+import { LazyFilterTh } from '@/components/LazyFilterTh'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
-import { usePagination } from '@/hooks/usePagination'
+import { useServerTable } from '@/hooks/useServerTable'
 import { CountryFormModal } from '@/components/modals/config/CountryFormModal'
 import { ViewCountryModal } from '@/components/modals/config/ViewCountryModal'
-import { useCountries, useCreateCountry, useUpdateCountry, useDeleteCountry, Country } from '@/hooks/config/useCountries'
+import { COUNTRIES_KEY, useCreateCountry, useUpdateCountry, useDeleteCountry, Country } from '@/hooks/config/useCountries'
+import { getCountriesPaged } from '@/lib/api/academic/country'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
@@ -26,14 +27,17 @@ export default function Page() {
   const permissions = usePagePermissions()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast]           = useState<{ msg: string; type: string } | null>(null)
-  const [filters, setFilters]       = useState<Record<string, string[]>>({})
   const [openFilter, setOpenFilter] = useState<string | null>(null)
   const [editingCountry, setEditingCountry] = useState<Country | null>(null)
   const [viewingCountry, setViewingCountry] = useState<Country | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Country | null>(null)
-  const [search, setSearch] = useState('')
 
-  const { data: rows = [], isLoading } = useCountries()
+  // One page at a time from the server (?page=&pageSize=&search=). The search
+  // box and the Nationality filter share the API's one `search` term (it
+  // matches name, code and nationality), so using one clears the other.
+  const table = useServerTable({ queryKey: COUNTRIES_KEY, fetchPage: getCountriesPaged, pageSize: PAGE_SIZE, minSearch: MIN_SEARCH_CHARS })
+  const { items: rows, search, setSearch, page, setPage, totalPages, totalCount } = table
+  const isLoading = table.isLoading || table.searchPending
   const createCountry = useCreateCountry()
   const updateCountry = useUpdateCountry()
   const deleteCountry = useDeleteCountry()
@@ -71,33 +75,25 @@ export default function Page() {
     return () => document.removeEventListener('click', closeFilter)
   }, [])
 
-  // Live preview shown in the search dropdown as the user types — matches
-  // the same code/name test as the table's own search filter below, just
-  // capped to a handful of rows and ignoring the column filters so it always
-  // reflects "what search alone would find".
-  const searchTrimmed = search.trim()
-  const searchMatches = searchTrimmed.length >= MIN_SEARCH_CHARS
-    ? rows.filter(r => `${r.countryCode} ${r.countryName}`.toLowerCase().includes(searchTrimmed.toLowerCase())).slice(0, 8)
-    : []
+  // Search-box preview: the first of the server's matches.
+  const searchMatches = search.trim().length >= MIN_SEARCH_CHARS && !table.searchPending ? rows.slice(0, 8) : []
+  const pageItems = table.searchPending ? [] : rows
 
-  const filteredRows = rows.filter(r => {
-    if (searchTrimmed.length >= MIN_SEARCH_CHARS && !`${r.countryCode} ${r.countryName}`.toLowerCase().includes(searchTrimmed.toLowerCase())) return false
-    return Object.entries(filters).every(([k, v]) => !v.length || v.includes(String((r as unknown as Record<string, unknown>)[k])))
-  })
-
-  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
-
-  function fth(label: string, col: string, opts: string[]) {
+  // Header filter whose options load from the country list as you scroll it;
+  // picking one narrows the table on the server.
+  function fth(label: string, col: string, toValue: (c: Country) => string | null | undefined) {
     return (
-      <FilterTh
+      <LazyFilterTh<Country>
         label={label}
-        opts={opts}
         isOpen={openFilter === col}
-        activeFilter={filters[col] ?? []}
         onToggle={e => { e.stopPropagation(); setOpenFilter(p => p === col ? null : col) }}
-        onSelect={vals => { setFilters(f => ({ ...f, [col]: vals })); setOpenFilter(null) }}
-        onClear={() => { setFilters(f => ({ ...f, [col]: [] })); setOpenFilter(null) }}
         onClose={() => setOpenFilter(null)}
+        value={table.filter?.column === col ? table.filter.value : null}
+        onSelect={v => { table.setFilter(col, v); setOpenFilter(null) }}
+        onClear={() => { table.setFilter(col, null); setOpenFilter(null) }}
+        queryKey={[...COUNTRIES_KEY, 'filter', col]}
+        fetchPage={getCountriesPaged}
+        toValue={toValue}
       />
     )
   }
@@ -127,11 +123,12 @@ export default function Page() {
                 onChange={setSearch}
                 results={searchMatches.map(r => ({ id: r.countryGuid, primary: r.countryCode, secondary: r.countryName }))}
                 minChars={MIN_SEARCH_CHARS}
+                loading={table.searchPending}
                 onSelect={(res) => { const row = rows.find(x => x.countryGuid === res.id); if (row) openViewModal(row) }}
               />
             </div>
           </div>
-          <ScrollTable filters={filters} onResetFilters={() => setFilters({})}>
+          <ScrollTable filters={table.filter ? { [table.filter.column]: [table.filter.value] } : {}} onResetFilters={() => table.setFilter('', null)}>
             <table>
               {/* Previous header/row markup (pre GET /api/v1/users/countries integration) — kept for reference.
               <thead>
@@ -175,7 +172,7 @@ export default function Page() {
                   <th style={{ width: 48 }}></th>
                   <th>Country Code</th>
                   <th>Country Name</th>
-                  {fth('Nationality', 'nationality', ['Ugandan', 'Kenyan', 'Tanzanian', 'Rwandan', 'South Sudanese', 'Congolese', 'British', 'Indian'])}
+                  {fth('Nationality', 'nationality', c => c.nationality)}
                   <th>Dial Prefix</th>
                   <th>Default</th>
                 </tr>
@@ -183,8 +180,8 @@ export default function Page() {
               <tbody>
                 {isLoading
                   ? <TableLoadingState colSpan={999} />
-                  : filteredRows.length === 0
-                    ? <EmptyState colSpan={999} hasFilters={Object.values(filters).some(v => v.length > 0)} onClearFilters={() => setFilters({})} />
+                  : pageItems.length === 0
+                    ? <EmptyState colSpan={999} hasFilters={!!table.term} onClearFilters={() => setSearch('')} />
                     : null}
                 {pageItems.map((r) => (
                   <tr key={r.countryGuid}>

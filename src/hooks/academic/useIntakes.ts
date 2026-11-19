@@ -1,6 +1,5 @@
-import { QueryClient, useMutation, useQuery, useQueryClient, useInfiniteQuery, useQueries, keepPreviousData } from '@tanstack/react-query'
+import { QueryClient, useMutation, useQuery, useQueryClient, useQueries, keepPreviousData } from '@tanstack/react-query'
 import { createIntake, CreateIntakeInput, deleteIntake, getCurrentIntake, getIntakeById, getIntakes, getIntakesPaged, Intake, updateIntake, getIntakesDropdown } from '@/lib/api/academic/intake'
-import { getNextPageParam } from '@/lib/pagination'
 
 const INTAKES_KEY = ['intakes']
 
@@ -56,24 +55,6 @@ export function useIntakesPaged(page: number, pageSize: number, search: string) 
   })
 }
 
-// Search-as-you-type/scroll picker (2026-09-10), backing IntakeSearchPicker
-// — same useInfiniteQuery + fetch-next-on-scroll pattern
-// useSearchProgramMastersInfinite (useProgramMaster.ts) uses. Replaces
-// ProgrammeModal's own Intake dropdowns, which used to read off useIntakes()'
-// capped 1000-row snapshot. Reuses getIntakesPaged, already confirmed to
-// genuinely support page/pageSize/search together (built for Intake
-// Master's own table pagination).
-export function useSearchIntakesInfinite(search: string, pageSize: number, enabled: boolean) {
-  return useInfiniteQuery({
-    queryKey: [...INTAKES_KEY, 'search-infinite', search, pageSize],
-    queryFn: ({ pageParam }) => getIntakesPaged(pageParam, pageSize, search),
-    initialPageParam: 1,
-    getNextPageParam,
-    enabled,
-    staleTime: Infinity,
-    gcTime: Infinity,
-  })
-}
 
 // Batched-by-guid lookup — same convention as useCourseUnitsByGuids
 // (useCourseUnits.ts), used by ProgrammeModal to resolve the display label

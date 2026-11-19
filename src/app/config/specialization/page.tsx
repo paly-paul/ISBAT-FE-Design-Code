@@ -8,10 +8,11 @@ import { Toast } from '@/components/Toast'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
-import { usePagination } from '@/hooks/usePagination'
+import { useServerTable } from '@/hooks/useServerTable'
+import { getStreamsPaged } from '@/lib/api/academic/stream'
 import { StreamFormModal } from '@/components/modals/config/StreamFormModal'
 import { ViewStreamModal } from '@/components/modals/config/ViewStreamModal'
-import { useStreams, useCreateStream, useUpdateStream, useDeleteStream, Stream } from '@/hooks/config/useStreams'
+import { STREAMS_KEY, useCreateStream, useUpdateStream, useDeleteStream, Stream } from '@/hooks/config/useStreams'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
@@ -28,23 +29,19 @@ export default function Page() {
   const [editingStreamGuid, setEditingStreamGuid] = useState<string | null>(null)
   const [viewingStreamGuid, setViewingStreamGuid] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Stream | null>(null)
-  const [search, setSearch] = useState('')
 
-  const { data: rows = [], isLoading } = useStreams()
+  // One page at a time from the server (?page=&pageSize=&search=), so the
+  // search box narrows the whole list, not just the rows on screen.
+  const table = useServerTable({ queryKey: STREAMS_KEY, fetchPage: getStreamsPaged, pageSize: PAGE_SIZE, minSearch: MIN_SEARCH_CHARS })
+  const { items: rows, search, setSearch, page, setPage, totalPages, totalCount } = table
+  const isLoading = table.isLoading || table.searchPending
   const createStream = useCreateStream()
   const updateStream = useUpdateStream()
   const deleteStream = useDeleteStream()
 
-  const searchTrimmed = search.trim()
-  const searchMatches = searchTrimmed.length >= MIN_SEARCH_CHARS
-    ? rows.filter(r => `${r.streamCode} ${r.streamName}`.toLowerCase().includes(searchTrimmed.toLowerCase())).slice(0, 8)
-    : []
-
-  const filteredRows = rows.filter(r =>
-    searchTrimmed.length < MIN_SEARCH_CHARS || `${r.streamCode} ${r.streamName}`.toLowerCase().includes(searchTrimmed.toLowerCase())
-  )
-
-  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
+  // Search-box preview: the first of the server's matches.
+  const searchMatches = search.trim().length >= MIN_SEARCH_CHARS && !table.searchPending ? rows.slice(0, 8) : []
+  const pageItems = table.searchPending ? [] : rows
 
   function nav(id: string) { router.push('/config/' + id) }
   function openModal(id: string)  { setOpenModals(prev => new Set(prev).add(id)) }
@@ -95,6 +92,7 @@ export default function Page() {
                 onChange={setSearch}
                 results={searchMatches.map(r => ({ id: r.streamGuid, primary: r.streamCode, secondary: r.streamName }))}
                 minChars={MIN_SEARCH_CHARS}
+                loading={table.searchPending}
                 onSelect={(r) => openViewModal(r.id)}
               />
             </div>
@@ -111,7 +109,7 @@ export default function Page() {
               <tbody>
                 {isLoading
                   ? <TableLoadingState colSpan={999} />
-                  : filteredRows.length === 0
+                  : pageItems.length === 0
                     ? <EmptyState colSpan={999} hasFilters={false} onClearFilters={() => {}} />
                     : null}
                 {pageItems.map((r) => (

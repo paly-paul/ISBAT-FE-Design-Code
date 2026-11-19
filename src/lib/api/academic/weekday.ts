@@ -1,4 +1,6 @@
 import { apiDelete, apiGet, apiPost, apiPut } from '../client'
+import { getPagedList } from '../pagedList'
+import type { PaginatedItems } from '@/lib/pagination'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
@@ -27,6 +29,11 @@ const mockWeekdays: Weekday[] = [
 export function getWeekdays(): Promise<Weekday[]> {
   if (MOCK_AUTH) return Promise.resolve(mockWeekdays)
   return apiGet<Weekday[] | null>('/api/v1/academic/weekdays').then((data: any) => Array.isArray(data) ? data : (data && typeof data === 'object' ? (data.items || Object.values(data).find(Array.isArray) || []) : []))
+}
+
+// One page for the master table (get-weekdays.md): ?page=&pageSize=&search=.
+export function getWeekdaysPaged(page: number, pageSize: number, search = ''): Promise<PaginatedItems<Weekday>> {
+  return getPagedList<Weekday>('/api/v1/academic/weekdays', page, pageSize, search, { rows: mockWeekdays, text: r => `${r.dayCode} ${r.dayName}` })
 }
 
 // Create a new weekday and return the saved record.

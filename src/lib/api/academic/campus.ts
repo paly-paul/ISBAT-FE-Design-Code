@@ -132,6 +132,19 @@ export function getCampusDropdown(): Promise<CampusDropdownItem[]> {
   return apiGet<CampusDropdownItem[] | null>('/api/v1/academic/campus/dropdown').then((data: any) => Array.isArray(data) ? data : (data && typeof data === 'object' ? (data.items || Object.values(data).find(Array.isArray) || []) : []))
 }
 
+// Same endpoint with its optional ?search= (get-campus-dropdown.md: contains-
+// match on code, name and location). For InfiniteSearchSelect pickers, via
+// dropdownAsPage. getCampusDropdown stays argument-free — it's passed straight
+// to useQuery as queryFn in places, which would hand it the query context.
+export function searchCampusDropdown(search = ''): Promise<CampusDropdownItem[]> {
+  const q = search.trim()
+  if (MOCK_AUTH) {
+    return getCampusDropdown().then(rows => rows.filter(c => !q || c.campusName.toLowerCase().includes(q.toLowerCase())))
+  }
+  const url = q ? `/api/v1/academic/campus/dropdown?search=${encodeURIComponent(q)}` : '/api/v1/academic/campus/dropdown'
+  return apiGet<CampusDropdownItem[] | null>(url).then(data => Array.isArray(data) ? data : [])
+}
+
 // Create a campus and return the saved record.
 export function createCampus(input: CampusInput): Promise<Campus> {
   if (MOCK_AUTH) {

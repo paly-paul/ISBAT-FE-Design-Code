@@ -1,4 +1,6 @@
 import { apiDelete, apiGet, apiPost, apiPut } from '../client'
+import { getPagedList } from '../pagedList'
+import type { PaginatedItems } from '@/lib/pagination'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
@@ -20,6 +22,11 @@ const mockInterestLevels: InterestLevel[] = [
 export function getInterestLevels(): Promise<InterestLevel[]> {
   if (MOCK_AUTH) return Promise.resolve(mockInterestLevels)
   return apiGet<InterestLevel[] | null>('/api/v1/admissions/interest-levels').then((data: any) => Array.isArray(data) ? data : (data && typeof data === 'object' ? (data.items || Object.values(data).find(Array.isArray) || []) : []))
+}
+
+// One page for the master table (get-interest-levels.md): ?page=&pageSize=&search=.
+export function getInterestLevelsPaged(page: number, pageSize: number, search = ''): Promise<PaginatedItems<InterestLevel>> {
+  return getPagedList<InterestLevel>('/api/v1/admissions/interest-levels', page, pageSize, search, { rows: mockInterestLevels, text: r => r.interestLevelName })
 }
 
 // GET /interest-levels/dropdown (get-interest-level-dropdown.md). Soft-deleted rows
