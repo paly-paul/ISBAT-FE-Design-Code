@@ -1,11 +1,11 @@
 'use client'
 import { Dispatch, SetStateAction, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { useMenu } from '@/hooks/users/useMenu'
 import { MenuNode } from '@/lib/api/users/menu'
 
-export type RailId = 'admission' | 'academic' | 'finance' | 'student' | 'attendance' | 'employee' | 'assessment' | 'config' | 'activity-log'
+export type RailId = 'student' | 'finance' | 'academic' | 'admission' | 'employee' | 'attendance' | 'assessment' | 'analytics' | 'configuration'
 
 interface SidebarProps {
   panelOpen: boolean
@@ -25,18 +25,33 @@ interface RailDef {
 }
 
 // name must match the top-level `name` field the menu API returns for that
-// module — used to look the node up in the fetched tree.
+// module — used to look the node up in the fetched tree. Listed in the
+// menu API's module order (ERP_Menu_Hierarchy_Verified_v7.md): Analytics and
+// Configuration are centralized modules whose pages live under other
+// modules' routes (/finance/reports/*, /config/*, /academic/skill-master…),
+// so a rail is not the same thing as a route segment.
 const RAIL_DEFS: RailDef[] = [
-  { id: 'admission', name: 'Admission', fallbackIcon: 'lni lni-clipboard', footer: 'S1 · Admission Service' },
-  { id: 'academic', name: 'Academic', fallbackIcon: 'lni lni-graduation', footer: 'S2 · Academic Service' },
-  { id: 'finance', name: 'Finance', fallbackIcon: 'lni lni-dollar', footer: 'S5 · Finance Service' },
   { id: 'student', name: 'Student', fallbackIcon: 'lni lni-user', footer: 'S10 · Student Service' },
-  { id: 'attendance', name: 'Attendance', fallbackIcon: 'lni lni-alarm-clock', footer: 'S6 · Attendance Service' },
+  { id: 'finance', name: 'Finance', fallbackIcon: 'lni lni-dollar', footer: 'S5 · Finance Service' },
+  { id: 'academic', name: 'Academic', fallbackIcon: 'lni lni-graduation', footer: 'S2 · Academic Service' },
+  { id: 'admission', name: 'Admission', fallbackIcon: 'lni lni-clipboard', footer: 'S1 · Admission Service' },
   { id: 'employee', name: 'Employee', fallbackIcon: 'lni lni-briefcase', footer: 'S4 · Employee Service' },
+  { id: 'attendance', name: 'Attendance', fallbackIcon: 'lni lni-alarm-clock', footer: 'S6 · Attendance Service' },
   { id: 'assessment', name: 'Assessment', fallbackIcon: 'lni lni-pencil-alt', footer: '' },
-  { id: 'config', name: 'Config', fallbackIcon: 'lni lni-cog', footer: 'S0 · Core Config' },
-  { id: 'activity-log', name: 'Activity Log', fallbackIcon: 'lni lni-list', footer: 'S0 · Audit & Activity' },
+  { id: 'analytics', name: 'Analytics', fallbackIcon: 'lni lni-bar-chart', footer: 'Reports & Analytics' },
+  { id: 'configuration', name: 'Configuration', fallbackIcon: 'lni lni-cog', footer: 'S0 · Core Config' },
 ]
+
+function normPath(path: string): string {
+  return path.split('?')[0].replace(/\/+$/, '').toLowerCase() || '/'
+}
+
+// Whether `path` is one of this module's own leaves (any depth).
+function moduleHasPath(nodes: MenuNode[], railId: RailId, path: string): boolean {
+  return nodes.some(n =>
+    (n.url && normPath(resolveHref(n.url, railId)) === path) || moduleHasPath(n.children, railId, path),
+  )
+}
 
 function slug(s: string) {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
@@ -58,8 +73,7 @@ function idFromUrl(url: string): string {
 }
 
 // Sidebar entries hidden from navigation without touching the backend menu
-// tree or deleting the page itself — keyed by the same url-slug idFromUrl()
-// resolves for every other leaf (sb-item's `active` state).
+// tree or deleting the page itself — keyed by the leaf's url slug.
 // Ledger Adjustments: commented out per request (2026-09-07) — that page is
 // still a UI-only mock (see AdjustLedgerModal.tsx's own comment: no backing
 // "ledger adjustment" endpoint exists in the API spec yet), so it stays out
@@ -69,32 +83,9 @@ const HIDDEN_ITEM_IDS = new Set<string>([
   'ledger-adjustments',
 ])
 
-// Client-side reorder for Finance's own Payment Collection items, per
-// request (2026-09-07) — the backend menu API decides sidebar order, so
-// there's no static array to reorder in-place the way a hardcoded nav
-// would; this re-sorts whichever children array these slugs turn up in
-// instead. Listed items move to the front in this exact order; anything
-// not listed here (a section header, another module's items, a future
-// Finance page not yet accounted for) keeps its original relative order
-// and simply follows after — a plain index lookup used as a stable-sort
-// key achieves both at once.
-const ORDER_PRIORITY = [
-  'dashboard',
-  'payment-console',
-  'nche-guild-payment',
-  'advanced-payments',
-  'discount-allocation',
-  'refugee-status',
-  'payment-refund',
-  'payment-history',
-  'exchange-rates',
-]
-
-function orderIndex(item: MenuNode): number {
-  if (!item.url) return ORDER_PRIORITY.length
-  const i = ORDER_PRIORITY.indexOf(idFromUrl(item.url))
-  return i === -1 ? ORDER_PRIORITY.length : i
-}
+// Order is the menu API's own (ERP_Menu_Hierarchy_Verified_v7.md). The
+// client-side Finance reorder (ORDER_PRIORITY, 2026-09-07) was removed
+// 2026-11-20 so the sidebar matches the verified hierarchy exactly.
 
 const HIDDEN_SECTION_NAMES = new Set<string>([
   'lecture master',
@@ -107,33 +98,15 @@ function isHiddenMenuNode(node: MenuNode): boolean {
   return false
 }
 
-// railId scopes ORDER_PRIORITY's re-sort to Finance only — several other
-// modules have their own "Dashboard" leaf sharing the exact slug ORDER_
-// PRIORITY matches on, and re-sorting every module just because Finance's
-// own order was requested would silently reshuffle navigation nobody asked
-// to change. The hide-filter has no such collision risk (HIDDEN_ITEM_IDS is
-// currently Finance-only anyway) so it stays applied everywhere.
-function visibleChildren(children: MenuNode[], railId: RailId): MenuNode[] {
-  const filtered = children.filter(c => !isHiddenMenuNode(c))
-  if (railId !== 'finance') return filtered
-  // Array.prototype.sort is a stable sort in every engine this app ships
-  // to (spec-guaranteed since ES2019) — items tied on orderIndex (i.e.
-  // every unlisted one) keep the relative order the API sent them in.
-  return filtered.sort((a, b) => orderIndex(a) - orderIndex(b))
+function visibleChildren(children: MenuNode[]): MenuNode[] {
+  return children.filter(c => !isHiddenMenuNode(c))
 }
 
+// The UE print renames ("UE Theory QP Print" / "UE Material Print") were
+// dropped 2026-11-20 — the menu API now sends the v7 names itself.
 function getItemDisplayName(item: MenuNode): string {
   if (!item.url) return item.name
   const id = idFromUrl(item.url)
-  if (id === 'university-exam-material-print') {
-    return 'UE Theory QP Print'
-  }
-  if (
-    id === 'university-exam-qp-booklet-print' ||
-    id === 'university-exam-qpprint'
-  ) {
-    return 'UE Material Print'
-  }
   return item.name === 'IA Creation' || id === 'ia-creation'
     ? 'Assessment Scheduler'
     : id === 'mark-ue'
@@ -151,6 +124,8 @@ export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSection
   const [menuSearch, setMenuSearch] = useState('')
   const { data, isLoading, isError, refetch } = useMenu()
   const router = useRouter()
+  const pathname = usePathname()
+  const currentPath = normPath(pathname ?? '')
   const menu = data?.menu
 
   // At ≤900px the panel lies over the page instead of pushing it aside (see
@@ -194,6 +169,22 @@ export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSection
     }
   }, [moduleByName, activeRail, setActiveRail])
 
+  // Open the rail whose menu actually holds the current page. Each route
+  // folder's layout starts on its own rail, but centralized modules list
+  // pages from other folders (Configuration → /finance/banks, Analytics →
+  // /attendance/reports/by-date), so the folder alone picks the wrong one.
+  // Runs on navigation only — clicking another rail still just swaps the
+  // panel. A page in no module's menu (profile, detail pages) keeps the
+  // layout's rail.
+  useEffect(() => {
+    if (moduleByName.size === 0) return
+    const owner = RAIL_DEFS.find(def => {
+      const node = moduleByName.get(def.name)
+      return node ? moduleHasPath(node.children, def.id, currentPath) : false
+    })
+    if (owner) setActiveRail(owner.id)
+  }, [moduleByName, currentPath, setActiveRail])
+
   function sbItem(item: MenuNode, railId: RailId) {
     const iconClass = item.icon ?? 'lni lni-dot'
     if (!item.url) {
@@ -205,9 +196,11 @@ export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSection
         </span>
       )
     }
-    const id = idFromUrl(item.url)
     const displayName = getItemDisplayName(item)
     const href = resolveHref(item.url, railId)
+    // Full-path match: slugs repeat across modules now (/config/specialization
+    // and /student/specialization both sit under Configuration).
+    const active = normPath(href) === currentPath
     return (
       // prefetch={false} — next/link's default auto-prefetch fires for every
       // rendered <Link> as soon as it's in the viewport, not just on hover.
@@ -225,7 +218,10 @@ export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSection
         prefetch={false}
         onMouseEnter={() => router.prefetch(href)}
         onFocus={() => router.prefetch(href)}
-        className={`sb-item${currentPage === id ? ' active' : ''}`}
+        // Close the panel once a link is picked, at every width (2026-11-20);
+        // the rail icon reopens it.
+        onClick={() => setPanelOpen(false)}
+        className={`sb-item${active ? ' active' : ''}`}
       >
         <span className="sb-icon"><i className={iconClass}></i></span>
         {displayName}
@@ -237,7 +233,7 @@ export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSection
     const id = `sc-${slug(moduleName)}-${slug(section.name)}`
     const isSearching = Boolean(menuSearch.trim())
     const collapsed = isSearching ? false : collapsedSections.has(id)
-    const items = itemsToRender ?? visibleChildren(section.children, railId)
+    const items = itemsToRender ?? visibleChildren(section.children)
     return (
       <div key={id} className={`sb-collapse${collapsed ? ' closed' : ''}`}>
         <div className="sb-group-hdr" onClick={() => toggleCollapse(id)}>
@@ -297,7 +293,7 @@ export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSection
       )
     }
 
-    const allVisible = visibleChildren(node.children, def.id)
+    const allVisible = visibleChildren(node.children)
     const query = menuSearch.trim().toLowerCase()
 
     let renderedContent: React.ReactNode
@@ -311,7 +307,7 @@ export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSection
         .map(section => {
           if (section.children.length > 0) {
             const sectionNameMatches = section.name.toLowerCase().includes(query)
-            const matchingChildren = visibleChildren(section.children, def.id).filter(item => {
+            const matchingChildren = visibleChildren(section.children).filter(item => {
               const name = getItemDisplayName(item).toLowerCase()
               const url = (item.url || '').toLowerCase()
               return name.includes(query) || url.includes(query)
@@ -387,21 +383,13 @@ export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSection
   // (moduleByName.get(def.name) misses). Dividers used to be hardcoded between every pair of
   // slots regardless, so a null slot (e.g. no Config access) left two
   // .rail-dividers stacked back-to-back with nothing between them — a
-  // visibly doubled line right above whatever module happened to follow
-  // (confirmed live: Activity Log, when Config returned null). Built as a
-  // {key, node} list and filtered first instead, so a divider only ever
-  // renders between two slots that both actually rendered something.
-  const railSlots: { key: string; node: React.ReactNode }[] = [
-    { key: 'admission', node: renderRailSlot(RAIL_DEFS[0]) },
-    { key: 'academic', node: renderRailSlot(RAIL_DEFS[1]) },
-    { key: 'finance', node: renderRailSlot(RAIL_DEFS[2]) },
-    { key: 'student', node: renderRailSlot(RAIL_DEFS[3]) },
-    { key: 'attendance', node: renderRailSlot(RAIL_DEFS[4]) },
-    { key: 'employee', node: renderRailSlot(RAIL_DEFS[5]) },
-    { key: 'assessment', node: renderRailSlot(RAIL_DEFS[6]) },
-    { key: 'config', node: renderRailSlot(RAIL_DEFS[7]) },
-    { key: 'activity-log', node: renderRailSlot(RAIL_DEFS[8]) },
-  ]
+  // visibly doubled line right above whatever module happened to follow.
+  // Built as a {key, node} list and filtered first instead, so a divider
+  // only ever renders between two slots that both actually rendered something.
+  const railSlots: { key: string; node: React.ReactNode }[] = RAIL_DEFS.map(def => ({
+    key: def.id,
+    node: renderRailSlot(def),
+  }))
   const visibleRailSlots = railSlots.filter(s => s.node)
 
   return (

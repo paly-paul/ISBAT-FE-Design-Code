@@ -21,8 +21,7 @@ export interface MenuPermissions {
 
 // A node with children is a rail/section (icon/url/permissions all null); a
 // node with an empty children array is a leaf page. A leaf can still have
-// url: null (e.g. Admission > Records > Receipts) for a nav entry that's
-// visible but has no page behind it yet.
+// url: null for a nav entry that's visible but has no page behind it yet.
 export interface MenuNode {
   name: string
   icon: string | null
@@ -61,277 +60,70 @@ function module_(name: string, icon: string, children: MenuNode[]): MenuNode {
   return { name, icon: `lni lni-${icon}`, url: null, permissions: null, children }
 }
 
-// Finance's Payment Collection / Reports & Statements, for mock mode only —
-// real mode takes these sections straight from /me/menu.
+// Mirrors ERP_Menu_Hierarchy_Verified_v7.md and the shape /me/menu returns
+// for it (2026-11-20): module order, section names and page order are the
+// menu API's, including its "General" section around each module's
+// dashboard. Analytics and Configuration are centralized modules — their
+// pages keep their own routes (/finance/reports/*, /config/*,
+// /academic/skill-master…). Full access to everything, so mock mode still
+// exercises every page. It is also the page catalog RouteGuard checks
+// against (see menuCatalog below).
 //
-// 'Payment Console Adjustments' removed (2026-09-08) — its "Apply Advance"
-// fields/functionality moved into Payment Console's own Semester Payment
-// tab, behind a Regular Payment/Apply Advance toggle; the standalone page
-// now just redirects there, so it no longer needs its own nav entry.
-const FINANCE_PAYMENT_SECTIONS: MenuNode[] = [
-  section('Payment Collection', [
-    leaf('Dashboard', 'dashboard', 'dashboard'),
-    leaf('Payment Console', 'credit-cards', 'payment-console'),
-    leaf('Payment Refund', 'reload', 'payment-refund'),
-    leaf('NCHE & Guild Payment', 'graduation', 'nche-guild-payment'),
-    leaf('Discount Allocation', 'tag', 'discount-allocation'),
-    // Same refugee-status workflow as Student Master's row-menu modal, as a
-    // standalone page for Finance (it changes the student's fees).
-    leaf('Refugee Status', 'shield', 'refugee-status'),
-    leaf('Payment History', 'bar-chart', 'payment-history'),
-    leaf('Ledger Adjustments', 'lock', 'ledger-adjustments'),
-    leaf('Exchange Rates', 'world', 'exchange-rates'),
-    leaf('Advanced Payments', 'wallet', 'advanced-payments'),
-  ]),
-  section('Reports & Statements', [
-    // 'Financial Reports' (financial-reports) removed 2026-11-11: the page
-    // was static mock figures with no API, and has been deleted.
-    // discount-report-page.md, 2026-10-11 — no backend page registration
-    // yet, so real mode shows it only once /me/menu returns it.
-    leaf('Discount Report', 'tag', 'reports/discount'),
-    // transaction-report-page.md / outstanding-report-page.md, 2026-10-13 —
-    // same: real mode shows them only once /me/menu returns them.
-    leaf('Transaction Report', 'list', 'reports/transaction'),
-    leaf('Outstanding Report', 'alarm-clock', 'reports/outstanding'),
-    leaf('Student Statement', 'files', 'student-statements'),
-  ]),
-]
-
-// Student module sections for mockMenu; cleanStudentSections also reads the
-// Operations icons from here for the real menu. Ported
-// from isbat_student_module.html; Dashboard and Student Directory were
-// skipped (Student Master already covers the directory role).
-const STUDENT_OPERATIONS_SECTIONS: MenuNode[] = [
-  section('Operations', [
-    leaf('Student Profile', 'user', '/student/profile'),
-    leaf('Batch Transfer', 'shuffle', '/student/batch-transfer'),
-    leaf('Programme Transfer', 'graduation', '/student/prog-transfer'),
-    leaf('Learning Mode', 'display', '/student/learning-mode'),
-    // Approval queue for Learning Mode's change requests, 2026-09-30.
-    leaf('Learning Mode Approval', 'checkmark-circle', '/student/learning-mode-approval'),
-    // Approval queue for refugee-status requests (assign now only raises a
-    // request — post-approve-refugee-status.md, 2026-10-05).
-    leaf('Refugee Status Approval', 'checkmark-circle', '/student/refugee-approval'),
-    // Re-enabled and renamed from "Intake Transfer" to "Dropout Rejoin",
-    // 2026-09-03 — same route (/student/intake-transfer), matching the page's
-    // own "Dropout Rejoin" mode tab (its "Deferment / Period Shift" tab was
-    // commented out on the page itself the same day, leaving Dropout Rejoin
-    // as the page's only mode).
-    leaf('Dropout Rejoin', 'calendar', '/student/intake-transfer'),
-    leaf('Fee Structure Transfer', 'dollar', '/student/fee-structure-transfer'),
-    // POST /students/{studentGuid}/terminate (student-termination/
-    // post-terminate-student.md) — added 2026-09-15.
-    leaf('Terminate Student', 'shield', '/student/terminate-student'),
-    // GET .../passout-confirmation/candidates + POST .../{studentGuid}/confirm
-    // (passout-confirmation/*.md) — manual Passout confirmation for PCSE/PCIM
-    // students, which have no marks data anywhere to drive an automated
-    // decision. Added 2026-09-18.
-    leaf('Passout Confirmation', 'graduation', '/student/passout-confirmation'),
-  ]),
-  // Learning Mode Report split out of the Learning Mode page into its own
-  // page, 2026-09-29 (GET /students/learning-mode/report). Hidden from the
-  // sidebar per request, 2026-10-01 — the page still exists at
-  // /student/learning-mode-report, just not linked to. Commented out whole
-  // for the same "childless section renders as Soon" reason as Services below.
-  // section('Reports', [
-  //   leaf('Learning Mode Report', 'bar-chart', '/student/learning-mode-report'),
-  // ]),
-  // students-in-programme-report-page.md, 2026-11-01.
-  section('Reports', [
-    leaf('Students in Programme Report', 'bar-chart', '/student/reports/students-in-programme'),
-  ]),
-  // Services section hidden from the sidebar per request, 2026-09-02 — its
-  // one leaf (Student Services) still exists at /student/services, just not
-  // linked to. Commented out whole (not just the leaf) since Sidebar.tsx
-  // renders a childless section as a disabled "Soon" item instead of
-  // skipping it (see sbItem/sbSection in Sidebar.tsx).
-  // section('Services', [
-  //   leaf('Student Services', 'ticket', '/student/services'),
-  // ]),
-  // Staff service-ticket triage (service-ticket-staff-page.md, Students
-  // module). Moved here from the Assessment module, 2026-11-10.
-  section('Student Services', [
-    leaf('Service Tickets', 'ticket', '/student/service-tickets'),
-  ]),
-  section('Communications', [
-    leaf('Send Communication', 'envelope', '/student/communications'),
-  ]),
-  section('Events and Announcements', [
-    leaf('Event Management', 'calendar', '/student/event-management'),
-    leaf('Announcement Management', 'bullhorn', '/student/announcement-management'),
-  ]),
-  section('Settings', [
-    leaf('Specialization Management', 'graduation', '/student/specialization'),
-    // M_TERMINATION_REASON master (termination-reasons/*.md) — the reason
-    // picker behind POST /students/{studentGuid}/terminate. Added 2026-09-15
-    // alongside the Refund-Eligibility Search work.
-    leaf('Termination Reason Master', 'shield', '/student/termination-reasons'),
-    // Course feedback forms + questions per intake (feedback-master/*.md,
-    // 2026-10-06).
-    leaf('Feedback Master', 'comments', '/student/feedback-master'),
-  ]),
-]
-
-const CONFIG_SECTIONS: MenuNode[] = [
-  section('Students', [
-    // Moved out of the Student module's Settings section — these are config
-    // masters (sponsor/student categories and ticketing categories), not
-    // day-to-day student operations, so they belong alongside the rest of
-    // Config's setup masters instead.
-    leaf('Student Category Master', 'users', '/config/student-category-master'),
-    leaf('Service Category Master', 'list', '/config/service-category-master'),
-  ]),
-  section('Organization', [
-    leaf('Faculty Master', 'library', '/config/faculty-master'),
-    leaf('Department Master', 'briefcase', '/config/department-master'),
-    leaf('Designation Master', 'tag', '/config/designation-master'),
-    leaf('Campus Master', 'home', '/config/campus-master'),
-    leaf('Country Master', 'world', '/config/country-master'),
-  ]),
-  section('Academic Setup', [
-    leaf('Specialization', 'certificate', '/config/specialization'),
-    leaf('Skill Master', 'bulb', '/config/skill'),
-    leaf('Unit Type Master', 'tag', '/config/unit-type'),
-    leaf('Unit Category Master', 'tag', '/config/unit-category'),
-    leaf('Weekdays', 'calendar', '/config/weekdays'),
-    leaf('Batch Times', 'timer', '/config/batch-times'),
-  ]),
-  section('Admissions', [
-    leaf('Enquiry Status', 'flag', '/config/enquiry-status'),
-    leaf('Isbat Enquiry Source', 'compass', '/config/enquiry-source'),
-    leaf('Enquiry Source', 'volume', '/config/enquiry-source-master'),
-    leaf('Followup Status', 'phone', '/config/followup-status'),
-    leaf('Followup Mode', 'comments', '/config/followup-mode'),
-    leaf('Interest Level', 'signal', '/config/interest-level'),
-  ]),
-  section('Access Control', [
-    leaf('Permission Master', 'lock', '/config/permission-master'),
-  ]),
-]
-
-const ASSESSMENT_SECTIONS: MenuNode[] = [
-  section('Overview', [
-    leaf('Assessment Dashboard', 'dashboard', '/assessment/dashboard'),
-  ]),
-  section('Assessment Structure', [
-    leaf('Fee Clearance Master', 'list', '/assessment/assessment-master'),
-    leaf('Exam Rules Master', 'files', '/assessment/exam-rules'),
-    leaf('Question FAQs', 'comments', '/assessment/question-faqs'),
-    // leaf('Weight Configuration', 'cog', '/assessment/weight-config'),
-    // leaf('Assessment Schedule', 'calendar', '/assessment/schedule'),
-    leaf('Bulk Exam Scheduler', 'calendar', '/assessment/bulk-exam-scheduler'),
-    leaf('Assessment Scheduler', 'graduation', '/assessment/ia-creation'),
-    leaf('IA Evaluation', 'checkmark-circle', '/assessment/ia-evaluation'),
-  ]),
-  section('Coursework (CW)', [
-    // leaf('CW Overview', 'folder', '/assessment/cw-overview'),
-    leaf('Question Bank Upload', 'upload', '/assessment/cw-qbank'),
-    // leaf('CW Submissions', 'files', '/assessment/cw-submissions'),
-    leaf('CW Rectification', 'reload', '/assessment/cw-rectify'),
-    leaf('Project Proposals', 'folder', '/assessment/project-proposals'),
-    leaf('Project Reviews', 'folder', '/assessment/project-reviews'),
-  ]),
-  section('Class Test (CBT)', [
-    // leaf('CBT Overview', 'folder', '/assessment/cbt-overview'),
-    // leaf('CBT Question Upload', 'upload', '/assessment/cbt-qupload'),
-    // leaf('CBT Monitor', 'display', '/assessment/cbt-monitor'),
-    leaf('Exam Cancel', 'timer', '/assessment/exam-cancel'),
-  ]),
-  section('University Exam (UE)', [
-    // leaf('UE Schedule', 'calendar', '/assessment/ue-schedule'),
-    leaf('Question Paper Vetting', 'upload', '/assessment/qp-vetting'),
-    leaf('UE Practical QBank', 'upload', '/assessment/question-bank-practical'),
-    leaf('Hall Ticket Issuance', 'ticket', '/assessment/hall-ticket'),
-    leaf('Hall Ticket Print', 'printer', '/assessment/hall-print'),
-    // Whole-intake combined PDF (hall-ticket-print-all-page.md, 2026-10-06).
-    leaf('Hall Ticket Print All', 'printer', '/assessment/hall-ticket-print-all'),
-    leaf('UE Theory QP Print', 'printer', '/assessment/university-exam-material-print'),
-    leaf('UE Material Print', 'printer', '/assessment/university-exam-qp-booklet-print'),
-    leaf('UE Practical QP Print', 'printer', '/assessment/university-exam-practical-qp-print'),
-    leaf('UE Project Booklet Print', 'printer', '/assessment/university-exam-project-booklet-print'),
-    leaf('Resit Question Print', 'printer', '/assessment/resit-question-print'),
-    leaf('UE Attendance', 'users', '/assessment/ue-attendance'),
-    leaf('UE Mark Import', 'upload', '/assessment/ue-mark-import'),
-  ]),
-  section('Mark Entry & Results', [
-    // leaf('Mark Entry CW', 'pencil-alt', '/assessment/mark-cw'),
-    // leaf('Mark Entry CBT', 'pencil-alt', '/assessment/mark-cbt'),
-    leaf('Mark Entry UE', 'pencil-alt', '/assessment/mark-ue'),
-    leaf('Mark Verify UE', 'shield', '/assessment/mark-ue-verify'),
-    leaf('Result & Moderation', 'bar-chart', '/assessment/moderation'),
-    leaf('Exam Mark Import', 'upload', '/assessment/exam-mark-import'),
-    leaf('Generate Result', 'cogs', '/assessment/generate-result'),
-    leaf('Transcript Print', 'printer', '/assessment/transcript-print'),
-    leaf('Graduate Transcript', 'certificate', '/assessment/graduate-transcript'),
-    leaf('HEC Graduate Transcript', 'certificate', '/assessment/hec-graduate-transcript'),
-    leaf('Transcript Collection', 'check-box', '/assessment/graduate-transcript/collection'),
-    leaf('Gown Collection', 'check-box', '/assessment/gown-collection'),
-  ]),
-  section('Resit & Disputes', [
-    leaf('Resit Master', 'cogs', '/assessment/resit-configs'),
-    // leaf('Resit Calendar', 'calendar', '/assessment/resit-calendar'),
-    leaf('Resit Applications', 'folder', '/assessment/resit-applications'),
-    leaf('Resit Apply', 'pencil-alt', '/assessment/resit-apply'),
-    leaf('Resit Scheduling', 'calendar', '/assessment/resit-scheduling'),
-    leaf('Resit IA Evaluation', 'checkmark-circle', '/assessment/resit-evaluation'),
-    leaf('Resit IA Result', 'bar-chart', '/assessment/resit-ia-results'),
-    leaf('Resit UE Mark Import', 'upload', '/assessment/resit-ue-mark-import'),
-    leaf('Resit Mark Update', 'reload', '/assessment/resit-mark-update'),
-    // leaf('Resit Seating Allocator', 'users', '/assessment/resit-seating'),
-    // leaf('CW Reevaluation', 'reload', '/assessment/reeval'),
-    // leaf('CW Recheck Hub', 'search-alt', '/assessment/recheck'),
-    leaf('Exam Grievances', 'files', '/assessment/exam-grievances'),
-  ]),
-  section('Reports', [
-    // exam-schedule-report-page.md, 2026-11-16.
-    leaf('Exam Schedule Report', 'bar-chart', '/assessment/reports/exam-schedule'),
-    // leaf('Pending QP Upload', 'folder', '/assessment/rpt-pending-qp'),
-    // leaf('Faculty Summary', 'users', '/assessment/rpt-faculty'),
-  ]),
-]
-
-// Mirrors docs/MENU_ROUTES_REFERENCE.md — full access to everything, matching
-// the app's pre-permission behavior, so mock mode still exercises every page.
+// v7 pages the menu API doesn't send yet (2026-11-20): Academic › ODL
+// Applications (both pages), Admission › Other (both pages), Admission ›
+// Records › Paid Students and Assessment › UE Practical QBank. Real mode
+// shows them once /me/menu does.
 const mockMenu: MenuNode[] = [
-  module_('Admission', 'clipboard', [
-    section('Enquiry', [
-      leaf('Online Enquiry', 'display', '/admission/online-enquiry'),
-      leaf('Self-Service Kiosk', 'tab', '/admission/kiosk-enquiry'),
-      leaf('On-Desk Enquiry', 'pencil-alt', '/admission/ondesk-enquiry'),
-      leaf('Enquiry List', 'folder', '/admission/enquiry-list'),
-      leaf('Enquiry Followup Master', 'calendar', '/admission/enquiry-followup-master'),
-      leaf('Enquiry Followup', 'phone', '/admission/enquiry-followup'),
-      // enquiry-report-page.md, 2026-10-14.
-      leaf('Enquiry Report', 'bar-chart', '/admission/reports/enquiry'),
+  module_('Student', 'user', [
+    section('Student Records', [
+      leaf('Student Master', 'graduation', '/student/student-master'),
+      leaf('Student Profile', 'user', '/student/profile'),
     ]),
-    section('Admission Flow', [
-      leaf('Dashboard', 'dashboard', '/admission/dashboard'),
-      leaf('Application Payment', 'credit-cards', '/admission/payment'),
-      leaf('Application Filing', 'pencil-alt', '/admission/filing'),
-      leaf('ODeL Application', 'world', '/admission/odel-application'),
-      leaf('Vetting Desk', 'search-alt', '/admission/vetting'),
-      leaf("Registrar's Desk", 'graduation', '/admission/registration'),
+    section('Transfers', [
+      leaf('Batch Transfer', 'shuffle', '/student/batch-transfer'),
+      leaf('Programme Transfer', 'graduation', '/student/prog-transfer'),
+      leaf('Dropout Rejoin', 'calendar', '/student/intake-transfer'),
+      leaf('Fee Structure Transfer', 'dollar', '/student/fee-structure-transfer'),
     ]),
-    section('Records', [
-      leaf('All Applicants', 'users', '/admission/applicants'),
-      // application-status-report-page.md, 2026-10-14.
-      leaf('Application Status Report', 'bar-chart', '/admission/reports/application-status'),
-      // get-paid-students.md, 2026-10-19.
-      leaf('Paid Students', 'wallet', '/admission/paid-students'),
-      leaf('Receipts', 'files', null),
-      leaf('Reports', 'bar-chart', null),
+    section('Approvals', [
+      leaf('Learning Mode Approval', 'checkmark-circle', '/student/learning-mode-approval'),
+      leaf('Refugee Status Approval', 'checkmark-circle', '/student/refugee-approval'),
+      leaf('Passout Confirmation', 'graduation', '/student/passout-confirmation'),
+    ]),
+    section('Operations', [
+      leaf('Learning Mode', 'display', '/student/learning-mode'),
+      leaf('Terminate Student', 'shield', '/student/terminate-student'),
+    ]),
+    section('Student Services', [
+      leaf('Service Tickets', 'ticket', '/student/service-tickets'),
+    ]),
+    section('Communications', [
+      leaf('Send Communication', 'envelope', '/student/communications'),
+    ]),
+  ]),
+  module_('Finance', 'dollar', [
+    section('General', [
+      leaf('Dashboard', 'dashboard', '/finance/dashboard'),
+      leaf('Student Statement', 'files', '/finance/student-statements'),
+    ]),
+    section('Payment Collection', [
+      leaf('Payment Console', 'credit-cards', '/finance/payment-console'),
+      leaf('Payment Refund', 'reload', '/finance/payment-refund'),
+      leaf('NCHE & Guild Payment', 'graduation', '/finance/nche-guild-payment'),
+      leaf('Discount Allocation', 'tag', '/finance/discount-allocation'),
+      leaf('Refugee Status', 'shield', '/finance/refugee-status'),
+      leaf('Ledger Adjustments', 'lock', '/finance/ledger-adjustments'),
+      leaf('Advanced Payments', 'wallet', '/finance/advanced-payments'),
     ]),
   ]),
   module_('Academic', 'graduation', [
-    section('Overview', [
+    section('General', [
       leaf('Dashboard', 'dashboard', '/academic/acad-dashboard'),
     ]),
     section('Academic Core', [
       leaf('Intake Master', 'calendar', '/academic/intake-master'),
       leaf('Bulk Intake Edit', 'layers', '/academic/bulk-intake-edit'),
-      leaf('Skill Management', 'bulb', '/academic/skill-master'),
       leaf('Batch Management', 'users', '/academic/batch-management'),
-      leaf('Room Management', 'home', '/academic/room-management'),
       leaf('Session Movement', 'reload', '/academic/session-movement'),
     ]),
     section('Course Unit Master', [
@@ -340,51 +132,61 @@ const mockMenu: MenuNode[] = [
       leaf('Course Allocation', 'agenda', '/academic/course-allocation'),
     ]),
     section('Programme Master', [
-      leaf('Programme Level', 'layers', '/academic/programme-level'),
-      leaf('Programme Group', 'folder', '/academic/programme-group'),
       leaf('Programme Master', 'graduation', '/academic/programme-master'),
-      leaf('Programme Approval', 'check-box', '/academic/programme-approval'),
       leaf('Fee Structure', 'dollar', '/academic/fee-structure'),
+      leaf('Programme Approval', 'check-box', '/academic/programme-approval'),
     ]),
-    section('Timetable', TIMETABLE_LEAVES()),
+    section('Timetable', [
+      leaf('Schedule Timetable', 'calendar', '/academic/timetable'),
+      leaf('Lecturer View', 'user', '/academic/timetable-lecturer'),
+      leaf('Batch View', 'users', '/academic/timetable-batch'),
+      leaf('Time Slot Audit', 'alarm-clock', '/academic/timetable-slot-audit'),
+    ]),
     section('ODL Applications', [
       leaf('ODL Applications', 'world', '/academic/odl-applications'),
       leaf('Payment Reconciliation', 'credit-cards', '/academic/odl-reconciliation'),
     ]),
-    // Student Lookup hidden from the sidebar per request, 2026-10-29 — page
-    // still exists on disk. Commented out whole (its only leaf) since
-    // Sidebar.tsx renders a childless section as a disabled "Soon" item.
-    // section('Cross-Module', [
-    //   leaf('Student Lookup', 'user', '/academic/student-lookup'),
-    // ]),
-  ]),
-  module_('Finance', 'dollar', [
-    ...FINANCE_PAYMENT_SECTIONS,
-    section('Finance Core', [
-      leaf('Cooperates', 'handshake', '/finance/cooperates'),
-      leaf('Discounts', 'tag', '/finance/discounts'),
-      leaf('Ledgers', 'book', '/finance/ledgers'),
-      leaf('Other Ledgers', 'book', '/finance/ledger-others'),
-      leaf('Currency Master', 'dollar', '/finance/currency-master'),
-      leaf('Receipt Books', 'ticket', '/finance/receipt-books'),
-      leaf('General Settings', 'cog', '/finance/gen-sets'),
-    ]),
-    section('Banking', [
-      leaf('Banks', 'coin', '/finance/banks'),
-      leaf('Bank Branches', 'map-marker', '/finance/bank-branches'),
-      leaf('Proc Banks', 'wallet', '/finance/proc-banks'),
-      leaf('Proc GL Accounts', 'calculator', '/finance/proc-gl-accounts'),
+    section('Events and Announcements', [
+      leaf('Event Management', 'calendar', '/student/event-management'),
+      leaf('Announcement Management', 'bullhorn', '/student/announcement-management'),
     ]),
   ]),
-  module_('Student', 'user', [
-    section('Student Records', [
-      leaf('Student Master', 'graduation', '/student/student-master'),
+  module_('Admission', 'clipboard', [
+    section('General', [
+      leaf('Dashboard', 'dashboard', '/admission/dashboard'),
     ]),
-    ...STUDENT_OPERATIONS_SECTIONS,
+    section('Enquiry', [
+      leaf('On-Desk Enquiry', 'pencil-alt', '/admission/ondesk-enquiry'),
+      leaf('Enquiry List', 'folder', '/admission/enquiry-list'),
+      leaf('Enquiry Followup Master', 'calendar', '/admission/enquiry-followup-master'),
+      leaf('Enquiry Status', 'flag', '/config/enquiry-status'),
+      leaf('Isbat Enquiry Source', 'compass', '/config/enquiry-source'),
+      leaf('Enquiry Followup', 'phone', '/admission/enquiry-followup'),
+    ]),
+    section('Other', [
+      leaf('Online Enquiry', 'display', '/admission/online-enquiry'),
+      leaf('Self-Service Kiosk', 'tab', '/admission/kiosk-enquiry'),
+    ]),
+    section('Admission Flow', [
+      leaf('Application Payment', 'credit-cards', '/admission/payment'),
+      leaf('Application Filing', 'pencil-alt', '/admission/filing'),
+      leaf('Vetting Desk', 'search-alt', '/admission/vetting'),
+      leaf("Registrar's Desk", 'graduation', '/admission/registration'),
+    ]),
+    section('Records', [
+      leaf('All Applicants', 'users', '/admission/applicants'),
+      leaf('Paid Students', 'wallet', '/admission/paid-students'),
+    ]),
   ]),
-  // Class Attendance (class-attendance-frontend-spec.md, 2026-10-28). Real
-  // mode shows it once /me/menu returns an "Attendance" module with these
-  // pages.
+  module_('Employee', 'briefcase', [
+    section('Employee Records', [
+      leaf('Employee Master', 'user', '/employee/employee-master'),
+      leaf('Employee Approvals', 'checkmark-circle', '/employee/employee-approve'),
+    ]),
+    section('Access Control', [
+      leaf('Permission Master', 'lock', '/config/permission-master'),
+    ]),
+  ]),
   module_('Attendance', 'alarm-clock', [
     section('Class Attendance', [
       leaf('Record Attendance', 'checkmark-circle', '/attendance/record'),
@@ -393,43 +195,155 @@ const mockMenu: MenuNode[] = [
     section('Management', [
       leaf('Attendance Sessions', 'calendar', '/attendance/sessions'),
     ]),
-    // attendance-report-pages-design.md, 2026-10-28; wired to
-    // /attendance/reports/* (attendanceReports.ts). Real mode shows it once
-    // /me/menu returns it.
-    section('Reports', [
-      leaf('Attendance by Date', 'bar-chart', '/attendance/reports/by-date'),
+  ]),
+  module_('Assessment', 'pencil-alt', [
+    section('General', [
+      leaf('Assessment Dashboard', 'dashboard', '/assessment/dashboard'),
+    ]),
+    section('Assessment Structure', [
+      leaf('Question Bank Upload', 'upload', '/assessment/cw-qbank'),
+      leaf('Bulk Exam Scheduler', 'calendar', '/assessment/bulk-exam-scheduler'),
+      leaf('Assessment Scheduler', 'graduation', '/assessment/ia-creation'),
+    ]),
+    section('IA Internal Assessment', [
+      leaf('IA Evaluation', 'checkmark-circle', '/assessment/ia-evaluation'),
+      leaf('CW Rectification', 'reload', '/assessment/cw-rectify'),
+      leaf('Project Proposals', 'folder', '/assessment/project-proposals'),
+      leaf('Project Reviews', 'folder', '/assessment/project-reviews'),
+      leaf('Exam Cancel', 'timer', '/assessment/exam-cancel'),
+    ]),
+    section('University Exam (UE)', [
+      leaf('Question Paper Vetting', 'upload', '/assessment/qp-vetting'),
+      leaf('UE Practical QBank', 'upload', '/assessment/question-bank-practical'),
+      leaf('Hall Ticket Issuance', 'ticket', '/assessment/hall-ticket'),
+      leaf('Hall Ticket Print', 'printer', '/assessment/hall-print'),
+      leaf('Hall Ticket Print All', 'printer', '/assessment/hall-ticket-print-all'),
+      leaf('UE Material Print', 'printer', '/assessment/university-exam-material-print'),
+      leaf('UE QP/Booklet Print', 'printer', '/assessment/university-exam-qp-booklet-print'),
+      leaf('UE Practical QP Print', 'printer', '/assessment/university-exam-practical-qp-print'),
+      leaf('UE Project Booklet Print', 'printer', '/assessment/university-exam-project-booklet-print'),
+      leaf('UE Attendance', 'users', '/assessment/ue-attendance'),
+      leaf('UE Mark Import', 'upload', '/assessment/ue-mark-import'),
+      leaf('Mark Entry — UE', 'pencil-alt', '/assessment/mark-ue'),
+      leaf('Mark Verify — UE', 'shield', '/assessment/mark-ue-verify'),
+      leaf('Exam Mark Import', 'upload', '/assessment/exam-mark-import'),
+    ]),
+    section('Results & Graduation', [
+      leaf('Result & Moderation', 'bar-chart', '/assessment/moderation'),
+      leaf('Generate Result', 'cogs', '/assessment/generate-result'),
+      leaf('Transcript Print', 'printer', '/assessment/transcript-print'),
+      leaf('Graduate Transcript', 'certificate', '/assessment/graduate-transcript'),
+      leaf('HEC Graduate Transcript', 'certificate', '/assessment/hec-graduate-transcript'),
+      leaf('Transcript Collection', 'check-box', '/assessment/graduate-transcript/collection'),
+      leaf('Gown Collection', 'check-box', '/assessment/gown-collection'),
+    ]),
+    section('Resit', [
+      leaf('Resit Master', 'cogs', '/assessment/resit-configs'),
+      leaf('Resit Question Print', 'printer', '/assessment/resit-question-print'),
+      leaf('Resit Applications', 'folder', '/assessment/resit-applications'),
+      leaf('Resit Apply', 'pencil-alt', '/assessment/resit-apply'),
+      leaf('Resit Scheduling', 'calendar', '/assessment/resit-scheduling'),
+      leaf('Resit IA Evaluation', 'checkmark-circle', '/assessment/resit-evaluation'),
+      leaf('Resit IA Result', 'bar-chart', '/assessment/resit-ia-results'),
+      leaf('Resit UE Mark Import', 'upload', '/assessment/resit-ue-mark-import'),
+      leaf('Resit Mark Update', 'reload', '/assessment/resit-mark-update'),
+    ]),
+    section('Exam Grievances', [
+      leaf('Exam Grievances', 'files', '/assessment/exam-grievances'),
+    ]),
+  ]),
+  module_('Analytics', 'bar-chart', [
+    section('Student', [
+      leaf('Students in Programme Report', 'bar-chart', '/student/reports/students-in-programme'),
+    ]),
+    section('Finance', [
+      leaf('Payment History', 'bar-chart', '/finance/payment-history'),
+      leaf('Discount Report', 'tag', '/finance/reports/discount'),
+      leaf('Transaction Report', 'list', '/finance/reports/transaction'),
+      leaf('Outstanding Report', 'alarm-clock', '/finance/reports/outstanding'),
+    ]),
+    section('Admission', [
+      leaf('Enquiry Report', 'bar-chart', '/admission/reports/enquiry'),
+      leaf('Application Status Report', 'bar-chart', '/admission/reports/application-status'),
+    ]),
+    section('Attendance', [
+      leaf('Attendance by Date', 'calendar', '/attendance/reports/by-date'),
       leaf('Student Attendance %', 'users', '/attendance/reports/student-pct'),
-      leaf('Faculty Attendance %', 'briefcase', '/attendance/reports/faculty-pct'),
+      leaf('Faculty Attendance %', 'library', '/attendance/reports/faculty-pct'),
     ]),
-  ]),
-  module_('Employee', 'briefcase', [
-    section('Employee Records', [
-      leaf('Employee Master', 'user', '/employee/employee-master'),
-      leaf('Employee Approvals', 'checkmark-circle', '/employee/employee-approve'),
+    section('Assessment', [
+      leaf('Exam Schedule Report', 'bar-chart', '/assessment/reports/exam-schedule'),
     ]),
-  ]),
-
-  module_('Assessment', 'pencil-alt', ASSESSMENT_SECTIONS),
-  module_('Config', 'cog', CONFIG_SECTIONS),
-  module_('Activity Log', 'list', [
-    section('Audit Trail', [
+    // Sent by the menu API but not listed in v7 (2026-11-20).
+    section('Employee', [
       leaf('Activity Log', 'list', '/activity-log/logs'),
+    ]),
+  ]),
+  module_('Configuration', 'cog', [
+    section('Student', [
+      leaf('Specialization Management', 'graduation', '/student/specialization'),
+      leaf('Termination Reason Master', 'shield', '/student/termination-reasons'),
+      leaf('Feedback Master', 'comments', '/student/feedback-master'),
+      leaf('Student Category Master', 'users', '/config/student-category-master'),
+      leaf('Service Category Master', 'list', '/config/service-category-master'),
+    ]),
+    section('Finance', [
+      leaf('Exchange Rates', 'world', '/finance/exchange-rates'),
+      leaf('Cooperates', 'handshake', '/finance/cooperates'),
+      leaf('Discounts', 'tag', '/finance/discounts'),
+      leaf('Ledgers', 'book', '/finance/ledgers'),
+      leaf('Other Ledgers', 'book', '/finance/ledger-others'),
+      leaf('Currency Master', 'dollar', '/finance/currency-master'),
+      leaf('Receipt Books', 'ticket', '/finance/receipt-books'),
+      leaf('General Settings', 'cog', '/finance/gen-sets'),
+      leaf('Banks', 'coin', '/finance/banks'),
+      leaf('Bank Branches', 'map-marker', '/finance/bank-branches'),
+      leaf('Proc Banks', 'wallet', '/finance/proc-banks'),
+      leaf('Proc GL Accounts', 'calculator', '/finance/proc-gl-accounts'),
+    ]),
+    section('Academic', [
+      leaf('Faculty Master', 'library', '/config/faculty-master'),
+      leaf('Campus Master', 'home', '/config/campus-master'),
+      leaf('Skill Management', 'bulb', '/academic/skill-master'),
+      leaf('Room Management', 'home', '/academic/room-management'),
+      leaf('Programme Level', 'layers', '/academic/programme-level'),
+      leaf('Programme Group', 'folder', '/academic/programme-group'),
+      leaf('Specialization', 'certificate', '/config/specialization'),
+      leaf('Skill Master', 'bulb', '/config/skill'),
+      leaf('Unit Type Master', 'tag', '/config/unit-type'),
+      leaf('Unit Category Master', 'tag', '/config/unit-category'),
+      leaf('Weekdays', 'calendar', '/config/weekdays'),
+      leaf('Batch Times', 'timer', '/config/batch-times'),
+    ]),
+    section('Admission', [
+      leaf('Enquiry Source', 'volume', '/config/enquiry-source-master'),
+      leaf('Followup Status', 'phone', '/config/followup-status'),
+      leaf('Followup Mode', 'comments', '/config/followup-mode'),
+      leaf('Interest Level', 'signal', '/config/interest-level'),
+    ]),
+    section('Assessment', [
+      leaf('Fee Clearance Master', 'list', '/assessment/assessment-master'),
+      leaf('Exam Rules Master', 'files', '/assessment/exam-rules'),
+      leaf('Question FAQs', 'comments', '/assessment/question-faqs'),
+    ]),
+    section('General', [
+      leaf('Department Master', 'briefcase', '/config/department-master'),
+      leaf('Designation Master', 'tag', '/config/designation-master'),
+      leaf('Country Master', 'world', '/config/country-master'),
     ]),
   ]),
 ]
 
 // Real mode shows exactly what /me/menu returns: no page, section or module
-// is added client-side. Whole-module injection went 2026-09-07, and the
-// section/leaf patches (mergeFinanceSections, mergeStudentSections,
-// mergeConfigSections and the ensure* functions) went 2026-10-28 — they
-// added frontend-only pages with full access to every role holding the
-// parent module/section, so a role granted two pages saw dozens. A page the
-// backend hasn't registered yet now stays hidden (and RouteGuard blocks it)
-// until /me/menu returns it. The steps below only remove or rename entries.
+// is added client-side. Whole-module injection went 2026-09-07, the
+// section/leaf patches went 2026-10-28, and the last two injections
+// (ensureOdelApplication, ensureExamScheduleReport) went 2026-11-20 — the
+// menu API now sends Exam Schedule Report under Analytics, and ODeL
+// Application isn't in the v7 hierarchy. The steps below only remove or
+// rename entries.
 
 // Student: drops entries the backend may still register for pages that were
-// removed, moved or hidden, and stamps the frontend's Operations icons by
-// name (the backend's are blank/inconsistent). Never adds anything.
+// removed, moved or hidden. Never adds anything.
 function cleanStudentSections(menu: MenuNode[]): MenuNode[] {
   const studentIdx = menu.findIndex(n => n.name === 'Student')
   if (studentIdx === -1) return menu
@@ -442,17 +356,13 @@ function cleanStudentSections(menu: MenuNode[]): MenuNode[] {
     'Batch Summary', 'Student Statement', 'Intake Transfer',
     'Category Masters', 'Discount Management', 'Student Category Master', 'Service Category Master',
   ])
-  const operationsDef = STUDENT_OPERATIONS_SECTIONS.find(s => s.name === 'Operations')!
-  const iconByName = new Map(operationsDef.children.map(l => [l.name, l.icon]))
 
   const studentModule = menu[studentIdx]
   const children = studentModule.children
     // Services hidden from the sidebar per request, 2026-09-02.
     .filter(sec => sec.name !== 'Services')
     .flatMap(sec => {
-      const kept = sec.children
-        .filter(l => !removedLeaves.has(l.name))
-        .map(l => (sec.name === 'Operations' && iconByName.has(l.name) ? { ...l, icon: iconByName.get(l.name)! } : l))
+      const kept = sec.children.filter(l => !removedLeaves.has(l.name))
       // Sidebar.tsx renders a childless section as a disabled "Soon" item,
       // so drop a section this emptied.
       return sec.children.length > 0 && kept.length === 0 ? [] : [{ ...sec, children: kept }]
@@ -493,35 +403,6 @@ function removeBatchSummary(menu: MenuNode[]): MenuNode[] {
   return mergedMenu
 }
 
-// The four Timetable screens (timetable-page.md / isbat_tt_v2.html), for
-// mockMenu. /academic/timetable is the Schedule screen; the three views are
-// siblings.
-function TIMETABLE_LEAVES(): MenuNode[] {
-  return [
-    leaf('Schedule Timetable', 'calendar', '/academic/timetable'),
-    leaf('Lecturer View', 'user', '/academic/timetable-lecturer'),
-    leaf('Batch View', 'users', '/academic/timetable-batch'),
-    leaf('Time Slot Audit', 'alarm-clock', '/academic/timetable-slot-audit'),
-  ]
-}
-
-// The backend names the Schedule screen "Timetable"; the design calls it
-// "Schedule Timetable". Rename only — the view screens appear once /me/menu
-// returns them.
-function renameTimetable(menu: MenuNode[]): MenuNode[] {
-  const isTtUrl = (url: string | null) => url === 'timetable' || url === '/academic/timetable'
-  return menu.map(mod => {
-    if (mod.name !== 'Academic') return mod
-    return {
-      ...mod,
-      children: mod.children.map(sec => ({
-        ...sec,
-        children: sec.children.map(l => (isTtUrl(l.url) && l.name === 'Timetable' ? { ...l, name: 'Schedule Timetable' } : l)),
-      })),
-    }
-  })
-}
-
 function stripLectureMaster(menu: MenuNode[]): MenuNode[] {
   return menu.map(mod => {
     const isLectureMatch = (name: string) => {
@@ -551,6 +432,9 @@ function stripUnintegratedPages(menu: MenuNode[]): MenuNode[] {
     // /me/menu still sends it, so strip it until the menu API drops it —
     // otherwise the sidebar would link to a 404.
     '/finance/financial-reports',
+    // Analytics › Assessment › IA Evaluation Report: the menu API sends it
+    // (2026-11-20) but the frontend has no page yet, so it would 404.
+    '/assessment/reports/ia-evaluation',
   ]
   // The real /me/menu may send bare slugs ("weight-config"), so match on
   // the last path segment too — but only within the hidden URL's own module,
@@ -665,12 +549,15 @@ function findLeafPermissions(menu: MenuNode[], path: string): MenuPermissions | 
 
 function cleanMenuLabel(label: string): string {
   return label
-    .replace(/\s*(?:â€”|â€“|\uFFFD|—|–)\s*/g, ' ')
+    .replace(/\s*(?:â€”|â€“|�|—|–)\s*/g, ' ')
     .replace(/\s+\?\s+/g, ' ')
     .replace(/\s{2,}/g, ' ')
     .trim()
 }
 
+// Assessment label cleanup. The UE print renames ("UE Theory QP Print" /
+// "UE Material Print") and the Timetable → "Schedule Timetable" rename were
+// dropped 2026-11-20: the menu API now sends the v7 names itself.
 function renameIaCreation(menu: MenuNode[]): MenuNode[] {
   return menu.map(mod => {
     if (mod.name !== 'Assessment') return mod
@@ -681,15 +568,6 @@ function renameIaCreation(menu: MenuNode[]): MenuNode[] {
         name: cleanMenuLabel(sec.name),
         children: sec.children.map(leafNode => {
           const slug = leafNode.url?.split('/').filter(Boolean).pop() ?? ''
-          if (slug === 'university-exam-material-print') {
-            return { ...leafNode, name: 'UE Theory QP Print' }
-          }
-          if (
-            slug === 'university-exam-qp-booklet-print' ||
-            slug === 'university-exam-qpprint'
-          ) {
-            return { ...leafNode, name: 'UE Material Print' }
-          }
           if (leafNode.name === 'IA Creation' || slug === 'ia-creation') {
             return { ...leafNode, name: 'Assessment Scheduler' }
           }
@@ -713,71 +591,6 @@ function renameIaCreation(menu: MenuNode[]): MenuNode[] {
   })
 }
 
-function ensureOdelApplication(menu: MenuNode[]): MenuNode[] {
-  const admissionIdx = menu.findIndex(n => n.name === 'Admission')
-  if (admissionIdx === -1) return menu
-
-  const admissionModule = menu[admissionIdx]
-  const moduleChildren = admissionModule.children || []
-  const hasOdel = moduleChildren.some(sec =>
-    (sec.children || []).some(l => l.url === '/admission/odel-application')
-  )
-  if (hasOdel) return menu
-
-  const flowIdx = moduleChildren.findIndex(s => s.name === 'Admission Flow')
-  const odelLeaf = leaf('ODeL Application', 'world', '/admission/odel-application')
-
-  const newChildren = [...moduleChildren]
-  if (flowIdx !== -1) {
-    const flowSec = newChildren[flowIdx]
-    const flowChildren = flowSec.children || []
-    const filingIdx = flowChildren.findIndex(c => c.url === '/admission/filing')
-    const updated = [...flowChildren]
-    if (filingIdx !== -1) {
-      updated.splice(filingIdx + 1, 0, odelLeaf)
-    } else {
-      updated.push(odelLeaf)
-    }
-    newChildren[flowIdx] = { ...flowSec, children: updated }
-  } else {
-    newChildren.push(section('Admission Flow', [odelLeaf]))
-  }
-
-  const merged = [...menu]
-  merged[admissionIdx] = { ...admissionModule, children: newChildren }
-  return merged
-}
-
-function ensureExamScheduleReport(menu: MenuNode[]): MenuNode[] {
-  const assessmentIdx = menu.findIndex(n => n.name === 'Assessment')
-  if (assessmentIdx === -1) return menu
-
-  const assessmentModule = menu[assessmentIdx]
-  const moduleChildren = assessmentModule.children || []
-  const hasReport = moduleChildren.some(sec =>
-    (sec.children || []).some(l => l.url === '/assessment/reports/exam-schedule')
-  )
-  if (hasReport) return menu
-
-  const examScheduleLeaf = leaf('Exam Schedule Report', 'bar-chart', '/assessment/reports/exam-schedule')
-  const reportsIdx = moduleChildren.findIndex(s => s.name === 'Reports')
-
-  const newChildren = [...moduleChildren]
-  if (reportsIdx !== -1) {
-    const reportSec = newChildren[reportsIdx]
-    newChildren[reportsIdx] = {
-      ...reportSec,
-      children: [...(reportSec.children || []), examScheduleLeaf],
-    }
-  } else {
-    newChildren.push(section('Reports', [examScheduleLeaf]))
-  }
-
-  const merged = [...menu]
-  merged[assessmentIdx] = { ...assessmentModule, children: newChildren }
-  return merged
-}
-
 // A failed /me/menu call rejects (no fallback menu): the sidebar shows its
 // "Couldn't load menu" state, RouteGuard blocks the page and
 // usePagePermissions grants nothing, until the user retries.
@@ -788,7 +601,6 @@ export function getMenu(): Promise<MenuResult> {
       // Taken as-is apart from the remove/rename steps — see the note above
       // cleanStudentSections.
       const menu = removeBatchSummary(cleanStudentSections(data ?? []))
-      const finalMenu = stripUnintegratedPages(stripLectureMaster(renameIaCreation(renameTimetable(ensureExamScheduleReport(ensureOdelApplication(menu))))))
-      return { menu: finalMenu }
+      return { menu: stripUnintegratedPages(stripLectureMaster(renameIaCreation(menu))) }
     })
 }

@@ -92,13 +92,16 @@ function localPartsToUtc(date: string, time: string) {
 }
 
 // yyyy-mm-dd → "16 Oct 2026"
-// A resit exam has ended once its date + end time (local, as entered) is in
-// the past. Ended exams can't be rescheduled — view only.
-const RESIT_ENDED_MSG = 'This resit exam has already ended and cannot be rescheduled.'
-function resitExamEnded(examDate: string | null | undefined, endTime: string | null | undefined) {
-  if (!examDate || !endTime) return false
-  const end = new Date(`${examDate.slice(0, 10)}T${endTime.slice(0, 5)}:00`)
-  return !isNaN(end.getTime()) && end.getTime() < Date.now()
+// A resit exam has started once its saved date + start time (local, as
+// entered) is at or before now. Started and finished exams can't be
+// rescheduled — view only (resit-schedule-validation-frontend-notes.md §1).
+// The backend returns no "started" flag for a resit UE and remains the
+// source of truth: PUT answers bad_request with this same message.
+const RESIT_STARTED_MSG = 'The resit exam for this course unit has already started and can no longer be rescheduled.'
+function resitExamStarted(examDate: string | null | undefined, startTime: string | null | undefined) {
+  if (!examDate || !startTime) return false
+  const start = new Date(`${examDate.slice(0, 10)}T${startTime.slice(0, 5)}:00`)
+  return !isNaN(start.getTime()) && start.getTime() <= Date.now()
 }
 
 function fmtDate(day: string | null | undefined) {
@@ -573,8 +576,8 @@ function ExamTab({ readOnly, readOnlyReason, units, unitsLoading, showToast, onF
               <EmptyState colSpan={11} hasFilters={!!search} onClearFilters={doClear} />
             ) : (
               items.map(s => {
-                const ended = resitExamEnded(s.examDate, s.endTime)
-                const canEdit = !readOnly && permissions.edit && !ended
+                const started = resitExamStarted(s.examDate, s.startTime)
+                const canEdit = !readOnly && permissions.edit && !started
                 return (
                 <tr key={s.resitScheduleGuid}>
                   <td>
@@ -701,10 +704,10 @@ function ExamScheduleModal({ mode, guid, readOnly: readOnlyProp, readOnlyReason:
   const updateMut = useUpdateResitSchedule()
   const saving = createMut.isPending || updateMut.isPending
 
-  // Ended (date + end time passed, per the saved schedule): view only.
-  const ended = !isAdd && !!detail && resitExamEnded(detail.examDate, detail.endTime)
-  const readOnly = readOnlyProp || ended
-  const readOnlyReason = ended ? RESIT_ENDED_MSG : readOnlyReasonProp
+  // Started (saved date + start time at or before now): view only.
+  const started = !isAdd && !!detail && resitExamStarted(detail.examDate, detail.startTime)
+  const readOnly = readOnlyProp || started
+  const readOnlyReason = started ? RESIT_STARTED_MSG : readOnlyReasonProp
 
   const [form, setForm] = useState<ExamForm>(EXAM_DEFAULTS)
   const [baseline, setBaseline] = useState<ExamForm>(EXAM_DEFAULTS)
@@ -801,8 +804,8 @@ function ExamScheduleModal({ mode, guid, readOnly: readOnlyProp, readOnlyReason:
 
   function handleSave() {
     if (saving) return
-    if (ended) {
-      showToast(RESIT_ENDED_MSG, 'error')
+    if (started) {
+      showToast(RESIT_STARTED_MSG, 'error')
       return
     }
     if (readOnly) return
@@ -1061,13 +1064,20 @@ function windowFormFrom(schedule: WindowSchedule): WindowForm {
   }
 }
 
-function validateWindow(f: WindowForm, isCt: boolean): string[] {
+const CT_PAST_START_MSG = 'Class test start date and time cannot be in the past.'
+
+// startChanged: a new class test, or one whose start differs from the saved
+// one. Only then must the start be in the future — an unchanged start may
+// already have passed (resit-schedule-validation-frontend-notes.md §2).
+// Coursework has no such rule.
+function validateWindow(f: WindowForm, isCt: boolean, startChanged: boolean): string[] {
   const out: string[] = []
   if (!f.startDate || !f.startTime || !f.endDate || !f.endTime) out.push('Enter the opening and closing date and time.')
   else {
     if (!inRange(f.startDate) || !inRange(f.endDate)) out.push(rangeMsg('Opening and closing dates'))
     const s = new Date(`${f.startDate}T${f.startTime}`).getTime()
     const e = new Date(`${f.endDate}T${f.endTime}`).getTime()
+    if (isCt && startChanged && s <= Date.now()) out.push(CT_PAST_START_MSG)
     if (e <= s) out.push('End date-time must be after start date-time.')
     else if (isCt) {
       const d = Number(f.duration)
@@ -1123,6 +1133,9 @@ function WindowScheduleForm({ kind, query, saving, readOnly, readOnlyReason, sho
   useEffect(() => { onDirtyChange(dirty) }, [dirty, onDirtyChange])
   useEffect(() => () => onDirtyChange(false), [onDirtyChange])
 
+  // New window, or start moved from the saved one (baseline = saved values).
+  const startChanged = !data?.schedule || form.startDate !== baseline.startDate || form.startTime !== baseline.startTime
+
   // Back to the summary, dropping any edits.
   function leaveEdit() {
     fill(data?.schedule ?? null)
@@ -1138,7 +1151,7 @@ function WindowScheduleForm({ kind, query, saving, readOnly, readOnlyReason, sho
 
   async function handleSave() {
     if (readOnly || saving) return
-    const invalid = validateWindow(form, isCt)
+    const invalid = validateWindow(form, isCt, startChanged)
     if (invalid.length) { setErrors(invalid); return }
     setErrors([])
     try {
@@ -1270,7 +1283,13 @@ function WindowScheduleForm({ kind, query, saving, readOnly, readOnlyReason, sho
           <label className="lbl">Opens <span className="text-red-500">*</span> <span className="text-g400 font-normal normal-case">(local time)</span></label>
           <div className="flex gap-2 mt-1">
             <div className="flex-1 min-w-0">
-              {fieldsOff ? <input className="ctrl w-full" value={fmtDate(form.startDate)} disabled /> : <DatePicker value={form.startDate} onChange={v => set('startDate', v)} maxYmd={maxYmd()} />}
+              {fieldsOff
+                ? <input className="ctrl w-full" value={fmtDate(form.startDate)} disabled />
+                // Class test: no past opening date for a new or moved start;
+                // an unchanged saved start keeps its (possibly past) date.
+                : <DatePicker value={form.startDate} onChange={v => set('startDate', v)} maxYmd={maxYmd()}
+                    minYmd={isCt && startChanged ? ymd(new Date()) : undefined}
+                    rangeMessage={isCt && startChanged && form.startDate && form.startDate < ymd(new Date()) ? CT_PAST_START_MSG : undefined} />}
             </div>
             <div className="w-[140px]"><TimePicker value={form.startTime} onChange={v => set('startTime', v)} disabled={fieldsOff} /></div>
           </div>

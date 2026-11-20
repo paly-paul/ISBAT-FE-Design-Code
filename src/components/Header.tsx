@@ -30,7 +30,7 @@ const MODULE_CONFIG: Record<string, { label: string; icon: string; pillClass: st
   finance: { label: 'Finance', icon: 'lni-dollar', pillClass: 'acad' },
   student: { label: 'Student', icon: 'lni-user', pillClass: 'home' },
   employee: { label: 'Employee', icon: 'lni-briefcase', pillClass: 'adm' },
-  config: { label: 'Config', icon: 'lni-cog', pillClass: 'home' },
+  config: { label: 'Configuration', icon: 'lni-cog', pillClass: 'home' },
   'activity-log': { label: 'Activity Log', icon: 'lni-list', pillClass: 'home' },
   profile: { label: 'Profile', icon: 'lni-user', pillClass: 'home' },
 }
