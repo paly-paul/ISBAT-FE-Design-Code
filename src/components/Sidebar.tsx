@@ -218,9 +218,6 @@ export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSection
         prefetch={false}
         onMouseEnter={() => router.prefetch(href)}
         onFocus={() => router.prefetch(href)}
-        // Close the panel once a link is picked, at every width (2026-11-20);
-        // the rail icon reopens it.
-        onClick={() => setPanelOpen(false)}
         className={`sb-item${active ? ' active' : ''}`}
       >
         <span className="sb-icon"><i className={iconClass}></i></span>
