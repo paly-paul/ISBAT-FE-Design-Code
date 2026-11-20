@@ -66,7 +66,8 @@ function useActiveExamRules() {
 function ymd(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
-// Dates: from 01 Jan 2000, at most 2 years ahead (past dates allowed).
+// Dates: from 01 Jan 2000, at most 2 years ahead. Past starts are checked
+// separately (validateExam / validateWindow).
 const MIN_YMD = '2000-01-01'
 function maxYmd() { const d = new Date(); d.setFullYear(d.getFullYear() + 2); return ymd(d) }
 function inRange(day: string) { return day >= MIN_YMD && day <= maxYmd() }
@@ -669,11 +670,18 @@ interface ExamForm {
 // Add defaults: Offline, Published.
 const EXAM_DEFAULTS: ExamForm = { courseUnitGuid: '', ueType: 0, examDate: '', startTime: '', endTime: '', maxMark: '100', examType: 1, publishStatus: 1, examRuleGuid: '' }
 
+// Same wording the backend uses (resit-schedule-validation-frontend-work.md §1).
+const UE_PAST_START_MSG = 'Exam date and start time cannot be in the past.'
+
+// Only editable (not yet started) exams reach this, so their saved start is
+// still ahead — the check applies to add and edit alike: no past date, and
+// no start time at or before now on today's date.
 function validateExam(f: ExamForm, isAdd: boolean): string[] {
   const out: string[] = []
   if (isAdd && !f.courseUnitGuid) out.push('Select Course Unit')
   if (!f.examDate) out.push('Enter Exam Date')
   else if (!inRange(f.examDate)) out.push(rangeMsg('Exam date'))
+  else if (f.startTime ? resitExamStarted(f.examDate, f.startTime) : f.examDate < ymd(new Date())) out.push(UE_PAST_START_MSG)
   if (!f.startTime || !f.endTime) out.push('Enter Start and End time')
   else if (f.endTime <= f.startTime) out.push('End time must be after start time.')
   const mark = Number(f.maxMark)
@@ -931,7 +939,9 @@ function ExamScheduleModal({ mode, guid, readOnly: readOnlyProp, readOnlyReason:
                 <div className="mt-1">
                   {disabled
                     ? <input className="ctrl w-full" value={fmtDate(form.examDate)} disabled />
-                    : <DatePicker value={form.examDate} onChange={v => set('examDate', v)} maxYmd={maxYmd()} />}
+                    : <DatePicker value={form.examDate} onChange={v => set('examDate', v)} maxYmd={maxYmd()}
+                        minYmd={ymd(new Date())}
+                        rangeMessage={form.examDate && form.examDate < ymd(new Date()) ? UE_PAST_START_MSG : undefined} />}
                 </div>
               </div>
 
@@ -1064,12 +1074,15 @@ function windowFormFrom(schedule: WindowSchedule): WindowForm {
   }
 }
 
-const CT_PAST_START_MSG = 'Class test start date and time cannot be in the past.'
+// Same wording the backend uses for each window (resit-schedule-validation-
+// frontend-work.md §2–3).
+function pastStartMsg(isCt: boolean) {
+  return `${isCt ? 'Class test' : 'Coursework'} start date and time cannot be in the past.`
+}
 
-// startChanged: a new class test, or one whose start differs from the saved
-// one. Only then must the start be in the future — an unchanged start may
-// already have passed (resit-schedule-validation-frontend-notes.md §2).
-// Coursework has no such rule.
+// startChanged: a new window, or one whose start differs from the saved one.
+// Only then must the start be in the future — an unchanged start may already
+// have passed (a running class test or coursework can still be edited).
 function validateWindow(f: WindowForm, isCt: boolean, startChanged: boolean): string[] {
   const out: string[] = []
   if (!f.startDate || !f.startTime || !f.endDate || !f.endTime) out.push('Enter the opening and closing date and time.')
@@ -1077,7 +1090,7 @@ function validateWindow(f: WindowForm, isCt: boolean, startChanged: boolean): st
     if (!inRange(f.startDate) || !inRange(f.endDate)) out.push(rangeMsg('Opening and closing dates'))
     const s = new Date(`${f.startDate}T${f.startTime}`).getTime()
     const e = new Date(`${f.endDate}T${f.endTime}`).getTime()
-    if (isCt && startChanged && s <= Date.now()) out.push(CT_PAST_START_MSG)
+    if (startChanged && s <= Date.now()) out.push(pastStartMsg(isCt))
     if (e <= s) out.push('End date-time must be after start date-time.')
     else if (isCt) {
       const d = Number(f.duration)
@@ -1285,11 +1298,11 @@ function WindowScheduleForm({ kind, query, saving, readOnly, readOnlyReason, sho
             <div className="flex-1 min-w-0">
               {fieldsOff
                 ? <input className="ctrl w-full" value={fmtDate(form.startDate)} disabled />
-                // Class test: no past opening date for a new or moved start;
-                // an unchanged saved start keeps its (possibly past) date.
+                // No past opening date for a new or moved start; an
+                // unchanged saved start keeps its (possibly past) date.
                 : <DatePicker value={form.startDate} onChange={v => set('startDate', v)} maxYmd={maxYmd()}
-                    minYmd={isCt && startChanged ? ymd(new Date()) : undefined}
-                    rangeMessage={isCt && startChanged && form.startDate && form.startDate < ymd(new Date()) ? CT_PAST_START_MSG : undefined} />}
+                    minYmd={startChanged ? ymd(new Date()) : undefined}
+                    rangeMessage={startChanged && form.startDate && form.startDate < ymd(new Date()) ? pastStartMsg(isCt) : undefined} />}
             </div>
             <div className="w-[140px]"><TimePicker value={form.startTime} onChange={v => set('startTime', v)} disabled={fieldsOff} /></div>
           </div>
