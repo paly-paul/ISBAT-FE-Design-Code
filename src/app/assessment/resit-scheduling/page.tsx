@@ -1074,15 +1074,14 @@ function windowFormFrom(schedule: WindowSchedule): WindowForm {
   }
 }
 
-// Same wording the backend uses for each window (resit-schedule-validation-
-// frontend-work.md §2–3).
-function pastStartMsg(isCt: boolean) {
-  return `${isCt ? 'Class test' : 'Coursework'} start date and time cannot be in the past.`
-}
+// Same wording the backend uses (resit-schedule-validation-frontend-work.md §3).
+const CT_PAST_START_MSG = 'Class test start date and time cannot be in the past.'
 
-// startChanged: a new window, or one whose start differs from the saved one.
-// Only then must the start be in the future — an unchanged start may already
-// have passed (a running class test or coursework can still be edited).
+// Class test only: startChanged = a new class test, or one whose start
+// differs from the saved one. Only then must the start be in the future — an
+// unchanged start may already have passed (a running class test can still
+// be edited). Coursework may be scheduled for a past date, so it has no such
+// check (per request, 2026-11-20 — overrides §2 of that doc).
 function validateWindow(f: WindowForm, isCt: boolean, startChanged: boolean): string[] {
   const out: string[] = []
   if (!f.startDate || !f.startTime || !f.endDate || !f.endTime) out.push('Enter the opening and closing date and time.')
@@ -1090,7 +1089,7 @@ function validateWindow(f: WindowForm, isCt: boolean, startChanged: boolean): st
     if (!inRange(f.startDate) || !inRange(f.endDate)) out.push(rangeMsg('Opening and closing dates'))
     const s = new Date(`${f.startDate}T${f.startTime}`).getTime()
     const e = new Date(`${f.endDate}T${f.endTime}`).getTime()
-    if (startChanged && s <= Date.now()) out.push(pastStartMsg(isCt))
+    if (isCt && startChanged && s <= Date.now()) out.push(CT_PAST_START_MSG)
     if (e <= s) out.push('End date-time must be after start date-time.')
     else if (isCt) {
       const d = Number(f.duration)
@@ -1298,11 +1297,12 @@ function WindowScheduleForm({ kind, query, saving, readOnly, readOnlyReason, sho
             <div className="flex-1 min-w-0">
               {fieldsOff
                 ? <input className="ctrl w-full" value={fmtDate(form.startDate)} disabled />
-                // No past opening date for a new or moved start; an
-                // unchanged saved start keeps its (possibly past) date.
+                // Class test: no past opening date for a new or moved start;
+                // an unchanged saved start keeps its (possibly past) date.
+                // Coursework: past dates allowed.
                 : <DatePicker value={form.startDate} onChange={v => set('startDate', v)} maxYmd={maxYmd()}
-                    minYmd={startChanged ? ymd(new Date()) : undefined}
-                    rangeMessage={startChanged && form.startDate && form.startDate < ymd(new Date()) ? pastStartMsg(isCt) : undefined} />}
+                    minYmd={isCt && startChanged ? ymd(new Date()) : undefined}
+                    rangeMessage={isCt && startChanged && form.startDate && form.startDate < ymd(new Date()) ? CT_PAST_START_MSG : undefined} />}
             </div>
             <div className="w-[140px]"><TimePicker value={form.startTime} onChange={v => set('startTime', v)} disabled={fieldsOff} /></div>
           </div>
