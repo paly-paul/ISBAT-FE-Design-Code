@@ -56,6 +56,14 @@ function normalizeHref(url: string, railId: string): string {
 
 function matchesPath(url: string, railId: string, pathname: string): boolean {
   const normPath = pathname.trim().split('?')[0].replace(/\/+$/, '').toLowerCase()
+  // A full path is matched as-is: centralized modules (Analytics,
+  // Configuration) and Academic's Events list pages from other route
+  // folders (/finance/exchange-rates under Configuration), so prefixing the
+  // module name would never match and the page would fall back to
+  // FULL_ACCESS.
+  if (url.trim().startsWith('/')) {
+    return url.trim().replace(/\/+$/, '').toLowerCase() === normPath
+  }
   const normHref = normalizeHref(url, railId)
   if (normHref === normPath) return true
   // Also compare slug if url is just the page slug and pathname ends with that slug

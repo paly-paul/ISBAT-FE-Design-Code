@@ -12,7 +12,7 @@ export default function ActivityLogLayout({ children }: { children: React.ReactN
   const [panelOpen, setPanelOpen] = useState(true)
   const [profileOpen, setProfileOpen] = useState(false)
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set())
-  const [activeRail, setActiveRail] = useState<RailId>('activity-log')
+  const [activeRail, setActiveRail] = useState<RailId>('analytics')
   const [displayName, setDisplayName] = useState<string | null>(null)
   const [authChecked, setAuthChecked] = useState(false)
   const profileRef = useRef<HTMLDivElement>(null)

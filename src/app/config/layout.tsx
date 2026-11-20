@@ -16,7 +16,7 @@ export default function ConfigLayout({ children }: { children: React.ReactNode }
   const [panelOpen, setPanelOpen] = useState(true)
   const [profileOpen, setProfileOpen] = useState(false)
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set())
-  const [activeRail, setActiveRail] = useState<RailId>('config')
+  const [activeRail, setActiveRail] = useState<RailId>('configuration')
   const profileRef = useRef<HTMLDivElement>(null)
   const pathname = usePathname()
   // This module never had a mount-time session check (unlike Academic), so
