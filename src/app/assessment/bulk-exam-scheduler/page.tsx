@@ -84,7 +84,10 @@ export default function BulkExamSchedulerPage() {
   const { data: allPrograms = [] } = useProgramDropdown()
 
   // ── 3. Table Rows from Session Management API ───────────────────────────────
-  const { data: sessionList, isLoading: isTableLoading } = useSessions(
+  // Errors are shown, not read as "no rows": a role with Bulk Exam Scheduler
+  // but not Session Movement gets 403 from this endpoint, which used to look
+  // like an empty intake. Shown once — no retries (global retry: false).
+  const { data: sessionList, isLoading: isTableLoading, isError: isTableError, error: tableError } = useSessions(
     { intakeGuid, campusGuid: campusGuid || undefined, pageNumber: page, pageSize: PAGE_SIZE },
     !!intakeGuid
   )
@@ -494,6 +497,30 @@ export default function BulkExamSchedulerPage() {
                   <tbody className="divide-y divide-slate-200/80 bg-white">
                     {isTableLoading ? (
                       <TableLoadingState colSpan={7} title="Loading schedules..." />
+                    ) : isTableError ? (
+                      // Before the rows: keepPreviousData would otherwise leave
+                      // the last selection's rows on screen after a failure.
+                      <tr>
+                        <td colSpan={7} className="tbl-empty-cell">
+                          <div className="tbl-empty-inner" role="alert">
+                            <div className="tbl-empty-icon-wrap">
+                              <i className={`lni lni-${(tableError as { code?: string } | null)?.code === 'forbidden' ? 'lock' : 'warning'}`} style={{ color: 'var(--red)' }} />
+                            </div>
+                            <div className="tbl-empty-title">
+                              {(tableError as { code?: string } | null)?.code === 'forbidden'
+                                ? 'No access to programme sessions'
+                                : 'Couldn’t load programme sessions'}
+                            </div>
+                            <div className="tbl-empty-sub">
+                              {/* AuthError falls back to its code as the message when the body had none — don't show that. */}
+                              {(() => {
+                                const e = tableError as { code?: string; message?: string } | null
+                                return e?.message && e.message !== e.code ? e.message : 'The programme session list could not be loaded.'
+                              })()}
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
                     ) : serverRows.length === 0 ? (
                       <EmptyState
                         colSpan={7}

@@ -95,7 +95,9 @@ export function getSessions(params: SessionListParams): Promise<SessionListRespo
   if (MOCK_AUTH) return Promise.resolve({ items: [], totalCount: 0, pageNumber, pageSize, totalPages: 1 })
   const qs = new URLSearchParams({ intakeGuid: params.intakeGuid, pageNumber: String(pageNumber), pageSize: String(pageSize) })
   if (params.campusGuid) qs.set('campusGuid', params.campusGuid)
-  return apiGet<unknown>(`/api/v1/academic/session-management/?${qs.toString()}`)
+  // No slash before "?": on the dev / Vercel server builds Next.js 308-
+  // redirects a trailing slash away before proxying, an extra round trip.
+  return apiGet<unknown>(`/api/v1/academic/session-management?${qs.toString()}`)
     .then(raw => normalizeSessionList(raw, pageNumber, pageSize))
 }
 
