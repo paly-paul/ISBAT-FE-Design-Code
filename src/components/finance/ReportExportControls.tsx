@@ -28,11 +28,12 @@ const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 //
 // `hideWithoutPermission`: for pages whose doc says to hide the button
 // rather than explain on click (e.g. the Transaction Report).
-export function ReportExportControls({ startExport, resetKey, mockFileName, hideWithoutPermission = false }: {
+export function ReportExportControls({ startExport, resetKey, mockFileName, hideWithoutPermission = false, className }: {
   startExport: () => Promise<{ job: ReportJob; message: string | null }>
   resetKey: number
   mockFileName: string
   hideWithoutPermission?: boolean
+  className?: string
 }) {
   const permissions = usePagePermissions()
   const queryClient = useQueryClient()
@@ -120,7 +121,7 @@ export function ReportExportControls({ startExport, resetKey, mockFileName, hide
   if (hideWithoutPermission && !permissions.export) return null
 
   return (
-    <div className="rpt-export">
+    <div className={`rpt-export ${className ?? ''}`.trim()}>
       <Toast toast={toast} />
       {phase === 'processing' && <span className="rpt-export-msg" aria-live="polite">Building the Excel file…</span>}
       {phase === 'ready' && (

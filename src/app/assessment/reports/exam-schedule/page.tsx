@@ -786,8 +786,8 @@ export default function ExamScheduleReportPage() {
           </div>
         ) : (
           <>
-            <div className="rpt-results-hdr">
-              <div className="rpt-count flex items-center gap-2 flex-wrap">
+            <div className="rpt-results-hdr flex items-start sm:items-center justify-between gap-4 flex-wrap sm:flex-nowrap">
+              <div className="rpt-count flex items-center gap-2 flex-wrap flex-1 min-w-0">
                 <span>
                   <strong>{fmtCount(totalCount)}</strong> {totalCount === 1 ? 'row' : 'rows'}
                 </span>
@@ -801,6 +801,8 @@ export default function ExamScheduleReportPage() {
                 resetKey={runId}
                 mockFileName="Exam_Schedule_Report.xlsx"
                 startExport={() => exportExamScheduleReport(saved!)}
+                hideWithoutPermission
+                className="ml-auto shrink-0"
               />
             </div>
 
