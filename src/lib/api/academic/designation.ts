@@ -81,42 +81,27 @@ export function getDesignations(page = 1, pageSize = 10): Promise<Designation[]>
 // department filter param.
 export function getDesignationsPaged(page = 1, pageSize = 20, search = ''): Promise<PaginatedItems<Designation>> {
   return getPagedList<Designation>('/api/v1/users/designations', page, pageSize, search, {
-    rows: mockDesignations.map(d => ({ ...d, deptGuid: mockDeptGuidByInt[d.intDept] ?? null })),
+    rows: mockDesignations,
     text: r => r.designationName,
   })
 }
 
 // Picker shape from GET /api/v1/users/designations/dropdown
-// (get-designations-dropdown.md, 2026-10-15) — carries designationGuid for
-// POST/PUT /employees, and filters by the picked department's deptGuid.
+// (get-designations-dropdown.md) — carries designationGuid for POST/PUT
+// /employees. Since 2026-11-21 designations aren't tied to a department: no
+// deptGuid filter or field, always the full list.
 export interface DesignationDropdownItem {
   designationGuid: string
   designationName: string
-  deptGuid: string
 }
 
-// Mock designations' intDept → the mock department dropdown's deptGuid
-// (department.ts), so the cascade behaves in mock mode too.
-const mockDeptGuidByInt: Record<number, string> = {
-  1: '67ec501a-1ed8-4fa5-b84e-c79cef3a1076',
-  2: '3b1e2f4a-0c6d-4a8e-9b2f-1d5c7e9a0b11',
-  3: '5c2d3e4f-1a7b-4c9d-8e0f-2a6b8c0d1e22',
-  4: '7d3e4f5a-2b8c-4dae-9f1a-3b7c9d1e2f33',
-  5: '9e4f5a6b-3c9d-4ebf-8a2b-4c8d0e2f3a44',
-  6: 'af5a6b7c-4dae-4fca-9b3c-5d9e1f3a4b55',
-}
-
-export function getDesignationsDropdown(deptGuid?: string): Promise<DesignationDropdownItem[]> {
+export function getDesignationsDropdown(): Promise<DesignationDropdownItem[]> {
   if (MOCK_AUTH) {
-    const items = mockDesignations.map(d => ({
-      designationGuid: `00000000-0000-4000-8000-${String(d.intDesignation).padStart(12, '0')}`,
-      designationName: d.designationName,
-      deptGuid: mockDeptGuidByInt[d.intDept] ?? '',
-    }))
-    return Promise.resolve(deptGuid ? items.filter(d => d.deptGuid === deptGuid) : items)
+    return Promise.resolve(mockDesignations
+      .map(d => ({ designationGuid: `00000000-0000-4000-8000-${String(d.intDesignation).padStart(12, '0')}`, designationName: d.designationName }))
+      .sort((a, b) => a.designationName.localeCompare(b.designationName)))
   }
-  const query = deptGuid ? `?deptGuid=${encodeURIComponent(deptGuid)}` : ''
-  return apiGet<DesignationDropdownItem[] | null>(`/api/v1/users/designations/dropdown${query}`).then(data => data ?? [])
+  return apiGet<DesignationDropdownItem[] | null>('/api/v1/users/designations/dropdown').then(data => data ?? [])
 }
 
 // Create a new designation and return the saved record.

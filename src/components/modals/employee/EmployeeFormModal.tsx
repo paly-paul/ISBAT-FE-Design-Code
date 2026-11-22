@@ -1,6 +1,8 @@
 'use client'
 import { useEffect, useMemo, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { ModalProps } from '../types'
+import { AuthError } from '@/lib/api/client'
 import { SuccessPopup } from '../shared/SuccessPopup'
 import { SearchSelect } from '@/components/SearchSelect'
 import { MultiSelect } from '@/components/MultiSelect'
@@ -118,8 +120,7 @@ export function EmployeeFormModal({ isOpen, onClose, showToast, mode, employeeGu
   const [saved, setSaved] = useState(false)
   // Bound straight to the guids POST/PUT /employees take, from the
   // department/designation dropdown endpoints (get-departments-dropdown.md /
-  // get-designations-dropdown.md, 2026-10-15) — the master list endpoints
-  // only ever exposed int ids, which is what blocked Add/Edit before.
+  // get-designations-dropdown.md). Independent of each other.
   const [deptGuid, setDeptGuid] = useState('')
   const [designationGuid, setDesignationGuid] = useState('')
 
@@ -158,14 +159,18 @@ export function EmployeeFormModal({ isOpen, onClose, showToast, mode, employeeGu
   const createEmployee = useCreateEmployee()
   const updateEmployee = useUpdateEmployee()
 
-  // Department → Designation cascade. Both endpoints return their full list
-  // in one call (no pagination), so SearchSelect's own client-side filter
-  // covers search. Designations are fetched per picked department via the
-  // dropdown's deptGuid filter, and not at all until one is picked.
-  const { data: departments = [], isLoading: departmentsLoading } = useDepartmentsDropdown(isOpen)
-  const { data: designations = [], isLoading: designationsLoading } = useDesignationsDropdown(deptGuid, isOpen)
+  // Designation and department are independent (employee-create-edit-page.md,
+  // 2026-11-22): any designation can go with any department, and the
+  // department is saved on the employee itself. Both dropdowns load their
+  // full list in one call, so SearchSelect's own filter covers search.
+  const departmentsQuery = useDepartmentsDropdown(isOpen)
+  const designationsQuery = useDesignationsDropdown(isOpen)
+  const { data: departments = [], isLoading: departmentsLoading } = departmentsQuery
+  const { data: designations = [], isLoading: designationsLoading } = designationsQuery
+  const queryClient = useQueryClient()
 
-  const { data: countries = [] } = useCountryDropdown(isOpen)
+  const countriesQuery = useCountryDropdown(isOpen)
+  const { data: countries = [] } = countriesQuery
   // The campus doc explicitly calls for GET /academic/campus/dropdown, not
   // the paginated campus list useCampuses() hits.
   const { data: campuses = [] } = useCampusDropdown()
@@ -210,7 +215,7 @@ export function EmployeeFormModal({ isOpen, onClose, showToast, mode, employeeGu
     if (!maritalStatus.trim()) e.maritalStatus = 'Select Marital Status before proceeding!'
     if (!deptGuid) e.department = 'Select Department before proceeding!'
     if (!designationGuid) e.designation = 'Select Designation before proceeding!'
-    if (campusGuids.length === 0) e.campus = 'Select Campus before proceeding!'
+    // Campuses may be left empty (employee-create-edit-page.md).
     return e
   }
 
@@ -272,11 +277,30 @@ export function EmployeeFormModal({ isOpen, onClose, showToast, mode, employeeGu
 
   function handleClose() { setSaved(false); setErrors({}); onClose() }
 
-  // Designations are scoped to the department, so a different department
-  // clears the picked designation.
-  function handleDepartmentChange(guid: string) {
-    if (guid !== deptGuid) setDesignationGuid('')
-    setDeptGuid(guid)
+  // Save errors per employee-create-edit-page.md. Returns true when handled.
+  function handleSaveError(error: Error, fallback: string) {
+    const code = error instanceof AuthError ? error.code : undefined
+    if (code === 'conflict') {
+      const e = { emailId: 'Another employee already uses this email.' }
+      setErrors(prev => ({ ...prev, ...e }))
+      scrollToFirstError(e)
+      return
+    }
+    if (code === 'bad_request') {
+      // A picked country, designation or department no longer exists.
+      departmentsQuery.refetch(); designationsQuery.refetch(); countriesQuery.refetch()
+      showToast(error.message || 'Invalid country, designation, or department.', 'error')
+      return
+    }
+    if (code === 'not_found' && isEdit) {
+      // The employee was blocked or deleted meanwhile.
+      queryClient.invalidateQueries({ queryKey: ['employees'] })
+      handleClose()
+      showToast(error.message || 'This employee can no longer be edited.', 'error')
+      return
+    }
+    const list = error instanceof AuthError && error.errors?.length ? error.errors.join(' ') : ''
+    showToast(list || error.message || fallback, 'error')
   }
 
   function handleSubmit() {
@@ -314,13 +338,13 @@ export function EmployeeFormModal({ isOpen, onClose, showToast, mode, employeeGu
         { id: employeeGuid, input },
         {
           onSuccess: () => { setSaved(true); showToast('Employee updated successfully') },
-          onError: (error: Error) => showToast(error.message || 'Failed to update employee', 'error'),
+          onError: (error: Error) => handleSaveError(error, 'Failed to update employee'),
         },
       )
     } else {
       createEmployee.mutate({ input, photo: photo?.file ?? null }, {
         onSuccess: () => { setSaved(true); showToast('Employee added successfully') },
-        onError: (error: Error) => showToast(error.message || 'Failed to add employee', 'error'),
+        onError: (error: Error) => handleSaveError(error, 'Failed to add employee'),
       })
     }
   }
@@ -462,33 +486,37 @@ export function EmployeeFormModal({ isOpen, onClose, showToast, mode, employeeGu
               <SearchSelect placeholder="Select…" options={MARITAL_STATUSES} value={maritalStatus} onChange={v => { setMaritalStatus(v); clearError('maritalStatus') }} />
               {errors.maritalStatus && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.maritalStatus}</p>}
             </div>
+          </div>
+
+          {/* Job — designation and department are separate choices; both show
+              on the employee's own profile under Job. */}
+          <div className="sec-divider">Job</div>
+          <div className="g3">
+            <div className="fg">
+              <div className="lbl">Designation <span className="req">*</span></div>
+              <SearchSelect
+                placeholder="Select designation…"
+                options={designationOptions}
+                value={designationGuid}
+                onChange={v => { setDesignationGuid(v); clearError('designation') }}
+                isLoading={designationsLoading}
+              />
+              {errors.designation && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.designation}</p>}
+            </div>
             <div className="fg">
               <div className="lbl">Department <span className="req">*</span></div>
               <SearchSelect
                 placeholder="Select department…"
                 options={departmentOptions}
                 value={deptGuid}
-                onChange={v => { handleDepartmentChange(v); clearError('department'); clearError('designation') }}
+                onChange={v => { setDeptGuid(v); clearError('department') }}
                 isLoading={departmentsLoading}
               />
               {errors.department && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.department}</p>}
             </div>
             <div className="fg">
-              <div className="lbl">Designation <span className="req">*</span></div>
-              <SearchSelect
-                placeholder={deptGuid ? 'Select designation…' : 'Select a department first'}
-                options={designationOptions}
-                value={designationGuid}
-                onChange={v => { setDesignationGuid(v); clearError('designation') }}
-                disabled={!deptGuid}
-                isLoading={designationsLoading}
-              />
-              {errors.designation && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.designation}</p>}
-            </div>
-            <div className="fg">
-              <div className="lbl">Campus Assignment <span className="req">*</span></div>
-              <MultiSelect placeholder="Select campuses…" options={campusOptions} value={campusGuids} onChange={v => { setCampusGuids(v); clearError('campus') }} />
-              {errors.campus && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.campus}</p>}
+              <div className="lbl">Campus Assignment</div>
+              <MultiSelect placeholder="Select campuses…" options={campusOptions} value={campusGuids} onChange={setCampusGuids} />
             </div>
           </div>
 

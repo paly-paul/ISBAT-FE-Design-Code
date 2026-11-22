@@ -329,6 +329,7 @@ const mockMenu: MenuNode[] = [
     section('General', [
       leaf('Department Master', 'briefcase', '/config/department-master'),
       leaf('Designation Master', 'tag', '/config/designation-master'),
+      leaf('Course Level Master', 'graduation', '/config/course-level-master'),
       leaf('Country Master', 'world', '/config/country-master'),
     ]),
   ]),

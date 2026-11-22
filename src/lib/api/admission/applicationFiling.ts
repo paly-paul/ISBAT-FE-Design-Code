@@ -381,7 +381,7 @@ export function getApplications(page = 1, pageSize = 10, search = ''): Promise<A
   }
   const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) })
   if (search.trim()) params.set('search', search.trim())
-  return apiGet<ApplicationListResponse | null>(`/api/v1/admissions/application-filling/?${params.toString()}`)
+  return apiGet<ApplicationListResponse | null>(`/api/v1/admissions/application-filling?${params.toString()}`)
     .then(data => data ?? { items: [], totalCount: 0, pageNumber: page, pageSize })
 }
 

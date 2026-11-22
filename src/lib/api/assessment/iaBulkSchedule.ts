@@ -140,7 +140,7 @@ export async function updateBulkCwSchedule(
     qs.set('campusGuid', params.campusGuid)
   }
 
-  return apiPut<BulkUpdateResponse>(`/api/v1/assessment/ia-bulk-cw-schedule/?${qs.toString()}`, body)
+  return apiPut<BulkUpdateResponse>(`/api/v1/assessment/ia-bulk-cw-schedule?${qs.toString()}`, body)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -222,7 +222,7 @@ export async function updateBulkTestSchedule(
     qs.set('campusGuid', params.campusGuid)
   }
 
-  return apiPut<BulkUpdateResponse>(`/api/v1/assessment/ia-bulk-test-schedule/?${qs.toString()}`, body)
+  return apiPut<BulkUpdateResponse>(`/api/v1/assessment/ia-bulk-test-schedule?${qs.toString()}`, body)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -306,7 +306,7 @@ export async function updateBulkUeSchedule(
     qs.set('campusGuid', params.campusGuid)
   }
 
-  return apiPut<BulkUpdateResponse>(`/api/v1/assessment/ia-bulk-ue-schedule/?${qs.toString()}`, body)
+  return apiPut<BulkUpdateResponse>(`/api/v1/assessment/ia-bulk-ue-schedule?${qs.toString()}`, body)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -376,5 +376,5 @@ export async function updateBulkMockSchedule(
     qs.set('campusGuid', params.campusGuid)
   }
 
-  return apiPut<BulkUpdateResponse>(`/api/v1/assessment/ia-bulk-mock-schedule/?${qs.toString()}`, body)
+  return apiPut<BulkUpdateResponse>(`/api/v1/assessment/ia-bulk-mock-schedule?${qs.toString()}`, body)
 }
