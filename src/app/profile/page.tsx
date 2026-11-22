@@ -447,6 +447,11 @@ export default function ProfilePage() {
                     <span className="font-mono">{profile.shortCode}</span>
                     {profile.account.userTypeName && <> · {profile.account.userTypeName}</>}
                   </div>
+                  {/* Set separately on the employee record, so either can be empty. */}
+                  <dl className="mp-hero-job" aria-label="Job">
+                    <div><dt>Designation</dt><dd>{profile.job?.designationName || '—'}</dd></div>
+                    <div><dt>Department</dt><dd>{profile.job?.departmentName || '—'}</dd></div>
+                  </dl>
                   <div className="mp-hero-pills">
                     {profile.status.statusName && (
                       <span className={statusPillClass(profile.status.status)}>

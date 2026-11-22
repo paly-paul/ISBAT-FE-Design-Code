@@ -41,6 +41,9 @@ export interface MyProfile {
     statusName: string | null
     category: number | null         // code only, no name
   }
+  // Designation (job title) and department, set separately on the employee
+  // record, so either can be null on its own (2026-11-22).
+  job: { designationName: string | null; departmentName: string | null }
   campuses: { campusGuid: string; campusName: string | null }[]   // sorted by name
   skills: { skillName: string; proficiency: number; approvalStatus: 'Pending' | 'Approved' | 'Rejected' | string; isApproved: boolean }[]
 }
@@ -61,6 +64,7 @@ const MOCK_PROFILE: MyProfile = {
   contact: { email: 'jane.doe@isbat.ac.ug', phone: '0700000000' },
   account: { userName: 'JANE', userTypeName: 'Lecturer', lastLoginDate: '2026-11-01T08:15:00', emailVerified: true },
   status: { status: 2, statusName: 'Active', category: 1 },
+  job: { designationName: 'Lecturer', departmentName: 'Computing' },
   campuses: [{ campusGuid: '19b1b516-166b-4855-991a-32b40261e765', campusName: 'ISBAT University - Main Campus' }],
   skills: [
     { skillName: 'Databases', proficiency: 4, approvalStatus: 'Approved', isApproved: true },

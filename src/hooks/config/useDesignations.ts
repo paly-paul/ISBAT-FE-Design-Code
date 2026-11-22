@@ -6,11 +6,12 @@ export const DESIGNATIONS_KEY = ['designations']
 // Guid-carrying picker list scoped to one department
 // (get-designations-dropdown.md's deptGuid filter) — only fetched once a
 // department is picked, for the Department → Designation cascade.
-export function useDesignationsDropdown(deptGuid: string, enabled = true) {
+// Full list, independent of any department (get-designations-dropdown.md).
+export function useDesignationsDropdown(enabled = true) {
   return useQuery({
-    queryKey: [...DESIGNATIONS_KEY, 'dropdown', deptGuid],
-    queryFn: () => getDesignationsDropdown(deptGuid),
-    enabled: enabled && !!deptGuid })
+    queryKey: [...DESIGNATIONS_KEY, 'dropdown'],
+    queryFn: () => getDesignationsDropdown(),
+    enabled })
 }
 
 export function useCreateDesignation() {
