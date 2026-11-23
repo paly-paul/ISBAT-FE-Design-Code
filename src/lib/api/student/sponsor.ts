@@ -37,9 +37,24 @@ export interface SponsorCategoryRequest {
   mandatoryFeeCheck?: number | null
 }
 
-// GET /students/sponsor-assignment/{studentGuid}/sponsor-details response shape
-// — same fields as a sponsor-category list item, per the docs.
-export type SponsorDetailsDto = SponsorCategoryDto
+// GET /students/sponsor-assignment/{studentGuid}/sponsor-details response
+// shape (confirmed live 2026-11-23). The category's name is `sponsorCategory`,
+// not `category` like a sponsor-category list item — reading `category` here
+// always came back undefined and showed every student as "Unassigned".
+export interface SponsorDetailsDto {
+  studentGuid: string
+  studentRegNo: string | null
+  studentName: string | null
+  sponsorCategoryGuid: string | null
+  sponsorCategory: string | null
+  programGuid: string | null
+  programCode: string | null
+  programName: string | null
+  batchGuid: string | null
+  batchCode: string | null
+  intSem: number | null
+  semesterName: string | null
+}
 
 const mockCategories: SponsorCategoryDto[] = [
   { sponsorCategoryGuid: 'spc-mock-1', category: 'SELF', mandatoryFeeCheck: 1 },
@@ -96,7 +111,12 @@ export function getSponsorDetails(studentGuid: string): Promise<SponsorDetailsDt
   if (MOCK_AUTH) {
     const guid = mockAssignments[studentGuid]
     const cat = mockCategories.find(c => c.sponsorCategoryGuid === guid)
-    return Promise.resolve(cat ?? null)
+    return Promise.resolve(cat ? {
+      studentGuid, studentRegNo: null, studentName: null,
+      sponsorCategoryGuid: cat.sponsorCategoryGuid, sponsorCategory: cat.category,
+      programGuid: null, programCode: null, programName: null,
+      batchGuid: null, batchCode: null, intSem: null, semesterName: null,
+    } : null)
   }
   // Route is /api/v1/students/sponsor-assignment/... per
   // students/sponsor-assignment/get-sponsor-details.md — moved there

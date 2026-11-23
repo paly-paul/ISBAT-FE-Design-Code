@@ -40,7 +40,9 @@ export function StudentSponsorModal({ isOpen, onClose, showToast, studentGuid, s
   const errorCode = error instanceof AuthError ? error.code : null
   const restricted = errorCode === 'unauthorized' || errorCode === 'forbidden'
   const errorMessage = error instanceof Error ? error.message : null
-  const unchanged = !!sponsorDetail && choice === sponsorDetail.sponsorCategoryGuid
+  // Assigned = the response names a category (it may come back with nulls).
+  const assigned = !!sponsorDetail?.sponsorCategoryGuid
+  const unchanged = assigned && choice === sponsorDetail?.sponsorCategoryGuid
 
   function handleSave() {
     if (!studentGuid) return
@@ -48,7 +50,7 @@ export function StudentSponsorModal({ isOpen, onClose, showToast, studentGuid, s
     assignSponsorCategory.mutate(
       { studentGuid, sponsorCategoryGuid: choice },
       {
-        onSuccess: () => { showToast(sponsorDetail ? 'Sponsor category updated' : 'Sponsor category assigned', 'ok'); onClose() },
+        onSuccess: () => { showToast(assigned ? 'Sponsor category updated' : 'Sponsor category assigned', 'ok'); onClose() },
         onError: (err: Error) => showToast(err.message || 'Could not update sponsor category', 'err'),
       }
     )
@@ -67,9 +69,9 @@ export function StudentSponsorModal({ isOpen, onClose, showToast, studentGuid, s
             <div className="info-box"><i className="lni lni-lock-alt" style={{ color: 'var(--b700)', fontSize: 15, flexShrink: 0 }}></i><div style={{ fontSize: 12.5 }}>{errorMessage || 'You are not authorized to view or change sponsor details for students in this campus.'}</div></div>
           ) : (
             <>
-              <div className="fg"><label className="lbl">Current Sponsor</label><input className="ctrl" readOnly value={sponsorDetail?.category ?? 'Unassigned'} /></div>
+              <div className="fg"><label className="lbl">Current Sponsor</label><input className="ctrl" readOnly value={sponsorDetail?.sponsorCategory || 'Unassigned'} /></div>
               <div className="fg">
-                <label className="lbl">{sponsorDetail ? 'Change To' : 'Sponsor Category'} <span className="req">*</span></label>
+                <label className="lbl">{assigned ? 'Change To' : 'Sponsor Category'} <span className="req">*</span></label>
                 <SearchSelect
                   placeholder={isCategoriesLoading ? 'Loading categories…' : '-- Select Sponsor Category --'}
                   options={categoryOptions}
@@ -84,7 +86,7 @@ export function StudentSponsorModal({ isOpen, onClose, showToast, studentGuid, s
           <button className="btn btn-neu" onClick={onClose}>Close</button>
           {!isLoading && !restricted && (
             <button className="btn btn-primary" onClick={handleSave} disabled={assignSponsorCategory.isPending || unchanged}>
-              <i className="lni lni-checkmark"></i> {assignSponsorCategory.isPending ? 'Saving…' : sponsorDetail ? 'Update Sponsor' : 'Assign Sponsor'}
+              <i className="lni lni-checkmark"></i> {assignSponsorCategory.isPending ? 'Saving…' : assigned ? 'Update Sponsor' : 'Assign Sponsor'}
             </button>
           )}
         </div>

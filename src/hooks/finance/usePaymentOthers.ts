@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { getGrievanceFee, getPaymentOthers, getResitFee, PaymentOtherListParams } from '@/lib/api/finance/paymentOthers'
+import { getGrievanceFee, getPaymentOther, getPaymentOthers, getResitFee, PaymentOtherListParams } from '@/lib/api/finance/paymentOthers'
 
 // Exported (not just used internally) so useCreatePaymentOther in
 // usePaymentConsole.ts can invalidate this list too — a newly-added Other
@@ -12,6 +12,16 @@ export function usePaymentOthersList(params: PaymentOtherListParams, enabled: bo
     queryKey: [...PAYMENT_OTHERS_KEY, 'list', params],
     queryFn: () => getPaymentOthers(params),
     enabled,
+  })
+}
+
+// One other payment by guid (View). Under PAYMENT_OTHERS_KEY so an edit's
+// invalidation refreshes it along with the list.
+export function usePaymentOther(paymentOtherGuid: string | null, enabled: boolean) {
+  return useQuery({
+    queryKey: [...PAYMENT_OTHERS_KEY, 'detail', paymentOtherGuid],
+    queryFn: () => getPaymentOther(paymentOtherGuid as string),
+    enabled: enabled && !!paymentOtherGuid,
   })
 }
 
