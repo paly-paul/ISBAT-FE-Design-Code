@@ -9,6 +9,8 @@ import { Pagination } from '@/components/Pagination'
 import { PaymentSuccessModal } from '@/components/modals/finance/PaymentSuccessModal'
 import { UpcomingSemestersModal } from '@/components/modals/finance/UpcomingSemestersModal'
 import { ViewPaymentModal } from '@/components/modals/finance/ViewPaymentModal'
+import { ViewOtherPaymentReceiptModal } from '@/components/modals/finance/ViewOtherPaymentReceiptModal'
+import { getPaymentOtherReceiptPdf, type PaymentOtherDto } from '@/lib/api/finance/paymentOthers'
 import { EditPaymentModal, EditablePaymentTarget } from '@/components/modals/finance/EditPaymentModal'
 import { EditPaymentOtherModal, EditablePaymentOtherTarget } from '@/components/modals/finance/EditPaymentOtherModal'
 import DatePicker from '@/components/DatePicker'
@@ -336,19 +338,20 @@ export default function PaymentConsolePage() {
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
   const guard = useActionGuard(showToast)
 
-  // Step 8 — server-rendered receipt PDF (tuition payments only). The tab is
+  // Step 8 — server-rendered receipt PDF: tuition by default, or an other
+  // payment's receipt when `fetchPdf` is getPaymentOtherReceiptPdf. The tab is
   // opened synchronously on click, before the fetch, because popup blockers
   // drop a window.open that happens after an await; the PDF is loaded into
   // it once it arrives. If the popup was blocked anyway, it downloads
   // instead. On a 404 ("Payment not found." etc.) the blank tab is closed
   // and the server's message shown.
   const [printingGuid, setPrintingGuid] = useState<string | null>(null)
-  async function printReceipt(paymentGuid: string, fallbackName: string) {
+  async function printReceipt(paymentGuid: string, fallbackName: string, fetchPdf = getPaymentReceiptPdf) {
     if (printingGuid) return
     const tab = window.open('', '_blank')
     setPrintingGuid(paymentGuid)
     try {
-      const { blob, filename } = await getPaymentReceiptPdf(paymentGuid)
+      const { blob, filename } = await fetchPdf(paymentGuid)
       const pdf = blob.type === 'application/pdf' ? blob : new Blob([blob], { type: 'application/pdf' })
       if (tab && !tab.closed) {
         // Not revoked — the tab needs the blob URL for as long as it's open.
@@ -1051,6 +1054,11 @@ export default function PaymentConsolePage() {
   // enrolled student's own rows), falling back to applicationGuid before
   // that — same precedence Payment Console's other studentGuid-optional
   // queries use elsewhere on this page.
+  // Other payment whose details are open in View.
+  const [otherReceipt, setOtherReceipt] = useState<PaymentOtherDto | null>(null)
+  function printOtherReceipt(p: PaymentOtherDto) {
+    guard('print', () => printReceipt(p.paymentOtherGuid, p.receipt ?? p.paymentCode, getPaymentOtherReceiptPdf), 'receipts')
+  }
   const [otherHistoryPage, setOtherHistoryPage] = useState(1)
   useEffect(() => setOtherHistoryPage(1), [selectedApplicationGuid])
   const {
@@ -2065,6 +2073,15 @@ export default function PaymentConsolePage() {
                               <tr key={h.paymentOtherGuid}>
                                 <td>
                                   <ActionMenu>
+                                    <button className="btn btn-neu btn-sm" onClick={() => setOtherReceipt(h)}>
+                                      <i className="lni lni-eye"></i> View
+                                    </button>
+                                    {/* No receipt for advance-funded payments, so no Print (per the receipt doc). */}
+                                    {h.receipt && (
+                                      <button className="btn btn-neu btn-sm" disabled={printingGuid === h.paymentOtherGuid} onClick={() => printOtherReceipt(h)}>
+                                        <i className="lni lni-printer"></i> {printingGuid === h.paymentOtherGuid ? 'Loading…' : 'Print / Reprint'}
+                                      </button>
+                                    )}
                                     <button
                                       className="btn btn-neu btn-sm"
                                       disabled={h.advance === 1}
@@ -3353,6 +3370,19 @@ export default function PaymentConsolePage() {
       <ViewPaymentModal isOpen={!!viewEntry} onClose={() => setViewEntry(null)} showToast={showToast} entry={viewEntry} />
       <EditPaymentModal isOpen={!!editTarget} onClose={() => setEditTarget(null)} showToast={showToast} target={editTarget} applicationGuid={selectedApplicationGuid ?? undefined} />
       <EditPaymentOtherModal isOpen={!!editOtherTarget} onClose={() => setEditOtherTarget(null)} showToast={showToast} target={editOtherTarget} />
+      <ViewOtherPaymentReceiptModal
+        isOpen={!!otherReceipt}
+        onClose={() => setOtherReceipt(null)}
+        showToast={showToast}
+        entry={otherReceipt}
+        onPrint={printOtherReceipt}
+        printing={!!otherReceipt && printingGuid === otherReceipt.paymentOtherGuid}
+        student={{
+          name: profile ? applicantName(profile) : '',
+          studentNo: profile?.studentNum ?? profile?.studentRegNo ?? profile?.appRefNo ?? null,
+          programName: programName ?? null,
+        }}
+      />
       <UpcomingSemestersModal
         isOpen={showUpcomingSemesters}
         onClose={() => setShowUpcomingSemesters(false)}

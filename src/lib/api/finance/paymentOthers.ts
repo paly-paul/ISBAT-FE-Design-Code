@@ -1,4 +1,4 @@
-import { apiGet } from '../client'
+import { apiGet, apiGetBlob } from '../client'
 import type { TotalPaid } from './totalPaid'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
@@ -71,6 +71,20 @@ export function getPaymentOthers(params: PaymentOtherListParams): Promise<Paymen
   if (params.applicationGuid) qs.set('applicationGuid', params.applicationGuid)
   return apiGet<PaymentOtherListResponse | null>(`/api/v1/finance/other-payment?${qs.toString()}`)
     .then(data => data ? { ...data, totalPaid: data.totalPaid ?? [] } : { items: [], totalCount: 0, pageNumber: page, pageSize, totalPaid: [] })
+}
+
+// get-payment-other-receipt-document.md — the printable receipt for one other
+// payment as a single-page PDF (same layout as the tuition receipt), filename
+// Receipt_{receiptNo}.pdf via Content-Disposition. Needs
+// finance.paymentconsole.print (403 otherwise). 404s: "Payment not found.",
+// "No paid ledgers found for this payment.", "Application not found.".
+// Advance-funded payments (receipt null) print a blank Receipt field, so the
+// doc says not to offer Print for them.
+export function getPaymentOtherReceiptPdf(paymentOtherGuid: string): Promise<{ blob: Blob; filename: string | null }> {
+  if (MOCK_AUTH) {
+    return Promise.resolve({ blob: new Blob(['%PDF-1.4 mock other payment receipt'], { type: 'application/pdf' }), filename: `Receipt_${paymentOtherGuid}.pdf` })
+  }
+  return apiGetBlob(`/api/v1/finance/other-payment/${encodeURIComponent(paymentOtherGuid)}/receipt`)
 }
 
 // Confirmed via get-resit-fee.md (repo root) — previews the resit fee the

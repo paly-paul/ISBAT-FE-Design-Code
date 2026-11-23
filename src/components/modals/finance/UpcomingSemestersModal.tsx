@@ -11,6 +11,29 @@ function fmtAmt(n: number) {
   return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
+type Ledger = CurrentSemesterUpcomingSemester['ledgers'][number]
+
+// Ledgers can be in different currencies (e.g. Entry Fee in USD, Tuition in
+// UGX), so amounts are summed per currency and never added across them.
+function sumByCurrency(ledgers: Ledger[], pick: (l: Ledger) => number): { code: string; total: number }[] {
+  const totals = new Map<string, number>()
+  for (const l of ledgers) {
+    const code = l.currencyCode ?? ''
+    totals.set(code, (totals.get(code) ?? 0) + pick(l))
+  }
+  return Array.from(totals, ([code, total]) => ({ code, total }))
+}
+
+function fmtTotal(t: { code: string; total: number }, prefix = '') {
+  return `${prefix}${fmtAmt(t.total)}${t.code ? ` ${t.code}` : ''}`
+}
+
+// One line per currency, so separate currencies don't read as being added.
+function TotalLines({ totals, prefix = '' }: { totals: { code: string; total: number }[]; prefix?: string }) {
+  if (totals.length === 0) return <>{fmtAmt(0)}</>
+  return <span>{totals.map(t => <span key={t.code} style={{ display: 'block' }}>{fmtTotal(t, prefix)}</span>)}</span>
+}
+
 // Opened from the Programme Progress "Total Outstanding" stat card on Step
 // 2/3's Outstanding Balance card — this is the only place upcomingSemesters
 // (current-semester-payable's whole-programme breakdown, everything beyond
@@ -25,8 +48,12 @@ function fmtAmt(n: number) {
 // this modal). Discount/Total Payable footer rows are summed client-side
 // per semester from its own ledgers, same "sum what the API gives per-row"
 // pattern the main table's own ledgerTotals uses.
-export function UpcomingSemestersModal({ isOpen, onClose, upcomingSemesters, totalProgramOutstanding }: UpcomingSemestersModalProps) {
+export function UpcomingSemestersModal({ isOpen, onClose, upcomingSemesters }: UpcomingSemestersModalProps) {
   if (!isOpen) return null
+
+  // The API's totalProgramOutstanding is one number that adds every currency
+  // together, so the header total is summed here per currency instead.
+  const upcomingTotals = sumByCurrency(upcomingSemesters.flatMap(s => s.ledgers), l => l.outstanding)
 
   return (
     <div className="modal-overlay open">
@@ -43,15 +70,15 @@ export function UpcomingSemestersModal({ isOpen, onClose, upcomingSemesters, tot
               doesn't just repeat what's already on screen. */}
           <div className="flex items-center justify-between mb-3" style={{ fontSize: 11.5 }}>
             <span className="text-g400">Ledgers beyond the current semester, across the rest of the programme.</span>
-            <span className="font-bold text-amber" style={{ fontSize: 13 }}>{fmtAmt(totalProgramOutstanding)} total</span>
+            <span className="font-bold text-amber" style={{ fontSize: 13 }}>{upcomingTotals.length ? upcomingTotals.map(t => fmtTotal(t)).join('  ·  ') : fmtAmt(0)} total</span>
           </div>
 
           {upcomingSemesters.length === 0 ? (
             <div className="text-g400 text-center" style={{ padding: 24, fontSize: 12.5 }}>No upcoming semester ledgers — the current semester is the last one billed.</div>
           ) : (
             upcomingSemesters.map(sem => {
-              const totalDiscount = sem.ledgers.reduce((sum, l) => sum + l.discountAmount, 0)
-              const totalNetPayable = sem.ledgers.reduce((sum, l) => sum + l.netPayable, 0)
+              const discountTotals = sumByCurrency(sem.ledgers, l => l.discountAmount).filter(t => t.total > 0)
+              const netPayableTotals = sumByCurrency(sem.ledgers, l => l.netPayable)
               return (
                 <div key={sem.semesterGuid} className="mb-4">
                   <div className="font-bold text-g700 mb-2" style={{ fontSize: 13 }}>{sem.semesterName}</div>
@@ -89,7 +116,12 @@ export function UpcomingSemestersModal({ isOpen, onClose, upcomingSemesters, tot
                               {l.currencyCode && <span className="text-g400" style={{ display: 'block', fontSize: 11, fontWeight: 600 }}>({l.currencyCode})</span>}
                             </span>
                           </span>
-                          <span data-label="Outstanding" className={isPaid ? 'font-bold text-green' : 'font-bold text-amber'}>{fmtAmt(l.outstanding)}</span>
+                          <span data-label="Outstanding" className={isPaid ? 'font-bold text-green' : 'font-bold text-amber'}>
+                            <span>
+                              {fmtAmt(l.outstanding)}
+                              {l.currencyCode && <span className="text-g400" style={{ display: 'block', fontSize: 11, fontWeight: 600 }}>({l.currencyCode})</span>}
+                            </span>
+                          </span>
                         </div>
                       )
                     })}
@@ -98,13 +130,13 @@ export function UpcomingSemestersModal({ isOpen, onClose, upcomingSemesters, tot
                         Discount
                         <span className="text-g400" style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0, marginLeft: 4 }}>(full payment only)</span>
                       </span>
-                      <span style={{ color: totalDiscount > 0 ? 'var(--green)' : 'var(--g400)' }}>
-                        {totalDiscount > 0 ? `− ${fmtAmt(totalDiscount)}` : fmtAmt(totalDiscount)}
+                      <span style={{ color: discountTotals.length > 0 ? 'var(--green)' : 'var(--g400)' }}>
+                        <TotalLines totals={discountTotals} prefix="− " />
                       </span>
                     </div>
                     <div className="recgrid-foot recgrid-total">
                       <span>Total Payable</span>
-                      <span style={{ color: 'var(--amber)' }}>{fmtAmt(totalNetPayable)}</span>
+                      <span style={{ color: 'var(--amber)' }}><TotalLines totals={netPayableTotals} /></span>
                     </div>
                   </div>
                 </div>
