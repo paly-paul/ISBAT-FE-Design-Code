@@ -63,7 +63,7 @@ export function WeekdayFormModal({ isOpen, onClose, showToast, mode, weekDayGuid
   function handleSubmit() {
     if (!validate()) return
     const input: WeekdayInput = { dayCode, dayName }
-    const onSuccess = () => { setSaved(true); showToast(isEdit ? 'Weekday updated successfully' : 'Weekday added successfully') }
+    const onSuccess = () => { setSaved(true); showToast(isEdit ? 'Weekday updated successfully' : 'Weekday added successfully', 'success') }
     const onError = (error: Error) => setFailure(error.message || `Failed to ${isEdit ? 'update' : 'add'} weekday. Please try again.`)
 
     if (isEdit && weekDayGuid) {

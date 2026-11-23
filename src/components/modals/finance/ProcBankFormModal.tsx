@@ -94,7 +94,7 @@ export function ProcBankFormModal({ isOpen, onClose, showToast, mode, procBankGu
       blocked,
       currencyGuid: currencyGuid || null,
     }
-    const onSuccess = () => { setSaved(true); showToast(isEdit ? 'Bank updated successfully' : 'Bank added successfully') }
+    const onSuccess = () => { setSaved(true); showToast(isEdit ? 'Bank updated successfully' : 'Bank added successfully', 'success') }
     const onError = (error: Error) => setFailure(error.message || `Failed to ${isEdit ? 'update' : 'add'} bank. Please try again.`)
 
     if (isEdit && procBankGuid) {

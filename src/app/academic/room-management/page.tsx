@@ -106,7 +106,7 @@ export default function Page() {
   function confirmDeleteRoom() {
     if (!deleteTarget) return
     deleteRoom.mutate(deleteTarget.roomGuid, {
-      onSuccess: () => { setDeleteTarget(null); showToast('Room deleted successfully') },
+      onSuccess: () => { setDeleteTarget(null); showToast('Room deleted successfully', 'success') },
       onError: (error: Error) => showToast(error.message || 'Failed to delete room', 'error'),
     })
   }

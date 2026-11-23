@@ -76,7 +76,7 @@ export default function Page() {
 
   function handleApprove(programGuid: string, isApproved: boolean) {
     updateProgramApproval.mutate({ programGuid, isApproved }, {
-      onSuccess: () => showToast(`Programme ${isApproved ? 'approved' : 'rejected'} successfully`),
+      onSuccess: () => showToast(`Programme ${isApproved ? 'approved' : 'rejected'} successfully`, 'success'),
       onError: (error: Error) => showToast(error.message || 'Failed to update approval', 'error'),
     })
   }
@@ -84,7 +84,7 @@ export default function Page() {
   function confirmDeleteProgram() {
     if (!deleteTarget) return
     deleteProgramMasterComplete.mutate(deleteTarget.programGuid, {
-      onSuccess: () => { setDeleteTarget(null); showToast('Programme deleted successfully') },
+      onSuccess: () => { setDeleteTarget(null); showToast('Programme deleted successfully', 'success') },
       onError: (error: Error) => showToast(error.message || 'Failed to delete programme', 'error'),
     })
   }

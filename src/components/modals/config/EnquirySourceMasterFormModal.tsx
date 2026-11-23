@@ -60,7 +60,7 @@ export function EnquirySourceMasterFormModal({ isOpen, onClose, showToast, mode,
   function handleSubmit() {
     if (!validate()) return
     const input: EnquirySourceMasterInput = { enquirySourceName }
-    const onSuccess = () => { setSaved(true); showToast(isEdit ? 'Enquiry source updated successfully' : 'Enquiry source added successfully') }
+    const onSuccess = () => { setSaved(true); showToast(isEdit ? 'Enquiry source updated successfully' : 'Enquiry source added successfully', 'success') }
     const onError = (error: Error) => setFailure(error.message || `Failed to ${isEdit ? 'update' : 'add'} enquiry source. Please try again.`)
 
     if (isEdit && enquirySourceGuid) {

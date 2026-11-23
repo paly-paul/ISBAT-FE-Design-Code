@@ -77,7 +77,7 @@ export default function TranscriptPrintPage() {
         a.click()
         a.remove()
         window.URL.revokeObjectURL(url)
-        showToast(`Downloaded bulk transcripts successfully`)
+        showToast(`Downloaded bulk transcripts successfully`, 'success')
       },
       onError: (err: any) => {
         showToast(err?.message || (err?.code === 'forbidden' ? 'You do not have permission to print transcripts.' : 'Failed to download bulk transcripts. Please try again.'), 'error')

@@ -63,7 +63,7 @@ export default function Page() {
   function confirmDeleteDepartment() {
     if (!deleteTarget) return
     deleteDepartment.mutate(String(deleteTarget.intDept), {
-      onSuccess: () => { setDeleteTarget(null); showToast('Department deleted successfully') },
+      onSuccess: () => { setDeleteTarget(null); showToast('Department deleted successfully', 'success') },
       onError: (error: Error) => showToast(error.message || 'Failed to delete department', 'error'),
     })
   }

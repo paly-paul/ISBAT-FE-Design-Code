@@ -79,7 +79,7 @@ export default function ProjectReviewsPage() {
     if (!deletingGuid) return
     deleteMut.mutate(deletingGuid, {
       onSuccess: () => {
-        showToast('Review deleted successfully')
+        showToast('Review deleted successfully', 'success')
         setIsConfirmDeleteOpen(false)
         setDeletingGuid(null)
       },
@@ -232,7 +232,7 @@ export default function ProjectReviewsPage() {
         }} 
         proposalGuid={proposalGuid}
         reviewGuid={editingGuid}
-        onSuccess={() => showToast(editingGuid ? 'Review updated successfully' : 'Review added successfully')}
+        onSuccess={() => showToast(editingGuid ? 'Review updated successfully' : 'Review added successfully', 'success')}
       />
 
       {/* Delete Confirmation Overlay */}

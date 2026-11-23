@@ -65,7 +65,7 @@ export default function Page() {
   function confirmDeleteGenSet() {
     if (!permissions.delete || !deleteTarget) return
     deleteGenSet.mutate(deleteTarget.genSetGuid, {
-      onSuccess: () => { setDeleteTarget(null); showToast('General setting deleted successfully') },
+      onSuccess: () => { setDeleteTarget(null); showToast('General setting deleted successfully', 'success') },
       onError: (error: Error) => showToast(error.message || 'Failed to delete general setting', 'error'),
     })
   }

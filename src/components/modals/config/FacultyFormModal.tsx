@@ -60,7 +60,7 @@ export function FacultyFormModal({ isOpen, onClose, showToast, mode, faculty, cr
   function handleSubmit() {
     if (!code || !name || !campusGuid || !deanEmployeeGuid) return
     const input: FacultyInput = { facultyCode: code, facultyName: name, campusGuid, deanEmployeeGuid }
-    const onSuccess = () => { setSaved(true); showToast(isEdit ? 'Faculty updated successfully' : 'Faculty added successfully') }
+    const onSuccess = () => { setSaved(true); showToast(isEdit ? 'Faculty updated successfully' : 'Faculty added successfully', 'success') }
     const onError = (error: Error) => {
       // A missing record on edit usually means the faculty was deleted while the modal was open.
       const notFound = isEdit && error instanceof AuthError && error.code === 'not_found'

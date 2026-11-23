@@ -81,7 +81,7 @@ export function EventFormModal({ isOpen, onClose, showToast, mode, eventGuid, cr
   function handleSubmit() {
     if (!validate()) return
     const input: EventInput = { subject: subject.trim(), eventBody: eventBody.trim(), eventDate: ymdToEventDate(eventDateYmd) }
-    const onSuccess = () => { setSaved(true); showToast(isEdit ? 'Event updated successfully' : 'Event added successfully') }
+    const onSuccess = () => { setSaved(true); showToast(isEdit ? 'Event updated successfully' : 'Event added successfully', 'success') }
     const onError = (error: Error) => {
       const code = error instanceof AuthError ? error.code : undefined
       setFailure(error.message || `Failed to ${isEdit ? 'update' : 'add'} event${code ? ` (${code})` : ''}. Please try again.`)

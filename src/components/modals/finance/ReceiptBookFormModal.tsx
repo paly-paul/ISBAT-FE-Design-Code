@@ -83,7 +83,7 @@ export function ReceiptBookFormModal({ isOpen, onClose, showToast, mode, receipt
   function handleSubmit() {
     if (isEdit && !receiptBook) return
     if (!validate()) return
-    const onSuccess = () => { setSaved(true); showToast(isEdit ? 'Receipt book updated successfully' : 'Receipt book added successfully') }
+    const onSuccess = () => { setSaved(true); showToast(isEdit ? 'Receipt book updated successfully' : 'Receipt book added successfully', 'success') }
     const onError = (error: Error) => setFailure(error.message || `Failed to ${isEdit ? 'update' : 'add'} receipt book. Please try again.`)
 
     if (isEdit && receiptBook) {

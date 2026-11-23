@@ -77,7 +77,7 @@ export function CurrencyFormModal({ isOpen, onClose, showToast, mode, currencyGu
     if (isEdit && !currencyGuid) return
     if (!validate()) return
     const input: CurrencyInput = { currencyCode, currencyName, isDefault: isDefault ? 1 : 0 }
-    const onSuccess = () => { setSaved(true); showToast(isEdit ? 'Currency updated successfully' : 'Currency added successfully') }
+    const onSuccess = () => { setSaved(true); showToast(isEdit ? 'Currency updated successfully' : 'Currency added successfully', 'success') }
 
     if (isEdit && currencyGuid) {
       updateCurrency.mutate({ guid: currencyGuid, input }, { onSuccess, onError: handleError })

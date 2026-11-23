@@ -70,7 +70,7 @@ export default function CbtQuestionUploadPage() {
           <div className="text-[12px] text-slate-500">Specify section (A/B/C) and marks per question in the template</div>
         </div>
 
-        <button className="btn btn-primary" onClick={() => showToast('Questions imported successfully')}>
+        <button className="btn btn-primary" onClick={() => showToast('Questions imported successfully', 'success')}>
           Import Questions
         </button>
 

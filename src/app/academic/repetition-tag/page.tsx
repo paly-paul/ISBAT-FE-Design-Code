@@ -52,7 +52,7 @@ export default function Page() {
   function confirmDeleteRepetitionTag() {
     if (!deleteTarget) return
     deleteRepetitionTag.mutate(deleteTarget.courseUnitRepetitionGuid, {
-      onSuccess: () => { setDeleteTarget(null); showToast('Repetition tag deleted successfully') },
+      onSuccess: () => { setDeleteTarget(null); showToast('Repetition tag deleted successfully', 'success') },
       onError: (error: Error) => {
         // delete-course-unit-repetition.md: tag_in_use while any course unit
         // still points at this tag — say how to free it up.

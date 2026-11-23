@@ -95,7 +95,7 @@ export default function Page() {
   function confirmDeleteLedgerOther() {
     if (!deleteTarget) return
     deleteLedgerOther.mutate(deleteTarget.ledgerOthersGuid, {
-      onSuccess: () => { setDeleteTarget(null); showToast('Other ledger deleted successfully') },
+      onSuccess: () => { setDeleteTarget(null); showToast('Other ledger deleted successfully', 'success') },
       onError: (error: Error) => showToast(error.message || 'Failed to delete other ledger', 'error'),
     })
   }

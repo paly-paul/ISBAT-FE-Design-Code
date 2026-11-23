@@ -104,7 +104,7 @@ export function AnnouncementFormModal({ isOpen, onClose, showToast, mode, announ
   function handleSubmit() {
     if (!validate()) return
     const input: AnnouncementUpdateInput = { body, announceDate, programGuid: programGuid || null, attachment }
-    const onSuccess = () => { setSaved(true); showToast(isEdit ? 'Announcement updated successfully' : 'Announcement added successfully') }
+    const onSuccess = () => { setSaved(true); showToast(isEdit ? 'Announcement updated successfully' : 'Announcement added successfully', 'success') }
     const onError = (error: Error) => {
       const code = error instanceof AuthError ? error.code : undefined
       setFailure(error.message || `Failed to ${isEdit ? 'update' : 'add'} announcement${code ? ` (${code})` : ''}. Please try again.`)

@@ -170,7 +170,7 @@ function CbtScheduleContent() {
         publishStatus,
         examRuleGuid,
       })
-      showToast('CBT Scheduled successfully')
+      showToast('CBT Scheduled successfully', 'success')
       setTimeout(() => {
         router.push('/assessment/ia-creation')
       }, 1000)

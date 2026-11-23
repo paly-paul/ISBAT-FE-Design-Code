@@ -175,7 +175,7 @@ export function CwScheduleModal({ isOpen, onClose, courseworkGuid }: CwScheduleM
         publishStatus,
         examRuleGuid,
       })
-      showToast('Coursework Scheduled successfully')
+      showToast('Coursework Scheduled successfully', 'success')
       setSaved(true)
     } catch (err: any) {
       const errorMsg = extractApiErrorMessage(err, 'Failed to save schedule.')

@@ -59,7 +59,7 @@ export default function Page() {
   function confirmDeleteEnquirySourceMaster() {
     if (!deleteTarget) return
     deleteEnquirySourceMaster.mutate(deleteTarget.enquirySourceGuid, {
-      onSuccess: () => { setDeleteTarget(null); showToast('Enquiry source deleted successfully') },
+      onSuccess: () => { setDeleteTarget(null); showToast('Enquiry source deleted successfully', 'success') },
       onError: (error: Error) => showToast(error.message || 'Failed to delete enquiry source', 'error'),
     })
   }

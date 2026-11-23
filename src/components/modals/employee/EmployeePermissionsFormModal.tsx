@@ -158,7 +158,7 @@ export function EmployeePermissionsFormModal({ isOpen, onClose, showToast, mode,
     assignPermissionGroups.mutate(
       { employeeGuid, permissionGroupGuids: assignedIds },
       {
-        onSuccess: () => { setSaved(true); showToast(isEdit ? 'Permissions updated successfully' : 'Permissions assigned successfully') },
+        onSuccess: () => { setSaved(true); showToast(isEdit ? 'Permissions updated successfully' : 'Permissions assigned successfully', 'success') },
         onError: (error: Error) => {
           // A missing record usually means the employee was deleted while the modal was open.
           const notFound = error instanceof AuthError && error.code === 'not_found'

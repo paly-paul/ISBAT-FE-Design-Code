@@ -150,12 +150,12 @@ export function ProgrammeLevelFormModal({ isOpen, onClose, showToast, mode, prog
     if (isEdit && programLevelGuid) {
       updateProgramLevel.mutate(
         { guid: programLevelGuid, input },
-        { onSuccess: () => { setSaved(true); showToast('Programme Level updated successfully') }, onError: handleSaveError },
+        { onSuccess: () => { setSaved(true); showToast('Programme Level updated successfully', 'success') }, onError: handleSaveError },
       )
     } else {
       createProgramLevel.mutate(
         input,
-        { onSuccess: () => { setSaved(true); setRedirectAfterClose(true); showToast('Programme Level added successfully') }, onError: handleSaveError },
+        { onSuccess: () => { setSaved(true); setRedirectAfterClose(true); showToast('Programme Level added successfully', 'success') }, onError: handleSaveError },
       )
     }
   }

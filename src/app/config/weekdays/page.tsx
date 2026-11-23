@@ -62,7 +62,7 @@ export default function Page() {
   function confirmDeleteWeekday() {
     if (!deleteTarget) return
     deleteWeekday.mutate(deleteTarget.weekDayGuid, {
-      onSuccess: () => { setDeleteTarget(null); showToast('Weekday deleted successfully') },
+      onSuccess: () => { setDeleteTarget(null); showToast('Weekday deleted successfully', 'success') },
       onError: (error: Error) => showToast(error.message || 'Failed to delete weekday', 'error'),
     })
   }

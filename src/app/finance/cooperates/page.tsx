@@ -65,7 +65,7 @@ export default function Page() {
   function confirmDeleteCooperate() {
     if (!permissions.delete || !deleteTarget) return
     deleteCooperate.mutate(deleteTarget.cooperateGuid, {
-      onSuccess: () => { setDeleteTarget(null); showToast('Cooperate deleted successfully') },
+      onSuccess: () => { setDeleteTarget(null); showToast('Cooperate deleted successfully', 'success') },
       onError: (error: Error) => showToast(error.message || 'Failed to delete cooperate', 'error'),
     })
   }

@@ -62,7 +62,7 @@ export default function Page() {
   function confirmDeleteFollowUpStatus() {
     if (!deleteTarget) return
     deleteFollowUpStatus.mutate(deleteTarget.followUpStatusGuid, {
-      onSuccess: () => { setDeleteTarget(null); showToast('Followup status deleted successfully') },
+      onSuccess: () => { setDeleteTarget(null); showToast('Followup status deleted successfully', 'success') },
       onError: (error: Error) => showToast(error.message || 'Failed to delete followup status', 'error'),
     })
   }

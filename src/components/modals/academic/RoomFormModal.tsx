@@ -123,12 +123,12 @@ export function RoomFormModal({ isOpen, onClose, showToast, mode, roomGuid, crea
     if (isEdit && roomGuid) {
       updateRoom.mutate(
         { guid: roomGuid, input },
-        { onSuccess: () => { setSaved(true); showToast('Room updated successfully') }, onError: handleSaveError },
+        { onSuccess: () => { setSaved(true); showToast('Room updated successfully', 'success') }, onError: handleSaveError },
       )
     } else {
       createRoom.mutate(
         input,
-        { onSuccess: () => { setSaved(true); showToast('Room added successfully') }, onError: handleSaveError },
+        { onSuccess: () => { setSaved(true); showToast('Room added successfully', 'success') }, onError: handleSaveError },
       )
     }
   }

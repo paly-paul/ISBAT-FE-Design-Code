@@ -70,7 +70,7 @@ export default function Page() {
   function confirmDeleteProcBank() {
     if (!permissions.delete || !deleteTarget) return
     deleteProcBank.mutate(deleteTarget.procBankGuid, {
-      onSuccess: () => { setDeleteTarget(null); showToast('Bank deleted successfully') },
+      onSuccess: () => { setDeleteTarget(null); showToast('Bank deleted successfully', 'success') },
       onError: (error: Error) => showToast(error.message || 'Failed to delete bank', 'error'),
     })
   }

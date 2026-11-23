@@ -73,7 +73,7 @@ export default function Page() {
   function confirmDeleteAnnouncement() {
     if (!deleteTarget) return
     deleteAnnouncement.mutate(deleteTarget.announcementGuid, {
-      onSuccess: () => { setDeleteTarget(null); showToast('Announcement deleted successfully') },
+      onSuccess: () => { setDeleteTarget(null); showToast('Announcement deleted successfully', 'success') },
       onError: (error: Error) => showToast(error.message || 'Failed to delete announcement', 'error'),
     })
   }

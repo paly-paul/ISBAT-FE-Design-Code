@@ -62,7 +62,7 @@ export function BatchTimeFormModal({ isOpen, onClose, showToast, mode, batchTime
   function handleSubmit() {
     if (!validate()) return
     const input: BatchTimeInput = { batchTime, batchTimeCode }
-    const onSuccess = () => { setSaved(true); showToast(isEdit ? 'Batch time updated successfully' : 'Batch time added successfully') }
+    const onSuccess = () => { setSaved(true); showToast(isEdit ? 'Batch time updated successfully' : 'Batch time added successfully', 'success') }
     const onError = (error: Error) => setFailure(error.message || `Failed to ${isEdit ? 'update' : 'add'} batch time. Please try again.`)
 
     if (isEdit && batchTimeGuid) {

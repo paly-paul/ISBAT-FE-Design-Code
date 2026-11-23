@@ -60,7 +60,7 @@ export default function Page() {
   function confirmDeleteEvent() {
     if (!deleteTarget) return
     deleteEvent.mutate(deleteTarget.eventGuid, {
-      onSuccess: () => { setDeleteTarget(null); showToast('Event deleted successfully') },
+      onSuccess: () => { setDeleteTarget(null); showToast('Event deleted successfully', 'success') },
       onError: (error: Error) => showToast(error.message || 'Failed to delete event', 'error'),
     })
   }

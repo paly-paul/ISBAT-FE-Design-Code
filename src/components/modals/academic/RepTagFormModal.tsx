@@ -121,7 +121,7 @@ export function RepTagFormModal({ isOpen, onClose, showToast, mode, courseUnitRe
     if (!validate()) return
     // Trimmed — the API stores what it's sent (tagCode is only uppercased).
     const input: RepetitionTagInput = { tagCode: tagCode.trim(), tagName: tagName.trim(), programLevelGuid }
-    const onSuccess = () => { setSaved(true); showToast(isEdit ? 'Repetition tag updated successfully' : 'Repetition tag added successfully') }
+    const onSuccess = () => { setSaved(true); showToast(isEdit ? 'Repetition tag updated successfully' : 'Repetition tag added successfully', 'success') }
     const onError = (error: Error) => {
       const code = error instanceof AuthError ? error.code : undefined
       const fieldErr = serverFieldError(code, error.message || '')

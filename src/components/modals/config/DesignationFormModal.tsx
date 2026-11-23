@@ -86,7 +86,7 @@ export function DesignationFormModal({ isOpen, onClose, showToast, mode, designa
   function handleSubmit() {
     if (!validate()) return
     const input: DesignationInput = { designationName, intDept: Number(department) }
-    const onSuccess = () => { setSaved(true); showToast(isEdit ? 'Designation updated successfully' : 'Designation added successfully') }
+    const onSuccess = () => { setSaved(true); showToast(isEdit ? 'Designation updated successfully' : 'Designation added successfully', 'success') }
 
     if (isEdit && designation) {
       updateDesignation.mutate({ id: String(designation.intDesignation), input }, { onSuccess, onError: handleMutateError })

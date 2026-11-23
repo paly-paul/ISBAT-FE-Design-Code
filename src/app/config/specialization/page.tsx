@@ -62,7 +62,7 @@ export default function Page() {
   function confirmDeleteStream() {
     if (!deleteTarget) return
     deleteStream.mutate(deleteTarget.streamGuid, {
-      onSuccess: () => { setDeleteTarget(null); showToast('Stream deleted successfully') },
+      onSuccess: () => { setDeleteTarget(null); showToast('Stream deleted successfully', 'success') },
       onError: (error: Error) => showToast(error.message || 'Failed to delete stream', 'error'),
     })
   }

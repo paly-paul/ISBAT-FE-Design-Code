@@ -66,7 +66,7 @@ export default function Page() {
   function confirmDeleteBank() {
     if (!permissions.delete || !deleteTarget) return
     deleteBank.mutate(deleteTarget.bankGuid, {
-      onSuccess: () => { setDeleteTarget(null); showToast('Bank deleted successfully') },
+      onSuccess: () => { setDeleteTarget(null); showToast('Bank deleted successfully', 'success') },
       onError: (error: Error) => showToast(error.message || 'Failed to delete bank', 'error'),
     })
   }

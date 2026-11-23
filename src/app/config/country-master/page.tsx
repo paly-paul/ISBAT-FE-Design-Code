@@ -61,7 +61,7 @@ export default function Page() {
   function confirmDeleteCountry() {
     if (!deleteTarget) return
     deleteCountry.mutate(deleteTarget.countryGuid, {
-      onSuccess: () => { setDeleteTarget(null); showToast('Country deleted successfully') },
+      onSuccess: () => { setDeleteTarget(null); showToast('Country deleted successfully', 'success') },
       onError: (error: Error) => showToast(error.message || 'Failed to delete country', 'error'),
     })
   }

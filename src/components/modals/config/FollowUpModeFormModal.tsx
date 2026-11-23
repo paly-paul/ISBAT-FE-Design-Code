@@ -60,7 +60,7 @@ export function FollowUpModeFormModal({ isOpen, onClose, showToast, mode: formMo
   function handleSubmit() {
     if (!validate()) return
     const input: FollowUpModeInput = { followUpModeName }
-    const onSuccess = () => { setSaved(true); showToast(isEdit ? 'Followup mode updated successfully' : 'Followup mode added successfully') }
+    const onSuccess = () => { setSaved(true); showToast(isEdit ? 'Followup mode updated successfully' : 'Followup mode added successfully', 'success') }
     const onError = (error: Error) => setFailure(error.message || `Failed to ${isEdit ? 'update' : 'add'} followup mode. Please try again.`)
 
     if (isEdit && followUpModeGuid) {

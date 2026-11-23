@@ -60,7 +60,7 @@ export default function Page() {
   function confirmDeleteIntake() {
     if (!deleteTarget) return
     deleteIntake.mutate(deleteTarget.intakeGuid, {
-      onSuccess: () => { setDeleteTarget(null); showToast('Intake deleted successfully') },
+      onSuccess: () => { setDeleteTarget(null); showToast('Intake deleted successfully', 'success') },
       onError: (error: Error) => showToast(error.message || 'Failed to delete intake', 'error'),
     })
   }

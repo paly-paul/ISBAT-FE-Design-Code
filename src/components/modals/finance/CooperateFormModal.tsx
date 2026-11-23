@@ -74,7 +74,7 @@ export function CooperateFormModal({ isOpen, onClose, showToast, mode, cooperate
     // Sent trimmed: the server's uniqueness check runs on the untrimmed value
     // but saves it trimmed, so "MTN " would otherwise slip past it.
     const input: CooperateInput = { cooperateCode: cooperateCode.trim(), cooperateName: cooperateName.trim() }
-    const onSuccess = () => { setSaved(true); showToast(isEdit ? 'Cooperate updated successfully' : 'Cooperate added successfully') }
+    const onSuccess = () => { setSaved(true); showToast(isEdit ? 'Cooperate updated successfully' : 'Cooperate added successfully', 'success') }
     const onError = (error: Error) => {
       // "Cooperate already exists." — a duplicate code, fixable in the form.
       if (/already exists/i.test(error.message || '')) {

@@ -67,7 +67,7 @@ export default function Page() {
   function confirmDeleteDesignation() {
     if (!deleteTarget) return
     deleteDesignation.mutate(String(deleteTarget.intDesignation), {
-      onSuccess: () => { setDeleteTarget(null); showToast('Designation deleted successfully') },
+      onSuccess: () => { setDeleteTarget(null); showToast('Designation deleted successfully', 'success') },
       onError: (error: Error) => showToast(error.message || 'Failed to delete designation', 'error'),
     })
   }

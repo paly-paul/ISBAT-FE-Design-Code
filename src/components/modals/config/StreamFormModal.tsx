@@ -68,12 +68,12 @@ export function StreamFormModal({ isOpen, onClose, showToast, mode, streamGuid, 
       updateStream.mutate(
         { guid: streamGuid, input },
         {
-          onSuccess: () => { setSaved(true); showToast('Stream updated successfully') },
+          onSuccess: () => { setSaved(true); showToast('Stream updated successfully', 'success') },
           onError: (error: Error) => setFailure(error.message || 'Failed to update stream. Please try again.'),
         },
       )
     } else {
-      createStream.mutate(input, { onSuccess: () => { setSaved(true); showToast('Stream added successfully') } })
+      createStream.mutate(input, { onSuccess: () => { setSaved(true); showToast('Stream added successfully', 'success') } })
     }
   }
 

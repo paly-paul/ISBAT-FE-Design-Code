@@ -59,7 +59,7 @@ export default function Page() {
   function confirmDeleteUnitCategory() {
     if (!deleteTarget) return
     deleteUnitCategory.mutate(deleteTarget.unitCatGuid, {
-      onSuccess: () => { setDeleteTarget(null); showToast('Unit category deleted successfully') },
+      onSuccess: () => { setDeleteTarget(null); showToast('Unit category deleted successfully', 'success') },
       onError: (error: Error) => showToast(error.message || 'Failed to delete unit category', 'error'),
     })
   }

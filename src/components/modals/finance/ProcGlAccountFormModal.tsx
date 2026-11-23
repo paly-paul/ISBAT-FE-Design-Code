@@ -79,7 +79,7 @@ export function ProcGlAccountFormModal({ isOpen, onClose, showToast, mode, procG
       typeName: null,
       blocked,
     }
-    const onSuccess = () => { setSaved(true); showToast(isEdit ? 'GL account updated successfully' : 'GL account added successfully') }
+    const onSuccess = () => { setSaved(true); showToast(isEdit ? 'GL account updated successfully' : 'GL account added successfully', 'success') }
     const onError = (error: Error) => setFailure(error.message || `Failed to ${isEdit ? 'update' : 'add'} GL account. Please try again.`)
 
     if (isEdit && procGlAccountGuid) {

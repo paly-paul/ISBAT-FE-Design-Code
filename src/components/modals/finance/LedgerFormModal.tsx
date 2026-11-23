@@ -75,7 +75,7 @@ export function LedgerFormModal({ isOpen, onClose, showToast, mode, ledgerGuid, 
     if (isEdit && !ledgerGuid) return
     if (!validate()) return
     const input: LedgerInput = { ledgerCode, ledgerName, procGlAccountGuid: procGlAccountGuid || null }
-    const onSuccess = () => { setSaved(true); showToast(isEdit ? 'Ledger updated successfully' : 'Ledger added successfully') }
+    const onSuccess = () => { setSaved(true); showToast(isEdit ? 'Ledger updated successfully' : 'Ledger added successfully', 'success') }
     const onError = (error: Error) => setFailure(error.message || `Failed to ${isEdit ? 'update' : 'add'} ledger. Please try again.`)
 
     if (isEdit && ledgerGuid) {

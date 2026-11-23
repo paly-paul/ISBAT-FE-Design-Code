@@ -121,12 +121,12 @@ export function ProgrammeGroupFormModal({ isOpen, onClose, showToast, mode, prog
     if (isEdit && programGroupGuid) {
       updateProgramGroup.mutate(
         { guid: programGroupGuid, input },
-        { onSuccess: () => { setSaved(true); showToast('Programme Group updated successfully') }, onError: handleSaveError },
+        { onSuccess: () => { setSaved(true); showToast('Programme Group updated successfully', 'success') }, onError: handleSaveError },
       )
     } else {
       createProgramGroup.mutate(
         input,
-        { onSuccess: () => { setSaved(true); setRedirectAfterClose(true); showToast('Programme Group added successfully') }, onError: handleSaveError },
+        { onSuccess: () => { setSaved(true); setRedirectAfterClose(true); showToast('Programme Group added successfully', 'success') }, onError: handleSaveError },
       )
     }
   }

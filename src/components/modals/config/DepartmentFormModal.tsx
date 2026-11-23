@@ -85,7 +85,7 @@ export function DepartmentFormModal({ isOpen, onClose, showToast, mode, departme
   function handleSubmit() {
     if (!validate()) return
     const input: DepartmentInput = { shortCode, deptName, employeeGuid: hod || null }
-    const onSuccess = () => { setSaved(true); showToast(isEdit ? 'Department updated successfully' : 'Department added successfully') }
+    const onSuccess = () => { setSaved(true); showToast(isEdit ? 'Department updated successfully' : 'Department added successfully', 'success') }
 
     if (isEdit && department) {
       updateDepartment.mutate({ id: String(department.intDept), input }, { onSuccess, onError: handleMutateError })

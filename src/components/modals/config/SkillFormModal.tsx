@@ -54,7 +54,7 @@ export function SkillFormModal({ isOpen, onClose, showToast, mode, skill, create
   function handleSubmit() {
     if (!validate()) return
     const input: SkillMasterInput = { skillName }
-    const onSuccess = () => { setSaved(true); showToast(isEdit ? 'Skill updated successfully' : 'Skill added successfully') }
+    const onSuccess = () => { setSaved(true); showToast(isEdit ? 'Skill updated successfully' : 'Skill added successfully', 'success') }
     const onError = (error: Error) => setFailure(error.message || `Failed to ${isEdit ? 'update' : 'add'} skill. Please try again.`)
 
     if (isEdit && skill) {

@@ -55,7 +55,7 @@ export function CourseLevelFormModal({ isOpen, onClose, showToast, mode, courseL
     const name = levelName.trim()
     if (!name) { setError('Course level name is required'); return }
     if (name.length > COURSE_LEVEL_NAME_MAX) { setError(`Course level name must be ${COURSE_LEVEL_NAME_MAX} characters or fewer`); return }
-    const onSuccess = () => { setSaved(true); showToast(isEdit ? 'Course level updated successfully' : 'Course level added successfully') }
+    const onSuccess = () => { setSaved(true); showToast(isEdit ? 'Course level updated successfully' : 'Course level added successfully', 'success') }
     if (isEdit && courseLevel) {
       updateLevel.mutate({ intLevel: courseLevel.intLevel, input: { levelName: name } }, { onSuccess, onError: handleError })
     } else {

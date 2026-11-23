@@ -60,7 +60,7 @@ export function EnquirySourceFormModal({ isOpen, onClose, showToast, mode, isbat
   function handleSubmit() {
     if (!validate()) return
     const input: EnquirySourceInput = { sourceName }
-    const onSuccess = () => { setSaved(true); showToast(isEdit ? 'Isbat enquiry source updated successfully' : 'Isbat enquiry source added successfully') }
+    const onSuccess = () => { setSaved(true); showToast(isEdit ? 'Isbat enquiry source updated successfully' : 'Isbat enquiry source added successfully', 'success') }
     const onError = (error: Error) => setFailure(error.message || `Failed to ${isEdit ? 'update' : 'add'} Isbat enquiry source. Please try again.`)
 
     if (isEdit && isbatSourceGuid) {
