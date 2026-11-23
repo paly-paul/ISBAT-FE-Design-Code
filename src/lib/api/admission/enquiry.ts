@@ -352,14 +352,19 @@ export function verifyEnquiryEmailOtp(email: string, challengeToken: string, otp
 // ANDed with the rest; totalCount reflects it. Left out entirely for "All"
 // (never sent as ''). Enquiries with no status drop out when it's set; an
 // unknown guid just returns an empty list.
-export function getEnquiries(page = 1, pageSize = 10, search = '', enquiryStatusGuid = ''): Promise<EnquiryListResult> {
+// intakeGuid / enquiryStatusGuid filter server-side (get-enquiries.md), so
+// totalCount covers the filtered set and paging walks it.
+export function getEnquiries(page = 1, pageSize = 10, search = '', enquiryStatusGuid = '', intakeGuid = ''): Promise<EnquiryListResult> {
   if (MOCK_AUTH) {
-    const items = enquiryStatusGuid ? mockEnquiries.filter(e => e.enquiryStatusGuid === enquiryStatusGuid) : mockEnquiries
+    const items = mockEnquiries.filter(e =>
+      (!enquiryStatusGuid || e.enquiryStatusGuid === enquiryStatusGuid) &&
+      (!intakeGuid || e.intakeGuid === intakeGuid))
     return Promise.resolve({ items, totalCount: items.length, pageNumber: page, pageSize })
   }
   const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) })
   if (search.trim()) params.set('search', search.trim())
   if (enquiryStatusGuid) params.set('enquiryStatusGuid', enquiryStatusGuid)
+  if (intakeGuid) params.set('intakeGuid', intakeGuid)
   return apiGet<EnquiryListResult | null>(`/api/v1/admissions/enquiries?${params.toString()}`)
     .then(data => data ?? { items: [], totalCount: 0, pageNumber: page, pageSize })
 }

@@ -22,9 +22,9 @@ import { formatEnquiryPhone } from '@/lib/api/admission/enquiry'
 
 // Real server-side pagination — only DISPLAY_PAGE_SIZE rows are ever
 // requested for the page currently on screen (see useEnquiries), not the
-// whole ~11k-row table in one shot. Trade-off: search and the Channel/Intake
-// filters below can now only narrow the rows already on the current page,
-// not the full dataset — a deliberate choice over the previous FETCH_SIZE
+// whole ~11k-row table in one shot. Search, Intake and Status go to the
+// server; only the Channel filter below still narrows just the rows already
+// on the current page — a deliberate choice over the previous FETCH_SIZE
 // = 12000 "fetch everything, filter client-side" approach, which meant a
 // much heavier request on every page load.
 const DISPLAY_PAGE_SIZE = 10
@@ -58,9 +58,10 @@ export default function EnquiryListPage() {
   const [search, setSearch] = useState('')
   const [channel, setChannel] = useState('')
   const [intakeGuid, setIntakeGuid] = useState('')
-  // Server-side filter (enquiryStatusGuid on GET /enquiries) — unlike
-  // Channel/Intake, it narrows the whole dataset and totalCount, not just
-  // the current page. '' = All (param left out).
+  // Server-side filters (intakeGuid / enquiryStatusGuid on GET /enquiries) —
+  // unlike Channel, they narrow the whole dataset and totalCount, so the
+  // page count and Next/Previous follow the filtered set. '' = All (param
+  // left out).
   const [statusGuid, setStatusGuid] = useState('')
   const [page, setPage] = useState(1)
 
@@ -70,7 +71,7 @@ export default function EnquiryListPage() {
   // so a 1-character keystroke doesn't fire a request against the full ~11k
   // row table.
   const activeSearch = searchTrimmed.length >= MIN_SEARCH_CHARS ? searchTrimmed : ''
-  const { data, isLoading: loading } = useEnquiries(page, DISPLAY_PAGE_SIZE, activeSearch, statusGuid)
+  const { data, isLoading: loading } = useEnquiries(page, DISPLAY_PAGE_SIZE, activeSearch, statusGuid, intakeGuid)
   const updateEnquiry = useUpdateEnquiry()
   const rows = data?.items ?? []
   // Dial codes for just the countries on this page, for the Phone column.
@@ -125,14 +126,10 @@ export default function EnquiryListPage() {
     { value: '', label: 'All Channels' },
     ...enquirySources.map(s => ({ value: s.enquirySourceGuid, label: s.enquirySourceName })),
   ]
-  // Search itself now happens server-side (see useEnquiries above) — rows
-  // already only contain matches for activeSearch. Channel/Intake stay
-  // client-side, narrowing only the current page's own rows (same
-  // pre-existing limitation as before this change, unrelated to search).
-  const filteredRows = rows.filter(r =>
-    (!channel || r.enquirySourceGuid === channel) &&
-    (!intakeGuid || r.intakeGuid === intakeGuid)
-  )
+  // Search, Intake and Status are applied server-side (see useEnquiries
+  // above). Channel stays client-side, narrowing only the current page's own
+  // rows — GET /enquiries has no source filter (get-enquiries.md).
+  const filteredRows = rows.filter(r => !channel || r.enquirySourceGuid === channel)
   // Rows are already server-paginated (see useEnquiries above) — filteredRows
   // just narrows the current page's own rows, it doesn't page through them
   // again client-side.

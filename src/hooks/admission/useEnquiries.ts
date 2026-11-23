@@ -33,10 +33,10 @@ export function useReloadEnquiryDropdowns() {
 // master-data lists elsewhere in this app, this can't just fetch everything
 // in one big page. page/pageSize/search are part of the query key so each
 // combination is cached separately.
-export function useEnquiries(page: number, pageSize: number, search = '', enquiryStatusGuid = '') {
+export function useEnquiries(page: number, pageSize: number, search = '', enquiryStatusGuid = '', intakeGuid = '') {
   return useQuery({
-    queryKey: [...ENQUIRIES_KEY, page, pageSize, search, enquiryStatusGuid],
-    queryFn: () => getEnquiries(page, pageSize, search, enquiryStatusGuid),
+    queryKey: [...ENQUIRIES_KEY, page, pageSize, search, enquiryStatusGuid, intakeGuid],
+    queryFn: () => getEnquiries(page, pageSize, search, enquiryStatusGuid, intakeGuid),
     staleTime: Infinity,
     gcTime: Infinity,
   })
