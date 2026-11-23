@@ -3374,7 +3374,7 @@ export default function PaymentConsolePage() {
         isOpen={!!otherReceipt}
         onClose={() => setOtherReceipt(null)}
         showToast={showToast}
-        entry={otherReceipt}
+        paymentOtherGuid={otherReceipt?.paymentOtherGuid ?? null}
         onPrint={printOtherReceipt}
         printing={!!otherReceipt && printingGuid === otherReceipt.paymentOtherGuid}
         student={{

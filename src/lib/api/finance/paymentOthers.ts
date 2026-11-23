@@ -73,6 +73,14 @@ export function getPaymentOthers(params: PaymentOtherListParams): Promise<Paymen
     .then(data => data ? { ...data, totalPaid: data.totalPaid ?? [] } : { items: [], totalCount: 0, pageNumber: page, pageSize, totalPaid: [] })
 }
 
+// get-payment-other-by-guid.md — one other payment, same shape as a row of
+// GET /other-payment. Needs finance.paymentconsole.get (403 otherwise); 404
+// "Other payment not found." for an unknown or deleted payment.
+export function getPaymentOther(paymentOtherGuid: string): Promise<PaymentOtherDto> {
+  if (MOCK_AUTH) return Promise.reject(new Error('Other payment not found.'))
+  return apiGet<PaymentOtherDto>(`/api/v1/finance/other-payment/${encodeURIComponent(paymentOtherGuid)}`)
+}
+
 // get-payment-other-receipt-document.md — the printable receipt for one other
 // payment as a single-page PDF (same layout as the tuition receipt), filename
 // Receipt_{receiptNo}.pdf via Content-Disposition. Needs
