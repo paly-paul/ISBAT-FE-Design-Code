@@ -1,4 +1,4 @@
-import { AuthError, apiDelete, apiPost, apiPut } from '../client'
+import { AuthError, apiDelete, apiGet, apiPost, apiPut } from '../client'
 import { getPagedList } from '../pagedList'
 import type { PaginatedItems } from '@/lib/pagination'
 
@@ -7,13 +7,19 @@ const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 // Course levels (erp-docs/api/userrole-service/course-levels): the
 // qualifications a designation can name as its minimum qualification. Each is
 // only a name. Int-keyed: PUT/DELETE take intLevel, while courseLevelGuid is
-// what other screens send when they pick one. status is always 2 (active) and
-// isn't editable.
+// what other screens send when they pick one. (The API stopped returning
+// `status` on 2026-11-23.)
 export interface CourseLevel {
   intLevel: number
   courseLevelGuid: string
   levelName: string
-  status: number
+}
+
+// GET /users/course-levels/dropdown — the Designation form's Min.
+// qualification picker.
+export interface CourseLevelDropdownItem {
+  courseLevelGuid: string
+  levelName: string
 }
 
 export interface CourseLevelInput {
@@ -24,7 +30,7 @@ export const COURSE_LEVEL_NAME_MAX = 100
 
 // The seven levels carried over from the old system.
 const mockCourseLevels: CourseLevel[] = ['A Level', 'Bachelors', 'Certificate', 'Diploma', 'Masters', 'PhD', 'Postgraduate Diploma']
-  .map((levelName, i) => ({ intLevel: i + 1, courseLevelGuid: `00000000-0000-4000-9000-${String(i + 1).padStart(12, '0')}`, levelName, status: 2 }))
+  .map((levelName, i) => ({ intLevel: i + 1, courseLevelGuid: `00000000-0000-4000-9000-${String(i + 1).padStart(12, '0')}`, levelName }))
 let mockLevelSeq = mockCourseLevels.length + 1
 
 function sortMock() {
@@ -41,12 +47,17 @@ export function getCourseLevelsPaged(page = 1, pageSize = 10, search = ''): Prom
   return getPagedList<CourseLevel>('/api/v1/users/course-levels', page, pageSize, search, { rows: mockCourseLevels, text: r => r.levelName })
 }
 
+export function getCourseLevelsDropdown(): Promise<CourseLevelDropdownItem[]> {
+  if (MOCK_AUTH) return Promise.resolve(mockCourseLevels.map(l => ({ courseLevelGuid: l.courseLevelGuid, levelName: l.levelName })))
+  return apiGet<CourseLevelDropdownItem[] | null>('/api/v1/users/course-levels/dropdown').then(data => data ?? [])
+}
+
 // POST /users/course-levels → 201 with the new row.
 // Errors: validation_error (400), conflict (409, name already used), forbidden (403).
 export function createCourseLevel(input: CourseLevelInput): Promise<CourseLevel> {
   if (MOCK_AUTH) {
     if (mockNameTaken(input.levelName)) return Promise.reject(new AuthError('conflict', 'A course level with this name already exists.'))
-    const level: CourseLevel = { intLevel: mockLevelSeq, courseLevelGuid: crypto.randomUUID(), levelName: input.levelName.trim(), status: 2 }
+    const level: CourseLevel = { intLevel: mockLevelSeq, courseLevelGuid: crypto.randomUUID(), levelName: input.levelName.trim() }
     mockLevelSeq++
     mockCourseLevels.push(level)
     sortMock()

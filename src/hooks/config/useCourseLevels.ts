@@ -1,8 +1,18 @@
-import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query'
-import { createCourseLevel, deleteCourseLevel, updateCourseLevel, CourseLevel, CourseLevelInput } from '@/lib/api/academic/courseLevel'
+import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
+import { createCourseLevel, deleteCourseLevel, getCourseLevelsDropdown, updateCourseLevel, CourseLevel, CourseLevelInput } from '@/lib/api/academic/courseLevel'
 import type { PaginatedItems } from '@/lib/pagination'
 
 export const COURSE_LEVELS_KEY = ['course-levels']
+
+// Min. qualification picker on the Designation form. Under COURSE_LEVELS_KEY
+// so a course level added or renamed on Course Level Master shows up here.
+export function useCourseLevelsDropdown(enabled = true) {
+  return useQuery({
+    queryKey: [...COURSE_LEVELS_KEY, 'dropdown'],
+    queryFn: getCourseLevelsDropdown,
+    enabled,
+  })
+}
 
 // Every save returns the full row (course-level-master-page.md), so the page
 // on screen is patched in place rather than refetched. Other cached pages and
@@ -10,8 +20,10 @@ export const COURSE_LEVELS_KEY = ['course-levels']
 type Page = PaginatedItems<CourseLevel>
 
 function patchActivePage(qc: QueryClient, patch: (page: Page) => Page) {
-  qc.setQueriesData<Page>({ queryKey: COURSE_LEVELS_KEY, type: 'active' }, old => (old ? patch(old) : old))
+  // `old?.items` skips the dropdown query (a plain array) under the same key.
+  qc.setQueriesData<Page>({ queryKey: COURSE_LEVELS_KEY, type: 'active' }, old => (old?.items ? patch(old) : old))
   qc.invalidateQueries({ queryKey: COURSE_LEVELS_KEY, type: 'inactive', refetchType: 'none' })
+  qc.invalidateQueries({ queryKey: [...COURSE_LEVELS_KEY, 'dropdown'] })
 }
 
 export function useCreateCourseLevel() {
