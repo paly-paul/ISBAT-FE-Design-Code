@@ -518,7 +518,7 @@ function StudentProfileContent() {
                 </div>
                 <button type="button" className="sp-link" onClick={handleManageSponsor} title="Assign or change sponsor in Student Master">
                   <span className="mp-sec-ic" aria-hidden="true"><i className="lni lni-handshake"></i></span>
-                  <span className="sp-link-txt"><span className="sp-link-lbl">Sponsor</span><span className="sp-link-val">{sponsorDetail?.category ?? detail?.sponsor ?? 'Unassigned'}</span></span>
+                  <span className="sp-link-txt"><span className="sp-link-lbl">Sponsor</span><span className="sp-link-val">{sponsorDetail?.sponsorCategory || detail?.sponsor || 'Unassigned'}</span></span>
                   <i className="lni lni-arrow-right sp-link-go" aria-hidden="true"></i>
                 </button>
                 <button type="button" className="sp-link" onClick={handleManageDiscount} title="Manage discount in Discount Allocation">
