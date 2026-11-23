@@ -126,7 +126,7 @@ export default function Page() {
   function confirmDeleteSkill() {
     if (!deleteTarget) return
     deleteSkill.mutate(deleteTarget.lecturerSkillGuid, {
-      onSuccess: () => { setDeleteTarget(null); showToast('Skill deleted successfully') },
+      onSuccess: () => { setDeleteTarget(null); showToast('Skill deleted successfully', 'success') },
       onError: (error: Error) => showToast(error.message || 'Failed to delete skill', 'error'),
     })
   }

@@ -514,7 +514,7 @@ export default function ResultModerationPage() {
         iaMod: newIaDelta,
         ueMod: newUeDelta,
       })
-      showToast('Moderation saved successfully')
+      showToast('Moderation saved successfully', 'success')
 
       // Update that row in loadedRows in-place per API doc rule
       setLoadedRows((prev) =>
@@ -564,7 +564,7 @@ export default function ResultModerationPage() {
         iaMod: 0,
         ueMod: 0,
       })
-      showToast('Moderation removed successfully')
+      showToast('Moderation removed successfully', 'success')
 
       // Update that row in loadedRows in-place
       setLoadedRows((prev) =>

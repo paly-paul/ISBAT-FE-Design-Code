@@ -80,7 +80,7 @@ export default function Page() {
   function confirmDeleteLedger() {
     if (!permissions.delete || !deleteTarget) return
     deleteLedger.mutate(deleteTarget.ledgerGuid, {
-      onSuccess: () => { setDeleteTarget(null); showToast('Ledger deleted successfully') },
+      onSuccess: () => { setDeleteTarget(null); showToast('Ledger deleted successfully', 'success') },
       onError: (error: Error) => showToast(error.message || 'Failed to delete ledger', 'error'),
     })
   }

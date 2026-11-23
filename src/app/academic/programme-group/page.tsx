@@ -90,7 +90,7 @@ export default function Page() {
   function confirmDeleteProgramGroup() {
     if (!deleteTarget) return
     deleteProgramGroup.mutate(deleteTarget.programGroupGuid, {
-      onSuccess: () => { setDeleteTarget(null); showToast('Programme Group deleted successfully') },
+      onSuccess: () => { setDeleteTarget(null); showToast('Programme Group deleted successfully', 'success') },
       onError: (error: Error) => showToast(error.message || 'Failed to delete programme group', 'error'),
     })
   }

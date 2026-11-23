@@ -93,7 +93,7 @@ export default function Page() {
   function confirmDeleteCourseUnit() {
     if (!deleteTarget) return
     deleteCourseUnit.mutate(deleteTarget.courseUnitGuid, {
-      onSuccess: () => { setDeleteTarget(null); showToast('Course unit deleted successfully') },
+      onSuccess: () => { setDeleteTarget(null); showToast('Course unit deleted successfully', 'success') },
       onError: (error: Error) => showToast(error.message || 'Failed to delete course unit', 'error'),
     })
   }

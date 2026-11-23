@@ -63,7 +63,7 @@ export function EnquiryStatusFormModal({ isOpen, onClose, showToast, mode, enqui
   function handleSubmit() {
     if (!validate()) return
     const input: EnquiryStatusInput = { enquiryStatusCode, enquiryStatusName }
-    const onSuccess = () => { setSaved(true); showToast(isEdit ? 'Enquiry status updated successfully' : 'Enquiry status added successfully') }
+    const onSuccess = () => { setSaved(true); showToast(isEdit ? 'Enquiry status updated successfully' : 'Enquiry status added successfully', 'success') }
     const onError = (error: Error) => setFailure(error.message || `Failed to ${isEdit ? 'update' : 'add'} enquiry status. Please try again.`)
 
     if (isEdit && enquiryStatusGuid) {

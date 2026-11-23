@@ -91,7 +91,7 @@ export function BankBranchFormModal({ isOpen, onClose, showToast, mode, bankBran
       status: STATUS_VALUES[status],
       sortCode,
     }
-    const onSuccess = () => { setSaved(true); showToast(isEdit ? 'Bank branch updated successfully' : 'Bank branch added successfully') }
+    const onSuccess = () => { setSaved(true); showToast(isEdit ? 'Bank branch updated successfully' : 'Bank branch added successfully', 'success') }
     const onError = (error: Error) => setFailure(error.message || `Failed to ${isEdit ? 'update' : 'add'} bank branch. Please try again.`)
 
     if (isEdit && bankBranchGuid) {

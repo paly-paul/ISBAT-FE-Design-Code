@@ -95,7 +95,7 @@ export default function ProjectProposalsPage() {
     if (!deletingGuid) return
     deleteMut.mutate(deletingGuid, {
       onSuccess: () => {
-        showToast('Project proposal deleted successfully.')
+        showToast('Project proposal deleted successfully.', 'success')
         setIsConfirmDeleteOpen(false)
         setDeletingGuid(null)
       },
@@ -245,7 +245,7 @@ export default function ProjectProposalsPage() {
           setEditingGuid(null)
         }} 
         proposalGuid={editingGuid}
-        onSuccess={() => showToast(editingGuid ? 'Proposal updated successfully' : 'Proposal created successfully')}
+        onSuccess={() => showToast(editingGuid ? 'Proposal updated successfully' : 'Proposal created successfully', 'success')}
       />
 
       <ProjectProposalViewModal
@@ -268,7 +268,7 @@ export default function ProjectProposalsPage() {
         }}
         proposalGuid={uploadingGuid}
         initialRow={uploadingRow}
-        onSuccess={() => showToast('Document uploaded successfully')}
+        onSuccess={() => showToast('Document uploaded successfully', 'success')}
       />
 
       {isConfirmDeleteOpen && deletingGuid && (

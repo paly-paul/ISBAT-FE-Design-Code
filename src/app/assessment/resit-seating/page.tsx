@@ -20,7 +20,7 @@ export default function ResitSeatingPage() {
           <div className="pg-sub">Staggered scheduling grid · Drag-and-drop allocation · Real-time capacity indicators</div>
         </div>
         <div className="pg-actions">
-          <button className="btn btn-primary whitespace-nowrap" onClick={() => showToast('Seating plan published successfully')}>
+          <button className="btn btn-primary whitespace-nowrap" onClick={() => showToast('Seating plan published successfully', 'success')}>
             Publish Seating Plan
           </button>
         </div>

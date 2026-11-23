@@ -64,7 +64,7 @@ export function GenSetFormModal({ isOpen, onClose, showToast, mode, genSetGuid, 
     if (isEdit && !genSetGuid) return
     if (!validate()) return
     const input: GenSetInput = { type, condition }
-    const onSuccess = () => { setSaved(true); showToast(isEdit ? 'General setting updated successfully' : 'General setting added successfully') }
+    const onSuccess = () => { setSaved(true); showToast(isEdit ? 'General setting updated successfully' : 'General setting added successfully', 'success') }
     const onError = (error: Error) => setFailure(error.message || `Failed to ${isEdit ? 'update' : 'add'} general setting. Please try again.`)
 
     if (isEdit && genSetGuid) {

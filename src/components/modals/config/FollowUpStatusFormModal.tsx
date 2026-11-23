@@ -65,7 +65,7 @@ export function FollowUpStatusFormModal({ isOpen, onClose, showToast, mode, foll
   function handleSubmit() {
     if (!validate()) return
     const input: FollowUpStatusInput = { followUpStatusCode, followUpStatusName, isClose: isClose ? 1 : 0 }
-    const onSuccess = () => { setSaved(true); showToast(isEdit ? 'Followup status updated successfully' : 'Followup status added successfully') }
+    const onSuccess = () => { setSaved(true); showToast(isEdit ? 'Followup status updated successfully' : 'Followup status added successfully', 'success') }
     const onError = (error: Error) => setFailure(error.message || `Failed to ${isEdit ? 'update' : 'add'} followup status. Please try again.`)
 
     if (isEdit && followUpStatusGuid) {

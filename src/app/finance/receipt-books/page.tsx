@@ -66,7 +66,7 @@ export default function Page() {
   function confirmDeleteReceiptBook() {
     if (!permissions.delete || !deleteTarget) return
     deleteReceiptBook.mutate(deleteTarget.receiptBookGuid, {
-      onSuccess: () => { setDeleteTarget(null); showToast('Receipt book deleted successfully') },
+      onSuccess: () => { setDeleteTarget(null); showToast('Receipt book deleted successfully', 'success') },
       onError: (error: Error) => showToast(error.message || 'Failed to delete receipt book', 'error'),
     })
   }

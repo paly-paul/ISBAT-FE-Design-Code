@@ -62,7 +62,7 @@ export default function Page() {
   function confirmDeleteBatchTime() {
     if (!deleteTarget) return
     deleteBatchTime.mutate(deleteTarget.batchTimeGuid, {
-      onSuccess: () => { setDeleteTarget(null); showToast('Batch time deleted successfully') },
+      onSuccess: () => { setDeleteTarget(null); showToast('Batch time deleted successfully', 'success') },
       onError: (error: Error) => showToast(error.message || 'Failed to delete batch time', 'error'),
     })
   }

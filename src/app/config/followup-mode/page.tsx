@@ -62,7 +62,7 @@ export default function Page() {
   function confirmDeleteFollowUpMode() {
     if (!deleteTarget) return
     deleteFollowUpMode.mutate(deleteTarget.followUpModeGuid, {
-      onSuccess: () => { setDeleteTarget(null); showToast('Followup mode deleted successfully') },
+      onSuccess: () => { setDeleteTarget(null); showToast('Followup mode deleted successfully', 'success') },
       onError: (error: Error) => showToast(error.message || 'Failed to delete followup mode', 'error'),
     })
   }

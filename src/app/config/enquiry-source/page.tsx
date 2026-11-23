@@ -62,7 +62,7 @@ export default function Page() {
   function confirmDeleteEnquirySource() {
     if (!deleteTarget) return
     deleteEnquirySource.mutate(deleteTarget.isbatSourceGuid, {
-      onSuccess: () => { setDeleteTarget(null); showToast('Isbat enquiry source deleted successfully') },
+      onSuccess: () => { setDeleteTarget(null); showToast('Isbat enquiry source deleted successfully', 'success') },
       onError: (error: Error) => showToast(error.message || 'Failed to delete Isbat enquiry source', 'error'),
     })
   }

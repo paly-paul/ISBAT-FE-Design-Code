@@ -60,7 +60,7 @@ export function InterestLevelFormModal({ isOpen, onClose, showToast, mode, inter
   function handleSubmit() {
     if (!validate()) return
     const input: InterestLevelInput = { interestLevelName }
-    const onSuccess = () => { setSaved(true); showToast(isEdit ? 'Interest level updated successfully' : 'Interest level added successfully') }
+    const onSuccess = () => { setSaved(true); showToast(isEdit ? 'Interest level updated successfully' : 'Interest level added successfully', 'success') }
     const onError = (error: Error) => setFailure(error.message || `Failed to ${isEdit ? 'update' : 'add'} interest level. Please try again.`)
 
     if (isEdit && interestLevelGuid) {

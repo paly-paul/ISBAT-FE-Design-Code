@@ -60,7 +60,7 @@ export function UnitTypeFormModal({ isOpen, onClose, showToast, mode, unitTypeGu
   function handleSubmit() {
     if (!validate()) return
     const input: UnitTypeInput = { unitTypeName }
-    const onSuccess = () => { setSaved(true); showToast(isEdit ? 'Unit type updated successfully' : 'Unit type added successfully') }
+    const onSuccess = () => { setSaved(true); showToast(isEdit ? 'Unit type updated successfully' : 'Unit type added successfully', 'success') }
     const onError = (error: Error) => setFailure(error.message || `Failed to ${isEdit ? 'update' : 'add'} unit type. Please try again.`)
 
     if (isEdit && unitTypeGuid) {

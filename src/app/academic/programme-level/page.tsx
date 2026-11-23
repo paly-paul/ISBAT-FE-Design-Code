@@ -111,7 +111,7 @@ export default function Page() {
   function confirmDeleteProgramLevel() {
     if (!deleteTarget) return
     deleteProgramLevel.mutate(deleteTarget.programLevelGuid, {
-      onSuccess: () => { setDeleteTarget(null); showToast('Programme Level deleted successfully') },
+      onSuccess: () => { setDeleteTarget(null); showToast('Programme Level deleted successfully', 'success') },
       // A level in use (level_in_use) or one whose usage couldn't be checked
       // (level_usage_check_failed) comes back as a 400 with user-ready text in
       // errors[0] — shown as-is (delete-program-level.md). The dialog stays

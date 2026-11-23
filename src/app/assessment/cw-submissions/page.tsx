@@ -102,7 +102,7 @@ export default function CwSubmissionsPage() {
               <tr>
                 <td>
                   <ActionMenu>
-                    <button className="btn btn-neu btn-sm" onClick={() => showToast('Mark saved successfully')}><i className="lni lni-save"></i> Save</button>
+                    <button className="btn btn-neu btn-sm" onClick={() => showToast('Mark saved successfully', 'success')}><i className="lni lni-save"></i> Save</button>
                   </ActionMenu>
                 </td>
                 <td><span className="font-bold text-[var(--blue)] font-mono">BCS/2024/0031</span></td>
@@ -118,7 +118,7 @@ export default function CwSubmissionsPage() {
               <tr>
                 <td>
                   <ActionMenu>
-                    <button className="btn btn-neu btn-sm" onClick={() => showToast('Mark saved successfully')}><i className="lni lni-save"></i> Save</button>
+                    <button className="btn btn-neu btn-sm" onClick={() => showToast('Mark saved successfully', 'success')}><i className="lni lni-save"></i> Save</button>
                   </ActionMenu>
                 </td>
                 <td><span className="font-bold text-[var(--blue)] font-mono">BCS/2024/0017</span></td>

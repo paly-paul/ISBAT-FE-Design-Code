@@ -174,7 +174,7 @@ export function NewFollowUpLogModal({ isOpen, onClose, showToast, createFollowUp
         remarks: remarks.trim(),
       },
       {
-        onSuccess: () => { setSaved(true); showToast('Follow-up logged successfully') },
+        onSuccess: () => { setSaved(true); showToast('Follow-up logged successfully', 'success') },
         onError: (error: Error) => {
           // Documented create errors that belong to one field, by message.
           const code = error instanceof AuthError ? error.code : undefined

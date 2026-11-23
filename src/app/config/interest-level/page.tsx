@@ -62,7 +62,7 @@ export default function Page() {
   function confirmDeleteInterestLevel() {
     if (!deleteTarget) return
     deleteInterestLevel.mutate(deleteTarget.interestLevelGuid, {
-      onSuccess: () => { setDeleteTarget(null); showToast('Interest level deleted successfully') },
+      onSuccess: () => { setDeleteTarget(null); showToast('Interest level deleted successfully', 'success') },
       onError: (error: Error) => showToast(error.message || 'Failed to delete interest level', 'error'),
     })
   }

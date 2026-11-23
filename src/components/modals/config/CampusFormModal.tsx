@@ -72,7 +72,7 @@ export function CampusFormModal({ isOpen, onClose, showToast, mode, campus, crea
       contact: contact.trim() ? contact.trim() : '',
       isAutomated,
     }
-    const onSuccess = () => { setSaved(true); showToast(isEdit ? 'Campus updated successfully' : 'Campus added successfully') }
+    const onSuccess = () => { setSaved(true); showToast(isEdit ? 'Campus updated successfully' : 'Campus added successfully', 'success') }
     const onError = (error: Error) => {
       // A missing record on edit usually means the campus was deleted while the modal was open.
       const notFound = isEdit && error instanceof AuthError && error.code === 'not_found'

@@ -78,7 +78,7 @@ export function PermissionFormModal({ isOpen, onClose, showToast, mode, permissi
   function handleCreate() {
     createPermissionGroup.mutate(
       { group: groupName.trim(), description: `Access to: ${selections.map(s => moduleLabel(s.module)).join(', ')}`, permissions: allSelectedIds },
-      { onSuccess: () => { setSaved(true); showToast('Permission group added successfully') } },
+      { onSuccess: () => { setSaved(true); showToast('Permission group added successfully', 'success') } },
     )
   }
 
@@ -86,7 +86,7 @@ export function PermissionFormModal({ isOpen, onClose, showToast, mode, permissi
     if (!permissionGroup) return
     updatePermissionGroup.mutate(
       { id: permissionGroup.id, input: { group: groupName.trim(), description: permissionGroup.description, permissions: allSelectedIds } },
-      { onSuccess: () => { setSaved(true); showToast('Permission group updated successfully') } },
+      { onSuccess: () => { setSaved(true); showToast('Permission group updated successfully', 'success') } },
     )
   }
 

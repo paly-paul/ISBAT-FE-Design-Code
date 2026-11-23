@@ -62,7 +62,7 @@ export default function Page() {
   function confirmDeleteEnquiryStatus() {
     if (!deleteTarget) return
     deleteEnquiryStatus.mutate(deleteTarget.enquiryStatusGuid, {
-      onSuccess: () => { setDeleteTarget(null); showToast('Enquiry status deleted successfully') },
+      onSuccess: () => { setDeleteTarget(null); showToast('Enquiry status deleted successfully', 'success') },
       onError: (error: Error) => showToast(error.message || 'Failed to delete enquiry status', 'error'),
     })
   }

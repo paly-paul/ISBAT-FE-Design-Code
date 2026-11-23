@@ -48,7 +48,7 @@ export default function Page() {
     if (!deleteTarget) return
     const target = deleteTarget
     deleteLevel.mutate(target.intLevel, {
-      onSuccess: () => { closeDelete(); showToast('Course level deleted successfully') },
+      onSuccess: () => { closeDelete(); showToast('Course level deleted successfully', 'success') },
       onError: (err: Error) => {
         const code = err instanceof AuthError ? err.code : undefined
         if (code === 'not_found') {

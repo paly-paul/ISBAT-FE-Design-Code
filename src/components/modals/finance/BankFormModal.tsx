@@ -78,7 +78,7 @@ export function BankFormModal({ isOpen, onClose, showToast, mode, bankGuid, crea
       branchCode: branchCode ? +branchCode : null,
       status: STATUS_VALUES[status],
     }
-    const onSuccess = () => { setSaved(true); showToast(isEdit ? 'Bank updated successfully' : 'Bank added successfully') }
+    const onSuccess = () => { setSaved(true); showToast(isEdit ? 'Bank updated successfully' : 'Bank added successfully', 'success') }
     const onError = (error: Error) => setFailure(error.message || `Failed to ${isEdit ? 'update' : 'add'} bank. Please try again.`)
 
     if (isEdit && bankGuid) {

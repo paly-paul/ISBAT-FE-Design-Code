@@ -169,7 +169,7 @@ export function LecturerSkillFormModal({ isOpen, onClose, showToast, mode, lectu
       updateSkill.mutate(
         { employeeGuid, skills },
         {
-          onSuccess: () => { setSaved(true); showToast(removed > 0 ? `Skills updated · ${removed} removed` : 'Skills updated successfully') },
+          onSuccess: () => { setSaved(true); showToast(removed > 0 ? `Skills updated · ${removed} removed` : 'Skills updated successfully', 'success') },
           onError: (error: Error) => setFailure(error.message || 'Failed to update skills. Please try again.'),
         },
       )
@@ -178,7 +178,7 @@ export function LecturerSkillFormModal({ isOpen, onClose, showToast, mode, lectu
       createSkill.mutate(
         input,
         {
-          onSuccess: () => { setSaved(true); showToast(`${skillIds.length} skill${skillIds.length !== 1 ? 's' : ''} added successfully`) },
+          onSuccess: () => { setSaved(true); showToast(`${skillIds.length} skill${skillIds.length !== 1 ? 's' : ''} added successfully`, 'success') },
           onError: (error: Error) => setFailure(error.message || 'Failed to add skill(s). Please try again.'),
         },
       )

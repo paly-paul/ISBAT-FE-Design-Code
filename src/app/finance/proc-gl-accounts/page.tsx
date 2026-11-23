@@ -70,7 +70,7 @@ export default function Page() {
   function confirmDeleteProcGlAccount() {
     if (!permissions.delete || !deleteTarget) return
     deleteProcGlAccount.mutate(deleteTarget.procGlAccountGuid, {
-      onSuccess: () => { setDeleteTarget(null); showToast('GL account deleted successfully') },
+      onSuccess: () => { setDeleteTarget(null); showToast('GL account deleted successfully', 'success') },
       onError: (error: Error) => showToast(error.message || 'Failed to delete GL account', 'error'),
     })
   }

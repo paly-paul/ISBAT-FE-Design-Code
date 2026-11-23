@@ -61,7 +61,7 @@ export default function Page() {
   function confirmDeleteCampus() {
     if (!deleteTarget) return
     deleteCampus.mutate(deleteTarget.campusGuid, {
-      onSuccess: () => { setDeleteTarget(null); showToast('Campus deleted successfully') },
+      onSuccess: () => { setDeleteTarget(null); showToast('Campus deleted successfully', 'success') },
       onError: (error: Error) => showToast(error.message || 'Failed to delete campus', 'error'),
     })
   }

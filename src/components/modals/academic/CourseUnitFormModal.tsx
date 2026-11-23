@@ -427,7 +427,7 @@ export function CourseUnitFormModal({ isOpen, onClose, showToast, mode, courseUn
     upsertOutlines.mutate(
       { courseUnitGuid: activeGuid, outlines },
       {
-        onSuccess: () => { setSaved(true); showToast(isEdit ? 'Course unit updated successfully' : 'Course unit added successfully') },
+        onSuccess: () => { setSaved(true); showToast(isEdit ? 'Course unit updated successfully' : 'Course unit added successfully', 'success') },
         onError: (error: Error) => {
           const code = error instanceof AuthError ? error.code : undefined
           setFailure(error.message || `Failed to save the course outline${code ? ` (${code})` : ''}. Please try again.`)

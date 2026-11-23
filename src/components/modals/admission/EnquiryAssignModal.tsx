@@ -138,7 +138,7 @@ export function EnquiryAssignModal({ isOpen, onClose, showToast, enquiryGuid, up
     updateEnquiry.mutate(
       { guid: enquiryGuid, input: { advisorGuid: advisorGuid || null, programGuid: programGuid || null, campusGuid } },
       {
-        onSuccess: () => { setSaved(true); showToast('Enquiry updated successfully') },
+        onSuccess: () => { setSaved(true); showToast('Enquiry updated successfully', 'success') },
         onError: (error: Error) => {
           // Campus (validation_error) and advisor (validation_error or 404
           // "Advisor not found.") have fields to point at; the rest go to the popup.

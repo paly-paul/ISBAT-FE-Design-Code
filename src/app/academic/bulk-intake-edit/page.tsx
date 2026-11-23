@@ -370,7 +370,7 @@ export default function Page() {
     setSaving(true)
     try {
       await bulkUpdate.mutateAsync(entries)
-      showToast(`Updated ${entries.length} calendar entr${entries.length === 1 ? 'y' : 'ies'} successfully`)
+      showToast(`Updated ${entries.length} calendar entr${entries.length === 1 ? 'y' : 'ies'} successfully`, 'success')
       setSelectedGuids(new Set())
       setSuccessInfo({ title: 'Calendar Updated!', subtitle: `Updated ${entries.length} calendar entr${entries.length === 1 ? 'y' : 'ies'} successfully.` })
     } catch (err) {

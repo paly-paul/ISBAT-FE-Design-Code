@@ -83,7 +83,7 @@ export function DiscountFormModal({ isOpen, onClose, showToast, mode, discountGu
       cop: cop.trim() || null,
       carryForward,
     }
-    const onSuccess = () => { setSaved(true); showToast(isEdit ? 'Discount updated successfully' : 'Discount added successfully') }
+    const onSuccess = () => { setSaved(true); showToast(isEdit ? 'Discount updated successfully' : 'Discount added successfully', 'success') }
     const onError = (error: Error) => setFailure(error.message || `Failed to ${isEdit ? 'update' : 'add'} discount. Please try again.`)
 
     if (isEdit && discountGuid) {

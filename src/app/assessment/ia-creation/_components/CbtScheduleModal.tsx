@@ -191,7 +191,7 @@ export function CbtScheduleModal({ isOpen, onClose, testGuid, unitCode, unitName
         publishStatus,
         examRuleGuid,
       })
-      showToast('CBT Scheduled successfully')
+      showToast('CBT Scheduled successfully', 'success')
       setSaved(true)
     } catch (err: any) {
       const errorMsg = extractApiErrorMessage(err, 'Failed to save schedule.')

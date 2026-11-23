@@ -59,7 +59,7 @@ export default function Page() {
   function confirmDeleteUnitType() {
     if (!deleteTarget) return
     deleteUnitType.mutate(deleteTarget.unitTypeGuid, {
-      onSuccess: () => { setDeleteTarget(null); showToast('Unit type deleted successfully') },
+      onSuccess: () => { setDeleteTarget(null); showToast('Unit type deleted successfully', 'success') },
       onError: (error: Error) => showToast(error.message || 'Failed to delete unit type', 'error'),
     })
   }

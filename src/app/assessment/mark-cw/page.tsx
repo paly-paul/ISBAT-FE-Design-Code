@@ -46,7 +46,7 @@ export default function MarkEntryCwPage() {
             ]}
             className="w-full"
           />
-          <button className="btn btn-primary whitespace-nowrap" onClick={() => showToast('Marks saved successfully')}>
+          <button className="btn btn-primary whitespace-nowrap" onClick={() => showToast('Marks saved successfully', 'success')}>
             Save All Marks
           </button>
         </div>

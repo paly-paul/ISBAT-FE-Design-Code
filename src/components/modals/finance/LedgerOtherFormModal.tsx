@@ -83,7 +83,7 @@ export function LedgerOtherFormModal({ isOpen, onClose, showToast, mode, ledgerO
     if (isEdit && !ledgerOthersGuid) return
     if (!validate()) return
     const input: LedgerOtherInput = { ledgerCode: ledgerCode.trim(), ledgerName: ledgerName.trim(), procGlAccountGuid: procGlAccountGuid || null }
-    const onSuccess = () => { setSaved(true); showToast(isEdit ? 'Other ledger updated successfully' : 'Other ledger added successfully') }
+    const onSuccess = () => { setSaved(true); showToast(isEdit ? 'Other ledger updated successfully' : 'Other ledger added successfully', 'success') }
     const onError = (error: Error) => setFailure(error.message || `Failed to ${isEdit ? 'update' : 'add'} other ledger. Please try again.`)
 
     if (isEdit && ledgerOthersGuid) {

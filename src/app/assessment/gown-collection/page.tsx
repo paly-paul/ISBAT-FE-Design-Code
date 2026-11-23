@@ -118,7 +118,7 @@ export default function GownCollectionPage() {
           onClose={() => setRecordingRow(null)}
           onSuccess={() => {
             setRecordingRow(null)
-            showToast('Gown collection recorded successfully.')
+            showToast('Gown collection recorded successfully.', 'success')
           }}
           onError={(msg) => {
             showToast(msg, 'error')

@@ -168,7 +168,7 @@ export function UeScheduleModal({ isOpen, onClose, examGuid, unitCode, unitName 
         publishStatus,
         examRuleGuid,
       })
-      showToast('University Exam Scheduled successfully')
+      showToast('University Exam Scheduled successfully', 'success')
       setSaved(true)
     } catch (err: any) {
       // One line per backend error, so "Question paper does not satisfy the exam rule:"

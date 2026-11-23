@@ -66,7 +66,7 @@ export default function Page() {
   function confirmDeleteDiscount() {
     if (!permissions.delete || !deleteTarget) return
     deleteDiscount.mutate(deleteTarget.discountGuid, {
-      onSuccess: () => { setDeleteTarget(null); showToast('Discount deleted successfully') },
+      onSuccess: () => { setDeleteTarget(null); showToast('Discount deleted successfully', 'success') },
       onError: (error: Error) => showToast(error.message || 'Failed to delete discount', 'error'),
     })
   }

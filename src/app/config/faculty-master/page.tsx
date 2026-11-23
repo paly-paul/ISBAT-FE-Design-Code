@@ -71,7 +71,7 @@ export default function Page() {
   function confirmDeleteFaculty() {
     if (!deleteTarget) return
     deleteFaculty.mutate(deleteTarget.facultyGuid, {
-      onSuccess: () => { setDeleteTarget(null); showToast('Faculty deleted successfully') },
+      onSuccess: () => { setDeleteTarget(null); showToast('Faculty deleted successfully', 'success') },
       onError: (error: Error) => showToast(error.message || 'Failed to delete faculty', 'error'),
     })
   }

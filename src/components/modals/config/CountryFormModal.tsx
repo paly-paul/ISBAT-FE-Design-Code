@@ -78,7 +78,7 @@ export function CountryFormModal({ isOpen, onClose, showToast, mode, country, cr
   function handleSubmit() {
     if (!validate()) return
     const input: CountryInput = { countryCode, countryName, nationality, countryPrefix, defaultCountry: defaultCountry ? 1 : 0 }
-    const onSuccess = () => { setSaved(true); showToast(isEdit ? 'Country updated successfully' : 'Country added successfully') }
+    const onSuccess = () => { setSaved(true); showToast(isEdit ? 'Country updated successfully' : 'Country added successfully', 'success') }
 
     if (isEdit && country) {
       const idToPass = (country as any).intCountryCode != null

@@ -659,7 +659,7 @@ export function IntakeFormModal({ isOpen, onClose, showToast, mode, intakeGuid, 
       academicCalendar: buildAcademicCalendarEntries(),
     }
 
-    const onSuccess = () => { setSaved(true); showToast(isEdit ? 'Intake updated successfully' : 'Intake added successfully') }
+    const onSuccess = () => { setSaved(true); showToast(isEdit ? 'Intake updated successfully' : 'Intake added successfully', 'success') }
 
     if (isEdit && intakeGuid) {
       updateIntake.mutate({ intakeGuid, input }, { onSuccess, onError: handleSaveError })

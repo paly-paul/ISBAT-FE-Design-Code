@@ -122,7 +122,7 @@ export function TableSearch({
       />
       {open && results !== undefined && safeValue.trim().length >= minChars && (
         <div
-          className="absolute left-0 right-0 top-full mt-1 bg-white border border-g200 rounded-lg shadow-lg z-20 max-h-56 overflow-y-auto"
+          className="absolute left-0 right-0 top-full mt-1 bg-white border border-g200 rounded-lg shadow-lg z-100 max-h-56 overflow-y-auto"
           onScroll={handleResultsScroll}
         >
           {loading

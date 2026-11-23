@@ -64,7 +64,7 @@ export default function SkillPage() {
   function confirmDeleteSkill() {
     if (!deleteTarget) return
     deleteSkill.mutate(deleteTarget.skillGuid, {
-      onSuccess: () => { setDeleteTarget(null); showToast('Skill deleted successfully') },
+      onSuccess: () => { setDeleteTarget(null); showToast('Skill deleted successfully', 'success') },
       onError: (error: Error) => showToast(error.message || 'Failed to delete skill', 'error'),
     })
   }

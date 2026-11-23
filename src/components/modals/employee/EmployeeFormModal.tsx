@@ -337,13 +337,13 @@ export function EmployeeFormModal({ isOpen, onClose, showToast, mode, employeeGu
       updateEmployee.mutate(
         { id: employeeGuid, input },
         {
-          onSuccess: () => { setSaved(true); showToast('Employee updated successfully') },
+          onSuccess: () => { setSaved(true); showToast('Employee updated successfully', 'success') },
           onError: (error: Error) => handleSaveError(error, 'Failed to update employee'),
         },
       )
     } else {
       createEmployee.mutate({ input, photo: photo?.file ?? null }, {
-        onSuccess: () => { setSaved(true); showToast('Employee added successfully') },
+        onSuccess: () => { setSaved(true); showToast('Employee added successfully', 'success') },
         onError: (error: Error) => handleSaveError(error, 'Failed to add employee'),
       })
     }

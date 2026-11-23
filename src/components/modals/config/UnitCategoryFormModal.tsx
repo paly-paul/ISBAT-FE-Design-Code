@@ -60,7 +60,7 @@ export function UnitCategoryFormModal({ isOpen, onClose, showToast, mode, unitCa
   function handleSubmit() {
     if (!validate()) return
     const input: UnitCategoryInput = { unitCatName }
-    const onSuccess = () => { setSaved(true); showToast(isEdit ? 'Unit category updated successfully' : 'Unit category added successfully') }
+    const onSuccess = () => { setSaved(true); showToast(isEdit ? 'Unit category updated successfully' : 'Unit category added successfully', 'success') }
     const onError = (error: Error) => setFailure(error.message || `Failed to ${isEdit ? 'update' : 'add'} unit category. Please try again.`)
 
     if (isEdit && unitCatGuid) {
