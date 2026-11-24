@@ -16,7 +16,7 @@ import { useEnquirySourceMastersDropdown } from '@/hooks/admission/useEnquirySou
 import { useProgramDropdown } from '@/hooks/academic/useProgramMaster'
 import { useIntakesDropdown } from '@/hooks/academic/useIntakes'
 import { useEnquiryStatusesDropdown } from '@/hooks/config/useEnquiryStatuses'
-import { usePagePermissions } from '@/hooks/users/usePagePermissions'
+import { useMenuPagePermissions, usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { useCountriesByGuids } from '@/hooks/config/useCountries'
 import { formatEnquiryPhone } from '@/lib/api/admission/enquiry'
 
@@ -52,6 +52,12 @@ function sourceBadge(r: Enquiry) {
 export default function EnquiryListPage() {
   const router = useRouter()
   const permissions = usePagePermissions()
+  // Convert hands the enquiry to Application Payment to record its payment,
+  // so it's offered only when that page is in the user's menu AND they can
+  // add a payment there — otherwise it would land on a page they can't open,
+  // or one with no form to submit.
+  const paymentPermissions = useMenuPagePermissions('/admission/payment')
+  const canConvert = !!paymentPermissions?.add
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [viewingGuid, setViewingGuid] = useState<string | null>(null)
@@ -235,7 +241,7 @@ export default function EnquiryListPage() {
                 <tr key={r.enquiryGuid}>
                   <td>
                     <ActionMenu>
-                      <button className="btn btn-neu btn-sm" onClick={() => router.push(`/admission/payment?enquiryGuid=${r.enquiryGuid}`)}><i className="lni lni-arrow-right" /> Convert</button>
+                      {canConvert && <button className="btn btn-neu btn-sm" onClick={() => router.push(`/admission/payment?enquiryGuid=${r.enquiryGuid}`)}><i className="lni lni-arrow-right" /> Convert</button>}
                       <button className="btn btn-neu btn-sm" onClick={() => openViewModal(r.enquiryGuid)}><i className="lni lni-eye" /> View</button>
                       {/* No "Verify Email" here any more: email is verified before
                           an enquiry can be created (2026-10), and the per-enquiry

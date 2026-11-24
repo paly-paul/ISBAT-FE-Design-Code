@@ -273,6 +273,7 @@ const mockMenu: MenuNode[] = [
     ]),
     section('Assessment', [
       leaf('Exam Schedule Report', 'bar-chart', '/assessment/reports/exam-schedule'),
+      leaf('IA Evaluation Report', 'bar-chart', '/assessment/reports/ia-evaluation'),
     ]),
     // Sent by the menu API but not listed in v7 (2026-11-20).
     section('Employee', [
@@ -433,9 +434,6 @@ function stripUnintegratedPages(menu: MenuNode[]): MenuNode[] {
     // /me/menu still sends it, so strip it until the menu API drops it —
     // otherwise the sidebar would link to a 404.
     '/finance/financial-reports',
-    // Analytics › Assessment › IA Evaluation Report: the menu API sends it
-    // (2026-11-20) but the frontend has no page yet, so it would 404.
-    '/assessment/reports/ia-evaluation',
   ]
   // The real /me/menu may send bare slugs ("weight-config"), so match on
   // the last path segment too — but only within the hidden URL's own module,

@@ -116,6 +116,24 @@ function findNode(nodes: MenuNode[], railId: string, pathname: string): MenuNode
   return null
 }
 
+// Permissions of ANOTHER page, for actions that hand off to it (e.g. Enquiry
+// List's Convert → Application Payment). Unlike usePagePermissions this is
+// strict: null when that page isn't in the user's menu, and also while the
+// menu loads or if it failed — so a hand-off is only offered once the target
+// page is known to be reachable.
+export function useMenuPagePermissions(path: string): MenuPermissions | null {
+  const { data, isLoading, isError } = useMenu()
+
+  return useMemo(() => {
+    if (isError || isLoading || !data) return null
+    for (const moduleNode of data.menu) {
+      const found = findNode(moduleNode.children, moduleNode.name.toLowerCase(), path)
+      if (found) return normalizePermissions(found.permissions)
+    }
+    return null
+  }, [data, isLoading, isError, path])
+}
+
 // Looks up the current route's permissions from the real /me/menu tree, so a
 // page can gate its own Add/Edit/Delete actions on what the logged-in user
 // is actually allowed to do rather than always rendering every action.

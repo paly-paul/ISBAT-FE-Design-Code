@@ -6,8 +6,8 @@ import { TableSearch } from '@/components/TableSearch'
 import { Toast } from '@/components/Toast'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
-import { RichTextDisplay } from '@/components/RichTextEditor'
 import { AnnouncementFormModal } from '@/components/modals/student/AnnouncementFormModal'
+import { AnnouncementViewModal } from '@/components/modals/student/AnnouncementViewModal'
 import {
   useAnnouncements, useCreateAnnouncement, useUpdateAnnouncement, useDeleteAnnouncement, AnnouncementItem,
 } from '@/hooks/student/useAnnouncementManagement'
@@ -22,12 +22,30 @@ function programLabel(a: AnnouncementItem): string {
   return a.programName ?? 'Programme unavailable'
 }
 
+// Plain-text preview of the rich-text body for the table: images, tables and
+// formatting are left to the View modal. Regex rather than DOMParser so it
+// also runs during the static export's prerender (no `document` there).
+const ENTITIES: Record<string, string> = { nbsp: ' ', amp: '&', lt: '<', gt: '>', quot: '"', '#39': "'", apos: "'" }
+function bodyPreview(html: string | null): { text: string; imageSrc: string | null } {
+  const source = html ?? ''
+  const text = source
+    .replace(/<(br|\/p|\/div|\/li|\/h\d|\/tr)\b[^>]*>/gi, ' ')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&(nbsp|amp|lt|gt|quot|#39|apos);/g, (_, e: string) => ENTITIES[e])
+    .replace(/\s+/g, ' ')
+    .trim()
+  // First image in the body, shown as the row's thumbnail.
+  const img = source.match(/<img\b[^>]*\bsrc\s*=\s*["']([^"']+)["']/i)
+  return { text, imageSrc: img ? img[1].replace(/&amp;/g, '&') : null }
+}
+
 export default function Page() {
   const permissions = usePagePermissions()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast]       = useState<{ msg: string; type: string } | null>(null)
   const [search, setSearch]     = useState('')
   const [editingAnnouncementGuid, setEditingAnnouncementGuid] = useState<string | null>(null)
+  const [viewingAnnouncementGuid, setViewingAnnouncementGuid] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<AnnouncementItem | null>(null)
 
   function openModal(id: string)  { setOpenModals(prev => new Set(prev).add(id)) }
@@ -64,6 +82,11 @@ export default function Page() {
   function openEditModal(guid: string) {
     setEditingAnnouncementGuid(guid)
     openModal('edit-announcement-modal')
+  }
+
+  function openViewModal(guid: string) {
+    setViewingAnnouncementGuid(guid)
+    openModal('view-announcement-modal')
   }
 
   function viewAttachment(url: string) {
@@ -124,8 +147,12 @@ export default function Page() {
                 {!isLoading && filteredRows.map(a => (
                   <tr key={a.announcementGuid}>
                     <td>
-                      {(permissions.edit || permissions.delete) && (
-                        <ActionMenu>
+                      {/* View needs only the page's own access, so the menu
+                          always shows; Edit/Delete follow their permissions. */}
+                      <ActionMenu>
+                          <button className="btn btn-neu btn-sm" onClick={() => openViewModal(a.announcementGuid)}>
+                            <i className="lni lni-eye"></i> View
+                          </button>
                           {permissions.edit && (
                             <button className="btn btn-neu btn-sm" onClick={() => openEditModal(a.announcementGuid)}>
                               <i className="lni lni-pencil"></i> Edit
@@ -136,14 +163,30 @@ export default function Page() {
                               <i className="lni lni-trash-can"></i> Delete
                             </button>
                           )}
-                        </ActionMenu>
-                      )}
+                      </ActionMenu>
                     </td>
-                    <td style={{ maxWidth: 480 }}>
-                      <strong>{a.subject || <span className="text-muted">— Untitled —</span>}</strong>
-                      <div className="text-muted" style={{ fontSize: 12.5, marginTop: 4, maxHeight: 60, overflow: 'hidden' }}>
-                        <RichTextDisplay content={a.announcementBody ?? ''} />
-                      </div>
+                    <td className="ann-cell">
+                      {(() => {
+                        const { text, imageSrc } = bodyPreview(a.announcementBody)
+                        return (
+                          <div className="ann-row">
+                            {/* Every row has the same thumbnail slot — an image, or
+                                a text tile — so subjects line up in one column. */}
+                            <button type="button" className={`ann-thumb${imageSrc ? '' : ' is-text'}`} onClick={() => openViewModal(a.announcementGuid)} aria-label={`View ${a.subject || 'announcement'}`}>
+                              {imageSrc
+                                // eslint-disable-next-line @next/next/no-img-element -- body images are arbitrary external/data URLs
+                                ? <img src={imageSrc} alt="" loading="lazy" />
+                                : <><i className="lni lni-image" aria-hidden="true"></i><span>No image</span></>}
+                            </button>
+                            <div className="ann-text">
+                              <strong>{a.subject || <span className="text-muted">— Untitled —</span>}</strong>
+                              {text
+                                ? <p className="ann-excerpt">{text}</p>
+                                : imageSrc && <p className="ann-excerpt ann-excerpt-note">Image announcement</p>}
+                            </div>
+                          </div>
+                        )
+                      })()}
                     </td>
                     <td className="text-muted">{programLabel(a)}</td>
                     <td className="text-muted">{formatDate(a.announceDate)}</td>
@@ -186,6 +229,13 @@ export default function Page() {
         announcementGuid={editingAnnouncementGuid}
         createAnnouncement={createAnnouncement}
         updateAnnouncement={updateAnnouncement}
+      />
+      <AnnouncementViewModal
+        isOpen={openModals.has('view-announcement-modal')}
+        onClose={() => closeModal('view-announcement-modal')}
+        showToast={showToast}
+        announcementGuid={viewingAnnouncementGuid}
+        onEdit={permissions.edit ? guid => { closeModal('view-announcement-modal'); openEditModal(guid) } : undefined}
       />
       <Toast toast={toast} />
 

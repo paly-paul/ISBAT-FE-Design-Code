@@ -13,6 +13,7 @@ import { useApplicants, ApplicantListItem, ApplicantStatus, ApplicationListItem 
 import { useVettingQueue } from '@/hooks/admission/useVetting'
 import { useRegistrarDeskApplications } from '@/hooks/admission/useRegistrarDesk'
 import { useAdmissionDashboard, AdmissionDashboard, AdmissionSourceMixEntry, AdmissionConversionStep } from '@/hooks/admission/useAdmissionDashboard'
+import { useMenuPagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 6
 
@@ -174,6 +175,19 @@ function dashboardTitle(d: AdmissionDashboard | undefined) {
 
 export default function DashboardPage() {
   const router = useRouter()
+  // Shortcuts to other pages show only when the user's menu allows what the
+  // shortcut is for there (docs/CROSS_PAGE_ACTION_PERMISSIONS.md).
+  const paymentPerms = useMenuPagePermissions('/admission/payment')
+  const applicantsPerms = useMenuPagePermissions('/admission/applicants')
+  const vettingPerms = useMenuPagePermissions('/admission/vetting')
+  const registrationPerms = useMenuPagePermissions('/admission/registration')
+  const studentProfilePerms = useMenuPagePermissions('/student/profile')
+  const canNewApplication = !!paymentPerms?.add
+  const canViewAllApplicants = !!applicantsPerms?.get
+  const canOpenVetting = !!vettingPerms?.get
+  const canOpenRegistration = !!registrationPerms?.get
+  const canRegister = !!registrationPerms?.register
+  const canOpenStudentProfile = !!studentProfilePerms?.get
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [hoveredSrc, setHoveredSrc] = useState<number | null>(null)
   const [selectedApplicant, setSelectedApplicant] = useState<ApplicationListItem | null>(null)
@@ -215,9 +229,11 @@ export default function DashboardPage() {
           <div className="pg-title">Admission Dashboard</div>
           <div className="pg-sub">Where applicants come from, how they move through admission, and who is waiting on you</div>
         </div>
-        <button className="btn btn-primary" onClick={() => router.push('/admission/payment')}>
-          <i className="lni lni-plus" /> New Application
-        </button>
+        {canNewApplication && (
+          <button className="btn btn-primary" onClick={() => router.push('/admission/payment')}>
+            <i className="lni lni-plus" /> New Application
+          </button>
+        )}
       </div>
 
       {/* Admission Progress */}
@@ -354,10 +370,12 @@ export default function DashboardPage() {
             <div className="card-sub">Newest applications across all intakes</div>
           </div>
           <div className="flex items-center gap-2">
-            <button className="btn btn-neu btn-sm" onClick={() => router.push('/admission/applicants')}>View All</button>
-            <button className="btn btn-primary btn-sm" onClick={() => router.push('/admission/payment')}>
-              <i className="lni lni-plus" /> New
-            </button>
+            {canViewAllApplicants && <button className="btn btn-neu btn-sm" onClick={() => router.push('/admission/applicants')}>View All</button>}
+            {canNewApplication && (
+              <button className="btn btn-primary btn-sm" onClick={() => router.push('/admission/payment')}>
+                <i className="lni lni-plus" /> New
+              </button>
+            )}
           </div>
         </div>
         <ScrollTable>
@@ -387,17 +405,17 @@ export default function DashboardPage() {
                         <button className="btn btn-neu btn-sm" onClick={() => openViewModal(app)}>
                           <i className="lni lni-eye" /> View
                         </button>
-                        {app.status === 'Submitted' && (
+                        {app.status === 'Submitted' && canOpenVetting && (
                           <button className="btn btn-neu btn-sm" onClick={() => router.push('/admission/vetting')}>
                             Review →
                           </button>
                         )}
-                        {app.status === 'Vetted' && (
+                        {app.status === 'Vetted' && canRegister && (
                           <button className="btn btn-success btn-sm" onClick={() => router.push('/admission/registration')}>
                             Register →
                           </button>
                         )}
-                        {app.studentGuid && (
+                        {app.studentGuid && canOpenStudentProfile && (
                           <button className="btn btn-neu btn-sm" onClick={() => router.push('/student/profile?studentGuid=' + app.studentGuid)}>
                             <i className="lni lni-user" /> Student Profile
                           </button>
@@ -435,9 +453,11 @@ export default function DashboardPage() {
         <div className="card adm-queue">
           <div className="card-hdr">
             <div className="card-title">Vetting Queue <span className="adm-count">{vettingData?.totalCount ?? 0}</span></div>
-            <button className="btn btn-neu btn-sm" onClick={() => router.push('/admission/vetting')}>
-              Open <i className="lni lni-arrow-right" />
-            </button>
+            {canOpenVetting && (
+              <button className="btn btn-neu btn-sm" onClick={() => router.push('/admission/vetting')}>
+                Open <i className="lni lni-arrow-right" />
+              </button>
+            )}
           </div>
           {isVettingLoading ? (
             <div className="adm-queue-state">Loading queue…</div>
@@ -452,11 +472,13 @@ export default function DashboardPage() {
                 return (
                   <li
                     key={item.applicationGuid || item.appRefNo}
-                    className="adm-qrow"
-                    role="link"
-                    tabIndex={0}
-                    onClick={() => router.push('/admission/vetting')}
-                    onKeyDown={e => { if (e.key === 'Enter') router.push('/admission/vetting') }}
+                    className={`adm-qrow${canOpenVetting ? '' : ' is-static'}`}
+                    {...(canOpenVetting ? {
+                      role: 'link',
+                      tabIndex: 0,
+                      onClick: () => router.push('/admission/vetting'),
+                      onKeyDown: (e: React.KeyboardEvent) => { if (e.key === 'Enter') router.push('/admission/vetting') },
+                    } : {})}
                   >
                     <span className="adm-avatar" aria-hidden="true">{initials(item.studentName || item.appRefNo)}</span>
                     <div className="adm-qmain">
@@ -475,7 +497,7 @@ export default function DashboardPage() {
                       </span>
                       <span className="adm-qtime">{timeAgo(item.submittedDate)}</span>
                     </div>
-                    <i className="lni lni-chevron-right adm-qchev" aria-hidden="true" />
+                    {canOpenVetting && <i className="lni lni-chevron-right adm-qchev" aria-hidden="true" />}
                   </li>
                 )
               })}
@@ -486,9 +508,11 @@ export default function DashboardPage() {
         <div className="card adm-queue">
           <div className="card-hdr">
             <div className="card-title">Ready to Register <span className="adm-count">{regDeskData?.totalCount ?? 0}</span></div>
-            <button className="btn btn-neu btn-sm" onClick={() => router.push('/admission/registration')}>
-              Open <i className="lni lni-arrow-right" />
-            </button>
+            {canOpenRegistration && (
+              <button className="btn btn-neu btn-sm" onClick={() => router.push('/admission/registration')}>
+                Open <i className="lni lni-arrow-right" />
+              </button>
+            )}
           </div>
           {isRegDeskLoading ? (
             <div className="adm-queue-state">Loading queue…</div>
@@ -499,11 +523,13 @@ export default function DashboardPage() {
               {(regDeskData?.items ?? []).map(item => (
                 <li
                   key={item.applicationGuid || item.appRefNo}
-                  className="adm-qrow"
-                  role="link"
-                  tabIndex={0}
-                  onClick={() => router.push('/admission/registration')}
-                  onKeyDown={e => { if (e.key === 'Enter') router.push('/admission/registration') }}
+                  className={`adm-qrow${canOpenRegistration ? '' : ' is-static'}`}
+                  {...(canOpenRegistration ? {
+                    role: 'link',
+                    tabIndex: 0,
+                    onClick: () => router.push('/admission/registration'),
+                    onKeyDown: (e: React.KeyboardEvent) => { if (e.key === 'Enter') router.push('/admission/registration') },
+                  } : {})}
                 >
                   <span className="adm-avatar" aria-hidden="true">{initials(item.studentName || item.appRefNo)}</span>
                   <div className="adm-qmain">
@@ -520,7 +546,7 @@ export default function DashboardPage() {
                     </span>
                     <span className="adm-qtime">Reg. fee</span>
                   </div>
-                  <i className="lni lni-chevron-right adm-qchev" aria-hidden="true" />
+                  {canOpenRegistration && <i className="lni lni-chevron-right adm-qchev" aria-hidden="true" />}
                 </li>
               ))}
             </ul>

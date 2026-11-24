@@ -11,7 +11,7 @@ import { EnquiryAssignModal } from '@/components/modals/admission/EnquiryAssignM
 import { NewFollowUpLogModal, InitialFollowUpData } from '@/components/modals/admission/NewFollowUpLogModal'
 import { useEnquiryFollowUps, useCreateEnquiryFollowUp } from '@/hooks/admission/useEnquiryFollowUps'
 import { useUpdateEnquiry } from '@/hooks/admission/useEnquiries'
-import { usePagePermissions } from '@/hooks/users/usePagePermissions'
+import { useMenuPagePermissions, usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
 // Don't narrow the table (or open the search dropdown) until the user's
@@ -27,6 +27,9 @@ function nameBadge(name: string | null, cls: string) {
 export default function EnquiryFollowupMasterPage() {
   const router = useRouter()
   const permissions = usePagePermissions()
+  // Convert → Application Payment: only when the user can add a payment there
+  // (docs/CROSS_PAGE_ACTION_PERMISSIONS.md).
+  const canConvert = !!useMenuPagePermissions('/admission/payment')?.add
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [search, setSearch] = useState('')
@@ -174,7 +177,7 @@ export default function EnquiryFollowupMasterPage() {
                 <tr key={r.enquiryGuid}>
                   <td>
                     <ActionMenu>
-                      <button className="btn btn-neu btn-sm" onClick={() => router.push(`/admission/payment?enquiryGuid=${r.enquiryGuid}`)}><i className="lni lni-arrow-right" /> Convert</button>
+                      {canConvert && <button className="btn btn-neu btn-sm" onClick={() => router.push(`/admission/payment?enquiryGuid=${r.enquiryGuid}`)}><i className="lni lni-arrow-right" /> Convert</button>}
                       {permissions.add && (
                         <button className="btn btn-neu btn-sm" onClick={() => handleCreateFollowUp(r)}>
                           <i className="lni lni-phone" /> Create Follow-up Status
