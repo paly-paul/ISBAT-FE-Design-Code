@@ -13,7 +13,7 @@ import { useBatchTimesDropdown } from '@/hooks/config/useBatchTimes'
 import { useBatch, useFilteredBatches } from '@/hooks/academic/useBatches'
 import { useCountriesForPicker } from '@/hooks/config/useCountries'
 import { useProgramFeeStructures } from '@/hooks/academic/useProgramFeeStructure'
-import { usePagePermissions } from '@/hooks/users/usePagePermissions'
+import { useMenuPagePermissions, usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { sanitizePhoneInput, sanitizeNameInput } from '@/lib/errorMessages'
 import { consumeFilingPrefill } from '@/lib/filingHandoff'
 import { getEnquiryById, getEnquiries } from '@/lib/api/admission/enquiry'
@@ -290,6 +290,10 @@ const PIPELINE = [
 export default function FilingPage() {
   const router = useRouter()
   const permissions = usePagePermissions()
+  // Hand-offs to the neighbouring stages, offered only when the user's menu
+  // lets them open those pages (docs/CROSS_PAGE_ACTION_PERMISSIONS.md).
+  const canOpenPayment = !!useMenuPagePermissions('/admission/payment')?.get
+  const canOpenVetting = !!useMenuPagePermissions('/admission/vetting')?.get
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [activeTab, setActiveTab] = useState<Tab>('personal')
   // Result of the final Submit Application action — shown as FailurePopup,
@@ -1310,7 +1314,7 @@ export default function FilingPage() {
           <h1 className="text-xl font-bold text-g900">Stage 2 &middot; Application Filing</h1>
           <p className="text-sm text-g500 mt-1">Counsellor enters applicant details, qualifications, family info and uploads documents.</p>
         </div>
-        <button className="btn" onClick={() => { if (confirmLeave()) router.push('/admission/payment') }}><i className="lni lni-arrow-left" /> Stage 1</button>
+        {canOpenPayment && <button className="btn" onClick={() => { if (confirmLeave()) router.push('/admission/payment') }}><i className="lni lni-arrow-left" /> Stage 1</button>}
       </div>
 
       <div className="pipeline">
@@ -1844,9 +1848,17 @@ export default function FilingPage() {
                 {selectedApplication?.appRefNo ?? 'The application'} has been submitted for vetting.
               </p>
               <div className="flex gap-2 justify-center mt-5 flex-wrap">
-                <button className="btn btn-primary" onClick={() => router.push('/admission/vetting')}>
-                  Continue to Vetting <i className="lni lni-arrow-right" />
-                </button>
+                {canOpenVetting ? (
+                  <button className="btn btn-primary" onClick={() => router.push('/admission/vetting')}>
+                    Continue to Vetting <i className="lni lni-arrow-right" />
+                  </button>
+                ) : (
+                  // Without Vetting Desk access the pop-up still needs a way
+                  // out: back to an empty Filing page, ready for the next one.
+                  <button className="btn btn-primary" onClick={() => { setSubmitted(false); setSelectedApplication(null); setApplicantSearch('') }}>
+                    File another application
+                  </button>
+                )}
               </div>
             </div>
           </div>

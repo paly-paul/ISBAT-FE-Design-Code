@@ -2105,6 +2105,9 @@ body {
   content: ''; position: absolute; top: 0; left: 58px; right: 10px; height: 1px; background: var(--g100);
 }
 .adm-qrow:hover { background: var(--surface); }
+/* Row whose queue page the user can't open: plain information, not a link. */
+.adm-qrow.is-static { cursor: default; }
+.adm-qrow.is-static:hover { background: none; }
 .adm-qrow:hover::before, .adm-qrow:hover + .adm-qrow::before { opacity: 0; }
 .adm-qrow:focus-visible, .donut-legend-item:focus-visible { outline: 2px solid var(--b500); outline-offset: 2px; }
 
@@ -5980,6 +5983,52 @@ body:has(.modal-overlay.open) {
 .modal.modal-flex>.prog-steps {
   background: var(--surface)
 }
+
+/* Announcement Management table: a thumbnail of the body's first image (when
+   there is one), the subject, and a one-line plain-text preview. The full
+   message is in View. Every row keeps the same compact shape. */
+.ann-cell { max-width: 620px; white-space: normal; }
+.ann-row { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.ann-text { min-width: 0; flex: 1; }
+.ann-thumb {
+  flex-shrink: 0; width: 88px; height: 56px; padding: 0; overflow: hidden; cursor: pointer;
+  border: 1px solid var(--g200); border-radius: var(--rxs); background: var(--surface);
+  transition: border-color var(--tr), box-shadow var(--tr);
+}
+.ann-thumb img { width: 100%; height: 100%; object-fit: cover; object-position: top center; display: block; }
+.ann-thumb:hover { border-color: var(--b300); box-shadow: 0 2px 8px rgba(15, 23, 42, .08); }
+/* Text-only announcement: the same tile, as an empty image slot. */
+.ann-thumb.is-text {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  background: var(--g100); border-style: dashed; border-color: var(--g300); color: var(--g500);
+}
+.ann-thumb.is-text i { font-size: 16px; color: var(--g400); }
+.ann-thumb.is-text span { font-size: 10.5px; font-weight: 600; letter-spacing: .02em; color: var(--g600); }
+.ann-thumb:focus-visible { outline: 2px solid var(--b500); outline-offset: 2px; }
+.ann-excerpt {
+  margin: 4px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--g500);
+  display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden;
+}
+.ann-excerpt-note { font-style: italic; }
+
+/* Announcement Management › View: fits its content, long bodies scroll. */
+.modal.modal-flex.ann-view { height: auto; max-height: 88vh; }
+.ann-view-loading { min-height: 180px; display: grid; place-items: center; color: var(--g400); }
+.ann-view-subject { margin: 0 0 12px; font-size: var(--fs-lg); font-weight: 700; color: var(--g900); line-height: 1.3; text-wrap: balance; }
+.ann-view-meta { display: flex; flex-wrap: wrap; gap: 10px 32px; margin: 0 0 16px; padding-bottom: 14px; border-bottom: 1px solid var(--g100); }
+.ann-view-meta dt { font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--g500); margin-bottom: 3px; }
+.ann-view-meta dd { margin: 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13.5px; font-weight: 600; color: var(--g800); }
+.ann-view-state { font-weight: 600; }
+.ann-view-body { font-size: 14px; line-height: 1.6; color: var(--g700); max-width: 72ch; overflow-wrap: anywhere; }
+.ann-view-attach {
+  margin-top: 18px; display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 11px 14px; border: 1.5px solid var(--g200); border-radius: var(--rsm); background: var(--surface);
+  font-size: 13px; font-weight: 600; color: var(--b700); cursor: pointer; text-align: left;
+  transition: border-color var(--tr), background var(--tr);
+}
+.ann-view-attach:hover { border-color: var(--b300); background: var(--b50); }
+.ann-view-attach:focus-visible { outline: 2px solid var(--b500); outline-offset: 2px; }
+.ann-view-attach-go { margin-left: auto; color: var(--b500); }
 
 .modal.modal-flex>.modal-scroll {
   flex: 1 1 auto;
@@ -13923,6 +13972,15 @@ body:has(.drawer-overlay) {
 /* Outstanding Report: one line per currency inside a student's amount cells. */
 .rpt-line { white-space: nowrap; line-height: 1.55; }
 .rpt-foot-row td { text-align: center; color: var(--g500); font-size: 12.5px; }
+/* "Loading more…" / "End of report" / Retry: the cell spans the whole table,
+   which on a wide report is far wider than the visible area, so centring in
+   the cell put the text off-screen. Pinned to the middle of what's visible
+   instead, wherever the table is scrolled sideways. The cell is also the
+   row's first cell, so it must beat the global sticky, centred first-column
+   rule (.tbl-wrap table td:first-child): it starts at the left edge, and the
+   sticky text then holds itself at the middle of the visible area. */
+.tbl-wrap table tr.rpt-foot-row td { position: static; text-align: left; box-shadow: none; }
+.tbl-wrap table tr.rpt-foot-row td > * { display: inline-flex; position: sticky; left: 50%; transform: translateX(-50%); white-space: nowrap; }
 .rpt-foot-row:hover td { background: var(--white); }
 
 .rpt-summary {
@@ -14016,6 +14074,55 @@ body:has(.drawer-overlay) {
 .rpt-export-msg { font-size: var(--fs-sm); color: var(--g500); font-variant-numeric: tabular-nums; }
 .rpt-export-msg.ok { color: var(--green); font-weight: 600; }
 .rpt-export-msg.err { color: var(--red); max-width: 420px; }
+
+/* ── IA Evaluation Report (assessment/reports/ia-evaluation) ──
+   Builds on the rpt-* report styles above; these only cover what's new:
+   the status badge, wide text cells, and the per-unit marking progress. */
+.iar-field-err { color: var(--red); font-size: 12px; margin-top: 4px; }
+.iar-table td { vertical-align: top; }
+.iar-status { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.iar-status i { font-size: 12px; }
+.iar-name { font-weight: 600; color: var(--g900); white-space: nowrap; }
+.iar-nowrap { white-space: nowrap; }
+.iar-wrap { min-width: 200px; max-width: 280px; white-space: normal; line-height: 1.4; }
+.iar-comment {
+  display: block; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--g600); cursor: help;
+}
+
+/* Per-unit summary: long lists scroll inside the panel, header in view. */
+.iar-unit-scroll { max-height: 340px; overflow-y: auto; }
+.iar-unit-scroll thead th { position: sticky; top: 0; z-index: 1; background: var(--surface); }
+/* The unit cell is a row header (th), so it undoes the global uppercase
+   header style; programme and semester read as in the main table. */
+.rpt-sumtbl th.iar-unit { width: auto; min-width: 200px; white-space: normal; text-align: left; letter-spacing: 0; text-transform: none; }
+/* Tighter cells than the currency summary so all seven columns, Average
+   included, fit the panel without a sideways scroll. */
+.iar-unit-scroll th, .iar-unit-scroll td { padding-left: 12px; padding-right: 12px; }
+.iar-unit-scroll th:first-child { padding-left: 16px; }
+.iar-unit-scroll th:last-child, .iar-unit-scroll td:last-child { padding-right: 16px; }
+.iar-unit-name { display: block; color: var(--g900); font-weight: 600; font-size: 13px; }
+.iar-unit-name.is-missing { color: var(--g500); font-weight: 500; font-style: italic; }
+.iar-unit-sub { display: block; margin-top: 2px; color: var(--g500); font-weight: 400; font-size: var(--fs-xs); }
+.rpt-sumtbl tbody td.iar-pending { color: #92400e; font-weight: 700; }
+.iar-pending-note { color: #92400e; font-weight: 600; }
+/* Heading and bars start at the same left edge. */
+.rpt-sumtbl .iar-progress-col { width: 1%; text-align: left; }
+.iar-progress { display: inline-flex; align-items: center; gap: 8px; }
+.iar-bar { width: 72px; height: 6px; border-radius: 999px; background: var(--amber-bg); overflow: hidden; }
+.iar-bar > span { display: block; height: 100%; border-radius: 999px; background: var(--b500); }
+.iar-bar > span.done { background: var(--green); }
+.iar-bar-pct { min-width: 34px; text-align: right; color: var(--g700); font-weight: 600; }
+.rpt-stat.is-blue .iar-avg-bar > span { background: var(--b500); }
+
+/* Programme / Most pending order toggle in the unit panel's header. */
+.iar-seg { display: inline-flex; padding: 2px; border-radius: var(--rxs); background: var(--g100); }
+.iar-seg button {
+  border: 0; background: none; padding: 4px 10px; border-radius: 5px;
+  font-size: var(--fs-xs); font-weight: 600; color: var(--g600); cursor: pointer;
+}
+.iar-seg button.on { background: var(--white); color: var(--b700); box-shadow: 0 1px 2px rgba(15, 23, 42, .12); }
+.iar-seg button:focus-visible { outline: 2px solid var(--b400); outline-offset: 1px; }
 
 /* ── Vetting desk (admission/vetting + VettingReviewModal) ──
    Status colours reuse the .badge-* text shades for 4.5:1 contrast. */

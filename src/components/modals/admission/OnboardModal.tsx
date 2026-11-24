@@ -1,6 +1,7 @@
 'use client'
 import { ModalProps } from '../types'
 import { RegisterStudentResponse } from '@/hooks/admission/useRegistrarDesk'
+import { useMenuPagePermissions } from '@/hooks/users/usePagePermissions'
 
 // None of these three have a corresponding field on RegisterStudentResponse
 // (registrar-desk-api-docs.html's POST /register only returns
@@ -19,6 +20,8 @@ interface Props extends ModalProps {
 }
 
 export function OnboardModal({ isOpen, onClose, showToast, nav, result }: Props) {
+  // Called before the early return so the hook order never changes.
+  const canOpenDashboard = !!useMenuPagePermissions('/admission/dashboard')?.get
   if (!isOpen) return null
 
   // Real outcome per post-register-student.md: no password is created or
@@ -76,9 +79,15 @@ export function OnboardModal({ isOpen, onClose, showToast, nav, result }: Props)
           <button className="btn" onClick={() => showToast('Admission letter sent to print queue.', 'success')}>
             <i className="lni lni-printer"></i> Print Letter
           </button>
-          <button className="btn btn-primary" onClick={() => { onClose(); nav?.('dashboard') }}>
-            <i className="lni lni-arrow-left"></i> Back to Dashboard
-          </button>
+          {/* Back to Dashboard only when the user can open it
+              (docs/CROSS_PAGE_ACTION_PERMISSIONS.md); otherwise just close. */}
+          {canOpenDashboard ? (
+            <button className="btn btn-primary" onClick={() => { onClose(); nav?.('dashboard') }}>
+              <i className="lni lni-arrow-left"></i> Back to Dashboard
+            </button>
+          ) : (
+            <button className="btn btn-primary" onClick={onClose}>Done</button>
+          )}
         </div>
       </div>
     </div>

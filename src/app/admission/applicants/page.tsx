@@ -13,6 +13,7 @@ import { ViewApplicantModal } from '@/components/modals/admission/ViewApplicantM
 import { downloadBlob } from '@/lib/downloadBlob'
 import { AuthError } from '@/lib/api/client'
 import { useActionGuard } from '@/hooks/users/useActionGuard'
+import { useMenuPagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
 // Don't narrow the table (or open the search dropdown) until the user's
@@ -55,6 +56,9 @@ function toModalRow(a: ApplicantListItem): ApplicationListItem {
 
 export default function ApplicantsPage() {
   const router = useRouter()
+  // Student Profile is in the Student module: offered only when the user's
+  // menu lets them open it (docs/CROSS_PAGE_ACTION_PERMISSIONS.md).
+  const canOpenStudentProfile = !!useMenuPagePermissions('/student/profile')?.get
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
@@ -164,7 +168,7 @@ export default function ApplicantsPage() {
                         <i className="lni lni-eye" /> View
                       </button>
                       {/* studentGuid is only set once the applicant is registered. */}
-                      {a.studentGuid && (
+                      {a.studentGuid && canOpenStudentProfile && (
                         <button className="btn btn-neu btn-sm" onClick={() => router.push('/student/profile?studentGuid=' + a.studentGuid)}>
                           <i className="lni lni-user" /> Student Profile
                         </button>

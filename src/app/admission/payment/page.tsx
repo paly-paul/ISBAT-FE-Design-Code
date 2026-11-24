@@ -33,7 +33,7 @@ import {
   useCreateApplicationPayment,
   useUnconvertedEnquiriesInfinite,
 } from '@/hooks/admission/useApplicationPayments'
-import { usePagePermissions } from '@/hooks/users/usePagePermissions'
+import { useMenuPagePermissions, usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { sanitizePhoneInput, stripLeadingZeros } from '@/lib/errorMessages'
 import { formatDate, monthsAgoYmd, RECENT_DATE_MONTHS } from '@/lib/date'
 import { setFilingPrefill } from '@/lib/filingHandoff'
@@ -219,6 +219,9 @@ function PaymentPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const permissions = usePagePermissions()
+  // Proceed to Filing → Application Filing: only when the user can file
+  // there (docs/CROSS_PAGE_ACTION_PERMISSIONS.md).
+  const canProceedToFiling = !!useMenuPagePermissions('/admission/filing')?.add
   const [toast, setToast]       = useState<{ msg: string; type: string } | null>(null)
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [showReceipt, setShowReceipt] = useState(false)
@@ -1360,17 +1363,19 @@ function PaymentPageContent() {
                     <i className={`lni ${printingReceipt ? 'lni-spinner-arrow spin' : 'lni-printer'}`} /> {printingReceipt ? 'Opening…' : 'Print Receipt'}
                   </button>
                 )}
-                <button
-                  className="btn btn-primary btn-sm ml-auto"
-                  onClick={() => {
-                    // Hands the saved payment to Filing so it opens straight on
-                    // this applicant (see lib/filingHandoff.ts).
-                    if (savedReceipt.filing) setFilingPrefill(savedReceipt.filing)
-                    router.push('/admission/filing')
-                  }}
-                >
-                  Proceed to Filing <i className="lni lni-arrow-right" />
-                </button>
+                {canProceedToFiling && (
+                  <button
+                    className="btn btn-primary btn-sm ml-auto"
+                    onClick={() => {
+                      // Hands the saved payment to Filing so it opens straight on
+                      // this applicant (see lib/filingHandoff.ts).
+                      if (savedReceipt.filing) setFilingPrefill(savedReceipt.filing)
+                      router.push('/admission/filing')
+                    }}
+                  >
+                    Proceed to Filing <i className="lni lni-arrow-right" />
+                  </button>
+                )}
               </div>
               {receiptRetryError && savedReceipt.paymentGuid && (
                 <div className="warn-box mt-3" role="alert">
