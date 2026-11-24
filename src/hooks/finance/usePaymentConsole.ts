@@ -105,12 +105,12 @@ export function useLedgerOthers() {
 }
 
 // All four categories (tuition/other/NCHE/guild) in one flat list — see
-// getAllOutstandingLedgers' own comment. Takes no studentGuid, unlike
-// useOutstandingLedgers above.
-export function useAllOutstandingLedgers(applicationGuid: string | null, enabled: boolean) {
+// getAllOutstandingLedgers' own comment. Same optional-studentGuid convention
+// as useOutstandingLedgers above.
+export function useAllOutstandingLedgers(applicationGuid: string | null, enabled: boolean, studentGuid?: string | null) {
   return useQuery({
-    queryKey: [...PAYMENT_CONSOLE_KEY, 'outstanding-all', applicationGuid],
-    queryFn: () => getAllOutstandingLedgers(applicationGuid as string),
+    queryKey: [...PAYMENT_CONSOLE_KEY, 'outstanding-all', applicationGuid, studentGuid],
+    queryFn: () => getAllOutstandingLedgers(applicationGuid as string, studentGuid),
     enabled: enabled && !!applicationGuid,
   })
 }
