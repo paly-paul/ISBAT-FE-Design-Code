@@ -10,6 +10,7 @@ import { usePendingEmployees, useApproveEmployee } from '@/hooks/employee/useEmp
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { normalizeTitle } from '@/components/modals/employee/EmployeeFormModal'
 import { ViewEmployeeModal } from '@/components/modals/employee/ViewEmployeeModal'
+import { formatEmployeeGender } from '@/lib/api/employee/employee'
 
 const PAGE_SIZE = 10
 
@@ -77,7 +78,7 @@ export default function Page() {
                       <tr key={r.employeeGuid}>
                         <td className="font-mono text-b700">{r.shortCode}</td>
                         <td><strong>{normalizeTitle(r.title)} {r.firstName} {r.surname}</strong></td>
-                        <td>{r.sex === 1 ? 'Male' : 'Female'}</td>
+                        <td>{formatEmployeeGender(r.sex, r.genderLabel) || '—'}</td>
                         <td><span className="badge badge-amber"><span className="bdot"></span>Pending</span></td>
                         <td className="whitespace-nowrap text-right">
                           <button className="btn btn-neu btn-sm mr-2" onClick={() => setViewingEmployeeGuid(r.employeeGuid)}>

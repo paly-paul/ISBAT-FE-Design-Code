@@ -64,12 +64,6 @@ export function getSingleQuestionCategories(): Promise<QuestionBankCategory[]> {
   }
   return apiGet<QuestionBankCategory[]>('/api/v1/assessment/questions/categories')
     .then(data => data ?? [])
-    .catch(() => [
-      { value: 1, name: 'Class Test' },
-      { value: 2, name: 'Course Work' },
-      { value: 3, name: 'Class Activity' },
-      { value: 5, name: 'University Exam' }
-    ])
 }
 
 function parseAllowedUeTypes(val: any): number[] | null {
