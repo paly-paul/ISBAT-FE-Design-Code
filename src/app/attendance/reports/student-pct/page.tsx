@@ -17,8 +17,8 @@ import { AttendancePct, ReportSkeleton, TargetMeter, isBelowTarget, reportErrorM
 // student's attendance across an intake and term, optionally narrowed to one
 // lecturer and/or course unit. Intake unlocks Term, Term unlocks Lecturer and
 // Load Report; Course Unit needs a lecturer (the course-units API is per
-// lecturer). The preview returns studentGuid only, so each row's number,
-// name and batch come from the student lookup. Changing any filter clears a
+// lecturer). The preview returns each row's reg. no., name and batch; a row
+// without a name falls back to the student lookup. Changing any filter clears a
 // loaded report, and Download PDF always uses the loaded filters.
 
 const PAGE_SIZES = [15, 30, 50].map(n => ({ value: String(n), label: String(n) }))
@@ -82,8 +82,8 @@ export default function Page() {
   const canLoad = scopeReady && phase !== 'loading'
   const canDownload = phase === 'ready' && !!report && report.totalCount > 0 && !pdfBusy
 
-  // Rows the preview returned without a name (the real API): one cached
-  // student lookup each, resolved per page.
+  // Rows the preview returned without a name: one cached student lookup
+  // each, resolved per page. Normally none — the API sends the name.
   const lookups = useQueries({
     queries: (report?.items ?? []).filter(r => r.fullName == null).map(r => ({
       queryKey: ['attendance', 'reports', 'student', r.studentGuid],
@@ -346,7 +346,7 @@ export default function Page() {
                     </thead>
                     <tbody>
                       {report.items.map((r, i) => {
-                        // Names inline (mock), or from the student lookup:
+                        // Names inline (API or mock), or from the student lookup:
                         // a placeholder while it loads, the short GUID if it fails.
                         const q = studentInfo.get(r.studentGuid)
                         const s = r.fullName != null

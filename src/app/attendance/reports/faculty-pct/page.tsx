@@ -15,9 +15,10 @@ import { AttendancePct, ReportSkeleton, TargetMeter, isBelowTarget, reportErrorM
 // Faculty Attendance % (attendance-report-pages-design.md, Page 3): how many
 // scheduled sessions each lecturer actually conducted, per course unit, for
 // an intake and term (erp-docs/pages/assessment/faculty-attendance-pct-
-// report-page.md). The preview returns GUIDs only: lecturer names come from
-// the term's lecturer list, unit code/name from each lecturer's course units
-// (one cached call per lecturer on the page). The spec blanks a lecturer's
+// report-page.md). The preview returns each row's unit code/name; lecturer
+// names come from the term's lecturer list, and a row sent without a unit
+// code falls back to that lecturer's course units (one cached call per
+// lecturer on the page). The spec blanks a lecturer's
 // name after the first row of their group; that read as missing data, so
 // every row shows its lecturer, as in the app's other tables. Changing a
 // filter clears a loaded report.
@@ -75,9 +76,9 @@ export default function Page() {
   const canLoad = scopeReady && phase !== 'loading'
   const canDownload = phase === 'ready' && !!report && report.totalCount > 0 && !pdfBusy
 
-  // Name resolution for rows the preview returned as GUIDs (the real API).
-  // Lecturers: the term's lecturer list. Units: each lecturer's course units,
-  // fetched once per lecturer on the current page and cached.
+  // Name resolution for what the preview didn't send. Lecturers: the term's
+  // lecturer list. Units: only for rows without a unit code — each such
+  // lecturer's course units, fetched once and cached. Normally none.
   const lecturerNames = useMemo(() => new Map((lecturersQ.data ?? []).map(l => [l.value, l.label])), [lecturersQ.data])
   const pageLecturers = useMemo(
     () => Array.from(new Set((report?.items ?? []).filter(r => r.courseUnitCode == null).map(r => r.lecturerEmployeeGuid))),
