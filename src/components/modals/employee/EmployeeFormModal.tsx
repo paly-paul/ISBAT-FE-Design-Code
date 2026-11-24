@@ -7,7 +7,12 @@ import { SuccessPopup } from '../shared/SuccessPopup'
 import { SearchSelect } from '@/components/SearchSelect'
 import { MultiSelect } from '@/components/MultiSelect'
 import DatePicker from '@/components/DatePicker'
-import { CreateEmployeeInput } from '@/lib/api/employee/employee'
+import {
+  CreateEmployeeInput,
+  EMPLOYEE_GENDERS,
+  EMPLOYEE_MARITAL_STATUSES,
+  formatEmployeeGender,
+} from '@/lib/api/employee/employee'
 import { PHOTO_MAX_BYTES, PHOTO_TYPES } from '@/lib/api/users/profile'
 import { useEmployee, useCreateEmployee, useUpdateEmployee } from '@/hooks/employee/useEmployees'
 import { useDepartmentsDropdown } from '@/hooks/config/useDepartments'
@@ -75,9 +80,9 @@ export function findCategory(val?: string | number | null) {
   return CATEGORIES[0]
 }
 
-// The lookup values below are placeholders until the API provides fuller options.
-const SEXES = ['Male', 'Female', 'Others']
-const MARITAL_STATUSES = ['Single', 'Married', 'Divorced', 'Widow', 'Widower', 'Separated']
+// Backend enum mappings: Gender (0=Male, 1=Female, 2=Other), Marital Status (0=Single, 1=Married, 2=Divorced, 3=Widowed).
+const SEXES = [...EMPLOYEE_GENDERS]
+const MARITAL_STATUSES = [...EMPLOYEE_MARITAL_STATUSES]
 const RELIGIONS = ['Christian', 'Muslim', 'Hindu', 'Other']
 // natId is a Yes/No flag, not a type: "0" = has a national ID (number
 // required), "1" = no national ID (number optional).
@@ -89,7 +94,8 @@ const NAT_ID_OPTIONS = [
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 function sexToNumber(sex: string): number {
-  return sex === 'Male' ? 1 : sex === 'Female' ? 2 : sex === 'Others' ? 3 : 0
+  const idx = EMPLOYEE_GENDERS.indexOf(sex as (typeof EMPLOYEE_GENDERS)[number])
+  return idx >= 0 ? idx : -1
 }
 
 function isAtLeast18(birthDate: string): boolean {
@@ -204,7 +210,7 @@ export function EmployeeFormModal({ isOpen, onClose, showToast, mode, employeeGu
     if (!title.trim()) e.title = 'Select Title before proceeding!'
     if (!surname.trim()) e.surname = 'Surname cannot be left blank!'
     if (!firstName.trim()) e.firstName = 'First Name cannot be left blank!'
-    if (sexToNumber(sex) <= 0) e.sex = 'Select Gender before proceeding!'
+    if (sexToNumber(sex) < 0) e.sex = 'Select Gender before proceeding!'
     if (!birthDate) e.birthDate = 'Date Of Birth cannot be left blank!'
     else if (!isAtLeast18(birthDate)) e.birthDate = 'The minimum age should be 18 years.'
     if (!placeOfBirth.trim()) e.placeOfBirth = 'Place Of Birth cannot be left blank!'
@@ -215,7 +221,7 @@ export function EmployeeFormModal({ isOpen, onClose, showToast, mode, employeeGu
     if (!maritalStatus.trim()) e.maritalStatus = 'Select Marital Status before proceeding!'
     if (!deptGuid) e.department = 'Select Department before proceeding!'
     if (!designationGuid) e.designation = 'Select Designation before proceeding!'
-    // Campuses may be left empty (employee-create-edit-page.md).
+    if (campusGuids.length === 0) e.campusGuids = 'Select at least one Campus before proceeding!'
     return e
   }
 
@@ -232,7 +238,7 @@ export function EmployeeFormModal({ isOpen, onClose, showToast, mode, employeeGu
       setFirstName(employee.firstName)
       setSurname(employee.surname)
       setOtherName(employee.otherName ?? '')
-      setSex(employee.sex === 1 ? 'Male' : employee.sex === 2 ? 'Female' : 'Others')
+      setSex(formatEmployeeGender(employee.sex, employee.genderLabel))
       setBirthDate(employee.birthDate.slice(0, 10))
       setPlaceOfBirth(employee.placeOfBirth)
       setCountryGuid(employee.countryGuid ?? '')
@@ -240,7 +246,11 @@ export function EmployeeFormModal({ isOpen, onClose, showToast, mode, employeeGu
       setNationalId(employee.nationalId ?? '')
       setEmailId(employee.emailId)
       setReligion(employee.intReligion ? RELIGIONS[employee.intReligion - 1] ?? '' : '')
-      setMaritalStatus(MARITAL_STATUSES[employee.maritalStatus - 1] ?? '')
+      setMaritalStatus(
+        EMPLOYEE_MARITAL_STATUSES[employee.maritalStatus] ??
+          EMPLOYEE_MARITAL_STATUSES.find(m => m.toLowerCase() === (employee.maritalStatusLabel ?? '').trim().toLowerCase()) ??
+          ''
+      )
       setDeptGuid(employee.deptGuid ?? '')
       setDesignationGuid(employee.designationGuid ?? '')
       setCampusGuids(employee.campusGuids ?? [])
@@ -329,7 +339,7 @@ export function EmployeeFormModal({ isOpen, onClose, showToast, mode, employeeGu
       nationalId: nationalId.trim() || null,
       emailId,
       intReligion: religion ? RELIGIONS.indexOf(religion) + 1 : null,
-      maritalStatus: MARITAL_STATUSES.indexOf(maritalStatus) + 1 || 1,
+      maritalStatus: Math.max(0, MARITAL_STATUSES.indexOf(maritalStatus as (typeof EMPLOYEE_MARITAL_STATUSES)[number])),
       campusGuids,
     }
 
@@ -515,8 +525,14 @@ export function EmployeeFormModal({ isOpen, onClose, showToast, mode, employeeGu
               {errors.department && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.department}</p>}
             </div>
             <div className="fg">
-              <div className="lbl">Campus Assignment</div>
-              <MultiSelect placeholder="Select campuses…" options={campusOptions} value={campusGuids} onChange={setCampusGuids} />
+              <div className="lbl">Campus Assignment <span className="req">*</span></div>
+              <MultiSelect
+                placeholder="Select campuses…"
+                options={campusOptions}
+                value={campusGuids}
+                onChange={vals => { setCampusGuids(vals); clearError('campusGuids') }}
+              />
+              {errors.campusGuids && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.campusGuids}</p>}
             </div>
           </div>
 
