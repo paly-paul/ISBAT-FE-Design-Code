@@ -4838,6 +4838,20 @@ th:hover .th-fi {
   color: var(--g700);
 }
 
+/* Semester sub-header — a full-width label row grouping a sponsored
+   student's arrears by semester inside the same grid. */
+.recgrid-group {
+  grid-column: 1 / -1;
+  padding: 7px 14px;
+  background: var(--g100);
+  border-bottom: 1px solid var(--g200);
+  font-size: var(--fs-2xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--g600);
+}
+
 .recgrid-hdr>span:not(:first-child),
 .recgrid-body>span:not(:first-child) {
   text-align: right;
@@ -17275,6 +17289,7 @@ button.sp-link:hover .sp-link-go { color: var(--b700); transform: translateX(3px
 }
 .pcx-pill-green { background: var(--green-bg); color: #065f46 }
 .pcx-pill-amber { background: var(--amber-bg); color: #92400e }
+.pcx-pill-blue { background: var(--b50); color: var(--b700) }
 .pcx-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor }
 
 /* Two separate tiles; outstanding carries a warm tint so the amount owed

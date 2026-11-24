@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Toast } from '@/components/Toast'
 import { StudentAvatar } from '@/components/StudentAvatar'
@@ -50,7 +50,7 @@ import {
   PaymentHistoryEntry,
 } from '@/hooks/finance/usePaymentConsole'
 import { useGrievanceFee, usePaymentOthersList, useResitFee, type ResitFee, type ResitFeeSemester } from '@/hooks/finance/usePaymentOthers'
-import { findGrievanceLedger, getPaymentReceiptPdf, isResitLedger, refugeeLabel, studCategoryLabel } from '@/lib/api/finance/paymentConsole'
+import { findGrievanceLedger, getPaymentReceiptPdf, isResitLedger, isSelfPaidStudent, refugeeLabel, sponsorCategoryLabel } from '@/lib/api/finance/paymentConsole'
 import { downloadBlob } from '@/lib/downloadBlob'
 import { formatDate, formatDateTime } from '@/lib/date'
 import { formatTotalAmount } from '@/lib/api/finance/totalPaid'
@@ -770,6 +770,9 @@ export default function PaymentConsolePage() {
         .find(s => s.ledgers.some(l => l.outstanding > 0)) ?? null
   const payingNextSemester = payNextSemester && !!nextSemester
   const ledgers = payingNextSemester ? nextSemester.ledgers : currentLedgers
+  // More than one semester in the list (a sponsored student's arrears) →
+  // Fee Breakdown labels each semester's run of rows.
+  const ledgersSpanSemesters = new Set(ledgers.map(l => l.semesterGuid ?? l.semesterName ?? null)).size > 1
   // Back to the current semester's view on a new student or a saved payment,
   // so the screen never moves on to a further semester by itself.
   useEffect(() => setPayNextSemester(false), [selectedApplicationGuid, receipt])
@@ -786,6 +789,12 @@ export default function PaymentConsolePage() {
   const semesterPaidPercentage = currentSemesterPayable?.currentSemesterPaidPercentage ?? 0
   const semesterRemainingPercentage = currentSemesterPayable?.currentSemesterRemainingPercentage ?? 0
   const semesterComplete = semesterAmount > 0 && semesterOutstanding <= 0
+  // Sponsored (sponsored-students guide): `ledgers` also carries earlier-
+  // semester arrears and the currentSemester* figures above cover every
+  // semester billed so far, so they're labelled as such, never as "this
+  // semester's fee". Unknown category (null) is treated as self-paid.
+  const isSponsored = !!profile && isSelfPaidStudent(profile) === false
+  const billedLabel = isSponsored && !payingNextSemester
   // Business rule (2026-09-04, per request): the discount is documented as
   // conditional on "this group is paid in full" (see discountMessage's own
   // wording), but this endpoint always shows it unconditionally — it has no
@@ -964,7 +973,7 @@ export default function PaymentConsolePage() {
   // payment-entry form stays mock (no documented single-category submit
   // endpoint for it). isError surfaced explicitly, same reasoning as the
   // other queries on this page.
-  const { data: allOutstanding = [], isLoading: isAllOutstandingLoading, isError: isAllOutstandingError } = useAllOutstandingLedgers(selectedApplicationGuid, !!selectedApplicationGuid)
+  const { data: allOutstanding = [], isLoading: isAllOutstandingLoading, isError: isAllOutstandingError } = useAllOutstandingLedgers(selectedApplicationGuid, !!selectedApplicationGuid, studentGuid)
   const otherOutstanding = allOutstanding.filter(i => i.category === 2)
   // isError kept separate from the [] fallback on purpose — a failed fetch
   // (confirmed live: this endpoint can 500 with server_error for some
@@ -1850,7 +1859,7 @@ export default function PaymentConsolePage() {
               { label: 'Phone', value: profile.phone },
               { label: 'Email', value: email },
               { label: 'Refugee', value: refugeeLabel(profile.refugee) },
-              { label: 'Category', value: studCategoryLabel(profile.studCategory) },
+              { label: 'Category', value: sponsorCategoryLabel(profile) },
             ]
             return (
             <section className="card pcx-student" aria-label="Student" ref={mainAreaRef}>
@@ -1861,6 +1870,7 @@ export default function PaymentConsolePage() {
                     <div className="pcx-name-row">
                       <h2 className="pcx-name">{fullName}</h2>
                       {regStatus && <span className={`pcx-pill pcx-pill-${regTone}`}><span className="pcx-dot" aria-hidden="true"></span>{regStatus}</span>}
+                      {isSponsored && <span className="pcx-pill pcx-pill-blue" title={profile.sponsorCategoryName ? `Sponsor category: ${profile.sponsorCategoryName}` : undefined}>Sponsored</span>}
                     </div>
                     <p className="pcx-sub">{programName ?? '—'}</p>
                     <div className="pcx-meta">
@@ -1876,8 +1886,8 @@ export default function PaymentConsolePage() {
                       <span className="pcx-figure-val text-amber">{fmtAmt(totalProgramOutstanding)}</span>
                     </button>
                     {(payingNextSemester || semesterAmount > 0) && (
-                      <div className="pcx-figure" title={payingNextSemester ? nextSemester.semesterName : undefined}>
-                        <span className="pcx-figure-lbl">{payingNextSemester ? 'Selected semester paid' : 'Semester paid'}</span>
+                      <div className="pcx-figure" title={payingNextSemester ? nextSemester.semesterName : billedLabel ? 'Every semester billed so far, earlier arrears and paid lines included' : undefined}>
+                        <span className="pcx-figure-lbl">{payingNextSemester ? 'Selected semester paid' : billedLabel ? 'Billed to date paid' : 'Semester paid'}</span>
                         {tileRateMissing ? (
                           <>
                             <span className="pcx-figure-val">—</span>
@@ -1886,13 +1896,13 @@ export default function PaymentConsolePage() {
                         ) : (
                           <>
                             <span className="pcx-figure-val">{tilePaidPct.toFixed(1).replace(/\.0$/, '')}%</span>
-                            <span className="pcx-mini-bar" role="img" aria-label={`${tilePaidPct.toFixed(1)} percent of ${payingNextSemester ? nextSemester.semesterName : 'the current semester'} paid, ${tileRemainingPct.toFixed(1)} percent remaining`}>
+                            <span className="pcx-mini-bar" role="img" aria-label={`${tilePaidPct.toFixed(1)} percent of ${payingNextSemester ? nextSemester.semesterName : billedLabel ? 'the fees billed so far' : 'the current semester'} paid, ${tileRemainingPct.toFixed(1)} percent remaining`}>
                               <span style={{ width: `${Math.min(100, Math.max(0, tilePaidPct))}%` }}></span>
                             </span>
                             <span className={`pcx-figure-note${tileComplete ? ' is-done' : ''}`}>
                               {tileComplete
-                                ? <><i className="lni lni-checkmark-circle" aria-hidden="true"></i> Semester complete</>
-                                : <>{fmtAmt(tileOutstanding)} left of {fmtAmt(tileAmount)}</>}
+                                ? <><i className="lni lni-checkmark-circle" aria-hidden="true"></i> {billedLabel ? 'All billed fees paid' : 'Semester complete'}</>
+                                : <>{fmtAmt(tileOutstanding)} left of {fmtAmt(tileAmount)}{billedLabel && ' billed'}</>}
                             </span>
                           </>
                         )}
@@ -2592,6 +2602,7 @@ export default function PaymentConsolePage() {
                           <h3 className="pcx-panel-title">Fee Breakdown</h3>
                           <p className="pcx-panel-sub">
                             {payingNextSemester && <><b>{nextSemester.semesterName}</b> · </>}
+                            {!payingNextSemester && isSponsored && ledgersSpanSemesters && <>Includes earlier-semester arrears · </>}
                             Amounts in {targetCurrencyName || 'the currency received'} — set via <b>Currency Received</b>
                           </p>
                         </div>
@@ -2628,7 +2639,7 @@ export default function PaymentConsolePage() {
                           <div
                             className="pcx-bar"
                             role="img"
-                            aria-label={`${(paymentCoverage * 100).toFixed(1)} percent of this semester's payable covered by this payment`}
+                            aria-label={`${(paymentCoverage * 100).toFixed(1)} percent of ${billedLabel ? 'the billed balance' : "this semester's payable"} covered by this payment`}
                           >
                             <span style={{ width: `${paymentCoverage * 100}%` }}></span>
                           </div>
@@ -2638,7 +2649,7 @@ export default function PaymentConsolePage() {
                             {balanceAfterPayment >= 0 ? (
                               <div><dt>Balance after</dt><dd className="text-amber">{fmtAmt(balanceAfterPayment)}</dd></div>
                             ) : (
-                              <div><dt>Beyond this semester</dt><dd className="text-blue">{fmtAmt(-balanceAfterPayment)}</dd></div>
+                              <div><dt>{billedLabel ? 'Beyond billed fees' : 'Beyond this semester'}</dt><dd className="text-blue">{fmtAmt(-balanceAfterPayment)}</dd></div>
                             )}
                           </dl>
                         </div>
@@ -2660,8 +2671,15 @@ export default function PaymentConsolePage() {
                         </div>
                         {convertedLedgers.map((l, i) => {
                           const isPaid = l.outstanding === 0
+                          // A sponsored student's list spans several
+                          // semesters (ordered by semCode) — label each run.
+                          const semKey = l.semesterGuid ?? l.semesterName ?? null
+                          const prevKey = i > 0 ? (convertedLedgers[i - 1].semesterGuid ?? convertedLedgers[i - 1].semesterName ?? null) : undefined
+                          const showGroup = ledgersSpanSemesters && semKey !== prevKey
                           return (
-                            <div className="recgrid-row recgrid-body" key={`${l.ledgerGuid ?? 'none'}-${i}`}>
+                            <Fragment key={`${l.ledgerGuid ?? 'none'}-${i}`}>
+                            {showGroup && <div className="recgrid-group">{semesterLabel(l.semesterName) ?? 'Semester not resolved'}</div>}
+                            <div className="recgrid-row recgrid-body">
                               <span className="pcx-ledger-cell">
                                 <span className="pcx-ledger-name">
                                   {l.ledgerName}
@@ -2716,6 +2734,7 @@ export default function PaymentConsolePage() {
                               </span>
                               <span data-label="Outstanding" className={isPaid ? 'font-bold text-green' : 'font-bold text-amber'}>{l.convOutstanding != null ? fmtAmt(l.convOutstanding) : '—'}</span>
                             </div>
+                            </Fragment>
                           )
                         })}
                         {/* Discount/Total as bold footer rows on the same
@@ -3044,12 +3063,12 @@ export default function PaymentConsolePage() {
                           </div>
 
                           <dl className="pcx-summary">
-                            <div><dt>Payable this semester</dt><dd>{fmtAmt(convertedTotalNetPayable)}</dd></div>
+                            <div><dt>{billedLabel ? 'Payable (billed to date)' : 'Payable this semester'}</dt><dd>{fmtAmt(convertedTotalNetPayable)}</dd></div>
                             <div><dt>This payment</dt><dd>− {fmtAmt(payAmountNum)}</dd></div>
                             {balanceAfterPayment >= 0 ? (
                               <div className="pcx-summary-total"><dt>Balance after</dt><dd className="text-amber">{payCurrencyCode} {fmtAmt(balanceAfterPayment)}</dd></div>
                             ) : (
-                              <div className="pcx-summary-total"><dt>Beyond this semester</dt><dd className="text-blue">{payCurrencyCode} {fmtAmt(-balanceAfterPayment)}</dd></div>
+                              <div className="pcx-summary-total"><dt>{billedLabel ? 'Beyond billed fees' : 'Beyond this semester'}</dt><dd className="text-blue">{payCurrencyCode} {fmtAmt(-balanceAfterPayment)}</dd></div>
                             )}
                           </dl>
 

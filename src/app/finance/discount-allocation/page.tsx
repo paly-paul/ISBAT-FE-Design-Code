@@ -5,7 +5,7 @@ import { Toast } from '@/components/Toast'
 import { StudentAvatar } from '@/components/StudentAvatar'
 import { SearchSelect } from '@/components/SearchSelect'
 import { useSearchStudentsInfinite, useStudentProfile } from '@/hooks/finance/usePaymentConsole'
-import { refugeeLabel, studCategoryLabel, searchStudents } from '@/lib/api/finance/paymentConsole'
+import { refugeeLabel, sponsorCategoryLabel, searchStudents } from '@/lib/api/finance/paymentConsole'
 import { useCampusDropdown } from '@/hooks/config/useCampuses'
 import { useProgramMasters } from '@/hooks/academic/useProgramMaster'
 import { useBatch } from '@/hooks/academic/useBatches'
@@ -554,7 +554,7 @@ function DiscountAllocationContent() {
                     <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Year</span><span className="pc-hero-fact-val" title={profile.yearCode ?? '—'}>{profile.yearCode ?? '—'}</span></div>
                     <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Reg Status</span><span className="pc-hero-fact-val" title={profile.regStatusName ?? '—'}>{profile.regStatusName ?? '—'}</span></div>
                     <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Refugee</span><span className="pc-hero-fact-val">{refugeeLabel(profile.refugee)}</span></div>
-                    <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Category</span><span className="pc-hero-fact-val">{studCategoryLabel(profile.studCategory)}</span></div>
+                    <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Category</span><span className="pc-hero-fact-val">{sponsorCategoryLabel(profile)}</span></div>
                   </div>
                 </div>
                 <div className="text-g500 flex items-center gap-1.5 px-5 py-4" style={{ fontSize: 11.5 }}>

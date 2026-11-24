@@ -25,7 +25,7 @@ import {
   RegulatoryPaymentHistoryEntry,
   RegulatorySemesterStatus,
 } from '@/hooks/finance/useNcheGuildPayment'
-import { refugeeLabel, studCategoryLabel } from '@/lib/api/finance/paymentConsole'
+import { refugeeLabel, sponsorCategoryLabel } from '@/lib/api/finance/paymentConsole'
 import { formatTotalAmount } from '@/lib/api/finance/totalPaid'
 import { SearchSelect } from '@/components/SearchSelect'
 import { getDefaultFinanceCurrencyGuid } from '@/hooks/finance/useFinanceCurrencies'
@@ -462,7 +462,7 @@ export default function NcheGuildPaymentPage() {
     { label: 'Phone', value: profile.phone },
     { label: 'Email', value: profile.emailId ?? profile.universityEmail },
     { label: 'Refugee', value: refugeeLabel(profile.refugee) },
-    { label: 'Category', value: studCategoryLabel(profile.studCategory) },
+    { label: 'Category', value: sponsorCategoryLabel(profile) },
   ] : []
   const payAmountNum = parseFloat(amount) || 0
   const payCurrencyCode = currencies.find(c => c.currencyGuid === currencyGuid)?.currencyCode ?? ''

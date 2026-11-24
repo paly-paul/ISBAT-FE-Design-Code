@@ -6,7 +6,7 @@ import { SearchSelect } from '@/components/SearchSelect'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { SuccessPopup } from '@/components/modals/shared/SuccessPopup'
 import { useSearchStudentsInfinite, useStudentProfile } from '@/hooks/finance/usePaymentConsole'
-import { refugeeLabel, studCategoryLabel } from '@/lib/api/finance/paymentConsole'
+import { refugeeLabel, sponsorCategoryLabel } from '@/lib/api/finance/paymentConsole'
 import { useStudent } from '@/hooks/student/useStudents'
 import { useTerminationReasonsDropdown } from '@/hooks/student/useTerminationReasons'
 import { useTerminateStudent } from '@/hooks/student/useStudentTermination'
@@ -285,7 +285,7 @@ export default function TerminateStudentPage() {
                     </div>
                     <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Reg Status</span><span className="pc-hero-fact-val" title={profile.regStatusName ?? '—'}>{profile.regStatusName ?? '—'}</span></div>
                     <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Refugee</span><span className="pc-hero-fact-val">{refugeeLabel(profile.refugee)}</span></div>
-                    <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Category</span><span className="pc-hero-fact-val">{studCategoryLabel(profile.studCategory)}</span></div>
+                    <div className="pc-hero-fact"><span className="pc-hero-fact-lbl">Category</span><span className="pc-hero-fact-val">{sponsorCategoryLabel(profile)}</span></div>
                   </div>
                 </div>
               </div>
