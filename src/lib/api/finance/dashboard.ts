@@ -25,8 +25,14 @@ export interface DashboardSummary {
   baseCurrencyCode: string
   currentInBase: DashboardTotals
   previousInBase: DashboardTotals
+  // Growth of the converted total, to one decimal; null when the previous
+  // period is 0. The Collected Today card doesn't use it.
+  netChangePercentInBase: number | null
   hasMissingRates: boolean
-  currencies: { currencyCode: string; current: DashboardTotals; previous: DashboardTotals }[]
+  // Only currencies with activity in either period, sorted by code. Never add
+  // them together. netChangePercent comes from the API (one decimal, null when
+  // previous.net is 0): show it as it is.
+  currencies: { currencyCode: string; current: DashboardTotals; previous: DashboardTotals; netChangePercent: number | null }[]
 }
 
 export interface DashboardRangeParams {

@@ -1,6 +1,6 @@
 # Finance Module: Dropdown APIs and 403 Risk
 
-This lists every dropdown in the Finance module, the endpoint that fills it, and which of those endpoints are likely to return **403 Forbidden** for users who lack certain permissions.
+This lists every dropdown in the Finance module, the endpoint that fills it, and which of those endpoints may return **403 Forbidden**.
 
 All endpoints are `GET` unless marked otherwise. **Static** means the options are hard-coded in the frontend and no API is called. **↳** means the dropdown waits until an earlier dropdown has a value.
 
@@ -11,7 +11,7 @@ All endpoints are `GET` unless marked otherwise. **Static** means the options ar
 ### Shared dropdowns used across Finance
 | Dropdown | API | Used in |
 |---|---|---|
-| Student search | `/api/v1/admissions/application-filling/payment-console/search?searchTerm=&pageNumber=&pageSize=` | Payment Console, Discount Allocation, NCHE / Guild Payment, New Advance Deposit modal |
+| Student search | `/api/v1/admissions/application-filling/payment-console/search?searchTerm=&pageNumber=&pageSize=` | Payment Console, Discount Allocation, Guild Payment, New Advance Deposit modal |
 | Processing bank picker | `/api/v1/finance/proc-banks?page=&pageSize=` (loads more on scroll), plus `/api/v1/finance/proc-banks/{guid}` when the saved bank isn't in the loaded pages | Payment Console, Edit Payment modal, Edit Other Payment modal, New Advance Deposit modal |
 | Report scope filters | Campus → `/api/v1/academic/campus/dropdown`<br>Programme ↳ campus → `/api/v1/academic/program-master/by-campus/{campusGuid}`<br>Semesters ↳ programme → `/api/v1/academic/semesters/dropdownforprogram?programGuid=`<br>Batches ↳ semesters → `/api/v1/academic/batches/dropdown?programGuid=&semesterGuid=…`<br>Sponsor → `/api/v1/students/sponsor-categories?page=1&pageSize=100` | Outstanding report, Transaction report, Dashboard student list |
 
@@ -79,7 +79,8 @@ The current intake is picked automatically from `/api/v1/academic/intakes/dropdo
 ### NCHE / Guild Payment
 | Dropdown | API |
 |---|---|
-| Student search | `/api/v1/admissions/application-filling/payment-console/search` |
+| Student search (NCHE) | `/api/v1/students/nche-search?…` |
+| Student search (Guild) | `/api/v1/admissions/application-filling/payment-console/search` |
 | Currency | `/api/v1/finance/currencies/dropdown` |
 
 ### Exchange Rates
@@ -163,43 +164,97 @@ The Student field on this report is a plain text box, not a dropdown.
 
 The search boxes on the master pages (Banks, Bank Branches, Cooperates, Currencies, Discounts, General Settings, Ledgers, Ledger Others, Processing Banks, Processing GL Accounts, Receipt Books) only filter rows already on the page and don't make an extra call.
 
+### GUID-based calls behind the dropdowns
+If one of these returns 403, the dropdown can still open, but the selected value may show blank or the form may not prefill.
+
+**Look up a selected value or name**
+| API | Used in | When it is called |
+|---|---|---|
+| `/api/v1/finance/proc-banks/{guid}` | Processing bank picker | The selected bank isn't in the loaded list |
+| `/api/v1/academic/batches/{guid}` | Discount Allocation → batch name (not a dropdown) | The student's profile has no batch code |
+
+Discount Allocation also calls `/api/v1/academic/program-master?pageSize=1000…` when the profile has no programme name. This isn't a GUID call or a dropdown, but it has the same risk.
+
+**Load the record after a student or parent is picked**
+| API | Used in |
+|---|---|
+| `/api/v1/admissions/application-filling/payment-console/student-profile/{applicationGuid}` | Payment Console, Discount Allocation, NCHE / Guild Payment |
+| `/api/v1/students/{studentGuid}/discount` | Discount Allocation → current discount |
+| `/api/v1/students/studentstatement/{studentGuid}` | Student Statements |
+| `/api/v1/students/refugee/{studentGuid}` | Refugee Status |
+| `/api/v1/academic/program-master/by-campus/{campusGuid}` | Report scope filters; Passout Library Deposit → Programme |
+
+**Prefill the edit form, including its dropdowns**
+| API | Form |
+|---|---|
+| `/api/v1/finance/banks/{guid}` | Edit Bank |
+| `/api/v1/finance/bank-branches/{guid}` | Edit Bank Branch |
+| `/api/v1/finance/cooperates/{guid}` | Edit Cooperate |
+| `/api/v1/finance/currencies/{guid}` | Edit Currency |
+| `/api/v1/finance/discounts/{guid}` | Edit Discount |
+| `/api/v1/finance/gen-sets/{guid}` | Edit General Setting |
+| `/api/v1/finance/ledgers/{guid}` | Edit Ledger |
+| `/api/v1/finance/ledger-others/{guid}` | Edit Other Ledger |
+| `/api/v1/finance/proc-banks/{guid}` | Edit Processing Bank |
+| `/api/v1/finance/proc-gl-accounts/{guid}` | Edit Processing GL Account |
+
 ---
 
 ## 2. Which endpoints may return 403
 
-> **Caveat:** the backend's permission rules were not available when this was written, so this section is inferred. It follows the convention the frontend has relied on so far: `/dropdown` endpoints are meant to be readable by **any logged-in user**, while plain list and filter endpoints are tied to the matching master page's **View** permission. Confirm with the backend team or by testing.
+> **Source:** one live test, on **Application Filing** with a limited admissions user (2026-11-24), then the `Auth` lines in `erp-docs`. The Finance pages themselves have not been tested. **The docs are not reliable for list and by-GUID endpoints:** some documented as needing no specific permission returned 403 in that test.
 
-### Most likely: list endpoints used as dropdown sources
-| Endpoint | Used in | Permission it probably needs |
+Whether a user is refused depends on their own permissions. The risk is mainly a user on one page whose dropdown reads **another page's** data.
+
+### Refused in the live test (admissions user)
+| Endpoint | Where Finance uses it |
+|---|---|
+| `/api/v1/academic/program-master?page=…` | Payment Refund → Passout Library Deposit → Programme (no campus); Discount Allocation programme name |
+| `/api/v1/academic/batches?…` | Payment Refund → Passout Library Deposit → Batch |
+| `/api/v1/academic/batches/{guid}` (*) | Discount Allocation batch name |
+
+(*) The Network tab showed only the GUID, so this one is inferred. A finance user may have different permissions, so these need testing with one.
+
+### Documented as requiring a permission (not tested)
+| Endpoint | Used in | Permission |
 |---|---|---|
-| `/api/v1/finance/currencies?page=1&pageSize=…` | Exchange Rates; Payment Refund form; Edit Payment modal; New Advance Deposit modal; Processing Bank form | Currency master. A `/currencies/dropdown` endpoint already exists, and Payment Console and NCHE / Guild already use it |
-| `/api/v1/finance/proc-banks?page=&pageSize=` | Processing bank picker in Payment Console, Edit Payment, Edit Other Payment, New Advance Deposit | Processing Bank master. **This is the highest-impact item: a cashier without that permission can't pick a bank when taking a payment** |
-| `/api/v1/finance/cooperates?page=1&pageSize=…` | Discount Allocation → Cooperate | Cooperate master |
-| `/api/v1/finance/ledgers?page=1&pageSize=…` | Transaction report → fee ledgers | Ledger master |
-| `/api/v1/students/sponsor-categories` | Outstanding report, Transaction report, Dashboard student list → Sponsor | Sponsor Category master (Student module) |
-| `/api/v1/academic/batches?…` | Payment Refund → Passout Library Deposit → Batch | Batch master (Academic module) |
-| `/api/v1/academic/program-master?page=…` | Payment Refund → Passout Library Deposit → Programme (no campus) | Programme Master (Academic module) |
-| `/api/v1/academic/program-master/by-campus/{guid}` | Report scope filters; Passout Library Deposit → Programme | Probably Programme Master |
+| `/api/v1/students/{studentGuid}/discount` | Discount Allocation | `finance.discountallocation.get` |
+| `/api/v1/finance/discounts/{guid}` | Edit Discount | `finance.discounts.get` |
 
-### Possible: feature endpoints from another module or page
-| Endpoint | Used in | Why it might fail |
+Both belong to the page that uses them, so a user with that page should normally have the permission.
+
+### At risk (not tested)
+The docs say these need no specific permission.
+
+| Endpoint | Used in | Dropdown endpoint available |
 |---|---|---|
-| `/api/v1/admissions/application-filling/payment-console/search` | Discount Allocation, NCHE / Guild, New Advance Deposit | An Admissions endpoint named for the Payment Console. A user with those pages but not Payment Console could be refused |
-| `/api/v1/admissions/application-filling/vetted-registered-search` | Transaction report → Student | Admissions endpoint used from Finance |
-| `/api/v1/students/studentstatement/search` | Student Statements → Student search | Student module endpoint used from Finance |
-| `POST /api/v1/students/search/search` | Refugee Status → Student search | Student module endpoint used from Finance |
-| `/api/v1/finance/proc-banks/{guid}` | Processing bank picker (only when the saved bank isn't in the loaded list) | Single-record read on the Processing Bank master |
+| `/api/v1/finance/proc-banks`, `/api/v1/finance/proc-banks/{guid}` | Processing bank picker. **Highest impact if refused: a cashier couldn't pick a bank when taking a payment** | `/api/v1/finance/proc-banks/dropdown` |
+| `/api/v1/finance/currencies` | Exchange Rates; Payment Refund form; Edit Payment; New Advance Deposit; Processing Bank form | `/api/v1/finance/currencies/dropdown` (already used by Payment Console and NCHE / Guild) |
+| `/api/v1/finance/cooperates` | Discount Allocation → Cooperate | None documented |
+| `/api/v1/finance/ledgers` | Transaction report → fee ledgers | None documented |
+| `/api/v1/students/sponsor-categories` | Report scope filters: Outstanding and Transaction reports, Dashboard student list | None documented |
+| `/api/v1/academic/program-master/by-campus/{campusGuid}` | Report scope filters; Passout Library Deposit → Programme | `/api/v1/academic/program-master/dropdown?campusGuid=` |
+| `/api/v1/admissions/application-filling/payment-console/search` | Payment Console, Discount Allocation, Guild Payment, New Advance Deposit | – |
+| `/api/v1/admissions/application-filling/payment-console/student-profile/{applicationGuid}` | Payment Console, Discount Allocation, NCHE / Guild Payment | – |
+| `/api/v1/admissions/application-filling/vetted-registered-search` | Transaction report → Student | – |
+| `/api/v1/students/nche-search` | NCHE Payment → Student search | – |
+| `/api/v1/students/studentstatement/search` | Student Statements → Student search | – |
+| `POST /api/v1/students/search/search` | Refugee Status → Student search | – |
 
-### Unlikely
-- Every `/dropdown` endpoint: finance currencies, receipt books, discounts, banks, proc GL accounts and ledger others; academic intakes, campus, program-master and batches; countries.
-- `/api/v1/academic/semesters/dropdownforprogram`.
-- `/api/v1/finance/payment-console/ledger-others`, which only runs on Payment Console itself.
-- `/api/v1/finance/enums/payment-types`: enum lists are usually open.
+### Lower risk
+- **The other `/dropdown` endpoints and `semesters/dropdownforprogram`.** Every `/dropdown` call in the live test worked, though only a few were exercised, and not the Finance ones.
+- **A page's own endpoints:** `/api/v1/finance/payment-console/ledger-others` on Payment Console, and a master's own by-GUID call on its own edit form.
+- `/api/v1/finance/enums/payment-types`: an enum list, but its permission isn't documented.
 
 ### Suggested follow-ups
-1. **Backend:** confirm the required permission for each endpoint in the "most likely" and "possible" tables.
-2. **Backend:** add `/dropdown` versions of `proc-banks`, `cooperates` and `ledgers` (and `sponsor-categories`, also flagged in the Student module write-up) so pages that only need a list don't require master-page permissions.
-3. **Frontend:** switch the five places that read the full `/finance/currencies` list to the existing `/finance/currencies/dropdown`. This is the only fix that doesn't need backend work.
+1. **Backend:** confirm the permission for each endpoint above and correct the docs.
+2. **Backend:** add dropdown endpoints for `cooperates`, `ledgers` and `sponsor-categories`; none is documented today.
+3. **Frontend:** switch the five places that read the full `/finance/currencies` list to `/finance/currencies/dropdown`.
+4. **Frontend:** move the processing bank picker to `/finance/proc-banks/dropdown`, after checking how it treats inactive banks and that a saved inactive bank still shows its name.
 
 ### How to verify
-Sign in as a staff member with limited permissions (for example, a cashier role), open each page above with the browser's Network tab filtered to status `403`, and open each dropdown. Payment Console is the most important page to test.
+Filter the Network tab by status `403` and test with limited users:
+1. **Cashier on Payment Console:** open Bank and Currency, then Edit Payment.
+2. **Discount Allocation only:** pick a student, then open Cooperate.
+3. **Finance reports only:** open Sponsor, Programme and Ledgers on the Transaction report.
+4. **Payment Refund only:** open Programme and Batch on the Passout Library Deposit tab.
