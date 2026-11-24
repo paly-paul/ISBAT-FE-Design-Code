@@ -78,8 +78,8 @@ export default function UniversityExamMaterialPrintPage() {
     window.setTimeout(() => setToast(null), 3500)
   }
 
-  const { data: currentIntake, isLoading: currentIntakeLoading } = useCurrentAcademicIntake()
-  const { data: allIntakes, isLoading: allIntakesLoading } = useIntakesDropdown()
+  const { data: currentIntake, isLoading: currentIntakeLoading, isError: currentIntakeError } = useCurrentAcademicIntake()
+  const { data: allIntakes, isLoading: allIntakesLoading, isError: allIntakesError } = useIntakesDropdown()
   const intakeLoading = currentIntakeLoading || allIntakesLoading
 
   const intakeOptions = useMemo(() => {
@@ -96,19 +96,14 @@ export default function UniversityExamMaterialPrintPage() {
         label: `${i.description || i.intakeCode} (Current)`,
       }))
     }
-    if ((allIntakes ?? []).length > 0) {
-      const fallback = allIntakes![0]
-      return [{
-        value: fallback.intakeGuid,
-        label: `${fallback.description || fallback.intakeCode} (Current)`,
-      }]
-    }
     return []
   }, [currentIntake, allIntakes])
 
   useEffect(() => {
     if (!selectedIntakeGuid && intakeOptions.length > 0) {
       setSelectedIntakeGuid(intakeOptions[0].value)
+    } else if (selectedIntakeGuid && intakeOptions.length === 0) {
+      setSelectedIntakeGuid('')
     }
   }, [intakeOptions, selectedIntakeGuid])
 
@@ -460,12 +455,19 @@ export default function UniversityExamMaterialPrintPage() {
           <div className="fg mb-0">
             <label className="lbl">Academic Intake <span className="text-red-500">*</span></label>
             <SearchSelect
-              placeholder="— Select Intake —"
+              placeholder={intakeLoading ? 'Loading…' : 'No current intake'}
               value={selectedIntakeGuid}
               onChange={setSelectedIntakeGuid}
               disabled={true}
               options={intakeOptions}
             />
+            {!intakeLoading && intakeOptions.length === 0 && (
+              <p className="text-clr-red text-xs mt-1">
+                {currentIntakeError || allIntakesError
+                  ? 'Could not load academic intakes. Please reload and try again.'
+                  : 'No current academic intake is set. Mark one as current in Intake Master.'}
+              </p>
+            )}
           </div>
           <div className="fg mb-0">
             <label className="lbl">Programme <span className="text-red-500">*</span></label>

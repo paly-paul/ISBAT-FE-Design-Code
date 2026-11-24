@@ -108,7 +108,13 @@ export default function QuestionBankUploadPage() {
   const { data: currentIntake } = useCurrentAcademicIntake()
 
   // ── Tab 1 Queries: Question Repository (Single Question Endpoints) ──────────
-  const { data: singleCategories, isLoading: isLoadingSingleCategories } = useSingleQuestionCategories()
+  const {
+    data: singleCategories,
+    isLoading: isLoadingSingleCategories,
+    isError: isSingleCategoriesError,
+    error: singleCategoriesError,
+    refetch: refetchSingleCategories,
+  } = useSingleQuestionCategories()
   const repoUnitsQuery = useSingleQuestionCourseUnits(
     intakeGuid,
     loggedInUserGuid || undefined,
@@ -131,7 +137,13 @@ export default function QuestionBankUploadPage() {
   )
 
   // ── Tab 2 Queries: Bulk Excel Import (Question Bank Endpoints) ──────────────
-  const { data: bankCategories, isLoading: isLoadingBankCategories } = useQuestionBankCategories()
+  const {
+    data: bankCategories,
+    isLoading: isLoadingBankCategories,
+    isError: isBankCategoriesError,
+    error: bankCategoriesError,
+    refetch: refetchBankCategories,
+  } = useQuestionBankCategories()
   const importUnitsQuery = useQuestionBankCourseUnits(
     intakeGuid,
     loggedInUserGuid,
@@ -200,6 +212,14 @@ export default function QuestionBankUploadPage() {
   useEffect(() => {
     setShowUploadBox(false)
   }, [importCourseUnitGuid, importCategory, effectiveImportUeType])
+
+  useEffect(() => {
+    if (activeTab === 'repository' && isSingleCategoriesError && singleCategoriesError) {
+      showToast(extractApiErrorMessage(singleCategoriesError, 'Failed to load assessment categories.'), 'error')
+    } else if (activeTab === 'import' && isBankCategoriesError && bankCategoriesError) {
+      showToast(extractApiErrorMessage(bankCategoriesError, 'Failed to load assessment categories.'), 'error')
+    }
+  }, [activeTab, isSingleCategoriesError, singleCategoriesError, isBankCategoriesError, bankCategoriesError])
 
   // ── Mutations ───────────────────────────────────────────────────────────────
   const downloadTemplateMut = useDownloadQuestionBankTemplate()
@@ -767,27 +787,14 @@ export default function QuestionBankUploadPage() {
               <SearchSelect
                 options={
                   activeTab === 'repository'
-                    ? (singleCategories && singleCategories.length > 0
-                        ? singleCategories.map(c => ({
-                            value: String(c.value),
-                            label: c.name,
-                          }))
-                        : [
-                            { value: '1', label: 'Class Test' },
-                            { value: '2', label: 'Course Work' },
-                            { value: '3', label: 'Class Activity' },
-                            { value: '5', label: 'University Exam' },
-                          ])
-                    : (bankCategories && bankCategories.length > 0
-                        ? bankCategories.map(c => ({
-                            value: String(c.value),
-                            label: c.name,
-                          }))
-                        : [
-                            { value: '1', label: 'CBT' },
-                            { value: '2', label: 'Course Work' },
-                            { value: '5', label: 'University Exam' },
-                          ])
+                    ? (singleCategories?.map(c => ({
+                        value: String(c.value),
+                        label: c.name,
+                      })) ?? [])
+                    : (bankCategories?.map(c => ({
+                        value: String(c.value),
+                        label: c.name,
+                      })) ?? [])
                 }
                 value={activeTab === 'repository' ? repoCategory : importCategory}
                 onChange={val => {
@@ -806,11 +813,15 @@ export default function QuestionBankUploadPage() {
                     ? `Loading ${activeTab === 'repository' ? 'Repository' : 'Bulk'} categories...`
                     : (activeTab === 'repository' ? isLoadingSingleCategories : isLoadingBankCategories)
                       ? 'Loading categories...'
-                      : 'Select category'
+                      : (activeTab === 'repository' ? isSingleCategoriesError : isBankCategoriesError)
+                        ? 'Failed to load categories'
+                        : 'Select category'
                 }
                 disabled={
                   isCategoryLoading ||
-                  (activeTab === 'repository' ? isLoadingSingleCategories : isLoadingBankCategories)
+                  (activeTab === 'repository'
+                    ? isLoadingSingleCategories || isSingleCategoriesError
+                    : isLoadingBankCategories || isBankCategoriesError)
                 }
                 isLoading={
                   isCategoryLoading ||
@@ -818,9 +829,26 @@ export default function QuestionBankUploadPage() {
                 }
               />
               <div className="text-[11px] text-slate-400 mt-1 truncate">
-                {activeTab === 'repository'
-                  ? 'Options: Class Test, Course Work, Class Activity'
-                  : 'Options: CBT, Course Work, University Exam'}
+                {(activeTab === 'repository' ? isSingleCategoriesError : isBankCategoriesError) ? (
+                  <span className="text-red-600">
+                    Failed to load categories.{' '}
+                    <button
+                      type="button"
+                      className="underline font-semibold hover:text-red-700"
+                      onClick={() => (activeTab === 'repository' ? refetchSingleCategories() : refetchBankCategories())}
+                    >
+                      Retry
+                    </button>
+                  </span>
+                ) : activeTab === 'repository' ? (
+                  singleCategories && singleCategories.length > 0
+                    ? `Options: ${singleCategories.map(c => c.name).join(', ')}`
+                    : 'Choose an assessment category'
+                ) : bankCategories && bankCategories.length > 0 ? (
+                  `Options: ${bankCategories.map(c => c.name).join(', ')}`
+                ) : (
+                  'Choose an assessment category'
+                )}
               </div>
             </div>
 

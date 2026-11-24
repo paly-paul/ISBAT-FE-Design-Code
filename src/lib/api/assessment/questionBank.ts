@@ -117,7 +117,7 @@ export function getQuestionBankCategories(): Promise<QuestionBankCategory[]> {
     return Promise.resolve(mockCategories)
   }
   return apiGet<QuestionBankCategory[]>('/api/v1/assessment/question-bank/categories')
-    .then(data => data ?? mockCategories)
+    .then(data => data ?? [])
 }
 
 /**
