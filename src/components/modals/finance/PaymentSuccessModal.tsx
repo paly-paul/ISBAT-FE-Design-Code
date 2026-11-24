@@ -15,6 +15,9 @@ interface PaymentSuccessModalProps extends ModalProps {
   // Optional second button beside OK — e.g. "View Student Statement" so the
   // user can go straight to the student's updated payment details.
   secondaryAction?: { label: string; icon: string; onClick: () => void }
+  // Receipt downloads, one button per receipt — a batch of Other payments
+  // issues one receipt each.
+  downloads?: { key: string; label: string; busy: boolean; disabled: boolean; onClick: () => void }[]
 }
 
 // Success confirmation for every payment category's submit — replaces the
@@ -22,8 +25,13 @@ interface PaymentSuccessModalProps extends ModalProps {
 // guildSubmit's own onError). Tuition's printable receipt card in Column 3
 // is unchanged by this — this modal is the immediate "it worked" moment,
 // the card underneath is the lasting/printable record.
-export function PaymentSuccessModal({ isOpen, onClose, title, rows, notices, secondaryAction }: PaymentSuccessModalProps) {
+export function PaymentSuccessModal({ isOpen, onClose, title, rows, notices, secondaryAction, downloads }: PaymentSuccessModalProps) {
   if (!isOpen) return null
+
+  // With downloads the footer is a two-column grid of equal buttons; OK takes
+  // the whole last row when the others fill theirs.
+  const actionCount = (downloads?.length ?? 0) + (secondaryAction ? 1 : 0)
+  const grid = !!downloads?.length
 
   return (
     <div className="modal-overlay open">
@@ -42,13 +50,18 @@ export function PaymentSuccessModal({ isOpen, onClose, title, rows, notices, sec
           ))}
         </div>
 
-        <div className="modal-footer">
+        <div className="modal-footer" style={grid ? { display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' } : undefined}>
+          {downloads?.map(d => (
+            <button key={d.key} type="button" className="btn btn-neu justify-center" disabled={d.disabled} aria-busy={d.busy} onClick={d.onClick}>
+              <i className="lni lni-download" aria-hidden="true"></i> {d.busy ? 'Downloading…' : d.label}
+            </button>
+          ))}
           {secondaryAction && (
             <button className="btn btn-neu flex-1 justify-center" onClick={secondaryAction.onClick}>
               <i className={`lni ${secondaryAction.icon}`}></i> {secondaryAction.label}
             </button>
           )}
-          <button className="btn btn-primary flex-1 justify-center" onClick={onClose}>OK</button>
+          <button className="btn btn-primary flex-1 justify-center" style={grid && actionCount % 2 === 0 ? { gridColumn: '1 / -1' } : undefined} onClick={onClose}>OK</button>
         </div>
       </div>
     </div>

@@ -27,8 +27,7 @@ import {
 } from '@/hooks/finance/useNcheGuildPayment'
 import { refugeeLabel, sponsorCategoryLabel } from '@/lib/api/finance/paymentConsole'
 import { formatTotalAmount } from '@/lib/api/finance/totalPaid'
-import { SearchSelect } from '@/components/SearchSelect'
-import { getDefaultFinanceCurrencyGuid } from '@/hooks/finance/useFinanceCurrencies'
+import { REFERENCE_FIELD, REFERENCE_MAX, regulatoryErrorField, validateReference } from '@/lib/api/finance/ncheGuildPayment'
 import { useCurrenciesDropdown } from '@/hooks/finance/useCurrencies'
 import { scrollToFirstError } from '@/lib/scrollToFirstError'
 import { stripLeadingZeros } from '@/lib/errorMessages'
@@ -281,24 +280,13 @@ export default function NcheGuildPaymentPage() {
   const [pnrNumber, setPnrNumber] = useState('')
   const [remarks, setRemarks] = useState('')
   const [bankDeposit, setBankDeposit] = useState('')
-  // Required on create (post-payment-nche.md / post-payment-guild.md).
-  // Recorded only — the rate and balance checks assume the base currency —
-  // so it defaults to the default finance currency once the list loads.
-  // The dropdown's isDefault is a boolean, GET /currencies' a number;
-  // getDefaultFinanceCurrencyGuid expects the number.
-  const { data: currencyDropdownItems = [] } = useCurrenciesDropdown()
-  const currencies = useMemo(
-    () => currencyDropdownItems.flatMap(c => c.currencyGuid
-      ? [{ currencyGuid: c.currencyGuid, currencyCode: c.currencyCode, currencyName: c.currencyName, isDefault: c.isDefault ? 1 : 0 }]
-      : []),
-    [currencyDropdownItems],
-  )
-  const [currencyGuid, setCurrencyGuid] = useState('')
-  const defaultCurrencyGuid = getDefaultFinanceCurrencyGuid(currencies)
-  useEffect(() => {
-    if (!currencyGuid && defaultCurrencyGuid) setCurrencyGuid(defaultCurrencyGuid)
-  }, [currencyGuid, defaultCurrencyGuid])
-  // Inline field errors: amount, currencyGuid, payDate.
+  // Payments are in the default currency (Uganda Shillings) only: the rate and
+  // balance are in it and nothing is converted, so the server rejects any
+  // other. Shown read-only; its guid is still sent on create.
+  const { data: currencyDropdownItems = [], isLoading: isCurrencyLoading } = useCurrenciesDropdown()
+  const currency = currencyDropdownItems.find(c => c.isDefault && c.currencyGuid)
+  const currencyGuid = currency?.currencyGuid ?? ''
+  // Inline field errors: amount, currencyGuid, payDate, reference.
   const [errors, setErrors] = useState<Record<string, string>>({})
   function clearError(field: string) {
     setErrors(prev => (prev[field] ? { ...prev, [field]: '' } : prev))
@@ -313,7 +301,6 @@ export default function NcheGuildPaymentPage() {
   function resetForm() {
     setAmount('')
     setPayDate(todayYmd())
-    setCurrencyGuid(defaultCurrencyGuid)
     setPnrNumber('')
     setRemarks('')
     setBankDeposit('')
@@ -386,8 +373,10 @@ export default function NcheGuildPaymentPage() {
     const amt = parseFloat(amount)
     if (!amount.trim()) e.amount = 'Amount is required.'
     else if (isNaN(amt) || amt <= 0) e.amount = 'Amount must be greater than 0.'
-    if (!currencyGuid) e.currencyGuid = 'Please select the currency received.'
+    if (!currencyGuid) e.currencyGuid = isCurrencyLoading ? 'The currency is still loading.' : 'No default currency is available. Ask an administrator to check Currency Master.'
     if (!payDate) e.payDate = 'Payment date is required.'
+    const refError = validateReference(category, category === 'nche' ? pnrNumber : bankDeposit)
+    if (refError) e.reference = refError
     return e
   }
 
@@ -399,8 +388,8 @@ export default function NcheGuildPaymentPage() {
     const amt = parseFloat(amount)
 
     const categoryFields = category === 'nche'
-      ? { pnrNumber: pnrNumber.trim() || null, remarks: remarks.trim() || null }
-      : { bankDeposit: bankDeposit.trim() || null }
+      ? { pnrNumber: pnrNumber.trim(), remarks: remarks.trim() || null }
+      : { bankDeposit: bankDeposit.trim() }
 
     createPayment.mutate(
       { applicationGuid: selectedApplicationGuid, studentGuid, amount: amt, currencyGuid, payDate, ...categoryFields },
@@ -417,14 +406,11 @@ export default function NcheGuildPaymentPage() {
         },
         onError: (error: Error) => {
           // The 400 "not a multiple of the configured rate" / "exceeds
-          // outstanding balance" business errors and the 404 for an unknown
-          // currency go under their field, in the server's own words; any
+          // outstanding balance" business errors, a bad reference number and a
+          // rejected currency go under their field, in the server's own words; any
           // other failure (application not found, etc.) stays a toast.
           const msg = error.message || ''
-          const field = /currency/i.test(msg) ? 'currencyGuid'
-            : /multiple|exceed|outstanding|balance|amount/i.test(msg) ? 'amount'
-            : /pay ?date/i.test(msg) ? 'payDate'
-            : null
+          const field = regulatoryErrorField(msg)
           if (field) {
             const e = { [field]: msg }
             setErrors(prev => ({ ...prev, ...e }))
@@ -465,7 +451,7 @@ export default function NcheGuildPaymentPage() {
     { label: 'Category', value: sponsorCategoryLabel(profile) },
   ] : []
   const payAmountNum = parseFloat(amount) || 0
-  const payCurrencyCode = currencies.find(c => c.currencyGuid === currencyGuid)?.currencyCode ?? ''
+  const payCurrencyCode = currency?.currencyCode ?? ''
   const reference = category === 'nche' ? pnrNumber.trim() : bankDeposit.trim()
 
   return (
@@ -655,7 +641,7 @@ export default function NcheGuildPaymentPage() {
                             <tr>
                               <th style={{ width: 40 }}></th>
                               <th>Payment Date</th>
-                              {category === 'nche' ? <th>PNR Number</th> : <th>Bank Deposit</th>}
+                              <th>{REFERENCE_FIELD[category].label}</th>
                               <th>Amount</th>
                               {category === 'nche' && <th>Remarks</th>}
                             </tr>
@@ -779,12 +765,11 @@ export default function NcheGuildPaymentPage() {
 
                 <div className="g2">
                   <div className="fg">
-                    <div className="lbl">Currency Received <span className="req">*</span></div>
-                    <SearchSelect
-                      placeholder="— Select Currency —"
-                      options={currencies.map(c => ({ value: c.currencyGuid, label: `${c.currencyCode} — ${c.currencyName}` }))}
-                      value={currencyGuid}
-                      onChange={v => { setCurrencyGuid(v); clearError('currencyGuid') }}
+                    <label className="lbl" htmlFor="reg-currency">Currency Received <span className="req">*</span></label>
+                    <input
+                      id="reg-currency" className="ctrl" type="text" readOnly
+                      style={{ background: 'var(--g100)', cursor: 'default' }}
+                      value={currency ? `${currency.currencyCode} — ${currency.currencyName}` : isCurrencyLoading ? 'Loading…' : 'Not available'}
                     />
                     {fieldErr('currencyGuid')}
                   </div>
@@ -813,17 +798,18 @@ export default function NcheGuildPaymentPage() {
                     <DatePicker value={payDate} onChange={v => { setPayDate(v); clearError('payDate') }} hasError={!!errors.payDate} />
                     {fieldErr('payDate')}
                   </div>
-                  {category === 'nche' ? (
-                    <div className="fg">
-                      <div className="lbl">PNR Number <span className="text-g400" style={{ fontWeight: 500 }}>(optional)</span></div>
-                      <input className="ctrl" type="text" placeholder="Reference number" value={pnrNumber} onChange={e => setPnrNumber(e.target.value)} />
-                    </div>
-                  ) : (
-                    <div className="fg">
-                      <div className="lbl">Bank Deposit <span className="text-g400" style={{ fontWeight: 500 }}>(optional)</span></div>
-                      <input className="ctrl" type="text" placeholder="Bank deposit reference" value={bankDeposit} onChange={e => setBankDeposit(e.target.value)} />
-                    </div>
-                  )}
+                  <div className="fg">
+                    <label className="lbl" htmlFor="reg-reference">{REFERENCE_FIELD[category].label} <span className="req">*</span></label>
+                    <input
+                      id="reg-reference" className="ctrl" type="text" maxLength={REFERENCE_MAX}
+                      placeholder={REFERENCE_FIELD[category].placeholder}
+                      aria-invalid={!!errors.reference}
+                      style={errors.reference ? { borderColor: 'var(--red)' } : undefined}
+                      value={category === 'nche' ? pnrNumber : bankDeposit}
+                      onChange={e => { (category === 'nche' ? setPnrNumber : setBankDeposit)(e.target.value); clearError('reference') }}
+                    />
+                    {fieldErr('reference')}
+                  </div>
                 </div>
 
                 {category === 'nche' && (

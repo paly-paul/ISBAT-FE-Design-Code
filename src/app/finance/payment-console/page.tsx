@@ -10,7 +10,7 @@ import { PaymentSuccessModal } from '@/components/modals/finance/PaymentSuccessM
 import { UpcomingSemestersModal } from '@/components/modals/finance/UpcomingSemestersModal'
 import { ViewPaymentModal } from '@/components/modals/finance/ViewPaymentModal'
 import { ViewOtherPaymentReceiptModal } from '@/components/modals/finance/ViewOtherPaymentReceiptModal'
-import { getPaymentOtherReceiptPdf, type PaymentOtherDto } from '@/lib/api/finance/paymentOthers'
+import { getPaymentOtherReceiptPdf, type OtherReceiptRef, type PaymentOtherDto } from '@/lib/api/finance/paymentOthers'
 import { EditPaymentModal, EditablePaymentTarget } from '@/components/modals/finance/EditPaymentModal'
 import { EditPaymentOtherModal, EditablePaymentOtherTarget } from '@/components/modals/finance/EditPaymentOtherModal'
 import DatePicker from '@/components/DatePicker'
@@ -371,7 +371,7 @@ export default function PaymentConsolePage() {
   // Other; NCHE/Guild before they were dropped from this page) — replaces
   // the plain success toast; errors still use showToast (see each submit
   // handler's own onError). null when closed.
-  const [successModal, setSuccessModal] = useState<{ title: string; rows: [string, string][]; notices?: string[] } | null>(null)
+  const [successModal, setSuccessModal] = useState<{ title: string; rows: [string, string][]; notices?: string[]; otherReceipts?: OtherReceiptRef[] } | null>(null)
 
   const { data: receiptBookOptions = [] } = useReceiptBookDropdown()
   const activeReceiptBooks = receiptBookOptions.filter(r => r.isActive)
@@ -1068,6 +1068,20 @@ export default function PaymentConsolePage() {
   function printOtherReceipt(p: PaymentOtherDto) {
     guard('print', () => printReceipt(p.paymentOtherGuid, p.receipt ?? p.paymentCode, getPaymentOtherReceiptPdf), 'receipts')
   }
+  // Same PDF as Print / Reprint, saved to disk instead of opened in a tab.
+  const [downloadingGuid, setDownloadingGuid] = useState<string | null>(null)
+  async function downloadOtherReceipt(p: OtherReceiptRef) {
+    if (downloadingGuid) return
+    setDownloadingGuid(p.paymentOtherGuid)
+    try {
+      const { blob, filename } = await getPaymentOtherReceiptPdf(p.paymentOtherGuid)
+      downloadBlob(blob, filename ?? `Receipt_${p.receipt ?? p.paymentCode}.pdf`)
+    } catch (err) {
+      showToast(err instanceof Error && err.message ? err.message : 'Could not download the receipt.', 'error')
+    } finally {
+      setDownloadingGuid(null)
+    }
+  }
   const [otherHistoryPage, setOtherHistoryPage] = useState(1)
   useEffect(() => setOtherHistoryPage(1), [selectedApplicationGuid])
   const {
@@ -1340,6 +1354,7 @@ export default function PaymentConsolePage() {
     setIsSavingOtherBatch(true)
     setGrievanceRowError(null)
     const successRows: [string, string][] = []
+    const otherReceipts: OtherReceiptRef[] = []
     const succeededIds: number[] = []
     let currentRowId: number | null = null
     try {
@@ -1366,10 +1381,13 @@ export default function PaymentConsolePage() {
           payDate: otherPayDate, ledgerName, amount: String(result.amount), currencyCode,
         }])
         successRows.push([ledgerName, `${result.amount.toLocaleString()} ${currencyCode} — Receipt ${result.receipt ?? '—'}`])
+        // No receipt when drawn from an advance deposit — nothing to download.
+        if (result.receipt) otherReceipts.push(result)
       }
       setSuccessModal({
         title: validRows.length > 1 ? `${validRows.length} Other Payments Recorded` : 'Other Payment Recorded',
         rows: successRows,
+        otherReceipts,
       })
       resetOtherForm()
     } catch (error) {
@@ -2086,10 +2104,15 @@ export default function PaymentConsolePage() {
                                     <button className="btn btn-neu btn-sm" onClick={() => setOtherReceipt(h)}>
                                       <i className="lni lni-eye"></i> View
                                     </button>
-                                    {/* No receipt for advance-funded payments, so no Print (per the receipt doc). */}
+                                    {/* No receipt for advance-funded payments, so no Print or Download (per the receipt doc). */}
                                     {h.receipt && (
                                       <button className="btn btn-neu btn-sm" disabled={printingGuid === h.paymentOtherGuid} onClick={() => printOtherReceipt(h)}>
                                         <i className="lni lni-printer"></i> {printingGuid === h.paymentOtherGuid ? 'Loading…' : 'Print / Reprint'}
+                                      </button>
+                                    )}
+                                    {h.receipt && (
+                                      <button className="btn btn-neu btn-sm" disabled={!!downloadingGuid} onClick={() => guard('print', () => downloadOtherReceipt(h), 'receipts')}>
+                                        <i className="lni lni-download"></i> {downloadingGuid === h.paymentOtherGuid ? 'Downloading…' : 'Download Receipt'}
                                       </button>
                                     )}
                                     <button
@@ -3383,7 +3406,15 @@ export default function PaymentConsolePage() {
           title={successModal.title}
           rows={successModal.rows}
           notices={successModal.notices}
-          secondaryAction={studentGuid ? { label: 'View Student Statement', icon: 'lni-files', onClick: openStudentStatement } : undefined}
+          downloads={successModal.otherReceipts?.map((r, _, all) => ({
+            key: r.paymentOtherGuid,
+            // The number is only needed to tell several receipts apart.
+            label: all.length > 1 ? `Receipt ${r.receipt}` : 'Download Receipt',
+            busy: downloadingGuid === r.paymentOtherGuid,
+            disabled: !!downloadingGuid,
+            onClick: () => guard('print', () => downloadOtherReceipt(r), 'receipts'),
+          }))}
+          secondaryAction={studentGuid ? { label: 'Student Statement', icon: 'lni-files', onClick: openStudentStatement } : undefined}
         />
       )}
       <ViewPaymentModal isOpen={!!viewEntry} onClose={() => setViewEntry(null)} showToast={showToast} entry={viewEntry} />
@@ -3396,6 +3427,8 @@ export default function PaymentConsolePage() {
         paymentOtherGuid={otherReceipt?.paymentOtherGuid ?? null}
         onPrint={printOtherReceipt}
         printing={!!otherReceipt && printingGuid === otherReceipt.paymentOtherGuid}
+        onDownload={p => guard('print', () => downloadOtherReceipt(p), 'receipts')}
+        downloading={!!otherReceipt && downloadingGuid === otherReceipt.paymentOtherGuid}
         student={{
           name: profile ? applicantName(profile) : '',
           studentNo: profile?.studentNum ?? profile?.studentRegNo ?? profile?.appRefNo ?? null,
