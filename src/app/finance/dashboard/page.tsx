@@ -435,6 +435,23 @@ function Kpi<T>({ label, icon, tone, query, value, foot, onOpen, openLabel }: {
     : <div className={cls}>{body}</div>
 }
 
+// The API's percent change, shown as sent (one decimal, never worked out
+// here). A dash when it's null: nothing was collected in the previous period.
+function NetChange({ percent, title }: { percent: number | null | undefined; title: string }) {
+  if (percent == null) return <span className="fd-chg" title={title}>—</span>
+  const tone = percent > 0 ? ' up' : percent < 0 ? ' dn' : ''
+  const arrow = percent > 0 ? '↑ ' : percent < 0 ? '↓ ' : ''
+  return <span className={`fd-chg${tone}`} title={title}>{arrow}{fmtFull(Math.abs(percent))}%</span>
+}
+
+// Under a million in full: "1 thousand" would hide most of USD 1,250.
+function CollectedAmount({ value, cur }: { value: number; cur: string }) {
+  const full = fmtFull(value)
+  if (Math.abs(value) < 1e6) return <span>{full}</span>
+  const { num, word } = scaleWords(value)
+  return <span title={`${cur} ${full}`}>{num}<span className="fd-mag"> {word}</span></span>
+}
+
 // Severity of a Needs-attention list: red stops work today (no receipt
 // book, a blocked bank in use, a rate never set), amber will soon, blue is
 // for review only.
@@ -659,17 +676,22 @@ export default function FinanceDashboardPage() {
       <div className="card fd-kpis">
         <Kpi
           label="Collected Today" icon="lni-wallet" query={summaryQ} onOpen={openRecent} openLabel="Today’s payments"
-          value={s => <Money value={s.currentInBase.net} cur={s.baseCurrencyCode} words />}
-          foot={s => {
-            // Percent change: a dash when there's nothing to compare against.
-            const prev = s.previousInBase.net
-            const change = prev > 0 ? ((s.currentInBase.net - prev) / prev) * 100 : null
-            const receipts = `${fmtFull(s.currentInBase.receiptCount)} ${s.currentInBase.receiptCount === 1 ? 'receipt' : 'receipts'}`
-            // .fd-nw keeps each phrase whole when the narrow panel wraps the line.
-            return change === null
-              ? <><span className="fd-nw">{receipts}</span> · <span className="fd-nw" title="Nothing collected yesterday to compare with">— vs yesterday</span></>
-              : <><span className="fd-nw">{receipts}</span> · <span className="fd-nw"><span className={`fd-chg ${change >= 0 ? 'up' : 'dn'}`} title={`Yesterday ${s.baseCurrencyCode} ${fmtFull(prev)}`}>{change >= 0 ? '↑' : '↓'} {Math.abs(change).toFixed(0)}%</span> vs yesterday</span></>
-          }}
+          // One block per currency, as collected: never converted or added together.
+          value={s => s.currencies.length === 0 ? '0' : (
+            <span className="fd-ccys">
+              {s.currencies.map(c => (
+                <span key={c.currencyCode} className="fd-ccy">
+                  <span className="fd-ccy-code">{c.currencyCode}</span>
+                  <CollectedAmount value={c.current.net} cur={c.currencyCode} />
+                  <span className="fd-ccy-chg">
+                    <NetChange percent={c.netChangePercent} title={`Yesterday ${c.currencyCode} ${fmtFull(c.previous.net)}`} />
+                    <span className="fd-nw">vs yesterday</span>
+                  </span>
+                </span>
+              ))}
+            </span>
+          )}
+          foot={s => (s.currencies.length === 0 ? 'Nothing collected today or yesterday' : null)}
         />
         <Kpi
           label="Students Fully Cleared" icon="lni-checkmark-circle" tone="green" query={outQ} onOpen={() => setStudentList('cleared')} openLabel="the list of cleared students"
