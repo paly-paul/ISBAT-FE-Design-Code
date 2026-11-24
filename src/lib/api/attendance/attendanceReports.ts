@@ -112,9 +112,9 @@ export async function getReportTimetables(intakeGuid: string, term: number, lect
     .sort((a, b) => a.courseUnitCode.localeCompare(b.courseUnitCode) || a.dayName.localeCompare(b.dayName))
 }
 
-// The student-pct preview returns studentGuid only. Resolved per row through
-// the existing student lookup (GET /students/{guid}); a failed lookup maps to
-// null so the page can fall back to the GUID.
+// Fallback for a student-pct row the preview returned without a name:
+// resolved through the existing student lookup (GET /students/{guid}); a
+// failed lookup leaves the page showing the short GUID.
 export interface ReportStudent { studentNumber: string; fullName: string; batchCode: string }
 
 export async function getReportStudent(studentGuid: string): Promise<ReportStudent> {
@@ -336,9 +336,9 @@ export function downloadAttendanceByDatePdf(filters: AttendanceByDateFilters): P
 }
 
 // ── Student Attendance % (Page 2) ───────────────────────────────────────
-// get-student-attendance-pct-preview.md returns studentGuid only (names are
-// resolved server-side just for the PDF), and no summary block. The page
-// resolves each row through getReportStudent; the mock fills the names in.
+// The preview returns studentRegNo/studentName/batchCode on each row (mapped
+// to studentNumber/fullName/batchCode below), and no summary block. A row
+// that comes back without a name still resolves through getReportStudent.
 
 export interface StudentPctFilters {
   intakeGuid: string
@@ -463,7 +463,18 @@ function summariseStudents(rows: StudentPctRow[]): StudentPctSummary {
 }
 
 interface StudentPctDto {
-  items: { studentGuid: string; totalSessions: number; presentCount: number; absentCount: number; attendancePct: number }[] | null
+  // studentRegNo/studentName/batchCode are now resolved server-side on each
+  // row; a row without a name still falls back to the per-student lookup.
+  items: {
+    studentGuid: string
+    studentRegNo?: string | null
+    studentName?: string | null
+    batchCode?: string | null
+    totalSessions: number
+    presentCount: number
+    absentCount: number
+    attendancePct: number
+  }[] | null
   totalCount: number
   pageNumber: number
   pageSize: number
@@ -487,7 +498,16 @@ export async function getStudentPctPreview(
   }
   const d = await apiGet<StudentPctDto>(`/api/v1/attendance/reports/student-pct/preview?${query({ ...filters, pageNumber, pageSize })}`)
   return {
-    items: (d.items ?? []).map(r => ({ ...r, studentNumber: null, fullName: null, batchCode: null })),
+    items: (d.items ?? []).map(r => ({
+      studentGuid: r.studentGuid,
+      studentNumber: r.studentRegNo?.trim() || null,
+      fullName: r.studentName?.trim() || null,
+      batchCode: r.batchCode?.trim() || null,
+      totalSessions: r.totalSessions,
+      presentCount: r.presentCount,
+      absentCount: r.absentCount,
+      attendancePct: r.attendancePct,
+    })),
     totalCount: d.totalCount,
     pageNumber: d.pageNumber,
     pageSize: d.pageSize,
@@ -501,9 +521,9 @@ export function downloadStudentPctPdf(filters: StudentPctFilters): Promise<{ moc
 
 // ── Faculty Attendance % (Page 3) ───────────────────────────────────────
 // get-faculty-attendance-pct-preview.md: one row per lecturer and course
-// unit, GUIDs only, no summary block. The page resolves lecturer names from
-// getReportLecturers and unit code/name from getReportCourseUnits (per
-// lecturer); the mock fills them in.
+// unit, with courseUnitCode/courseUnitName on each row, no summary block.
+// The page resolves lecturer names from getReportLecturers, and falls back
+// to getReportCourseUnits (per lecturer) for a row sent without a unit code.
 
 // Faculty conducted-% below this is flagged (spec: Shared Design Tokens).
 export const FACULTY_CONDUCTED_TARGET = 80
@@ -571,7 +591,20 @@ function facultyPctRows(f: FacultyPctFilters): FacultyPctRow[] {
 }
 
 interface FacultyPctDto {
-  items: { lecturerEmployeeGuid: string; courseUnitGuid: string; totalScheduled: number; totalConducted: number; totalSkipped: number; conductedPct: number }[] | null
+  // courseUnitCode/courseUnitName are now resolved server-side on each row;
+  // a row without a code still falls back to the per-lecturer unit lookup.
+  // lecturerName is read if the API sends it, else the page resolves it.
+  items: {
+    lecturerEmployeeGuid: string
+    lecturerName?: string | null
+    courseUnitGuid: string
+    courseUnitCode?: string | null
+    courseUnitName?: string | null
+    totalScheduled: number
+    totalConducted: number
+    totalSkipped: number
+    conductedPct: number
+  }[] | null
   totalCount: number
   pageNumber: number
   pageSize: number
@@ -609,7 +642,17 @@ export async function getFacultyPctPreview(
   }
   const d = await apiGet<FacultyPctDto>(`/api/v1/attendance/reports/faculty-pct/preview?${query({ ...filters, pageNumber, pageSize })}`)
   return {
-    items: (d.items ?? []).map(r => ({ ...r, lecturerName: null, courseUnitCode: null, courseUnitName: null })),
+    items: (d.items ?? []).map(r => ({
+      lecturerEmployeeGuid: r.lecturerEmployeeGuid,
+      lecturerName: r.lecturerName?.trim() || null,
+      courseUnitGuid: r.courseUnitGuid,
+      courseUnitCode: r.courseUnitCode?.trim() || null,
+      courseUnitName: r.courseUnitName?.trim() || null,
+      totalScheduled: r.totalScheduled,
+      totalConducted: r.totalConducted,
+      totalSkipped: r.totalSkipped,
+      conductedPct: r.conductedPct,
+    })),
     totalCount: d.totalCount,
     pageNumber: d.pageNumber,
     pageSize: d.pageSize,

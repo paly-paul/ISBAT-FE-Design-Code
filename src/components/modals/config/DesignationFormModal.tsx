@@ -4,98 +4,122 @@ import { ModalProps } from '../types'
 import { SuccessPopup } from '../shared/SuccessPopup'
 import { FailurePopup } from '../shared/FailurePopup'
 import { SearchSelect } from '@/components/SearchSelect'
-import { Designation, DesignationInput } from '@/lib/api/academic/designation'
-import { useDepartments } from '@/hooks/config/useDepartments'
+import {
+  Designation, DesignationInput,
+  DESIGNATION_NAME_MAX, DESIGNATION_SHORT_CODE_MAX, DESIGNATION_TEXT_MAX,
+} from '@/lib/api/academic/designation'
+import { useCreateDesignation, useUpdateDesignation } from '@/hooks/config/useDesignations'
+import { useCourseLevelsDropdown } from '@/hooks/config/useCourseLevels'
 import { AuthError } from '@/lib/api/client'
 import { scrollToFirstError } from '@/lib/scrollToFirstError'
-
-// Not part of the real GET /api/v1/users/designations response (which
-// references departments by numeric intDept, not a name string) — kept for
-// reference. The Department dropdown below is now backed by the real
-// departments list (useDepartments) instead of this hardcoded set.
-// const DEPARTMENT_OPTIONS = [
-//   { value: 'Computer Science',        label: 'Computer Science' },
-//   { value: 'Information Technology',  label: 'Information Technology' },
-//   { value: 'Business Administration', label: 'Business Administration' },
-//   { value: 'Accounting & Finance',    label: 'Accounting & Finance' },
-//   { value: 'Civil Engineering',       label: 'Civil Engineering' },
-//   { value: 'Nursing Sciences',        label: 'Nursing Sciences' },
-// ]
 
 interface DesignationFormModalProps extends ModalProps {
   mode: 'new' | 'edit'
   designation: Designation | null
-  createDesignation: {
-    mutate: (input: DesignationInput, options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => void
-    isPending: boolean
-  }
-  updateDesignation: {
-    mutate: (variables: { id: string; input: DesignationInput }, options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => void
-    isPending: boolean
-  }
+  // Edit hit not_found: someone else deleted the row. The page drops it.
+  onGone: (designation: Designation) => void
 }
 
-export function DesignationFormModal({ isOpen, onClose, showToast, mode, designation, createDesignation, updateDesignation }: DesignationFormModalProps) {
-  const isEdit = mode === 'edit'
-  const [saved, setSaved]                     = useState(false)
-  const [failure, setFailure]                 = useState<string | null>(null)
-  const [designationName, setDesignationName] = useState('')
-  const [department, setDepartment]           = useState('')
-  const [errors, setErrors]                   = useState<Record<string, string>>({})
+type Field = 'shortCode' | 'designationName' | 'minQualificationGuid' | 'jobDescription' | 'skillSet'
 
-  const { data: departments = [] } = useDepartments()
-  const departmentOptions = departments.map(d => ({ value: String(d.intDept), label: d.deptName }))
+// Add / Edit Designation (designation-master-page.md). No department: a
+// designation isn't tied to one, the employee picks it separately.
+export function DesignationFormModal({ isOpen, onClose, showToast, mode, designation, onGone }: DesignationFormModalProps) {
+  const isEdit = mode === 'edit'
+  const [saved, setSaved]     = useState(false)
+  const [failure, setFailure] = useState<string | null>(null)
+  const [shortCode, setShortCode]                       = useState('')
+  const [designationName, setDesignationName]           = useState('')
+  const [minQualificationGuid, setMinQualificationGuid] = useState('')
+  const [jobDescription, setJobDescription]             = useState('')
+  const [skillSet, setSkillSet]                         = useState('')
+  const [errors, setErrors] = useState<Partial<Record<Field, string>>>({})
+
+  const createDesignation = useCreateDesignation()
+  const updateDesignation = useUpdateDesignation()
+  const { data: courseLevels = [], isLoading: courseLevelsLoading, refetch: reloadCourseLevels } = useCourseLevelsDropdown(isOpen)
+  const qualificationOptions = courseLevels.map(c => ({ value: c.courseLevelGuid, label: c.levelName }))
 
   useEffect(() => {
     if (!isOpen) return
-    if (isEdit && designation) {
-      setDesignationName(designation.designationName)
-      setDepartment(String(designation.intDept))
-    } else if (!isEdit) {
-      setDesignationName(''); setDepartment('')
-    }
+    const d = isEdit ? designation : null
+    setShortCode(d?.shortCode ?? '')
+    setDesignationName(d?.designationName ?? '')
+    setMinQualificationGuid(d?.minQualificationGuid ?? '')
+    setJobDescription(d?.jobDescription ?? '')
+    setSkillSet(d?.skillSet ?? '')
     setErrors({})
   }, [isOpen, isEdit, designation])
 
   if (!isOpen || (isEdit && !designation)) return null
 
   function handleClose() { setSaved(false); setFailure(null); onClose() }
+  function clearError(f: Field) { if (errors[f]) setErrors(p => ({ ...p, [f]: '' })) }
 
   function validate() {
-    const e: Record<string, string> = {}
-    if (!designationName.trim()) e.designationName = 'Designation Name is required'
-    if (!department)             e.department      = 'Please select a department'
+    const e: Partial<Record<Field, string>> = {}
+    if (!shortCode.trim()) e.shortCode = 'Short code is required'
+    else if (shortCode.trim().length > DESIGNATION_SHORT_CODE_MAX) e.shortCode = `Short code must be ${DESIGNATION_SHORT_CODE_MAX} characters or fewer`
+    if (!designationName.trim()) e.designationName = 'Designation name is required'
+    else if (designationName.trim().length > DESIGNATION_NAME_MAX) e.designationName = `Designation name must be ${DESIGNATION_NAME_MAX} characters or fewer`
+    if (jobDescription.trim().length > DESIGNATION_TEXT_MAX) e.jobDescription = `Job description must be ${DESIGNATION_TEXT_MAX} characters or fewer`
+    if (skillSet.trim().length > DESIGNATION_TEXT_MAX) e.skillSet = `Skill set must be ${DESIGNATION_TEXT_MAX} characters or fewer`
     setErrors(e)
     scrollToFirstError(e)
     return Object.keys(e).length === 0
   }
 
-  // Maps the backend's { code, errors } failure shape (see
-  // departments-and-designations.md) to inline field errors where the cause
-  // is actionable right there (duplicate designationName); validation_error
-  // and not_found (bad intDept reference) show the failure popup instead.
-  function handleMutateError(error: Error) {
-    const code = error instanceof AuthError ? error.code : undefined
-    if (code === 'bad_request') {
-      setErrors(prev => ({ ...prev, designationName: error.message || 'A designation with this name already exists.' }))
+  function handleError(err: Error) {
+    const code = err instanceof AuthError ? err.code : undefined
+    // 409: the short code or the name is taken — the message says which.
+    if (code === 'conflict') {
+      const msg = err.message || ''
+      if (/code/i.test(msg)) setErrors({ shortCode: msg || 'A designation with this short code already exists.' })
+      else setErrors({ designationName: msg || 'A designation with this name already exists.' })
       return
     }
-    setFailure(error.message || `Failed to ${isEdit ? 'update' : 'add'} designation. Please try again.`)
+    // The chosen course level was deleted meanwhile: say so and reload the picker.
+    if (code === 'bad_request') {
+      setErrors({ minQualificationGuid: err.message || 'Minimum qualification not found.' })
+      setMinQualificationGuid('')
+      reloadCourseLevels()
+      return
+    }
+    if (code === 'validation_error') {
+      const msgs = err instanceof AuthError && err.errors?.length ? err.errors : [err.message]
+      setFailure(msgs.filter(Boolean).join(' ') || 'Check the form and try again.')
+      return
+    }
+    if (code === 'not_found' && isEdit && designation) {
+      onGone(designation)
+      handleClose()
+      showToast('This designation no longer exists.', 'error')
+      return
+    }
+    setFailure(err.message || `Failed to ${isEdit ? 'update' : 'add'} designation. Please try again.`)
   }
 
   function handleSubmit() {
     if (!validate()) return
-    const input: DesignationInput = { designationName, intDept: Number(department) }
+    // Optional fields go as null when empty; PUT clears anything sent as null.
+    const input: DesignationInput = {
+      shortCode: shortCode.trim(),
+      designationName: designationName.trim(),
+      jobDescription: jobDescription.trim() || null,
+      minQualificationGuid: minQualificationGuid || null,
+      skillSet: skillSet.trim() || null,
+    }
     const onSuccess = () => { setSaved(true); showToast(isEdit ? 'Designation updated successfully' : 'Designation added successfully', 'success') }
-
     if (isEdit && designation) {
-      updateDesignation.mutate({ id: String(designation.intDesignation), input }, { onSuccess, onError: handleMutateError })
+      updateDesignation.mutate({ designationGuid: designation.designationGuid, input }, { onSuccess, onError: handleError })
     } else {
-      createDesignation.mutate(input, { onSuccess, onError: handleMutateError })
+      createDesignation.mutate(input, { onSuccess, onError: handleError })
     }
   }
 
   const isPending = isEdit ? updateDesignation.isPending : createDesignation.isPending
+  const errStyle = (f: Field) => (errors[f] ? { borderColor: 'var(--red)' } : undefined)
+  const errText = (f: Field) => errors[f] && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors[f]}</p>
 
   if (saved) {
     return (
@@ -129,27 +153,68 @@ export function DesignationFormModal({ isOpen, onClose, showToast, mode, designa
           <button className="modal-close" onClick={handleClose}><i className="lni lni-close"></i></button>
         </div>
         <div className="g2">
-          <div className="fg span2">
+          <div className="fg" data-field="shortCode">
+            <div className="lbl">Short Code <span className="req">*</span></div>
+            <input
+              className="ctrl font-mono"
+              type="text"
+              placeholder={isEdit ? undefined : 'e.g. JT010'}
+              maxLength={DESIGNATION_SHORT_CODE_MAX}
+              value={shortCode}
+              onChange={e => { setShortCode(e.target.value.toUpperCase()); clearError('shortCode') }}
+              style={errStyle('shortCode')}
+            />
+            {errText('shortCode')}
+          </div>
+          <div className="fg" data-field="minQualificationGuid">
+            <div className="lbl">Min. Qualification</div>
+            <SearchSelect
+              placeholder={courseLevelsLoading ? 'Loading…' : 'Select qualification…'}
+              value={minQualificationGuid}
+              onChange={v => { setMinQualificationGuid(v); clearError('minQualificationGuid') }}
+              options={qualificationOptions}
+              isLoading={courseLevelsLoading}
+            />
+            {errText('minQualificationGuid')}
+          </div>
+          <div className="fg span2" data-field="designationName">
             <div className="lbl">Designation Name <span className="req">*</span></div>
             <input
               className="ctrl"
               type="text"
               placeholder={isEdit ? undefined : 'e.g. Senior Lecturer'}
+              maxLength={DESIGNATION_NAME_MAX}
               value={designationName}
-              onChange={e => { setDesignationName(e.target.value); if (errors.designationName) setErrors(p => ({ ...p, designationName: '' })) }}
-              style={errors.designationName ? { borderColor: 'var(--red)' } : undefined}
+              onChange={e => { setDesignationName(e.target.value); clearError('designationName') }}
+              style={errStyle('designationName')}
             />
-            {errors.designationName && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.designationName}</p>}
+            {errText('designationName')}
           </div>
-          <div className="fg span2">
-            <div className="lbl">Department <span className="req">*</span></div>
-            <SearchSelect
-              placeholder="Select department…"
-              value={department}
-              onChange={v => { setDepartment(v); if (errors.department) setErrors(p => ({ ...p, department: '' })) }}
-              options={departmentOptions}
+          <div className="fg span2" data-field="jobDescription">
+            <div className="lbl">Job Description</div>
+            <textarea
+              className="ctrl"
+              rows={3}
+              placeholder="What this role does"
+              maxLength={DESIGNATION_TEXT_MAX}
+              value={jobDescription}
+              onChange={e => { setJobDescription(e.target.value); clearError('jobDescription') }}
+              style={errStyle('jobDescription')}
             />
-            {errors.department && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.department}</p>}
+            {errText('jobDescription')}
+          </div>
+          <div className="fg span2" data-field="skillSet">
+            <div className="lbl">Skill Set</div>
+            <textarea
+              className="ctrl"
+              rows={3}
+              placeholder="e.g. Curriculum design, research"
+              maxLength={DESIGNATION_TEXT_MAX}
+              value={skillSet}
+              onChange={e => { setSkillSet(e.target.value); clearError('skillSet') }}
+              style={errStyle('skillSet')}
+            />
+            {errText('skillSet')}
           </div>
         </div>
         <div className="modal-footer">

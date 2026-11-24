@@ -1,95 +1,85 @@
-import { apiDelete, apiGet, apiPost, apiPut } from '../client'
+import { AuthError, apiDelete, apiGet, apiPost, apiPut } from '../client'
 import { getPagedList } from '../pagedList'
 import type { PaginatedItems } from '@/lib/pagination'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
-// Older mock shape kept for reference.
-// export interface Designation {
-//   id: string
-//   designationName: string
-//   department: string
-// }
-//
-// export type DesignationInput = Omit<Designation, 'id'>
-//
-// const mockDesignations: Designation[] = [
-//   { id: '1', designationName: 'Professor',           department: 'Computer Science' },
-//   { id: '2', designationName: 'Associate Professor', department: 'Computer Science' },
-//   { id: '3', designationName: 'Senior Lecturer',     department: 'Information Technology' },
-//   { id: '4', designationName: 'Lecturer',            department: 'Business Administration' },
-//   { id: '5', designationName: 'Assistant Lecturer',  department: 'Civil Engineering' },
-//   { id: '6', designationName: 'Teaching Assistant',  department: 'Nursing Sciences' },
-// ]
-//
-// export function getDesignations(): Promise<Designation[]> {
-//   return Promise.resolve(mockDesignations)
-// }
-//
-// export function createDesignation(input: DesignationInput): Promise<Designation> {
-//   const designation: Designation = { id: String(mockDesignations.length + 1), ...input }
-//   mockDesignations.push(designation)
-//   return Promise.resolve(designation)
-// }
-//
-// export function updateDesignation(id: string, input: DesignationInput): Promise<Designation> {
-//   const existing = mockDesignations.find(d => d.id === id)
-//   if (!existing) return Promise.reject(new Error('Designation not found'))
-//   Object.assign(existing, input)
-//   return Promise.resolve(existing)
-// }
-
-// Represents a designation record returned by the API.
+// Designations (job titles) — erp-docs/api/userrole-service/designations and
+// pages/identity/designation-master-page.md. Since 2026-11-21 a designation
+// doesn't belong to a department (the employee picks one separately), and
+// since 2026-11-23 it's keyed by designationGuid (intDesignation is gone) and
+// carries a short code, job description, minimum qualification and skill set.
 export interface Designation {
-  intDesignation: number
+  designationGuid: string
+  // Trimmed and saved in upper case by the server — show this, not what was typed.
+  shortCode: string
   designationName: string
-  intDept: number
-  // GUID of the same department as intDept (get-designations.md, 2026-10-15)
-  // — no department name either; resolve it via departments/dropdown.
-  deptGuid?: string | null
+  jobDescription: string | null
+  // A courseLevelGuid from GET /users/course-levels/dropdown.
+  minQualificationGuid: string | null
+  minQualificationName: string | null
+  skillSet: string | null
 }
 
-// Payload used when creating or updating a designation.
-export type DesignationInput = Omit<Designation, 'intDesignation'>
-
-// Response wrapper used by the paginated designation list endpoint.
-export interface DesignationListResponse {
-  items: Designation[]
-  totalCount: number
-  pageNumber: number
-  pageSize: number
+// POST and PUT send all five fields; PUT clears any optional field sent as null.
+export interface DesignationInput {
+  shortCode: string
+  designationName: string
+  jobDescription: string | null
+  minQualificationGuid: string | null
+  skillSet: string | null
 }
+
+export const DESIGNATION_SHORT_CODE_MAX = 10
+export const DESIGNATION_NAME_MAX = 100
+export const DESIGNATION_TEXT_MAX = 1000
 
 const mockDesignations: Designation[] = [
-  { intDesignation: 1, designationName: 'Professor',           intDept: 1 },
-  { intDesignation: 2, designationName: 'Associate Professor', intDept: 1 },
-  { intDesignation: 3, designationName: 'Senior Lecturer',     intDept: 2 },
-  { intDesignation: 4, designationName: 'Lecturer',            intDept: 3 },
-  { intDesignation: 5, designationName: 'Assistant Lecturer',  intDept: 5 },
-  { intDesignation: 6, designationName: 'Teaching Assistant',  intDept: 6 },
-]
-let mockDesignationSeq = mockDesignations.length + 1
+  ['JT004', 'Accountant', 'Bachelors'],
+  ['JT012', 'Head of Department', 'Masters'],
+  ['JT010', 'Lecturer', 'Masters'],
+  ['JT020', 'Office Assistant', null],
+].map(([shortCode, designationName, minQualificationName], i) => ({
+  designationGuid: `00000000-0000-4000-8000-${String(i + 1).padStart(12, '0')}`,
+  shortCode: shortCode as string,
+  designationName: designationName as string,
+  jobDescription: null,
+  minQualificationGuid: null,
+  minQualificationName,
+  skillSet: null,
+}))
 
-// Fetch the designation list, using mock data when the mock auth flag is enabled.
-export function getDesignations(page = 1, pageSize = 10): Promise<Designation[]> {
-  if (MOCK_AUTH) return Promise.resolve(mockDesignations)
-  return apiGet<DesignationListResponse | null>(`/api/v1/users/designations?page=${page}&pageSize=${pageSize}`).then(data => data?.items ?? [])
+function mockConflict(input: DesignationInput, exceptGuid?: string): AuthError | null {
+  const others = mockDesignations.filter(d => d.designationGuid !== exceptGuid)
+  if (others.some(d => d.shortCode === input.shortCode.trim().toUpperCase())) return new AuthError('conflict', 'A designation with this short code already exists.')
+  if (others.some(d => d.designationName.toLowerCase() === input.designationName.trim().toLowerCase())) return new AuthError('conflict', 'A designation with this name already exists.')
+  return null
 }
 
-// Same list endpoint, one page at a time (get-designations.md): ?page=
-// &pageSize=&search=, search matching the designation name. There's no
-// department filter param.
-export function getDesignationsPaged(page = 1, pageSize = 20, search = ''): Promise<PaginatedItems<Designation>> {
+function mockRow(designationGuid: string, input: DesignationInput): Designation {
+  return {
+    designationGuid,
+    shortCode: input.shortCode.trim().toUpperCase(),
+    designationName: input.designationName.trim(),
+    jobDescription: input.jobDescription,
+    minQualificationGuid: input.minQualificationGuid,
+    minQualificationName: null,
+    skillSet: input.skillSet,
+  }
+}
+
+// GET /users/designations?page=&pageSize=&search= — sorted by name on the
+// server; search matches the short code or the name.
+export function getDesignationsPaged(page = 1, pageSize = 10, search = ''): Promise<PaginatedItems<Designation>> {
   return getPagedList<Designation>('/api/v1/users/designations', page, pageSize, search, {
     rows: mockDesignations,
-    text: r => r.designationName,
+    text: r => `${r.shortCode} ${r.designationName}`,
   })
 }
 
 // Picker shape from GET /api/v1/users/designations/dropdown
 // (get-designations-dropdown.md) — carries designationGuid for POST/PUT
-// /employees. Since 2026-11-21 designations aren't tied to a department: no
-// deptGuid filter or field, always the full list.
+// /employees. Not tied to a department: always the full list.
 export interface DesignationDropdownItem {
   designationGuid: string
   designationName: string
@@ -98,40 +88,49 @@ export interface DesignationDropdownItem {
 export function getDesignationsDropdown(): Promise<DesignationDropdownItem[]> {
   if (MOCK_AUTH) {
     return Promise.resolve(mockDesignations
-      .map(d => ({ designationGuid: `00000000-0000-4000-8000-${String(d.intDesignation).padStart(12, '0')}`, designationName: d.designationName }))
+      .map(d => ({ designationGuid: d.designationGuid, designationName: d.designationName }))
       .sort((a, b) => a.designationName.localeCompare(b.designationName)))
   }
   return apiGet<DesignationDropdownItem[] | null>('/api/v1/users/designations/dropdown').then(data => data ?? [])
 }
 
-// Create a new designation and return the saved record.
+// POST /users/designations → 201 with the new row.
+// Errors: validation_error (400), bad_request (400, minimum qualification not
+// found), conflict (409, short code or name already used), forbidden (403).
 export function createDesignation(input: DesignationInput): Promise<Designation> {
   if (MOCK_AUTH) {
-    const designation: Designation = { intDesignation: mockDesignationSeq++, ...input }
-    mockDesignations.push(designation)
-    return Promise.resolve(designation)
+    const conflict = mockConflict(input)
+    if (conflict) return Promise.reject(conflict)
+    const row = mockRow(crypto.randomUUID(), input)
+    mockDesignations.push(row)
+    return Promise.resolve(row)
   }
   return apiPost<Designation>('/api/v1/users/designations', input)
 }
 
-// Update an existing designation by ID and return the updated record.
-export function updateDesignation(id: string, input: DesignationInput): Promise<Designation> {
+// PUT /users/designations/{designationGuid} → 200 with the updated row.
+// Errors: as POST, plus not_found (404).
+export function updateDesignation(designationGuid: string, input: DesignationInput): Promise<Designation> {
   if (MOCK_AUTH) {
-    const existing = mockDesignations.find(d => String(d.intDesignation) === id)
-    if (!existing) return Promise.reject(new Error('Designation not found'))
-    Object.assign(existing, input)
-    return Promise.resolve(existing)
+    const index = mockDesignations.findIndex(d => d.designationGuid === designationGuid)
+    if (index === -1) return Promise.reject(new AuthError('not_found', 'Designation not found.'))
+    const conflict = mockConflict(input, designationGuid)
+    if (conflict) return Promise.reject(conflict)
+    mockDesignations[index] = mockRow(designationGuid, input)
+    return Promise.resolve(mockDesignations[index])
   }
-  return apiPut<Designation>(`/api/v1/users/designations/${id}`, input)
+  return apiPut<Designation>(`/api/v1/users/designations/${encodeURIComponent(designationGuid)}`, input)
 }
 
-// Delete a designation and return true when the API confirms success.
-export function deleteDesignation(id: string): Promise<boolean> {
+// DELETE /users/designations/{designationGuid} → 200 data: true (soft delete).
+// Errors: designation_in_use (400, an employee holds it), not_found (404),
+// forbidden (403).
+export function deleteDesignation(designationGuid: string): Promise<boolean> {
   if (MOCK_AUTH) {
-    const index = mockDesignations.findIndex(d => String(d.intDesignation) === id)
-    if (index === -1) return Promise.reject(new Error('Designation not found'))
+    const index = mockDesignations.findIndex(d => d.designationGuid === designationGuid)
+    if (index === -1) return Promise.reject(new AuthError('not_found', 'Designation not found.'))
     mockDesignations.splice(index, 1)
     return Promise.resolve(true)
   }
-  return apiDelete<boolean>(`/api/v1/users/designations/${id}`)
+  return apiDelete<boolean>(`/api/v1/users/designations/${encodeURIComponent(designationGuid)}`)
 }

@@ -1,6 +1,6 @@
 'use client'
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useQueryClient } from '@tanstack/react-query'
 import { ScrollTable } from '@/components/ScrollTable'
 import { ActionMenu } from '@/components/ActionMenu'
 import { TableSearch } from '@/components/TableSearch'
@@ -11,11 +11,15 @@ import { Pagination } from '@/components/Pagination'
 import { useServerTable } from '@/hooks/useServerTable'
 import { DesignationFormModal } from '@/components/modals/config/DesignationFormModal'
 import { ViewDesignationModal } from '@/components/modals/config/ViewDesignationModal'
-import { DESIGNATIONS_KEY, useCreateDesignation, useUpdateDesignation, useDeleteDesignation, Designation } from '@/hooks/config/useDesignations'
+import { DESIGNATIONS_KEY, removeDesignationRow, useDeleteDesignation, Designation } from '@/hooks/config/useDesignations'
 import { getDesignationsPaged } from '@/lib/api/academic/designation'
-import { useDepartmentsDropdown } from '@/hooks/config/useDepartments'
+import { AuthError } from '@/lib/api/client'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
+// Designation Master (erp-docs/pages/identity/designation-master-page.md):
+// job titles with a short code, optional minimum qualification (a course
+// level), job description and skill set. No department — that's picked on
+// each employee. Permissions: config.designation.get / add / edit / delete.
 const PAGE_SIZE = 10
 // Don't narrow the table (or open the search dropdown) until the user's
 // typed at least this many characters — same convention as the other
@@ -23,32 +27,21 @@ const PAGE_SIZE = 10
 const MIN_SEARCH_CHARS = 2
 
 export default function Page() {
-  const router = useRouter()
   const permissions = usePagePermissions()
+  const queryClient = useQueryClient()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
   const [toast, setToast]           = useState<{ msg: string; type: string } | null>(null)
   const [editingDesignation, setEditingDesignation] = useState<Designation | null>(null)
   const [viewingDesignation, setViewingDesignation] = useState<Designation | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Designation | null>(null)
+  const [deleteError, setDeleteError]   = useState<string | null>(null)
 
-  // One page at a time from the server (?page=&pageSize=&search=; search
-  // matches the designation name). There's no department filter param, so
-  // the Department header filter is gone.
+  // Server-paged and sorted by name; search matches the short code or the name.
   const table = useServerTable({ queryKey: DESIGNATIONS_KEY, fetchPage: getDesignationsPaged, pageSize: PAGE_SIZE, minSearch: MIN_SEARCH_CHARS })
   const { items: rows, search, setSearch, page, setPage, totalPages, totalCount } = table
   const isLoading = table.isLoading || table.searchPending
-  const createDesignation = useCreateDesignation()
-  const updateDesignation = useUpdateDesignation()
   const deleteDesignation = useDeleteDesignation()
 
-  // Designations carry the department's guid but not its name — resolved
-  // from the department dropdown (GET /departments/dropdown).
-  const { data: departments = [] } = useDepartmentsDropdown()
-  function departmentName(r: Designation) {
-    return departments.find(d => d.deptGuid === r.deptGuid)?.deptName ?? '—'
-  }
-
-  function nav(id: string) { router.push('/config/' + id) }
   function openModal(id: string)  { setOpenModals(prev => new Set(prev).add(id)) }
   function closeModal(id: string) { setOpenModals(prev => { const s = new Set(prev); s.delete(id); return s }) }
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
@@ -64,11 +57,30 @@ export default function Page() {
     setSearch('')
   }
 
+  function openDelete(designation: Designation) { setDeleteError(null); setDeleteTarget(designation) }
+  function closeDelete() { setDeleteTarget(null); setDeleteError(null) }
+
   function confirmDeleteDesignation() {
     if (!deleteTarget) return
-    deleteDesignation.mutate(String(deleteTarget.intDesignation), {
-      onSuccess: () => { setDeleteTarget(null); showToast('Designation deleted successfully', 'success') },
-      onError: (error: Error) => showToast(error.message || 'Failed to delete designation', 'error'),
+    const target = deleteTarget
+    deleteDesignation.mutate(target.designationGuid, {
+      onSuccess: () => {
+        closeDelete()
+        showToast('Designation deleted successfully', 'success')
+        // The page is now empty and isn't the first one: go back a page.
+        if (pageItems.length === 1 && page > 1) setPage(page - 1)
+      },
+      onError: (err: Error) => {
+        const code = err instanceof AuthError ? err.code : undefined
+        if (code === 'not_found') {
+          removeDesignationRow(queryClient, target.designationGuid)
+          closeDelete()
+          showToast('This designation no longer exists.', 'error')
+          return
+        }
+        // designation_in_use and anything else: keep the row and say why.
+        setDeleteError(err.message || 'Failed to delete designation.')
+      },
     })
   }
 
@@ -82,7 +94,7 @@ export default function Page() {
         <div className="pg-hdr">
           <div>
             <div className="pg-title">Designation Master</div>
-            <div className="pg-sub">Manage staff designations and their department assignments</div>
+            <div className="pg-sub">Job titles, their minimum qualification and skills · Department is chosen on each employee</div>
           </div>
           {permissions.add && (
             <button className="btn btn-primary" onClick={() => openModal('new-designation-modal')}>
@@ -96,32 +108,25 @@ export default function Page() {
             <div className="flex gap-2">
               <TableSearch
                 className="w-56"
-                placeholder="Search by name…"
+                placeholder="Search by code or name…"
                 value={search}
                 onChange={setSearch}
-                results={searchMatches.map(r => ({ id: String(r.intDesignation), primary: r.designationName, secondary: departmentName(r) }))}
+                results={searchMatches.map(r => ({ id: r.designationGuid, primary: r.shortCode, secondary: r.designationName }))}
                 minChars={MIN_SEARCH_CHARS}
                 loading={table.searchPending}
-                onSelect={(res) => { const row = rows.find(x => String(x.intDesignation) === res.id); if (row) openViewModal(row) }}
+                onSelect={(res) => { const row = rows.find(x => x.designationGuid === res.id); if (row) openViewModal(row) }}
               />
             </div>
           </div>
           <ScrollTable>
             <table>
-              {/* Previous header (pre GET /api/v1/users/designations integration) — kept for reference.
               <thead>
                 <tr>
                   <th style={{ width: 48 }}></th>
-                  <th>Designation Name</th>
-                  {fth('Department', 'department', ['Computer Science', 'Information Technology', 'Business Administration', 'Civil Engineering', 'Nursing Sciences'])}
-                </tr>
-              </thead>
-              */}
-              <thead>
-                <tr>
-                  <th style={{ width: 48 }}></th>
-                  <th>Designation Name</th>
-                  <th>Department</th>
+                  <th style={{ width: 64 }}>#</th>
+                  <th>Code</th>
+                  <th>Designation</th>
+                  <th>Min. Qualification</th>
                 </tr>
               </thead>
               <tbody>
@@ -130,38 +135,23 @@ export default function Page() {
                   : pageItems.length === 0
                     ? <EmptyState colSpan={999} hasFilters={!!table.term} onClearFilters={() => setSearch('')} />
                     : null}
-                {/* Previous row markup (pre GET /api/v1/users/designations integration) — kept for reference.
-                {filteredRows.map((r) => (
-                  <tr key={r.id}>
+                {pageItems.map((r, i) => (
+                  <tr key={r.designationGuid}>
                     <td>
                       <ActionMenu>
-                        <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r)}>
+                        <button className="btn btn-neu btn-sm" onClick={() => openViewModal(r)}><i className="lni lni-eye"></i> View</button>
+                        {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r)}>
                           <i className="lni lni-pencil"></i> Edit
-                        </button>
+                        </button>}
+                        {permissions.delete && <button className="btn btn-neu btn-sm" onClick={() => openDelete(r)}>
+                          <i className="lni lni-trash-can"></i> Delete
+                        </button>}
                       </ActionMenu>
                     </td>
+                    <td className="font-mono" style={{ color: 'var(--g500)' }}>{(page - 1) * PAGE_SIZE + i + 1}</td>
+                    <td className="font-mono">{r.shortCode || '—'}</td>
                     <td><strong>{r.designationName}</strong></td>
-                    <td>{r.department}</td>
-                  </tr>
-                ))}
-                */}
-                {pageItems.map((r) => (
-                  <tr key={r.intDesignation}>
-                    <td>
-                      {(true) && (
-                        <ActionMenu>
-                          <button className="btn btn-neu btn-sm" onClick={() => openViewModal(r)}><i className="lni lni-eye"></i> View</button>
-                          {permissions.edit && <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r)}>
-                            <i className="lni lni-pencil"></i> Edit
-                          </button>}
-                          {permissions.delete && <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}>
-                            <i className="lni lni-trash-can"></i> Delete
-                          </button>}
-                        </ActionMenu>
-                      )}
-                    </td>
-                    <td><strong>{r.designationName}</strong></td>
-                    <td>{departmentName(r)}</td>
+                    <td>{r.minQualificationName || '—'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -176,8 +166,7 @@ export default function Page() {
         onClose={() => closeModal('new-designation-modal')}
         showToast={showToast}
         designation={null}
-        createDesignation={createDesignation}
-        updateDesignation={updateDesignation}
+        onGone={() => {}}
       />
       <DesignationFormModal
         mode="edit"
@@ -185,34 +174,37 @@ export default function Page() {
         onClose={() => closeModal('edit-designation-modal')}
         showToast={showToast}
         designation={editingDesignation}
-        createDesignation={createDesignation}
-        updateDesignation={updateDesignation}
+        onGone={d => removeDesignationRow(queryClient, d.designationGuid)}
       />
       <ViewDesignationModal
         isOpen={openModals.has('view-designation-modal')}
         onClose={() => closeModal('view-designation-modal')}
         showToast={showToast}
         designation={viewingDesignation}
-        onEdit={() => {
+        onEdit={permissions.edit ? () => {
           closeModal('view-designation-modal')
-          openEditModal(viewingDesignation!)
-        }}
+          if (viewingDesignation) openEditModal(viewingDesignation)
+        } : undefined}
       />
       <Toast toast={toast} />
 
       {deleteTarget && (
-        <div className="perm-delete-overlay" style={{ position: 'fixed', zIndex: 500 }} onClick={() => setDeleteTarget(null)}>
+        <div className="perm-delete-overlay" style={{ position: 'fixed', zIndex: 500 }}>
           <div className="perm-delete-card tab-panel-in" onClick={e => e.stopPropagation()}>
             <div className="perm-delete-icon"><i className="lni lni-trash-can"></i></div>
             <div className="perm-delete-title">Delete {deleteTarget.designationName}?</div>
             <div className="perm-delete-sub">
-              This will permanently delete this designation. This can&apos;t be undone.
+              {deleteError
+                ? <span style={{ color: 'var(--red)' }}>{deleteError}</span>
+                : <>This designation will be removed from the list. A designation that an employee holds can&apos;t be deleted.</>}
             </div>
             <div className="perm-delete-actions">
-              <button className="btn btn-neu" onClick={() => setDeleteTarget(null)}>Cancel</button>
-              <button className="btn btn-danger" disabled={deleteDesignation.isPending} onClick={confirmDeleteDesignation}>
-                <i className="lni lni-trash-can"></i> {deleteDesignation.isPending ? 'Deleting…' : 'Delete'}
-              </button>
+              <button className="btn btn-neu" onClick={closeDelete}>{deleteError ? 'Close' : 'Cancel'}</button>
+              {!deleteError && (
+                <button className="btn btn-danger" disabled={deleteDesignation.isPending} onClick={confirmDeleteDesignation}>
+                  <i className="lni lni-trash-can"></i> {deleteDesignation.isPending ? 'Deleting…' : 'Delete'}
+                </button>
+              )}
             </div>
           </div>
         </div>

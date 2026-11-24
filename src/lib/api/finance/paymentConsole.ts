@@ -56,7 +56,17 @@ export interface StudentProfile {
   batchGuid: string | null
   refugee: number | null
   refugeeId: string | null
+  // The application's category (1 = self-paid). Can be stale after a sponsor
+  // reassignment — use isSelfPaid/sponsorCategoryName below instead.
   studCategory: number | null
+  // The student's own sponsor category (2026-11-23, see
+  // erp-docs/pages/finance/sponsored-students.md) — the source of truth
+  // once a student exists. All three are null when the student has no
+  // category (or there's no student yet, or the sponsor-category migration
+  // hasn't been run in this environment).
+  sponsorCategoryGuid?: string | null
+  sponsorCategoryName?: string | null
+  isSelfPaid?: boolean | null
   gender: number | null
   action: number | null
   universityEmail: string | null
@@ -100,10 +110,23 @@ export interface StudentProfile {
   ucam: unknown
 }
 
-// studCategory: 1 = active, anything else (0/null/other) = inactive — per
-// FinanceStudentProfileDto, confirmed against a live response.
-export function studCategoryLabel(studCategory: number | null): string {
-  return studCategory === 1 ? 'Active' : 'Inactive'
+// Self-paid or sponsored, per the sponsored-students guide: the student's own
+// isSelfPaid wins; when it's null (no category on the student), fall back to
+// the application's studCategory, where 1 means self-paid. null = unknown.
+export function isSelfPaidStudent(profile: Pick<StudentProfile, 'studCategory' | 'isSelfPaid'>): boolean | null {
+  if (profile.isSelfPaid != null) return profile.isSelfPaid
+  if (profile.studCategory == null) return null
+  return profile.studCategory === 1
+}
+
+// What the header's "Category" fact shows: the sponsor category's own name
+// (e.g. "HESFB") when the student has one, else Self-paid/Sponsored from the
+// fallback above.
+export function sponsorCategoryLabel(profile: Pick<StudentProfile, 'studCategory' | 'isSelfPaid' | 'sponsorCategoryName'>): string {
+  const name = profile.sponsorCategoryName?.trim()
+  if (name) return name
+  const selfPaid = isSelfPaidStudent(profile)
+  return selfPaid == null ? '—' : selfPaid ? 'Self-paid' : 'Sponsored'
 }
 
 // refugee: 1 = refugee, anything else = not a refugee — same 1/0 flag
@@ -362,6 +385,10 @@ export function getOutstandingLedgers(applicationGuid: string, studentGuid?: str
 export interface CurrentSemesterPayableLedger {
   ledgerGuid: string | null
   semesterGuid: string | null
+  // Added 2026-11-23, on `ledgers` and upcomingSemesters[].ledgers alike.
+  // `ledgers` is ordered by semCode. Optional only for older backends.
+  semesterName?: string | null
+  semCode?: number | null
   ledgerName: string
   ledgerNum: number | null
   currencyGuid: string | null
@@ -429,6 +456,11 @@ export interface CurrentSemesterUpcomingSemester {
 // counts fully paid lines too, so it can exceed the sum of `ledgers` (which
 // only lists lines still owing). A paid-up current semester comes back 200
 // with ledgers [] and currentSemesterOutstanding 0.
+//
+// Sponsored students (2026-11-23): `ledgers` also carries earlier-semester
+// arrears, and the currentSemester* figures cover every semester in scope
+// (paid lines included) — so for them currentSemesterAmount is "billed to
+// date", not one semester's fee. Self-paid students are unchanged.
 export interface CurrentSemesterPayableResult {
   ledgers: CurrentSemesterPayableLedger[]
   upcomingSemesters: CurrentSemesterUpcomingSemester[]
@@ -539,9 +571,13 @@ export interface AllOutstandingItem {
   discountWarning: string | null
 }
 
-export function getAllOutstandingLedgers(applicationGuid: string): Promise<AllOutstandingItem[]> {
+// studentGuid: the endpoint doc still lists no query params, but the
+// 2026-11-23 sponsored-students rollout says to pass it here too, so the
+// student's own fee structure and sponsor category are used.
+export function getAllOutstandingLedgers(applicationGuid: string, studentGuid?: string | null): Promise<AllOutstandingItem[]> {
   if (MOCK_AUTH) return Promise.resolve([])
-  return apiGet<AllOutstandingItem[] | null>(`/api/v1/finance/payment-console/outstanding-all/${applicationGuid}`)
+  const qs = studentGuid ? `?studentGuid=${encodeURIComponent(studentGuid)}` : ''
+  return apiGet<AllOutstandingItem[] | null>(`/api/v1/finance/payment-console/outstanding-all/${applicationGuid}${qs}`)
     .then(data => data ?? [])
     // Same "genuinely-empty-result-as-404" behavior as getOutstandingLedgers
     // above — confirmed by the doc's own error table: 404 `not_found`
