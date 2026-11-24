@@ -45,6 +45,10 @@ export interface PaymentOtherDto {
   paymentCategory: number | null
 }
 
+// What fetching and naming a receipt needs; a history row and the create
+// response both carry it.
+export type OtherReceiptRef = Pick<PaymentOtherDto, 'paymentOtherGuid' | 'paymentCode' | 'receipt'>
+
 export interface PaymentOtherListResponse {
   items: PaymentOtherDto[]
   totalCount: number

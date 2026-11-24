@@ -4,6 +4,7 @@ import { stripLeadingZeros } from '@/lib/errorMessages'
 import { ModalProps } from '../types'
 import DatePicker from '@/components/DatePicker'
 import { useUpdateRegulatoryPayment, PaymentCategory, RegulatoryPaymentHistoryEntry } from '@/hooks/finance/useNcheGuildPayment'
+import { REFERENCE_FIELD, REFERENCE_MAX, REFERENCE_REQUIRED, regulatoryErrorField, validateReference } from '@/lib/api/finance/ncheGuildPayment'
 
 interface EditRegulatoryPaymentModalProps extends ModalProps {
   target: RegulatoryPaymentHistoryEntry | null
@@ -32,6 +33,7 @@ export function EditRegulatoryPaymentModal({ isOpen, onClose, showToast, target,
   const [pnrNumber, setPnrNumber] = useState('')
   const [remarks, setRemarks] = useState('')
   const [bankDeposit, setBankDeposit] = useState('')
+  const [referenceError, setReferenceError] = useState<string | null>(null)
 
   useEffect(() => {
     if (isOpen && target) {
@@ -40,6 +42,7 @@ export function EditRegulatoryPaymentModal({ isOpen, onClose, showToast, target,
       setPnrNumber(target.pnrNumber ?? '')
       setRemarks(target.remarks ?? '')
       setBankDeposit(target.bankDeposit ?? '')
+      setReferenceError(null)
     }
   }, [isOpen, target])
 
@@ -56,6 +59,9 @@ export function EditRegulatoryPaymentModal({ isOpen, onClose, showToast, target,
     const amt = parseFloat(amount)
     if (!amount.trim() || isNaN(amt) || amt <= 0) { showToast('Amount must be greater than 0.', 'warn'); return }
     if (!payDate) { showToast('Please select a payment date.', 'warn'); return }
+    const refError = validateReference(category, category === 'nche' ? pnrNumber : bankDeposit)
+    setReferenceError(refError)
+    if (refError) return
 
     const categoryFields = category === 'nche'
       ? { pnrNumber: pnrNumber.trim() || null, remarks: remarks.trim() || null }
@@ -71,7 +77,8 @@ export function EditRegulatoryPaymentModal({ isOpen, onClose, showToast, target,
         onError: (error: Error) => {
           // Same "not a multiple of the configured rate"/"exceeds
           // outstanding balance" business errors post/put-payment-{category}.md
-          // describe — surfaced as-is.
+          // describe — surfaced as-is. A bad reference goes under its field.
+          if (regulatoryErrorField(error.message || '') === 'reference') { setReferenceError(error.message); return }
           showToast(error.message || `Failed to update ${CATEGORY_LABEL[category]} payment. Please try again.`, 'error')
         },
       },
@@ -97,21 +104,22 @@ export function EditRegulatoryPaymentModal({ isOpen, onClose, showToast, target,
               <DatePicker value={payDate} onChange={setPayDate} />
             </div>
           </div>
-          {category === 'nche' ? (
-            <>
-              <div className="fg mb-[14px]">
-                <div className="lbl">PNR Number</div>
-                <input className="ctrl" type="text" placeholder="Optional reference number" value={pnrNumber} onChange={e => setPnrNumber(e.target.value)} />
-              </div>
-              <div className="fg mb-[14px]">
-                <div className="lbl">Remarks</div>
-                <textarea className="ctrl" rows={2} placeholder="Optional notes" value={remarks} onChange={e => setRemarks(e.target.value)} />
-              </div>
-            </>
-          ) : (
+          <div className="fg mb-[14px]">
+            <label className="lbl" htmlFor="edit-reg-reference">{REFERENCE_FIELD[category].label} {REFERENCE_REQUIRED ? <span className="req">*</span> : <span className="text-g400" style={{ fontWeight: 500 }}>(optional)</span>}</label>
+            <input
+              id="edit-reg-reference" className="ctrl" type="text" maxLength={REFERENCE_REQUIRED ? REFERENCE_MAX : undefined}
+              placeholder={REFERENCE_FIELD[category].placeholder}
+              aria-invalid={!!referenceError}
+              style={referenceError ? { borderColor: 'var(--red)' } : undefined}
+              value={category === 'nche' ? pnrNumber : bankDeposit}
+              onChange={e => { (category === 'nche' ? setPnrNumber : setBankDeposit)(e.target.value); setReferenceError(null) }}
+            />
+            {referenceError && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{referenceError}</p>}
+          </div>
+          {category === 'nche' && (
             <div className="fg mb-[14px]">
-              <div className="lbl">Bank Deposit</div>
-              <input className="ctrl" type="text" placeholder="Optional bank deposit reference" value={bankDeposit} onChange={e => setBankDeposit(e.target.value)} />
+              <div className="lbl">Remarks</div>
+              <textarea className="ctrl" rows={2} placeholder="Optional notes" value={remarks} onChange={e => setRemarks(e.target.value)} />
             </div>
           )}
         </div>

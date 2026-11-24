@@ -24,20 +24,60 @@ function basePath(category: PaymentCategory) {
   return `/api/v1/finance/${category}`
 }
 
+// The bank/portal reference each category requires on create and edit
+// (post/put-payment-{nche,guild}.md, 2026-11-24). Presence and length only:
+// one reference can pay several semesters, so never check for duplicates.
+export const REFERENCE_MAX = 20
+
+// TODO: the backend rule (fix/nche-guild-required-reference-ugx) isn't live
+// yet, so the reference stays optional on create and edit, with no length cap.
+// Once it's published, uncomment the `true` line and delete the `false` one.
+// export const REFERENCE_REQUIRED: boolean = true
+export const REFERENCE_REQUIRED: boolean = false
+
+export const REFERENCE_FIELD: Record<PaymentCategory, { label: string; placeholder: string; required: string; tooLong: string }> = {
+  nche: {
+    label: 'PNR Number', placeholder: 'Reference number',
+    required: 'PNR number is required.', tooLong: `PNR number must not exceed ${REFERENCE_MAX} characters.`,
+  },
+  guild: {
+    label: 'Bank Deposit Slip Number', placeholder: 'Bank deposit slip number',
+    required: 'Bank deposit slip number is required.', tooLong: `Bank deposit slip number must not exceed ${REFERENCE_MAX} characters.`,
+  },
+}
+
+// Same rule as the server: trimmed, so spaces only counts as empty.
+export function validateReference(category: PaymentCategory, value: string): string | null {
+  if (!REFERENCE_REQUIRED) return null
+  const v = value.trim()
+  if (!v) return REFERENCE_FIELD[category].required
+  return v.length > REFERENCE_MAX ? REFERENCE_FIELD[category].tooLong : null
+}
+
+// Which form field a server error belongs under; null = show as a toast.
+// Reference is tested first: "must not exceed 20 characters" would otherwise
+// read as an amount error.
+export function regulatoryErrorField(message: string): 'reference' | 'currencyGuid' | 'amount' | 'payDate' | null {
+  if (/pnr|bank ?deposit|slip number/i.test(message)) return 'reference'
+  if (/currency|uganda shilling/i.test(message)) return 'currencyGuid'
+  if (/multiple|exceed|outstanding|balance|amount/i.test(message)) return 'amount'
+  if (/pay ?date/i.test(message)) return 'payDate'
+  return null
+}
+
 export interface RegulatoryPaymentInput {
   category: PaymentCategory
   applicationGuid: string
   studentGuid: string | null
   amount: number
-  // Required on create since 2026-09-11 (post-payment-nche.md /
-  // post-payment-guild.md) — informational only, no conversion; the balance
-  // and rate checks assume the base currency. Not accepted on update.
+  // Required on create, and must be the default currency (Uganda Shillings):
+  // anything else is a 400 bad_request. Not accepted on update.
   currencyGuid: string
   payDate: string
-  // NCHE-only.
+  // NCHE-only; pnrNumber is required once REFERENCE_REQUIRED is on.
   pnrNumber?: string | null
   remarks?: string | null
-  // Guild-only.
+  // Guild-only, required likewise — "Bank Deposit Slip Number" on screen.
   bankDeposit?: string | null
 }
 

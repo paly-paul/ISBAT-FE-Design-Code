@@ -41,7 +41,7 @@ export function ViewRegulatoryPaymentModal({ isOpen, onClose, entry, category }:
             </>
           ) : (
             <>
-              <div className="receipt-row"><span className="text-muted">Bank Deposit</span><span className="font-bold">{entry.bankDeposit ?? '—'}</span></div>
+              <div className="receipt-row"><span className="text-muted">Bank Deposit Slip Number</span><span className="font-bold">{entry.bankDeposit ?? '—'}</span></div>
               <div className="receipt-row"><span className="text-muted">Receipt</span><span className="font-bold font-mono">{entry.receipt ?? '—'}</span></div>
             </>
           )}

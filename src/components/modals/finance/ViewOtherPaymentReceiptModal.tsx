@@ -13,6 +13,9 @@ interface ViewOtherPaymentReceiptModalProps extends ModalProps {
   // The page owns it, including the `print` permission check.
   onPrint: (entry: PaymentOtherDto) => void
   printing: boolean
+  // Saves that same PDF to disk.
+  onDownload: (entry: PaymentOtherDto) => void
+  downloading: boolean
 }
 
 function fmtAmount(n: number) {
@@ -28,7 +31,7 @@ function loadErrorMessage(err: unknown) {
 // Details of one Other payment (exam fees, resit, grievance, …), loaded from
 // GET /finance/other-payment/{paymentOtherGuid} (get-payment-other-by-guid.md).
 // Print Receipt fetches the official PDF, the same as the row's Print / Reprint.
-export function ViewOtherPaymentReceiptModal({ isOpen, onClose, paymentOtherGuid, student, onPrint, printing }: ViewOtherPaymentReceiptModalProps) {
+export function ViewOtherPaymentReceiptModal({ isOpen, onClose, paymentOtherGuid, student, onPrint, printing, onDownload, downloading }: ViewOtherPaymentReceiptModalProps) {
   const { data: entry, isLoading, isError, error } = usePaymentOther(paymentOtherGuid, isOpen)
 
   if (!isOpen || !paymentOtherGuid) return null
@@ -92,6 +95,11 @@ export function ViewOtherPaymentReceiptModal({ isOpen, onClose, paymentOtherGuid
           <button className="btn btn-neu flex-1 justify-center" onClick={onClose}>Close</button>
           {/* Without `print` it explains instead of printing. Hidden for
               advance-funded payments, which have no receipt to print. */}
+          {entry?.receipt && (
+            <button className="btn btn-neu flex-1 justify-center" disabled={downloading} onClick={() => onDownload(entry)}>
+              <i className="lni lni-download"></i> {downloading ? 'Downloading…' : 'Download'}
+            </button>
+          )}
           {entry?.receipt && (
             <button className="btn btn-primary flex-1 justify-center" disabled={printing} onClick={() => onPrint(entry)}>
               <i className="lni lni-printer"></i> {printing ? 'Loading receipt…' : 'Print Receipt'}
