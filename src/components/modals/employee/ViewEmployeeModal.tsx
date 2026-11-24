@@ -4,10 +4,8 @@ import { ModalProps } from '../types'
 import { useEmployee } from '@/hooks/employee/useEmployees'
 import { useCampusDropdown } from '@/hooks/config/useCampuses'
 import { formatDate } from '@/lib/date'
+import { EMPLOYEE_MARITAL_STATUSES, formatEmployeeGender } from '@/lib/api/employee/employee'
 import { normalizeTitle, findCategory } from './EmployeeFormModal'
-
-const SEXES: Record<number, string> = { 1: 'Male', 2: 'Female', 3: 'Others' }
-const MARITAL_STATUSES = ['Single', 'Married', 'Divorced', 'Widow', 'Widower', 'Separated']
 
 interface ViewEmployeeModalProps extends ModalProps {
   employeeGuid: string | null
@@ -83,13 +81,13 @@ export function ViewEmployeeModal({ isOpen, onClose, employeeGuid, onEdit, canEd
             <Field label="Surname" value={employee.surname} />
             <Field label="Other Name" value={employee.otherName || '—'} />
             <Field label="Email" value={employee.emailId} />
-            <Field label="Sex" value={SEXES[employee.sex] ?? '—'} />
+            <Field label="Sex" value={formatEmployeeGender(employee.sex, employee.genderLabel) || '—'} />
             <Field label="Date of Birth" value={formatDate(employee.birthDate)} />
             <Field label="Place of Birth" value={employee.placeOfBirth} />
             <Field label="Country" value={employee.countryName || '—'} />
             <Field label="Has National ID?" value={employee.natId === '0' ? 'Yes' : employee.natId === '1' ? 'No' : '—'} />
             <Field label="National ID Number" value={employee.nationalId || '—'} />
-            <Field label="Marital Status" value={MARITAL_STATUSES[employee.maritalStatus - 1] ?? '—'} />
+            <Field label="Marital Status" value={employee.maritalStatusLabel || EMPLOYEE_MARITAL_STATUSES[employee.maritalStatus] || '—'} />
             <Field label="Department" value={deptName} />
             <Field label="Designation" value={designationName} />
             <Field label="Campus" value={campusDisplay} />

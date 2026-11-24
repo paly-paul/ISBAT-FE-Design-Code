@@ -14,7 +14,7 @@ import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { useBlockEmployee, useEmployeesPaged, useUnblockEmployee } from '@/hooks/employee/useEmployees'
 import { AuthError } from '@/lib/api/client'
-import { EmployeeListItem } from '@/lib/api/employee/employee'
+import { EMPLOYEE_GENDERS, EmployeeListItem, formatEmployeeGender } from '@/lib/api/employee/employee'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { sameOriginApiUrl } from '@/lib/apiFileUrl'
 
@@ -189,7 +189,7 @@ function EmployeeMasterContent() {
 
   const filteredRows = rows.filter(r => Object.entries(filters).every(([k, v]) => {
     if (!v.length) return true
-    const cell = k === 'sex' ? (r.sex === 1 ? 'Male' : 'Female')
+    const cell = k === 'sex' ? (formatEmployeeGender(r.sex, r.genderLabel) || '—')
       : k === 'status' ? (r.isApproved ? 'Approved' : 'Pending')
       : String((r as unknown as Record<string, unknown>)[k])
     return v.includes(cell)
@@ -254,7 +254,7 @@ function EmployeeMasterContent() {
                 <th style={{ width: 48 }}></th>
                 <th>Short Code</th>
                 <th>Name</th>
-                {fth('Sex', 'sex', ['Male', 'Female'])}
+                {fth('Sex', 'sex', [...EMPLOYEE_GENDERS])}
                 {fth('Status', 'status', ['Approved', 'Pending'])}
               </tr>
             </thead>
@@ -314,7 +314,7 @@ function EmployeeMasterContent() {
                         <strong>{normalizeTitle(r.title)} {r.firstName} {r.surname}</strong>
                       </span>
                     </td>
-                    <td>{r.sex === 1 ? 'Male' : 'Female'}</td>
+                    <td>{formatEmployeeGender(r.sex, r.genderLabel) || '—'}</td>
                     <td>
                       <span
                         className={`badge ${r.isApproved ? 'badge-green' : 'badge-amber'}`}

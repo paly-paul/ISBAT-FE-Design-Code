@@ -2,6 +2,21 @@ import { apiGet, apiPost, apiPostForm, apiPut } from '../client'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
+export const EMPLOYEE_GENDERS = ['Male', 'Female', 'Other'] as const
+export const EMPLOYEE_MARITAL_STATUSES = ['Single', 'Married', 'Divorced', 'Widowed'] as const
+
+/** Resolve display label for employee sex (0=Male, 1=Female, 2=Other), preferring server genderLabel when valid. */
+export function formatEmployeeGender(sex: number | null | undefined, genderLabel?: string | null): string {
+  const label = genderLabel?.trim()
+  if (label) {
+    const matched = EMPLOYEE_GENDERS.find(g => g.toLowerCase() === label.toLowerCase())
+    if (matched) return matched
+    if (label.toLowerCase() === 'others') return 'Other'
+    return label
+  }
+  return sex !== null && sex !== undefined ? (EMPLOYEE_GENDERS[sex] ?? '') : ''
+}
+
 // Lightweight employee record used by the list view.
 export interface EmployeeListItem {
   employeeGuid: string
@@ -11,6 +26,7 @@ export interface EmployeeListItem {
   surname: string
   firstName: string
   sex: number
+  genderLabel?: string | null
   isApproved: boolean
   // Signed photo link (expires after ~1 hour, so it's used straight from the
   // list response, never cached); null when no photo was uploaded.
@@ -51,6 +67,7 @@ export interface Employee {
   firstName: string
   otherName: string | null
   sex: number
+  genderLabel?: string | null
   birthDate: string
   placeOfBirth: string
   countryGuid: string | null
@@ -63,6 +80,7 @@ export interface Employee {
   // in EmployeeFormModal.
   intReligion?: number | null
   maritalStatus: number
+  maritalStatusLabel?: string | null
   countryName: string | null
   isApproved?: boolean
   deptGuid?: string | null
