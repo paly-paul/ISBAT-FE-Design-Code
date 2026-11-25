@@ -1,14 +1,13 @@
 'use client'
 import { useState } from 'react'
 import { ScrollTable } from '@/components/ScrollTable'
-import { useStudentStatement } from '@/hooks/student/useStudentStatement'
+import { useStudentFeeSummary, useStudentStatement } from '@/hooks/student/useStudentStatement'
 import { getStudentStatementPdfUrl } from '@/lib/api/student/studentStatement'
 import { PAYMENT_CATEGORY_LABELS } from '@/lib/api/finance/paymentConsole'
 
-// Compact read-only view of a student's financial statement — same data
-// (GET student statement) as Finance > Student Statement,
-// sized to sit inside a tab rather than own a whole page. Used by Dropout
-// Rejoin's "Financial Record" tab.
+// Compact read-only view of a student's financial statement for Dropout
+// Rejoin's "Financial Record" tab — the same data as Finance > Student
+// Statement, from the dropout-rejoin routes (student.dropoutrejoin.get).
 function formatMoney(amount?: number | null): string {
   if (amount == null) return '—'
   const formatted = Math.abs(amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -19,11 +18,32 @@ function formatDate(value?: string | null): string {
   return value ? new Date(value).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
 }
 
+// Amounts are never added across currencies. A row with no currency (NCHE,
+// Guild, application fee) is UGX.
+type CurrencyTotals = Record<string, number>
+function currencyOf(row: { currencyName?: string | null; currencyCode?: string | null }): string {
+  const c = (row.currencyCode || row.currencyName || '').trim()
+  if (!c || /^(ugx|uganda)/i.test(c)) return 'UGX'
+  return /^(usd|us dollar)/i.test(c) ? 'USD' : c
+}
+function totalsOf<T extends { currencyName?: string | null; currencyCode?: string | null }>(rows: T[], amount: (row: T) => number): CurrencyTotals {
+  const totals: CurrencyTotals = {}
+  for (const r of rows) totals[currencyOf(r)] = (totals[currencyOf(r)] ?? 0) + (amount(r) || 0)
+  return totals
+}
+
+function Totals({ totals }: { totals: CurrencyTotals }) {
+  const rows = Object.entries(totals).filter(([, v]) => v !== 0)
+  if (rows.length === 0) return <>{formatMoney(0)}</>
+  return <>{rows.map(([currency, v]) => <span key={currency} style={{ display: 'block' }}><small>{currency}</small> {formatMoney(v)}</span>)}</>
+}
+
 type Section = 'payments' | 'outstanding' | 'future'
 
 export function StudentFinancialRecord({ studentGuid }: { studentGuid: string }) {
   const [section, setSection] = useState<Section>('payments')
-  const { data: statement, isLoading, isError, error } = useStudentStatement(studentGuid)
+  const { data: statement, isLoading, isError, error } = useStudentStatement(studentGuid, 'dropout-rejoin')
+  const { data: feeSummary } = useStudentFeeSummary(studentGuid, 'dropout-rejoin')
 
   if (isLoading) return <div className="text-g400 text-center" style={{ padding: 24, fontSize: 12.5 }}>Loading financial statement…</div>
   if (isError || !statement) {
@@ -39,10 +59,15 @@ export function StudentFinancialRecord({ studentGuid }: { studentGuid: string })
   const payments = statement.paymentHistory ?? []
   const outstanding = statement.outstandingItems ?? []
   const future = statement.futurePayments ?? []
-  const totalPaid = payments.reduce((sum, p) => sum + (p.amount || 0), 0)
-  const currentOutstanding = outstanding.reduce((sum, o) => sum + (o.outstanding || 0), 0)
-  const totalFuture = future.reduce((sum, f) => sum + (f.amountDue || 0), 0)
-  const balanceDue = currentOutstanding - totalPaid
+  // Paid is fee-summary's (the rows stand in until it loads). Outstanding stays
+  // with the rows: fee-summary's toBePaid* counts future payments and leaves
+  // out NCHE / Guild dues (seen 2026-11-25), as on Finance > Student Statement.
+  const totalPaid: CurrencyTotals = feeSummary
+    ? { UGX: feeSummary.totalAmountPaidUgx, USD: feeSummary.totalAmountPaidUsd }
+    : totalsOf(payments, p => p.amount)
+  const currentOutstanding = totalsOf(outstanding, o => o.outstanding)
+  const totalFuture = totalsOf(future, f => f.amountDue)
+  const isCleared = Object.values(currentOutstanding).every(v => Math.round(v * 100) <= 0)
 
   const sections: { id: Section; label: string; icon: string; count: number }[] = [
     { id: 'payments', label: 'Payment History', icon: 'credit-cards', count: payments.length },
@@ -53,10 +78,9 @@ export function StudentFinancialRecord({ studentGuid }: { studentGuid: string })
   return (
     <>
       <div className="stat-grid-fluid mb-3">
-        <div className="stat-card"><div className="stat-lbl">Total Paid</div><div className="stat-num">{formatMoney(totalPaid)}</div></div>
-        <div className="stat-card"><div className="stat-lbl">Current Outstanding</div><div className="stat-num" style={{ color: 'var(--red)' }}>{formatMoney(currentOutstanding)}</div></div>
-        <div className="stat-card"><div className="stat-lbl">Future Payments</div><div className="stat-num">{formatMoney(totalFuture)}</div></div>
-        <div className="stat-card"><div className="stat-lbl">Balance Due (Current)</div><div className="stat-num" style={{ color: balanceDue <= 0 ? 'var(--green)' : 'var(--red)' }}>{formatMoney(balanceDue)}</div></div>
+        <div className="stat-card"><div className="stat-lbl">Total Paid</div><div className="stat-num"><Totals totals={totalPaid} /></div></div>
+        <div className="stat-card"><div className="stat-lbl">Current Outstanding</div><div className="stat-num" style={{ color: isCleared ? 'var(--green)' : 'var(--red)' }}><Totals totals={currentOutstanding} /></div></div>
+        <div className="stat-card"><div className="stat-lbl">Future Payments</div><div className="stat-num"><Totals totals={totalFuture} /></div></div>
       </div>
 
       <div className="card">
@@ -68,7 +92,7 @@ export function StudentFinancialRecord({ studentGuid }: { studentGuid: string })
               </button>
             ))}
           </div>
-          <button className="btn btn-neu btn-sm" onClick={() => window.open(getStudentStatementPdfUrl(studentGuid), '_blank')}>
+          <button className="btn btn-neu btn-sm" onClick={() => window.open(getStudentStatementPdfUrl(studentGuid, 'dropout-rejoin'), '_blank')}>
             <i className="lni lni-download"></i> PDF
           </button>
         </div>

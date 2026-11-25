@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { ModalProps } from '../types'
 import { SearchSelect } from '@/components/SearchSelect'
-import { useSponsorDetails, useSponsorCategories, useAssignSponsorCategory } from '@/hooks/student/useSponsor'
+import { useSponsorDetails, useSponsorCategoriesDropdown, useAssignSponsorCategory } from '@/hooks/student/useSponsor'
 import { AuthError } from '@/lib/api/client'
 
 interface Props extends ModalProps {
@@ -21,8 +21,8 @@ export function StudentSponsorModal({ isOpen, onClose, showToast, studentGuid, s
   // ("not authorized to view sponsor details for students in this campus",
   // seen live 2026-08-25), not "no assignment" (that resolves to null).
   const { data: sponsorDetail, isLoading, error } = useSponsorDetails(studentGuid, isOpen)
-  const { data: categoriesPage, isLoading: isCategoriesLoading } = useSponsorCategories(isOpen)
-  const categoryOptions = (categoriesPage?.items ?? []).map(c => ({ value: c.sponsorCategoryGuid, label: c.category }))
+  const { data: categories = [], isLoading: isCategoriesLoading } = useSponsorCategoriesDropdown(isOpen)
+  const categoryOptions = categories.map(c => ({ value: c.sponsorCategoryGuid, label: c.category }))
   const assignSponsorCategory = useAssignSponsorCategory()
 
   const [choice, setChoice] = useState('')

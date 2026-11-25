@@ -73,6 +73,9 @@ export interface StudentDetailDto extends StudentDto {
   gender?: string | null
   sponsor?: string | null
   learningMode?: string | null
+  // Refugee status, added to GET /students/{guid} 2026-11-25. No document link.
+  isRefugee?: boolean | null
+  refugeeId?: string | null
   // Intake code the student joined in (e.g. "20222") — added to
   // GET /students/{guid} 2026-09-29.
   joinedIntake?: string | null

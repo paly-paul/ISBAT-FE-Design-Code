@@ -3,7 +3,6 @@ import { useLayoutEffect, useRef, useState } from 'react'
 import { ModalProps } from '../types'
 import { ApplicationListItem, useApplicationAllDetail } from '@/hooks/admission/useApplicationFiling'
 import { useProgramDropdown } from '@/hooks/academic/useProgramMaster'
-import { useVettingApplicationDetail } from '@/hooks/admission/useVetting'
 import { applicantProfileHref } from '@/lib/applicantProfileLink'
 import { documentTitle } from '@/lib/admission/applicantDisplay'
 import { formatDate } from '@/lib/date'
@@ -88,16 +87,10 @@ export function ViewApplicantModal({ isOpen, onClose, applicant: listRow }: View
 
   // Full record at any stage (get-all-applicant-detail-by-guid.md). If it
   // can't be loaded, the list row is all there is to show.
-  const { data: detail, isLoading: detailLoading, isError: detailUnavailable } =
+  const { data: detail, isLoading: detailLoading, isError: detailUnavailable, error: detailError } =
     useApplicationAllDetail(listRow?.applicationGuid, isOpen && !!listRow)
   const { data: programs = [] } = useProgramDropdown(undefined, isOpen && !!listRow)
 
-  // Documents with viewable URLs come from the vetting detail
-  // (GET /admissions/vetting/applications/{guid}), the same source as the
-  // Applicant Profile page and Vetting Desk. all-detail only carries the
-  // upload filenames, which can't be opened.
-  const { data: vetting, isLoading: docsLoading, isError: docsError, error: docsErrorObj } =
-    useVettingApplicationDetail(listRow?.applicationGuid ?? null, isOpen && !!listRow)
   const [preview, setPreview] = useState<{ url: string; title: string } | null>(null)
 
   // Same sliding underline as ViewProgrammeModal.
@@ -151,7 +144,7 @@ export function ViewApplicantModal({ isOpen, onClose, applicant: listRow }: View
 
   const profileUrl = applicantProfileHref(applicant.applicationGuid)
 
-  const documents = vetting?.documents ?? []
+  const documents = detail?.documents ?? []
   const uploadedCount = documents.filter(d => d.uploaded).length
 
   const reference = (name: string | null, phone: string | null, org: string | null) =>
@@ -246,11 +239,9 @@ export function ViewApplicantModal({ isOpen, onClose, applicant: listRow }: View
             <div style={GRID}>
               <SectionTitle>Uploaded Documents</SectionTitle>
               <div style={{ gridColumn: '1 / -1' }}>
-                {docsLoading ? (
-                  <p className="text-sm text-g500" style={{ margin: 0 }}><i className="lni lni-spinner-arrow spin" aria-hidden="true" /> Loading documents…</p>
-                ) : docsError ? (
+                {detailUnavailable ? (
                   <p className="text-sm" style={{ margin: 0, color: 'var(--g600)' }}>
-                    <i className="lni lni-warning" style={{ color: 'var(--amber)' }} aria-hidden="true" /> Couldn&rsquo;t load this applicant&rsquo;s documents{docsErrorObj instanceof Error && docsErrorObj.message ? ` — ${docsErrorObj.message}` : ''}.
+                    <i className="lni lni-warning" style={{ color: 'var(--amber)' }} aria-hidden="true" /> Couldn&rsquo;t load this applicant&rsquo;s documents{detailError instanceof Error && detailError.message ? ` — ${detailError.message}` : ''}.
                   </p>
                 ) : documents.length === 0 ? (
                   <p className="text-sm text-g500" style={{ margin: 0 }}>No documents required for this application.</p>
@@ -297,7 +288,7 @@ export function ViewApplicantModal({ isOpen, onClose, applicant: listRow }: View
         <div className="modal-footer">
           <span className="text-sm" style={{ color: 'var(--g500)' }}>
             {fullName} · {applicant.intakeCode || 'No intake'}
-            {vetting && ` · ${uploadedCount} of ${documents.length} documents uploaded`}
+            {detail && ` · ${uploadedCount} of ${documents.length} documents uploaded`}
           </span>
           <span className="flex-1"></span>
           <a className="btn btn-neu" href={profileUrl} target="_blank" rel="noopener noreferrer">
