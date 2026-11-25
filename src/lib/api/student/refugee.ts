@@ -133,9 +133,11 @@ export function getRefugeeStudents(): Promise<RefugeeStudentDto[]> {
 // the same `code: "not_found"` body instead — checked via err.code here, not
 // the HTTP status, so this still resolves to null either way rather than
 // throwing.
-export function getStudentRefugeeDetails(studentGuid: string): Promise<RefugeeStudentDetailsDto | null> {
+// approvalView: the Refugee Approval page's own route for the same data, under
+// its own permission (2026-11-25).
+export function getStudentRefugeeDetails(studentGuid: string, approvalView = false): Promise<RefugeeStudentDetailsDto | null> {
   if (MOCK_AUTH) return Promise.resolve(mockRefugees[studentGuid] ?? null)
-  return apiGet<RefugeeStudentDetailsDto>(`/api/v1/students/refugee/${studentGuid}`).catch(err => {
+  return apiGet<RefugeeStudentDetailsDto>(`/api/v1/students/refugee/${studentGuid}${approvalView ? '/approval-view' : ''}`).catch(err => {
     if (err instanceof AuthError && err.code === 'not_found') return null
     throw err
   })

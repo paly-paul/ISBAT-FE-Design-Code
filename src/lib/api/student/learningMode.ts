@@ -120,14 +120,16 @@ export function getLearningModeOptions(): Promise<LearningModeOption[]> {
   return apiGet<LearningModeOption[] | null>('/api/v1/students/learning-mode/options').then(data => data ?? [])
 }
 
-export function getStudentLearningModeDetail(studentGuid: string): Promise<StudentLearningModeDetail> {
+// approvalView: the Learning Mode Approval page's own route for the same data,
+// under student.learningmodeapproval.get (2026-11-25).
+export function getStudentLearningModeDetail(studentGuid: string, approvalView = false): Promise<StudentLearningModeDetail> {
   if (MOCK_AUTH) {
     return Promise.resolve(mockDetails[studentGuid] ?? {
       studentGuid, studentRegNo: null, studentNum: null, studentName: null, programGuid: null, programName: null,
       semesterGuid: null, semesterName: null, learningMode: null, learningModeLabel: null,
     })
   }
-  return apiGet<StudentLearningModeDetail>(`/api/v1/students/learning-mode/${studentGuid}`)
+  return apiGet<StudentLearningModeDetail>(`/api/v1/students/learning-mode/${studentGuid}${approvalView ? '/approval-view' : ''}`)
 }
 
 // Raises a change request (post-apply-learning-mode-change.md). multipart:

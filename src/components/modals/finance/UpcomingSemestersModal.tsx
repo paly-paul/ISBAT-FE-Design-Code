@@ -102,6 +102,7 @@ export function UpcomingSemestersModal({ isOpen, onClose, upcomingSemesters }: U
                                   <i className="lni lni-tag" aria-hidden="true"></i> {l.discountName}
                                 </span>
                               )}
+                              {l.discountMessage && <span className="pcx-disc-msg">{l.discountMessage}</span>}
                             </span>
                           </span>
                           <span data-label="Scheduled Amt">

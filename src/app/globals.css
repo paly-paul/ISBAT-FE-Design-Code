@@ -1633,15 +1633,17 @@ body {
 /* Approval queue rows (Learning Mode Approval): person-row's avatar and
    name, laid out as aligned columns so the requested change sits next to
    the student instead of a full card-width away from its Review button.
-   Stacks into a compact card below 900px. */
+   Stacks into a compact card when the list itself (not the window, which the
+   sidebar takes part of) is under 720px. */
 .appr-list {
+  container-type: inline-size;
   display: flex;
   flex-direction: column
 }
 
 .appr-row {
   display: grid;
-  grid-template-columns: minmax(200px, 1.15fr) minmax(180px, 1.35fr) minmax(190px, auto) minmax(140px, 1fr) auto;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.4fr) minmax(0, 1.2fr) minmax(0, .9fr) 100px;
   align-items: center;
   column-gap: 20px;
   padding: 14px 12px;
@@ -1740,7 +1742,7 @@ body {
   font-style: italic
 }
 
-@media(max-width:900px) {
+@container (max-width: 720px) {
   .appr-head {
     display: none
   }
@@ -17540,20 +17542,14 @@ button.sp-link:hover .sp-link-go { color: var(--b700); transform: translateX(3px
 .pcx-ledger-name { font-weight: 600; color: var(--g900) }
 .pcx-ledger-sub { font-size: var(--fs-sm); color: var(--g500) }
 .pcx-ledgers .recgrid-total > span:first-child { text-transform: none; letter-spacing: 0; font-size: var(--fs-base); color: var(--g700) }
-/* Discount section breakdown: one lighter row per discount under the
-   Discount total — name and rule, the ledgers it covers, then the
-   backend's condition / warning, with that discount's own amount. */
+/* A ledger's discount condition, as worded by the backend: under its row, and
+   under the Discount total while no discount is earned. */
+.pcx-disc-msg { display: block; margin-top: 3px; font-size: var(--fs-xs); font-weight: 500; line-height: 1.4; color: var(--green); text-transform: none; letter-spacing: 0; white-space: normal }
 .pcx-ledgers .pcx-disc-row { background: var(--white); border-top: 1px dashed var(--g100) }
-.pcx-ledgers .pcx-disc-row > span:first-child { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; padding-top: 8px; padding-bottom: 8px }
-.pcx-ledgers .pcx-disc-row > span:last-child { font-weight: 600; font-size: var(--fs-sm); color: var(--green); padding-top: 8px; padding-bottom: 8px }
-.pcx-disc-name { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; color: var(--g800); font-size: var(--fs-sm) }
-.pcx-disc-name > i { color: var(--green) }
-.pcx-disc-rule { padding: 1px 6px; border-radius: 999px; background: var(--green-bg); color: var(--green); font-size: var(--fs-xs); font-weight: 700 }
-.pcx-disc-meta { font-size: var(--fs-xs); color: var(--g500); text-align: right }
-.pcx-disc-warn { color: var(--amber) }
+.pcx-ledgers .pcx-disc-row > span:first-child { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; padding-top: 8px; padding-bottom: 8px; text-align: right }
+.pcx-disc-warn { font-size: var(--fs-xs); color: var(--amber) }
 @media (max-width: 640px) {
-  .pcx-ledgers .pcx-disc-row > span:first-child { align-items: flex-start }
-  .pcx-disc-meta { text-align: left }
+  .pcx-ledgers .pcx-disc-row > span:first-child { align-items: flex-start; text-align: left }
 }
 .pcx-ledgers .recgrid-total:last-child { background: var(--surface) }
 .pcx-ledgers .recgrid-total:last-child > span { padding-top: 13px; padding-bottom: 13px }

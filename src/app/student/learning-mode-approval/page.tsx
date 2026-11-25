@@ -6,7 +6,7 @@ import { Pagination } from '@/components/Pagination'
 import { BaselinePanel } from '@/components/student/BaselinePanel'
 import {
   usePendingLearningModeApprovals,
-  useStudentLearningModeDetail,
+  useLearningModeApprovalDetail,
   useApproveLearningModeChange,
 } from '@/hooks/student/useLearningMode'
 import { downloadDocument } from '@/lib/documentViewer'
@@ -18,8 +18,8 @@ import { useActionGuard } from '@/hooks/users/useActionGuard'
 // /student/learning-mode or from Student Master's row menu. Same list → review shape as Dropout Rejoin:
 //  - List: GET /students/learning-mode/pending-approvals (server-paged,
 //    every campus) — get-pending-learning-mode-approvals.md.
-//  - Review: GET /students/learning-mode/{studentGuid} for the request's
-//    remarks and document, then POST .../{studentGuid}/approve.
+//  - Review: GET /students/learning-mode/{studentGuid}/approval-view for the
+//    request's remarks and document, then POST .../{studentGuid}/approve.
 // There is no reject endpoint, so a request can only be approved here.
 
 const PAGE_SIZE = 10
@@ -69,7 +69,7 @@ function LearningModeApprovalContent() {
   // Picked from the list, or deep-linked as ?studentGuid=<guid> from Learning
   // Mode's "Review it →" link or Student Master's modal.
   const [selectedGuid, setSelectedGuid] = useState<string | null>(() => searchParams.get('studentGuid'))
-  const { data: detail, isLoading: detailLoading, isError: detailError } = useStudentLearningModeDetail(selectedGuid)
+  const { data: detail, isLoading: detailLoading, isError: detailError } = useLearningModeApprovalDetail(selectedGuid)
   const approve = useApproveLearningModeChange()
   const [docPreviewOpen, setDocPreviewOpen] = useState(false)
 

@@ -14,10 +14,9 @@ import { AuthError } from '@/lib/api/client'
 
 // Terminates a student mid-program — POST /students/{studentGuid}/terminate
 // (student-termination/post-terminate-student.md), per request (2026-09-15).
-// Student search reuses Payment Console's own generic search/profile flow
-// (useSearchStudentsInfinite/useStudentProfile — same one Payment Refund and
-// NCHE & Guild Payment already reuse) rather than a dedicated picker, since
-// none is documented for this workflow. Termination itself is irreversible
+// Student search reuses Payment Console's search/profile hooks, pointed at this
+// page's own routes (GET /students/termination/search and /student-profile/
+// {applicationGuid}, under student.terminatestudent.get). Termination itself is irreversible
 // (sets StudActive = 0, a terminal state later fee-recalculation can't
 // revert — see the doc's own description) — gated behind the same
 // confirm-modal-overlay/confirm-modal-pop → SuccessPopup swap
@@ -75,6 +74,7 @@ export default function TerminateStudentPage() {
   } = useSearchStudentsInfinite(
     committedSearch, 20,
     searchFocused && !searchTooShort,
+    'termination',
   )
   const matches = searchTooShort ? [] : searchPages?.pages.flatMap(p => p.items) ?? []
 
@@ -84,7 +84,7 @@ export default function TerminateStudentPage() {
     if (el.scrollTop > 0 && el.scrollHeight - el.scrollTop - el.clientHeight < 48) fetchNextPage()
   }
 
-  const { data: profile, isLoading: isProfileLoading, isError: isProfileError } = useStudentProfile(selectedApplicationGuid, !!selectedApplicationGuid, selectedStudentGuidHint)
+  const { data: profile, isLoading: isProfileLoading, isError: isProfileError } = useStudentProfile(selectedApplicationGuid, !!selectedApplicationGuid, selectedStudentGuidHint, 'termination')
   const studentGuid = profile?.studentGuid ?? selectedStudentGuidHint ?? null
 
   // Current active/inactive status — resolved off get-student-by-guid, the

@@ -306,7 +306,16 @@ let mockPaymentSeq = 1
 // this "/payment-console/search" route is explicitly documented as "for use
 // in the Finance Payment Console student picker" and returns
 // FinanceStudentSearchDto instead (see ApplicationSummary above).
-export function searchStudents(searchTerm: string, pageNumber = 1, pageSize = 20): Promise<ApplicationSummaryListResponse> {
+//
+// Terminate Student has its own routes (2026-11-25) for the same search and
+// profile, under student.terminatestudent.get.
+export type StudentSearchScope = 'payment-console' | 'termination'
+const STUDENT_SEARCH_BASE: Record<StudentSearchScope, string> = {
+  'payment-console': '/api/v1/admissions/application-filling/payment-console',
+  termination: '/api/v1/students/termination',
+}
+
+export function searchStudents(searchTerm: string, pageNumber = 1, pageSize = 20, scope: StudentSearchScope = 'payment-console'): Promise<ApplicationSummaryListResponse> {
   if (MOCK_AUTH) {
     const items = searchTerm.trim()
       ? mockApplicationSummaries.filter(a => `${a.appRefNo} ${a.firstName} ${a.studentName} ${a.emailId} ${a.phone}`.toLowerCase().includes(searchTerm.toLowerCase()))
@@ -314,7 +323,7 @@ export function searchStudents(searchTerm: string, pageNumber = 1, pageSize = 20
     return Promise.resolve({ items, totalCount: items.length, pageNumber, pageSize })
   }
   return apiGet<ApplicationSummaryListResponse | null>(
-    `/api/v1/admissions/application-filling/payment-console/search?searchTerm=${encodeURIComponent(searchTerm)}&pageNumber=${pageNumber}&pageSize=${pageSize}`,
+    `${STUDENT_SEARCH_BASE[scope]}/search?searchTerm=${encodeURIComponent(searchTerm)}&pageNumber=${pageNumber}&pageSize=${pageSize}`,
   ).then(data => data ?? { items: [], totalCount: 0, pageNumber, pageSize })
 }
 
@@ -326,14 +335,14 @@ export function searchStudents(searchTerm: string, pageNumber = 1, pageSize = 20
 // returns studentGuid directly on each search hit, so callers can pass it
 // straight through here instead of only learning it after the profile
 // itself has already loaded.
-export function getStudentProfile(applicationGuid: string, studentGuid?: string | null): Promise<StudentProfile> {
+export function getStudentProfile(applicationGuid: string, studentGuid?: string | null, scope: StudentSearchScope = 'payment-console'): Promise<StudentProfile> {
   if (MOCK_AUTH) {
     const existing = mockStudentProfiles[applicationGuid]
     if (!existing) return Promise.reject(new Error('Application not found'))
     return Promise.resolve(existing)
   }
   const query = studentGuid ? `?studentGuid=${encodeURIComponent(studentGuid)}` : ''
-  return apiGet<StudentProfile>(`/api/v1/admissions/application-filling/payment-console/student-profile/${applicationGuid}${query}`)
+  return apiGet<StudentProfile>(`${STUDENT_SEARCH_BASE[scope]}/student-profile/${applicationGuid}${query}`)
 }
 
 // studentGuid is optional per get-outstanding-ledgers.md, but supplying it
@@ -405,15 +414,18 @@ export interface CurrentSemesterPayableLedger {
   // above to interpret it) — null when discountGuid is null.
   discountAmtPer: number | null
   // The ledgerNums sharing this ledger's discount group; [] when no
-  // discount. Purely informational here — unlike payable-ledgers'
-  // simulation, this endpoint doesn't gate the discount on the group being
-  // paid in full, it's shown unconditionally regardless of this list.
+  // discount. Purely informational: the discount on this DTO is not yet
+  // applied (see minimumPaymentForDiscount); payable-ledgers decides that.
   discountGroupLedgerNums: number[]
   // This ledger's apportioned share of its discount group's total discount,
   // rounded to 2dp.
   discountAmount: number
-  // Display string from the discount formatter, e.g. "TALENT 1-10%: 75.00
-  // USD off if this group is paid in full".
+  // The least one payment must cover to earn the discount, in the ledger's
+  // currency (2026-11-25). null = no discount; 0 = the next payment earns it.
+  // All-or-nothing: a smaller payment gets no discount. A partly paid ledger
+  // still carries its full discount, since it hasn't been earned yet.
+  minimumPaymentForDiscount?: number | null
+  // What the discount is and the payment it needs. Show exactly as returned.
   discountMessage: string | null
   // Portion of discountAmount that exceeds this ledger's own outstanding
   // and couldn't be applied to it.
