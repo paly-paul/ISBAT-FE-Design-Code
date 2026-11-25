@@ -1,4 +1,4 @@
-import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import {
   deleteQualification,
   exportApplicationsCsv,
@@ -124,15 +124,27 @@ export function useSaveGeneral() {
   })
 }
 
+// by-payment carries the saved qualifications, so a save or delete makes it
+// stale. refetchType 'none': the open form already shows the change, and a
+// refetch midway through saving several rows would add them twice. It's
+// fetched again the next time the applicant is selected.
+function markByPaymentStale(queryClient: QueryClient) {
+  queryClient.invalidateQueries({ queryKey: [...FILING_KEY, 'by-payment'], refetchType: 'none' })
+}
+
 export function useSaveQualification() {
+  const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (input: SaveQualificationInput) => saveQualification(input),
+    onSuccess: () => markByPaymentStale(queryClient),
   })
 }
 
 export function useDeleteQualification() {
+  const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (intApplicationQual: number) => deleteQualification(intApplicationQual),
+    onSuccess: () => markByPaymentStale(queryClient),
   })
 }
 

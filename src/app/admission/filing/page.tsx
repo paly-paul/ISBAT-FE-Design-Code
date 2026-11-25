@@ -28,7 +28,6 @@ import {
   useUploadPhoto,
 } from '@/hooks/admission/useApplicationFiling'
 import { filingResultFromNewPayment } from '@/lib/api/admission/applicationFiling'
-import { useVettingApplicationDetail } from '@/hooks/admission/useVetting'
 
 // Family Details tab removed per the Application Filling requirements doc
 // (req. 10) — sponsorship fields already live in Personal Info.
@@ -543,6 +542,7 @@ export default function FilingPage() {
     data: applicationDetail,
     isError: applicationDetailFailed,
     isFetched: applicationDetailFetched,
+    isFetching: applicationDetailFetching,
   } = useApplicationByPaymentGuid(
     selectedApplication?.applicationGuid,
     // Re-enabled (2026-09-10) per request. Still expected to 400 for the
@@ -777,15 +777,9 @@ export default function FilingPage() {
   // Inline field errors per qualification row, keyed by row id then field.
   const [qualErrors, setQualErrors] = useState<Record<number, Record<string, string>>>({})
 
-  // Saved qualifications of an existing application. There's no
-  // application-filling read endpoint for them; GET /vetting/applications/
-  // {guid} returns them (any status, including in progress) with the fields
-  // this form saves plus intApplicationQual, the id the delete call takes.
-  // It needs the real application guid: selectedApplication.applicationGuid
-  // is the payment's guid, so it's taken from the by-payment detail, which
-  // 400s (no application row yet, so nothing saved) for a new filing.
+  // Saved qualifications of an existing application, from the by-payment
+  // detail. It has no applicationGuid (so nothing saved) for a new filing.
   const realApplicationGuid = applicationDetail?.applicationGuid ?? null
-  const { data: savedApplication } = useVettingApplicationDetail(realApplicationGuid, !!realApplicationGuid)
   const [qualsLoadedFor, setQualsLoadedFor] = useState<string | null>(null)
 
   // A different applicant starts from a blank form, not the last one's rows.
@@ -796,10 +790,11 @@ export default function FilingPage() {
   }, [selectedApplication?.applicationGuid])
 
   useEffect(() => {
-    if (!savedApplication || !realApplicationGuid || savedApplication.applicationGuid !== realApplicationGuid) return
+    // Not while refetching: a reselected applicant's cached list can be out of date.
+    if (!applicationDetail || !realApplicationGuid || applicationDetailFetching) return
     if (qualsLoadedFor === realApplicationGuid) return
     setQualsLoadedFor(realApplicationGuid)
-    const saved = savedApplication.qualifications ?? []
+    const saved = applicationDetail.qualifications ?? []
     if (!saved.length) return
     const text = (s: string | null | undefined) => (s && s !== 'null' ? s : '')
     const loaded: QualRow[] = saved.map(q => ({
@@ -812,14 +807,14 @@ export default function FilingPage() {
       proofFile: null,
       savedId: q.intApplicationQual,
       savedProofName: q.proofUserFileName || (q.proofUrl ? 'Proof document' : null),
-      proofUrl: q.proofUrl,
+      proofUrl: q.proofUrl ?? null,
     }))
     // Keep anything already typed into an unsaved row.
     setQualRows(rows => {
       const typed = rows.filter(r => r.savedId == null && (r.institution || r.university || r.passYear || r.grade || r.yearsTaken || r.proofFile))
       return [...loaded, ...typed]
     })
-  }, [savedApplication, realApplicationGuid, qualsLoadedFor])
+  }, [applicationDetail, applicationDetailFetching, realApplicationGuid, qualsLoadedFor])
 
   function updateQualRow(id: number, patch: Partial<QualRow>) {
     setQualRows(rows => rows.map(r => (r.id === id ? { ...r, ...patch } : r)))
