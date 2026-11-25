@@ -3,13 +3,13 @@ import { ModalProps } from '../types'
 import { ScrollTable } from '@/components/ScrollTable'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
-import { useProgramSpecializations } from '@/hooks/academic/useProgramSpecializations'
+import { useProgramMasterFullDetails } from '@/hooks/academic/useProgramMaster'
 
 // Previous mock content (hardcoded rows, a fake "Add Specialization" create
 // form) — replaced per Program_Master_Change_Requests_Final.md's Home Page
 // "Specialization" action: this now just displays the real specializations
-// already assigned to the selected programme (GET
-// /api/v1/academic/specializations?programGuid=), read-only. Managing the
+// already assigned to the selected programme (streamGuids /
+// streamNames on full-details, which carry no code), read-only. Managing the
 // programme's specializations themselves still happens on the Programme
 // Details step (Step 1's Specialization(s) multi-select).
 // const rows = [
@@ -24,7 +24,8 @@ interface SpecializationModalProps extends ModalProps {
 }
 
 export function SpecializationModal({ isOpen, onClose, programGuid, programName }: SpecializationModalProps) {
-  const { data: specializations = [], isLoading } = useProgramSpecializations(programGuid, isOpen && !!programGuid)
+  const { data: program, isLoading, isError } = useProgramMasterFullDetails(programGuid, isOpen)
+  const specializations = (program?.streamGuids ?? []).map((guid, i) => ({ guid, name: program?.streamNames?.[i] || '—' }))
 
   if (!isOpen) return null
   return (
@@ -36,16 +37,17 @@ export function SpecializationModal({ isOpen, onClose, programGuid, programName 
         </div>
         <ScrollTable>
           <table>
-            <thead><tr><th>Code</th><th>Specialization Name</th></tr></thead>
+            <thead><tr><th>Specialization Name</th></tr></thead>
             <tbody>
               {isLoading
-                ? <TableLoadingState colSpan={2} />
+                ? <TableLoadingState colSpan={1} />
+                : isError
+                  ? <EmptyState colSpan={1} title="Couldn’t load specializations" subtitle="Close this and try again." />
                 : specializations.length === 0
-                  ? <EmptyState colSpan={2} title="No specializations" subtitle="This programme has no specializations assigned yet." />
+                  ? <EmptyState colSpan={1} title="No specializations" subtitle="This programme has no specializations assigned yet." />
                   : specializations.map(s => (
-                      <tr key={s.streamGuid}>
-                        <td className="font-mono text-[var(--fs-xs)] text-b700">{s.streamCode}</td>
-                        <td><strong>{s.streamName}</strong></td>
+                      <tr key={s.guid}>
+                        <td><strong>{s.name}</strong></td>
                       </tr>
                     ))}
             </tbody>

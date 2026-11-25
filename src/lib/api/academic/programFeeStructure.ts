@@ -55,11 +55,17 @@ export interface ProgramFeeStructureSaveCompleteInput extends ProgramFeeStructur
 
 let mockHeaderSeq = 1
 
-export function saveProgramFeeStructureComplete(input: ProgramFeeStructureSaveCompleteInput): Promise<ProgramFeeStructureHeader> {
+// Programme Master's step 3 has its own routes for the same list, fee lines and
+// saves (2026-11-25), under its own permission: same parameters, body and
+// response. The Fee Structure page keeps /Programfee-structure.
+export type FeeStructureScope = 'fee-structure' | 'programme-master'
+const PROGRAMME_FEE_BASE = '/api/v1/academic/program-master/fee-structures'
+
+export function saveProgramFeeStructureComplete(input: ProgramFeeStructureSaveCompleteInput, scope: FeeStructureScope = 'fee-structure'): Promise<ProgramFeeStructureHeader> {
   if (MOCK_AUTH) {
     return Promise.resolve({ ...input, feeHdGuid: String(mockHeaderSeq++), programFees: input.feeLines })
   }
-  return apiPost<ProgramFeeStructureHeader>('/api/v1/academic/Programfee-structure/hd/save-complete', input)
+  return apiPost<ProgramFeeStructureHeader>(scope === 'programme-master' ? PROGRAMME_FEE_BASE : '/api/v1/academic/Programfee-structure/hd/save-complete', input)
 }
 
 interface ProgramFeeStructureListResult {
@@ -82,7 +88,7 @@ interface ProgramFeeStructureListResult {
 // against a spec, so callers pair it with a client-side re-filter of
 // whatever comes back, keeping results correct even if the backend doesn't
 // actually recognize the param.
-export function getProgramFeeStructures(pageNumber = 1, pageSize = 20, programGuid?: string, search = ''): Promise<ProgramFeeStructureListResult> {
+export function getProgramFeeStructures(pageNumber = 1, pageSize = 20, programGuid?: string, search = '', scope: FeeStructureScope = 'fee-structure'): Promise<ProgramFeeStructureListResult> {
   if (MOCK_AUTH) {
     return Promise.resolve({ items: [], totalCount: 0, pageNumber, pageSize })
   }
@@ -90,7 +96,7 @@ export function getProgramFeeStructures(pageNumber = 1, pageSize = 20, programGu
   if (programGuid) params.set('programGuid', programGuid)
   const q = search.trim()
   if (q) params.set('search', q)
-  return apiGet<ProgramFeeStructureListResult | null>(`/api/v1/academic/Programfee-structure?${params.toString()}`)
+  return apiGet<ProgramFeeStructureListResult | null>(`${scope === 'programme-master' ? PROGRAMME_FEE_BASE : '/api/v1/academic/Programfee-structure'}?${params.toString()}`)
     .then(data => data ?? { items: [], totalCount: 0, pageNumber, pageSize })
 }
 
@@ -134,9 +140,9 @@ export interface ProgramFeeLineDetail {
 // data at all (editData was a purely decorative prefill: programme code,
 // fee code, description, a display-only currency string — no feeHdGuid, no
 // fetch of any kind).
-export function getProgramFeeLines(feeHdGuid: string): Promise<ProgramFeeLineDetail[]> {
+export function getProgramFeeLines(feeHdGuid: string, scope: FeeStructureScope = 'fee-structure'): Promise<ProgramFeeLineDetail[]> {
   if (MOCK_AUTH) return Promise.resolve([])
-  return apiGet<ProgramFeeLineDetail[] | null>(`/api/v1/academic/Programfee-structure/fee-lines/${feeHdGuid}`)
+  return apiGet<ProgramFeeLineDetail[] | null>(scope === 'programme-master' ? `${PROGRAMME_FEE_BASE}/${feeHdGuid}/fee-lines` : `/api/v1/academic/Programfee-structure/fee-lines/${feeHdGuid}`)
     .then((data: any) => Array.isArray(data) ? data : (data && typeof data === 'object' ? (data.items || Object.values(data).find(Array.isArray) || []) : []))
 }
 
@@ -148,9 +154,9 @@ export interface ProgramFeeStructureUpdateInput extends ProgramFeeStructureHeade
   feeLines: ProgramFeeLineSaveInput[]
 }
 
-export function updateProgramFeeStructureComplete(feeHdGuid: string, input: ProgramFeeStructureUpdateInput): Promise<ProgramFeeStructureHeader> {
+export function updateProgramFeeStructureComplete(feeHdGuid: string, input: ProgramFeeStructureUpdateInput, scope: FeeStructureScope = 'fee-structure'): Promise<ProgramFeeStructureHeader> {
   if (MOCK_AUTH) {
     return Promise.resolve({ ...input, programFees: input.feeLines })
   }
-  return apiPut<ProgramFeeStructureHeader>(`/api/v1/academic/Programfee-structure/hd/${feeHdGuid}/update-complete`, input)
+  return apiPut<ProgramFeeStructureHeader>(scope === 'programme-master' ? `${PROGRAMME_FEE_BASE}/${feeHdGuid}` : `/api/v1/academic/Programfee-structure/hd/${feeHdGuid}/update-complete`, input)
 }

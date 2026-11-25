@@ -1,6 +1,5 @@
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient, useQueries, keepPreviousData } from '@tanstack/react-query'
-import { createProgramGroup, deleteProgramGroup, getProgramGroupById, getProgramGroupsPaged, ProgramGroup, ProgramGroupInput, updateProgramGroup } from '@/lib/api/academic/programGroup'
-import { getNextPageParam } from '@/lib/pagination'
+import { useMutation, useQuery, useQueryClient, useQueries, keepPreviousData } from '@tanstack/react-query'
+import { createProgramGroup, deleteProgramGroup, getProgramGroupById, getProgramGroupsDropdown, getProgramGroupsPaged, ProgramGroup, ProgramGroupInput, updateProgramGroup } from '@/lib/api/academic/programGroup'
 
 const PROGRAM_GROUPS_KEY = ['programGroups']
 
@@ -14,12 +13,11 @@ export function useProgramGroupsPaged(page: number, pageSize: number, search: st
   })
 }
 
-export function useSearchProgramGroupsInfinite(search: string, pageSize: number, enabled: boolean) {
-  return useInfiniteQuery({
-    queryKey: [...PROGRAM_GROUPS_KEY, 'search-infinite', search, pageSize],
-    queryFn: ({ pageParam }) => getProgramGroupsPaged(pageParam, pageSize, search),
-    initialPageParam: 1,
-    getNextPageParam,
+// Every programme group, for pickers outside Programme Group Master.
+export function useProgramGroupsDropdown(enabled = true) {
+  return useQuery({
+    queryKey: [...PROGRAM_GROUPS_KEY, 'dropdown'],
+    queryFn: getProgramGroupsDropdown,
     enabled,
     staleTime: Infinity,
     gcTime: Infinity,

@@ -5,7 +5,7 @@ export const WEEKDAYS_KEY = ['weekdays']
 
 export function useWeekdays() {
   return useQuery({
-    queryKey: WEEKDAYS_KEY,
+    queryKey: [...WEEKDAYS_KEY, 'dropdown'],
     queryFn: () => getWeekdays(),
     // Keep the cached list until a mutation explicitly refreshes it.
     staleTime: Infinity,

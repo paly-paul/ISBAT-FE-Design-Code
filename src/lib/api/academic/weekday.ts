@@ -25,10 +25,11 @@ const mockWeekdays: Weekday[] = [
   { weekDayGuid: '7', dayName: 'sunday',    dayCode: 'SUN' },
 ]
 
-// Fetch all weekdays.
+// GET /weekdays/dropdown (get-weekday-dropdown.md): every weekday, open to any
+// signed-in user. The master table uses the paged list below.
 export function getWeekdays(): Promise<Weekday[]> {
   if (MOCK_AUTH) return Promise.resolve(mockWeekdays)
-  return apiGet<Weekday[] | null>('/api/v1/academic/weekdays').then((data: any) => Array.isArray(data) ? data : (data && typeof data === 'object' ? (data.items || Object.values(data).find(Array.isArray) || []) : []))
+  return apiGet<Weekday[] | null>('/api/v1/academic/weekdays/dropdown').then((data: any) => Array.isArray(data) ? data : (data && typeof data === 'object' ? (data.items || Object.values(data).find(Array.isArray) || []) : []))
 }
 
 // One page for the master table (get-weekdays.md): ?page=&pageSize=&search=.
