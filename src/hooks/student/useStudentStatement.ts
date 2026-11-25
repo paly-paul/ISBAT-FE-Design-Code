@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { getStudentStatement, searchStudentStatement, statementSearchFilters, StudentStatementSearchFilters, getStudentFeeSummary } from '@/lib/api/student/studentStatement'
+import { getStudentStatement, searchStudentStatement, statementSearchFilters, StatementScope, StudentStatementSearchFilters, getStudentFeeSummary } from '@/lib/api/student/studentStatement'
 
 // Search-as-you-type box, same "browse all on an empty box" behavior as the
 // Finance Payment Console's own student search (PaymentConsoleStudentSearch
@@ -29,20 +29,20 @@ export function useStudentStatementSearch(term: string, enabled = true) {
   })
 }
 
-export function useStudentStatement(studentGuid: string | null) {
+export function useStudentStatement(studentGuid: string | null, scope: StatementScope = 'statement') {
   return useQuery({
-    queryKey: ['student-statement', studentGuid],
-    queryFn: () => getStudentStatement(studentGuid as string),
+    queryKey: ['student-statement', studentGuid, scope],
+    queryFn: () => getStudentStatement(studentGuid as string, scope),
     enabled: !!studentGuid,
     staleTime: 5 * 60 * 1000,
     gcTime: Infinity,
   })
 }
 
-export function useStudentFeeSummary(studentGuid: string | null) {
+export function useStudentFeeSummary(studentGuid: string | null, scope: StatementScope = 'statement') {
   return useQuery({
-    queryKey: ['student-fee-summary', studentGuid],
-    queryFn: () => getStudentFeeSummary(studentGuid as string),
+    queryKey: ['student-fee-summary', studentGuid, scope],
+    queryFn: () => getStudentFeeSummary(studentGuid as string, scope),
     enabled: !!studentGuid,
     staleTime: 5 * 60 * 1000,
     gcTime: Infinity,

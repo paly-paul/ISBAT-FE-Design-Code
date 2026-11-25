@@ -3,7 +3,7 @@ import {
   assignSponsorCategory,
   createSponsorCategory,
   deleteSponsorCategory,
-  getSponsorCategories,
+  getSponsorCategoriesDropdown,
   getSponsorDetails,
   SponsorCategoryRequest,
   updateSponsorCategory,
@@ -12,10 +12,11 @@ import {
 export const SPONSOR_CATEGORIES_KEY = ['sponsor-categories']
 const SPONSOR_DETAILS_KEY = ['sponsor-details']
 
-export function useSponsorCategories(enabled = true) {
+// Every category, for the Sponsor Assignment picker.
+export function useSponsorCategoriesDropdown(enabled = true) {
   return useQuery({
-    queryKey: SPONSOR_CATEGORIES_KEY,
-    queryFn: () => getSponsorCategories(),
+    queryKey: [...SPONSOR_CATEGORIES_KEY, 'dropdown'],
+    queryFn: () => getSponsorCategoriesDropdown(),
     staleTime: Infinity,
     gcTime: Infinity,
     enabled,

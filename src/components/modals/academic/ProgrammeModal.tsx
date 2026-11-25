@@ -10,14 +10,14 @@ import { SearchSelect } from '@/components/SearchSelect'
 import DatePicker from '@/components/DatePicker'
 import { stripLeadingZeros } from '@/lib/errorMessages'
 import { StreamMultiSearchPicker } from '@/components/StreamMultiSearchPicker'
-import { useStreamsByGuids } from '@/hooks/config/useStreams'
+import { useSpecializationsDropdown } from '@/hooks/config/useStreams'
 import { ProgramMasterInput } from '@/lib/api/academic/programMaster'
 import { useProgramLevelsDropdown, useProgramLevel } from '@/hooks/academic/useProgramLevels'
-import { useSearchProgramGroupsInfinite } from '@/hooks/academic/useProgramGroups'
+import { useProgramGroupsDropdown } from '@/hooks/academic/useProgramGroups'
 import { useCurrenciesDropdown } from '@/hooks/finance/useCurrencies'
 import { useCourseUnit, useCourseUnitsByGuids } from '@/hooks/academic/useCourseUnits'
 import { CourseUnitSearchPicker, CourseUnitPickOption } from '@/components/CourseUnitSearchPicker'
-import { useIntakesByGuids, useCurrentAcademicIntake } from '@/hooks/academic/useIntakes'
+import { useIntakesDropdown, useCurrentAcademicIntake } from '@/hooks/academic/useIntakes'
 import { IntakeSearchPicker } from '@/components/IntakeSearchPicker'
 import { FacultySearchPicker } from '@/components/FacultySearchPicker'
 import { useFacultiesByGuids } from '@/hooks/config/useFaculties'
@@ -245,8 +245,8 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   const updateProgramStep1 = useUpdateProgramMasterStep1()
   const addProgramCourseUnits = useAddProgramCourseUnitsBulk()
   const updateProgramCourseUnits = useUpdateProgramCourseUnits()
-  const saveFeeStructureComplete = useSaveProgramFeeStructureComplete()
-  const updateFeeStructureComplete = useUpdateProgramFeeStructureComplete()
+  const saveFeeStructureComplete = useSaveProgramFeeStructureComplete('programme-master')
+  const updateFeeStructureComplete = useUpdateProgramFeeStructureComplete('programme-master')
   // Add mode only — Step 1's programme record already exists once this is
   // set, so its own fields lock (see the banner + pointerEvents wrapper in
   // Step 1's JSX below) rather than risking a duplicate/orphaned create.
@@ -329,11 +329,8 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   const [programName, setProgramName] = useState('')
   const [programGroupGuid, setProgramGroupGuid] = useState('')
   const [programLevelGuid, setProgramLevelGuid] = useState('')
-  const [programGroupSearch, setProgramGroupSearch] = useState('')
   const [programLevelSearch, setProgramLevelSearch] = useState('')
-  const [committedProgramGroupSearch, setCommittedProgramGroupSearch] = useState('')
   const [committedProgramLevelSearch, setCommittedProgramLevelSearch] = useState('')
-  const [programGroupPickerOpen, setProgramGroupPickerOpen] = useState(false)
   const [programLevelPickerOpen, setProgramLevelPickerOpen] = useState(false)
   const [programGroupLabel, setProgramGroupLabel] = useState('')
   const [programLevelLabel, setProgramLevelLabel] = useState('')
@@ -402,29 +399,19 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   // see validateStep2 / Program_Master_Change_Requests_Final.md.
   const [step2Error, setStep2Error] = useState<string | null>(null)
 
-  useEffect(() => {
-    const timer = setTimeout(() => setCommittedProgramGroupSearch(programGroupSearch.trim()), 300)
-    return () => clearTimeout(timer)
-  }, [programGroupSearch])
-
-
-
-  const programGroupQuery = useSearchProgramGroupsInfinite(
-    committedProgramGroupSearch,
-    20,
-    isOpen && programGroupPickerOpen,
-  )
+  // GET /program-groups/dropdown — one cached call, filtered in the browser.
+  const programGroupQuery = useProgramGroupsDropdown(isOpen)
   const programLevelQuery = useProgramLevelsDropdown(isOpen)
   const selectedProgramLevelQuery = useProgramLevel(programLevelGuid, isOpen && !!programLevelGuid)
   const selectedProgramLevel = selectedProgramLevelQuery.data
 
   const programGroups = useMemo(() => {
-    const items = flattenUniquePages(programGroupQuery.data?.pages ?? [], g => g.programGroupGuid)
-    if (programGroupGuid && programGroupLabel && !items.some(g => g.programGroupGuid === programGroupGuid)) {
-      items.unshift({ programGroupGuid, groupCode: '', groupName: programGroupLabel, programLevelGuid } as typeof items[number])
+    const items = [...(programGroupQuery.data ?? [])]
+    if (programGroupGuid && programGroupLabel && !items.some(g => g.guid === programGroupGuid)) {
+      items.unshift({ guid: programGroupGuid, name: programGroupLabel })
     }
     return items
-  }, [programGroupGuid, programGroupLabel, programGroupQuery.data, programLevelGuid])
+  }, [programGroupGuid, programGroupLabel, programGroupQuery.data])
   const programLevels = useMemo(() => {
     const items = (programLevelQuery.data ?? []).map(p => ({
       guid: p.guid,
@@ -436,14 +423,14 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     return items
   }, [programLevelGuid, programLevelLabel, programLevelQuery.data])
   const programLevelOptions = programLevels.map(p => ({ value: p.guid, label: p.name }))
-  const programGroupOptions = programGroups.map(g => ({ value: g.programGroupGuid, label: `${g.groupCode} — ${g.groupName}` }))
+  const programGroupOptions = programGroups.map(g => ({ value: g.guid, label: g.name }))
 
   // Faculty picker (Step 1) — required by validateStep1, though the API itself
   // takes it as optional (post-program-master.md: facultyGuid: guid?). The
   // label comes from the pick itself, or in Edit
   // from full-details' schoolName; when that's missing the faculty is looked
   // up by guid so the picker never shows a bare placeholder for a real value.
-  // The same lookup gives the campus in Edit, where full-details has none.
+  // The same lookup gives the campus of a newly picked faculty.
   const facultyLookup = useFacultiesByGuids(facultyGuid && (!facultyLabel || !facultyCampus) ? [facultyGuid] : [])
   const facultyDisplay = facultyLabel || facultyLookup.get(facultyGuid)?.facultyName || null
   const campusDisplay = facultyCampus || facultyLookup.get(facultyGuid)?.campusName || ''
@@ -472,11 +459,11 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     const t = setTimeout(() => setCommittedCopySearch(copySearch.trim()), 300)
     return () => clearTimeout(t)
   }, [copySearch])
-  const savedFeeQuery = useSearchProgramFeeStructuresInfinite(committedCopySearch, 20, isOpen && step === 3 && copyPickerOpen)
+  const savedFeeQuery = useSearchProgramFeeStructuresInfinite(committedCopySearch, 20, isOpen && step === 3 && copyPickerOpen, 'programme-master')
   const savedFeeStructures = useMemo(() => flattenUniquePages(savedFeeQuery.data?.pages ?? [], f => f.feeHdGuid), [savedFeeQuery.data])
   const savedCopyGuid = copySourceId.startsWith('saved:') ? copySourceId.slice(6) : ''
   const savedCopySource = savedFeeStructures.find(f => f.feeHdGuid === savedCopyGuid)
-  const { data: savedCopyLines, isLoading: savedCopyLinesLoading } = useProgramFeeLines(savedCopyGuid || null, !!savedCopyGuid)
+  const { data: savedCopyLines, isLoading: savedCopyLinesLoading } = useProgramFeeLines(savedCopyGuid || null, !!savedCopyGuid, 'programme-master')
   const { data: savedCopySemesters, isLoading: savedCopySemestersLoading } = useSemestersForProgram(savedCopySource?.programGuid ?? null, !!savedCopySource)
   const isCopyLoading = !!savedCopyGuid && (savedCopyLinesLoading || savedCopySemestersLoading)
 
@@ -543,23 +530,13 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
       })),
   ]
 
-  // Specialization(s) is now StreamMultiSearchPicker's own infinite-scroll
-  // search (2026-09-10) instead of a MultiSelect fed by useStreams(isOpen)'s
-  // capped 1000-row snapshot — confirmed live that GET
-  // /api/v1/academic/specializations genuinely supports page/pageSize/search
-  // together. Step 2's per-semester picker only offers what was picked in
-  // Step 1, which is always a small, bounded set regardless — resolved via
-  // the same batched-by-guid lookup StreamMultiSearchPicker itself uses for
-  // its selected-chip labels, rather than holding the whole stream list here
-  // too.
-  // streamNames is only filled from full-details (Edit), and can come back
-  // empty. Resolve the rest by guid, same lookup the picker uses, so chips and
-  // the Step 2 picker never show a raw GUID.
-  const streamsByGuid = useStreamsByGuids(streamGuids)
+  // Step 2's per-semester picker offers only what was picked in Step 1. Labels
+  // come from the specialization dropdown (the picker's own cached list), or
+  // full-details' streamNames for a saved one it doesn't list.
+  const { data: specializations = [] } = useSpecializationsDropdown(isOpen)
   const semesterStreamOptions = streamGuids.map(guid => {
-    const s = streamsByGuid.get(guid)
-    const label = s ? `${s.streamCode} — ${s.streamName}` : (streamNames[guid] || 'Loading…')
-    return { value: guid, label }
+    const s = specializations.find(x => (x.guid || x.streamGuid) === guid)
+    return { value: guid, label: s?.name || s?.streamName || streamNames[guid] || 'Loading…' }
   })
 
 
@@ -638,19 +615,15 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   // Intake instead of offering a picker at all.
   const { data: currentAcademicIntake } = useCurrentAcademicIntake(isOpen && mode !== 'edit')
 
-  // Resolves the display label ("intakeCode — description") for the
-  // top-level Programme Intake plus whichever intake each fee structure
-  // already carries — a bounded batched-by-guid lookup (useIntakesByGuids)
-  // instead of holding the whole intake list in memory just to look labels
-  // up, now that this modal's Intake pickers are IntakeSearchPicker's own
-  // search/scroll fetch rather than a plain SearchSelect over a full list.
-  const intakesByGuid = useIntakesByGuids([intakeGuid, ...feeStructures.map(s => s.intakeGuid)])
+  // Labels the programme's and each fee structure's intake; shares the
+  // pickers' own cached list.
+  const { data: intakes = [] } = useIntakesDropdown(isOpen)
   function intakeLabel(guid: string): string | null {
     if (!guid) return null
     if (currentAcademicIntake && currentAcademicIntake.intakeGuid === guid) {
       return `${currentAcademicIntake.intakeCode} — ${currentAcademicIntake.description}`
     }
-    const found = intakesByGuid.get(guid)
+    const found = intakes.find(i => i.intakeGuid === guid)
     return found ? `${found.intakeCode} — ${found.description}` : null
   }
 
@@ -741,7 +714,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     setProgramLevelLabel(fullDetails.programLevelName ?? '')
     setFacultyGuid(fullDetails.facultyGuid ?? '')
     setFacultyLabel(fullDetails.schoolName ?? '')
-    setFacultyCampus('')
+    setFacultyCampus(fullDetails.campusName?.trim() ?? '')
     // Confirmed live (2026-09-07) that full-details DOES return a real
     // currencyGuid — overrides whatever the initialCurrencyGuid-driven
     // effect above set from the (often-null) list row the moment this
@@ -963,16 +936,10 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   function selectProgramGroup(guid: string) {
     setProgramGroupGuid(guid)
     if (step1Errors.programGroupGuid) setStep1Errors(p => ({ ...p, programGroupGuid: '' }))
-    // Every ProgramGroup carries its own programLevelGuid (a group belongs to
-    // exactly one level) — auto-fill Level from the picked group instead of
-    // making the user look up and re-pick the same level a second time.
-    // Routed through selectProgramLevel so App/Late Fee and the Step 2/3
-    // semester-count resize all follow the same auto-fill this level would
-    // get from being picked directly. Guarded on the level actually being in
-    // the loaded programLevels list — otherwise programLevelGuid would point
-    // at a level programLevelOptions has no entry for, and the dropdown
-    // would silently show its placeholder instead of the real selection.
-    const group = programGroups.find(g => g.programGroupGuid === guid)
+    // Auto-fills Level from the group, when the dropdown sends the group's
+    // level (it doesn't yet — see ProgramGroupDropdownItem) and that level is
+    // in the list.
+    const group = programGroups.find(g => g.guid === guid)
     if (group?.programLevelGuid && programLevels.some(l => l.guid === group.programLevelGuid)) {
       selectProgramLevel(group.programLevelGuid)
     }
@@ -1934,12 +1901,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                     value={programGroupGuid}
                     onChange={selectProgramGroup}
                     options={programGroupOptions}
-                    onSearch={setProgramGroupSearch}
-                    onOpenChange={setProgramGroupPickerOpen}
                     isLoading={programGroupQuery.isLoading}
-                    hasNextPage={programGroupQuery.hasNextPage}
-                    isFetchingNextPage={programGroupQuery.isFetchingNextPage}
-                    onLoadMore={() => programGroupQuery.fetchNextPage()}
                   />
                   {step1Errors.programGroupGuid && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{step1Errors.programGroupGuid}</p>}
                 </div>
@@ -2069,6 +2031,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                   <StreamMultiSearchPicker
                     placeholder="— Select specialization(s) —"
                     value={streamGuids}
+                    savedNames={streamNames}
                     onChange={vals => {
                       setStreamGuids(vals)
                       // Drop any per-unit pick (Step 2) that's no longer part of this selection.

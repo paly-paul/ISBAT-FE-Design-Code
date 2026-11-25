@@ -53,6 +53,20 @@ export function getProgramGroupsPaged(page = 1, pageSize = 10, search = ''): Pro
     .then(data => data ?? { items: [], totalCount: 0, pageNumber: page, pageSize })
 }
 
+// GET /program-groups/dropdown (get-program-group-dropdown.md): unpaged, any
+// signed-in user. programLevelGuid isn't sent today (the doc says the dropdown
+// drops the level fields); it's read if the backend adds it.
+export interface ProgramGroupDropdownItem {
+  guid: string
+  name: string
+  programLevelGuid?: string | null
+}
+
+export function getProgramGroupsDropdown(): Promise<ProgramGroupDropdownItem[]> {
+  if (MOCK_AUTH) return Promise.resolve(mockProgramGroups.map(g => ({ guid: g.programGroupGuid, name: g.groupName, programLevelGuid: g.programLevelGuid })))
+  return apiGet<ProgramGroupDropdownItem[] | null>('/api/v1/academic/program-groups/dropdown').then(data => data ?? [])
+}
+
 // Payload used when creating or updating a programme group.
 export interface ProgramGroupInput {
   groupCode: string

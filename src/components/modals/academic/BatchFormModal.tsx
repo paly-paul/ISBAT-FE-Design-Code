@@ -7,12 +7,12 @@ import { SearchSelect } from '@/components/SearchSelect'
 import DatePicker from '@/components/DatePicker'
 import { BatchCreateInput, BatchUpdateInput, EMPTY_GUID } from '@/lib/api/academic/batch'
 import { useBatch } from '@/hooks/academic/useBatches'
-import { useProgramMasterByGuid, useProgramDropdown } from '@/hooks/academic/useProgramMaster'
+import { useProgramDropdown } from '@/hooks/academic/useProgramMaster'
 import { useCurrentAcademicIntake, useIntake, useIntakesDropdown } from '@/hooks/academic/useIntakes'
 import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
-import { useSpecializationsDropdown, useStream } from '@/hooks/config/useStreams'
+import { useSpecializationsDropdown } from '@/hooks/config/useStreams'
 import { useBatchTimesDropdown } from '@/hooks/config/useBatchTimes'
-import { useEmployee, useEmployeeDropdown } from '@/hooks/employee/useEmployees'
+import { useEmployeeDropdown } from '@/hooks/employee/useEmployees'
 import { AuthError } from '@/lib/api/client'
 import { scrollToFirstError } from '@/lib/scrollToFirstError'
 
@@ -117,11 +117,7 @@ export function BatchFormModal({ isOpen, onClose, showToast, mode, batchGuid, cr
   const [committedEmployeeSearch, setCommittedEmployeeSearch] = useState('')
   const [employeePickerOpen, setEmployeePickerOpen] = useState(false)
 
-  const selectedProgram = useProgramMasterByGuid(programGuid, isOpen && !!programGuid)
   const selectedIntake = useIntake(intakeGuid, isOpen && !!intakeGuid)
-  const selectedStream = useStream(streamGuid, isOpen && !!streamGuid)
-  const selectedEmployee = useEmployee(inChargeGuid || null)
-  const selectedHead = useEmployee(pHeadGuid || null)
 
   const { data: programDropdownItems = [], isLoading: isProgramLoading } = useProgramDropdown(undefined, isOpen)
   // Create offers exactly the intakes POST /batches accepts (post-batch.md,
@@ -135,13 +131,15 @@ export function BatchFormModal({ isOpen, onClose, showToast, mode, batchGuid, cr
   const { data: specializationDropdownItems = [], isLoading: isSpecializationLoading } = useSpecializationsDropdown(isOpen)
   const { data: employeeDropdownItems = [], isLoading: isEmployeesLoading } = useEmployeeDropdown(isOpen)
 
+  // A saved value the dropdown doesn't list (e.g. staff no longer approved)
+  // keeps its label from the batch's own name fields.
   const programOptions = useMemo(() => {
     const arr = programDropdownItems.map(p => ({ value: p.programGuid, label: `${p.programName} (${p.programCode})` }))
-    if (programGuid && !arr.some(option => option.value === programGuid) && selectedProgram.data) {
-      arr.unshift({ value: programGuid, label: `${selectedProgram.data.programName} (${selectedProgram.data.programCode})` })
+    if (batch?.programName && programGuid === batch.programGuid && !arr.some(option => option.value === programGuid)) {
+      arr.unshift({ value: programGuid, label: batch.programName })
     }
     return arr
-  }, [programDropdownItems, programGuid, selectedProgram.data])
+  }, [programDropdownItems, programGuid, batch])
 
   const intakeOptions = useMemo(() => {
     const toOption = (i: { intakeGuid: string; intakeCode: number; description: string }) => ({ value: i.intakeGuid, label: `${i.intakeCode} — ${i.description}` })
@@ -174,22 +172,22 @@ export function BatchFormModal({ isOpen, onClose, showToast, mode, batchGuid, cr
       value: s.guid || s.streamGuid || '',
       label: s.name || s.streamName || '',
     }))
-    if (streamGuid && !arr.some(option => option.value === streamGuid) && selectedStream.data) {
-      arr.unshift({ value: streamGuid, label: selectedStream.data.streamName })
+    if (batch?.streamName && streamGuid === batch.streamGuid && !arr.some(option => option.value === streamGuid)) {
+      arr.unshift({ value: streamGuid, label: batch.streamName })
     }
     return arr
-  }, [specializationDropdownItems, streamGuid, selectedStream.data])
+  }, [specializationDropdownItems, streamGuid, batch])
 
   const advisorOptions = useMemo(() => {
     const arr = employeeDropdownItems.map(e => ({ value: e.employeeGuid, label: e.displayName }))
-    if (inChargeGuid && !arr.some(option => option.value === inChargeGuid) && selectedEmployee.data) {
-      arr.unshift({ value: inChargeGuid, label: selectedEmployee.data.empName })
+    if (batch?.bInChargeName && inChargeGuid === batch.bInCharge && !arr.some(option => option.value === inChargeGuid)) {
+      arr.unshift({ value: inChargeGuid, label: batch.bInChargeName })
     }
-    if (pHeadGuid && !arr.some(option => option.value === pHeadGuid) && selectedHead.data) {
-      arr.unshift({ value: pHeadGuid, label: selectedHead.data.empName })
+    if (batch?.pHeadName && pHeadGuid === batch.pHead && !arr.some(option => option.value === pHeadGuid)) {
+      arr.unshift({ value: pHeadGuid, label: batch.pHeadName })
     }
     return arr
-  }, [employeeDropdownItems, inChargeGuid, pHeadGuid, selectedEmployee.data, selectedHead.data])
+  }, [employeeDropdownItems, inChargeGuid, pHeadGuid, batch])
 
   const { data: semesters = [] } = useSemestersForProgram(programGuid, !!programGuid)
 

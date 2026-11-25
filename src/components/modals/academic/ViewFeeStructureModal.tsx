@@ -3,7 +3,7 @@ import { useLayoutEffect, useRef, useState } from 'react'
 import { ModalProps } from '../types'
 import { useProgramFeeLines, ProgramFeeStructureHeader } from '@/hooks/academic/useProgramFeeStructure'
 import { useProgramsByGuids } from '@/hooks/academic/useProgramMaster'
-import { useIntakesByGuids } from '@/hooks/academic/useIntakes'
+import { useIntakesDropdown } from '@/hooks/academic/useIntakes'
 import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
 import { FailurePopup } from '../shared/FailurePopup'
 import { AuthError } from '@/lib/api/client'
@@ -55,7 +55,7 @@ export function ViewFeeStructureModal({ isOpen, onClose, feeStructure, onEdit }:
   // Resolves just this one record's own intakeGuid (2026-09-10) instead of
   // useIntakes(isOpen)'s full 1000-row snapshot fetched just to look up a
   // single guid — same batched-by-guid convention as ViewProgrammeModal.
-  const intakesByGuid = useIntakesByGuids(feeStructure?.intakeGuid ? [feeStructure.intakeGuid] : [])
+  const { data: intakes = [] } = useIntakesDropdown(isOpen && !!feeStructure)
   const { data: semesters = [] } = useSemestersForProgram(feeStructure?.programGuid ?? '', isOpen && !!feeStructure?.programGuid)
 
   const [activeTab, setActiveTab] = useState<Tab>('details')
@@ -112,7 +112,7 @@ export function ViewFeeStructureModal({ isOpen, onClose, feeStructure, onEdit }:
   const matchedProgram = programsByGuid.get(feeStructure.programGuid)
   const programName = matchedProgram?.programName || '—'
   const programCode = matchedProgram?.programCode
-  const intakeName = (feeStructure.intakeGuid ? intakesByGuid.get(feeStructure.intakeGuid) : undefined)?.description || '—'
+  const intakeName = intakes.find(i => i.intakeGuid === feeStructure.intakeGuid)?.description || '—'
   const isPercentage = feeStructure.calcType === 2
 
   return (

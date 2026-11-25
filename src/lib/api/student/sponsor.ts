@@ -74,6 +74,26 @@ export function getSponsorCategories(page = 1, pageSize = 25): Promise<PagedResu
     .then(data => data ?? { items: [], totalCount: 0, pageNumber: page, pageSize })
 }
 
+export interface SponsorCategoryDropdownItem {
+  sponsorCategoryGuid: string
+  category: string
+}
+
+// GET /students/sponsor-categories/dropdown?search= — the whole list, for
+// pickers outside the Sponsor Category master. Not in erp-docs yet
+// (2026-11-25), so the fields are read under either naming the backend's other
+// dropdowns use: the entity's own names, or guid / name.
+export function getSponsorCategoriesDropdown(search = ''): Promise<SponsorCategoryDropdownItem[]> {
+  const q = search.trim()
+  if (MOCK_AUTH) return Promise.resolve(mockCategories.filter(c => c.category.toLowerCase().includes(q.toLowerCase())))
+  type Raw = { sponsorCategoryGuid?: string; guid?: string; category?: string | null; name?: string | null }
+  return apiGet<Raw[] | null>(`/api/v1/students/sponsor-categories/dropdown${q ? `?search=${encodeURIComponent(q)}` : ''}`)
+    .then(rows => (rows ?? []).map(r => ({
+      sponsorCategoryGuid: r.sponsorCategoryGuid ?? r.guid ?? '',
+      category: r.category ?? r.name ?? '',
+    })).filter(r => r.sponsorCategoryGuid))
+}
+
 export function createSponsorCategory(payload: SponsorCategoryRequest): Promise<SponsorCategoryDto> {
   if (MOCK_AUTH) {
     const row: SponsorCategoryDto = { sponsorCategoryGuid: `spc-mock-${Date.now()}`, category: payload.category, mandatoryFeeCheck: payload.mandatoryFeeCheck ?? null }

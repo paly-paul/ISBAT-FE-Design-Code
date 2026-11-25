@@ -6,7 +6,7 @@ import { FailurePopup } from '../shared/FailurePopup'
 import { SearchSelect } from '@/components/SearchSelect'
 import { stripLeadingZeros } from '@/lib/errorMessages'
 import { useProgramDropdown } from '@/hooks/academic/useProgramMaster'
-import { useIntakesByGuids, useCurrentAcademicIntake } from '@/hooks/academic/useIntakes'
+import { useIntakesDropdown, useCurrentAcademicIntake } from '@/hooks/academic/useIntakes'
 import { IntakeSearchPicker } from '@/components/IntakeSearchPicker'
 import { useCurrenciesDropdown } from '@/hooks/finance/useCurrencies'
 import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
@@ -147,21 +147,14 @@ export function FeeStructureModal({ isOpen, onClose, showToast, mode, editData }
   const [activeIdx, setActiveIdx]   = useState(0)
   const [activeAcc, setActiveAcc]   = useState(0)
 
-  // Intake is now IntakeSearchPicker's own infinite-scroll search (2026-09-10)
-  // instead of a SearchSelect fed by useIntakes(isOpen)'s capped 1000-row
-  // snapshot — confirmed live that GET /api/v1/academic/intakes genuinely
-  // supports page/pageSize/search together. Every structure's own picked
-  // intakeGuid still needs a label to display in the closed trigger though —
-  // resolved via a bounded batched-by-guid lookup (only however many
-  // distinct intakes are actually in play across this modal's structures),
-  // same convention as ProgrammeModal's own intakeLabel.
-  const intakesByGuid = useIntakesByGuids(structures.map(s => s.intake))
+  // Labels each structure's intake; shares the picker's own cached list.
+  const { data: intakes = [] } = useIntakesDropdown(isOpen)
   function intakeLabel(guid: string): string | null {
     if (!guid) return null
     if (currentAcademicIntake && currentAcademicIntake.intakeGuid === guid) {
       return `${currentAcademicIntake.intakeCode} — ${currentAcademicIntake.description}`
     }
-    const found = intakesByGuid.get(guid)
+    const found = intakes.find(i => i.intakeGuid === guid)
     return found ? `${found.intakeCode} — ${found.description}` : null
   }
 

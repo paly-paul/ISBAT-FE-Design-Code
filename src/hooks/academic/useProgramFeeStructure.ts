@@ -5,6 +5,7 @@ import {
   getProgramFeeLines,
   saveProgramFeeStructureComplete,
   updateProgramFeeStructureComplete,
+  FeeStructureScope,
   ProgramFeeStructureHeader,
   ProgramFeeStructureHeaderInput,
   ProgramFeeLineSaveInput,
@@ -58,10 +59,10 @@ export function useProgramFeeStructuresPaged(page: number, pageSize: number, sea
   })
 }
 
-export function useSearchProgramFeeStructuresInfinite(search: string, pageSize: number, enabled: boolean) {
+export function useSearchProgramFeeStructuresInfinite(search: string, pageSize: number, enabled: boolean, scope: FeeStructureScope = 'fee-structure') {
   return useInfiniteQuery({
-    queryKey: [...PROGRAM_FEE_STRUCTURES_KEY, 'search-infinite', search, pageSize],
-    queryFn: ({ pageParam }) => getProgramFeeStructures(pageParam, pageSize, undefined, search),
+    queryKey: [...PROGRAM_FEE_STRUCTURES_KEY, 'search-infinite', search, pageSize, scope],
+    queryFn: ({ pageParam }) => getProgramFeeStructures(pageParam, pageSize, undefined, search, scope),
     initialPageParam: 1,
     getNextPageParam,
     enabled,
@@ -75,10 +76,10 @@ export function useSearchProgramFeeStructuresInfinite(search: string, pageSize: 
 // calcType, lef/cef/ace, intakeGuid, etc.) come from the list row the page
 // already has, not from this endpoint — GET fee-lines only ever returns the
 // line items themselves.
-export function useProgramFeeLines(feeHdGuid: string | null, enabled: boolean) {
+export function useProgramFeeLines(feeHdGuid: string | null, enabled: boolean, scope: FeeStructureScope = 'fee-structure') {
   return useQuery({
-    queryKey: [...PROGRAM_FEE_STRUCTURES_KEY, 'feeLines', feeHdGuid],
-    queryFn: () => getProgramFeeLines(feeHdGuid as string),
+    queryKey: [...PROGRAM_FEE_STRUCTURES_KEY, 'feeLines', feeHdGuid, scope],
+    queryFn: () => getProgramFeeLines(feeHdGuid as string, scope),
     enabled: enabled && !!feeHdGuid,
   })
 }
@@ -94,18 +95,18 @@ function refreshFeeStructureQueries(queryClient: QueryClient, programGuid: strin
   ])
 }
 
-export function useSaveProgramFeeStructureComplete() {
+export function useSaveProgramFeeStructureComplete(scope: FeeStructureScope = 'fee-structure') {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (input: ProgramFeeStructureSaveCompleteInput) => saveProgramFeeStructureComplete(input),
+    mutationFn: (input: ProgramFeeStructureSaveCompleteInput) => saveProgramFeeStructureComplete(input, scope),
     onSuccess: (_result, input) => refreshFeeStructureQueries(queryClient, input.programGuid),
   })
 }
 
-export function useUpdateProgramFeeStructureComplete() {
+export function useUpdateProgramFeeStructureComplete(scope: FeeStructureScope = 'fee-structure') {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ feeHdGuid, input }: { feeHdGuid: string; input: ProgramFeeStructureUpdateInput }) => updateProgramFeeStructureComplete(feeHdGuid, input),
+    mutationFn: ({ feeHdGuid, input }: { feeHdGuid: string; input: ProgramFeeStructureUpdateInput }) => updateProgramFeeStructureComplete(feeHdGuid, input, scope),
     onSuccess: (_result, { input }) => refreshFeeStructureQueries(queryClient, input.programGuid),
   })
 }

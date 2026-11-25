@@ -11,7 +11,6 @@ import { StudentDto, StudentDetailDto, normalizeStudentDetail } from '@/lib/api/
 import { oneSemesterDiscountInForce } from '@/lib/api/student/studentDiscount'
 import { useIdCard, useIssueOrRenewIdCard, useUpdateIdCardDates, getIdCardQrImageUrl, currentCardIssue } from '@/hooks/student/useIdCards'
 import { useSponsorDetails } from '@/hooks/student/useSponsor'
-import { useStudentRefugeeDetails } from '@/hooks/student/useRefugee'
 import { useDropoutStudents } from '@/hooks/student/useDropoutRejoin'
 import { useCountryDropdown } from '@/hooks/config/useCountries'
 import { useIntakesDropdown } from '@/hooks/academic/useIntakes'
@@ -32,11 +31,11 @@ const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 // StudentDetailDto discount fields useStudent already carries) — its value
 // links through to Finance's Discount Allocation, which owns assign/update/
 // cancel.
-// Refugee status is read-only here (students/refugee GET) — its value links
+// Refugee status is read-only here (isRefugee / refugeeId on the student
+// detail) — its value links
 // through to Student Master, whose StudentRefugeeModal owns assign/remove.
 // Sponsor's own dedicated GET endpoint is never fetched from this page (per
-// request, 2026-09-01). Refugee's is fetched on load, since the Refugee
-// Details card's visibility depends on it — see each hook call's comment.
+// request, 2026-09-01).
 // The communication dispatch audit log still has no backend
 // contract — page-local mock state only, same
 // "UI-first prototype" convention as Finance's Payment Collection pages.
@@ -126,7 +125,7 @@ function StudentProfileContent() {
   const [idPhotoError, setIdPhotoError] = useState(false)
 
   const effectiveStudentGuid = student?.studentGuid ?? studentGuidParam
-  const { data: detail } = useStudent(effectiveStudentGuid ?? null, !!effectiveStudentGuid)
+  const { data: detail, isLoading: isDetailLoading } = useStudent(effectiveStudentGuid ?? null, !!effectiveStudentGuid)
 
   // Registration Date and Fee Structure read the student record first, then
   // the timeline's joinedDate / current history row, which both carry them.
@@ -198,14 +197,6 @@ function StudentProfileContent() {
   // detail?.sponsor, already fetched by useStudent above.
   const { data: sponsorDetail } = useSponsorDetails(student?.studentGuid ?? null, false)
 
-  // Real refugee-status record — GET /students/refugee/{guid}, resolves to
-  // null when the student has no record yet (404 not_found is the common
-  // case, not an error — see getStudentRefugeeDetails). Fetched as soon as a
-  // student loads again (was on-demand behind a "Check status" click, per
-  // 2026-09-01) — the Profile Info tab's Refugee Details card only renders
-  // when a record exists, so the answer is needed up front to decide that.
-  const { data: refugeeDetail, isLoading: isRefugeeChecking } = useStudentRefugeeDetails(student?.studentGuid ?? null, !!student)
-
   // The Dropout Rejoin action only applies to dropped-out students — the
   // rejoin candidate endpoint rejects anyone else ("Student is not a
   // dropout."). The student detail response carries no reg status, so this
@@ -215,11 +206,6 @@ function StudentProfileContent() {
   const regNo = student?.studentRegNo ?? ''
   const { data: dropoutMatch } = useDropoutStudents({ searchTerm: regNo, page: 1, pageSize: 25 }, !!regNo)
   const isDropout = !!student && !!dropoutMatch?.items.some(d => d.studentGuid === student.studentGuid)
-  // Supporting-document preview popup. Images render as <img>; anything
-  // else (PDF, etc.) goes in an iframe and relies on the browser's viewer.
-  const [docPreviewOpen, setDocPreviewOpen] = useState(false)
-  const refugeeDocUrl = refugeeDetail?.documentUrl ?? null
-  const refugeeDocIsImage = !!refugeeDocUrl && /\.(png|jpe?g|gif|webp|bmp|svg)(\?|#|$)/i.test(refugeeDocUrl)
   // Resolves the ID card's Nationality — GET /students/{guid} returns
   // nationality: null alongside a populated nationalityGuid (confirmed live
   // 2026-09-28), so the name has to come from the country catalogue. Same
@@ -524,7 +510,7 @@ function StudentProfileContent() {
                   <span className="sp-link-txt"><span className="sp-link-lbl">Discount</span><span className="sp-link-val">{formatDiscount(detail)}</span></span>
                   <i className="lni lni-arrow-right sp-link-go" aria-hidden="true"></i>
                 </button>
-                {isRefugeeChecking ? (
+                {isDetailLoading ? (
                   <div className="sp-link">
                     <span className="mp-sec-ic" aria-hidden="true"><i className="lni lni-shield"></i></span>
                     <span className="sp-link-txt"><span className="sp-link-lbl">Refugee Status</span><span className="sp-link-val text-g400">Checking…</span></span>
@@ -532,7 +518,7 @@ function StudentProfileContent() {
                 ) : (
                   <button type="button" className="sp-link" onClick={handleManageRefugee} title="Manage refugee status in Student Master">
                     <span className="mp-sec-ic" aria-hidden="true"><i className="lni lni-shield"></i></span>
-                    <span className="sp-link-txt"><span className="sp-link-lbl">Refugee Status</span><span className="sp-link-val">{refugeeDetail ? `Refugee · ID ${refugeeDetail.refugeeId}` : 'Not a refugee'}</span></span>
+                    <span className="sp-link-txt"><span className="sp-link-lbl">Refugee Status</span><span className="sp-link-val">{detail?.isRefugee ? `Refugee · ID ${detail.refugeeId || '—'}` : detail?.isRefugee === false ? 'Not a refugee' : '—'}</span></span>
                     <i className="lni lni-arrow-right sp-link-go" aria-hidden="true"></i>
                   </button>
                 )}
@@ -631,10 +617,9 @@ function StudentProfileContent() {
                   </div>
                   <p className="mp-note sp-note"><i className="lni lni-information" aria-hidden="true"></i> To change Batch, Programme, Learning Mode, or Intake — use the quick-action buttons in the banner above or navigate via the Operations section in the sidebar.</p>
                 </div>
-                {/* Only rendered when the student has a refugee record —
-                    GET /students/refugee/{guid} resolves to null otherwise.
+                {/* Only rendered for a refugee student.
                     Changes go through Student Master (handleManageRefugee). */}
-                {refugeeDetail && (
+                {detail?.isRefugee && (
                   <div className="card">
                     <div className="card-hdr">
                       <div>
@@ -644,15 +629,7 @@ function StudentProfileContent() {
                     </div>
                     <dl className="mp-traits sp-cols-3">
                       <div className="mp-trait"><dt><i className="lni lni-shield" aria-hidden="true"></i>Refugee Status</dt><dd>Refugee</dd></div>
-                      <div className="mp-trait"><dt><i className="lni lni-postcard" aria-hidden="true"></i>Refugee ID</dt><dd className="font-mono" title={refugeeDetail.refugeeId || undefined}>{refugeeDetail.refugeeId || '—'}</dd></div>
-                      <div className="mp-trait">
-                        <dt><i className="lni lni-files" aria-hidden="true"></i>Supporting Document</dt>
-                        <dd>
-                          {refugeeDetail.documentUrl
-                            ? <button type="button" className="mp-link" onClick={() => setDocPreviewOpen(true)}><i className="lni lni-eye" aria-hidden="true"></i> View Document</button>
-                            : '—'}
-                        </dd>
-                      </div>
+                      <div className="mp-trait"><dt><i className="lni lni-postcard" aria-hidden="true"></i>Refugee ID</dt><dd className="font-mono" title={detail.refugeeId || undefined}>{detail.refugeeId || '—'}</dd></div>
                     </dl>
                     <p className="mp-note sp-note"><i className="lni lni-information" aria-hidden="true"></i> To grant or remove refugee status, use the Refugee Status field in the banner above — it opens Student Master.</p>
                   </div>
@@ -902,23 +879,6 @@ function StudentProfileContent() {
           </div>
         )}
       </div>
-
-      {docPreviewOpen && refugeeDocUrl && (
-        <div className="modal-overlay open">
-          <div className="modal modal-xl" onClick={e => e.stopPropagation()}>
-            <div className="modal-hdr modal-hdr-blue"><div className="modal-title"><i className="lni lni-files"></i> Refugee Supporting Document</div><button className="modal-close" onClick={() => setDocPreviewOpen(false)}>✕</button></div>
-            <div style={{ height: '70vh', background: 'var(--g100)', borderRadius: 'var(--rsm)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              {refugeeDocIsImage
-                ? <img src={refugeeDocUrl} alt="Refugee supporting document" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
-                : <iframe src={refugeeDocUrl} title="Refugee supporting document" style={{ width: '100%', height: '100%', border: 0 }} />}
-            </div>
-            <div className="modal-footer">
-              <a className="btn btn-neu" href={refugeeDocUrl} target="_blank" rel="noopener noreferrer"><i className="lni lni-exit-up"></i> Open in New Tab</a>
-              <button className="btn btn-primary" onClick={() => setDocPreviewOpen(false)}>Close</button>
-            </div>
-          </div>
-        </div>
-      )}
 
       <Toast toast={toast} />
     </>
