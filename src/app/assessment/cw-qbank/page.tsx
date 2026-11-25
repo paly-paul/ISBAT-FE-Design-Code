@@ -690,25 +690,27 @@ export default function QuestionBankUploadPage() {
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <button
-            type="button"
-            className="btn btn-neu btn-sm flex items-center gap-1.5 shadow-xs text-xs"
-            onClick={handleDownloadTemplate}
-            disabled={downloadTemplateMut.isPending}
-            title="Download the official 9-column question import template"
-          >
-            {downloadTemplateMut.isPending ? (
-              <>
-                <span className="inline-block w-3.5 h-3.5 border-2 border-slate-400 border-t-transparent rounded-full animate-spin"></span>
-                <span>Generating Link...</span>
-              </>
-            ) : (
-              <>
-                <i className="lni lni-download text-slate-600"></i>
-                <span>Download Template (.xlsx)</span>
-              </>
-            )}
-          </button>
+          {permissions.download && (
+            <button
+              type="button"
+              className="btn btn-neu btn-sm flex items-center gap-1.5 shadow-xs text-xs"
+              onClick={handleDownloadTemplate}
+              disabled={downloadTemplateMut.isPending}
+              title="Download the official 9-column question import template"
+            >
+              {downloadTemplateMut.isPending ? (
+                <>
+                  <span className="inline-block w-3.5 h-3.5 border-2 border-slate-400 border-t-transparent rounded-full animate-spin"></span>
+                  <span>Generating Link...</span>
+                </>
+              ) : (
+                <>
+                  <i className="lni lni-download text-slate-600"></i>
+                  <span>Download Template (.xlsx)</span>
+                </>
+              )}
+            </button>
+          )}
         </div>
       </div>
 
@@ -1290,14 +1292,16 @@ export default function QuestionBankUploadPage() {
                                 <span>Add First Question</span>
                               </button>
                               )}
-                              <button
-                                type="button"
-                                className="btn btn-neu btn-sm flex items-center gap-1.5"
-                                onClick={() => handleTabChange('import')}
-                              >
-                                <i className="lni lni-upload"></i>
-                                <span>Upload Excel (.xlsx)</span>
-                              </button>
+                              {permissions.import && (
+                                <button
+                                  type="button"
+                                  className="btn btn-neu btn-sm flex items-center gap-1.5"
+                                  onClick={() => handleTabChange('import')}
+                                >
+                                  <i className="lni lni-upload"></i>
+                                  <span>Upload Excel (.xlsx)</span>
+                                </button>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -1426,7 +1430,7 @@ export default function QuestionBankUploadPage() {
               {/* If questions already exist for current type and user has not toggled upload box: Show Existing Questions */}
               {currentImportQuestions && currentImportQuestions.length > 0 && !showUploadBox ? (
                 <ExistingQuestionsTable
-                  canAdd={permissions.add}
+                  canAdd={permissions.import}
                   canDelete={permissions.delete}
                   questions={currentImportQuestions}
                   allQuestions={importExistingQuestions ?? []}
@@ -1443,6 +1447,14 @@ export default function QuestionBankUploadPage() {
                   categoryName={selectedImportCategoryObj?.name}
                   intakeCode={selectedIntake?.intakeCode}
                 />
+              ) : !permissions.import ? (
+                <div className="card p-8 text-center">
+                  <i className="lni lni-lock text-2xl text-slate-400 block mb-2"></i>
+                  <div className="text-sm font-semibold text-slate-700">No questions uploaded yet</div>
+                  <div className="text-xs text-slate-500 mt-1">
+                    You have view-only access. Import permission is required to upload Excel question banks.
+                  </div>
+                </div>
               ) : (
                 /* Upload Card */
                 <div className="card p-5">
@@ -1673,24 +1685,26 @@ export default function QuestionBankUploadPage() {
                     </div>
 
                     <div className="flex items-center gap-3">
-                      <button
-                        type="button"
-                        className="btn btn-primary bg-emerald-600 hover:bg-emerald-700 border-emerald-600 text-white flex items-center gap-2 px-5 py-2 shadow-xs font-semibold"
-                        onClick={handleImport}
-                        disabled={importMut.isPending}
-                      >
-                        {importMut.isPending ? (
-                          <>
-                            <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                            <span>Saving Questions...</span>
-                          </>
-                        ) : (
-                          <>
-                            <i className="lni lni-upload text-base"></i>
-                            <span>Commit & Import Questions ({previewRows.length})</span>
-                          </>
-                        )}
-                      </button>
+                      {permissions.import && (
+                        <button
+                          type="button"
+                          className="btn btn-primary bg-emerald-600 hover:bg-emerald-700 border-emerald-600 text-white flex items-center gap-2 px-5 py-2 shadow-xs font-semibold"
+                          onClick={handleImport}
+                          disabled={importMut.isPending}
+                        >
+                          {importMut.isPending ? (
+                            <>
+                              <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                              <span>Saving Questions...</span>
+                            </>
+                          ) : (
+                            <>
+                              <i className="lni lni-upload text-base"></i>
+                              <span>Commit & Import Questions ({previewRows.length})</span>
+                            </>
+                          )}
+                        </button>
+                      )}
                     </div>
                   </div>
 

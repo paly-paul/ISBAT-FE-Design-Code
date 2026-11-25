@@ -385,22 +385,20 @@ function StudentProfileContent() {
     )
   }
 
-  function handleDownloadCard() {
-    if (!student) return
-    const a = document.createElement('a')
-    a.href = getIdCardQrImageUrl(student.studentGuid)
-    a.download = `ID_Card_QR_${student.studentRegNo || student.studentNum || 'student'}.png`
-    a.target = '_blank'
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    showToast('ID card QR downloaded', 'ok')
-  }
-
   function handlePrintCard() {
     // Scopes the print to the card preview only — see .printing-id-card in globals.css.
+    const prevTitle = document.title
+    const safeId = (student?.studentRegNo || student?.studentNum || 'student').replace(/[^\w.-]+/g, '_')
+    document.title = `ID_Card_${safeId}`
     document.body.classList.add('printing-id-card')
-    window.addEventListener('afterprint', () => document.body.classList.remove('printing-id-card'), { once: true })
+    window.addEventListener(
+      'afterprint',
+      () => {
+        document.body.classList.remove('printing-id-card')
+        document.title = prevTitle
+      },
+      { once: true }
+    )
     window.print()
   }
 
@@ -732,8 +730,16 @@ function StudentProfileContent() {
                       <div className="card-title"><i className="lni lni-eye"></i> Live Card Preview</div>
                       <div className="flex gap-2 items-center">
                         <span className="badge badge-blue">Preview</span>
-                        {/* <button className="btn btn-neu btn-sm" onClick={handleDownloadCard}><i className="lni lni-download"></i> Download</button> */}
-                        <button className="btn btn-primary btn-sm" onClick={() => guard('print', handlePrintCard, 'ID cards')}><i className="lni lni-printer"></i> Print</button>
+                        {permissions.download && (
+                          <button className="btn btn-neu btn-sm" onClick={() => guard('download', handlePrintCard, 'ID cards')}>
+                            <i className="lni lni-download"></i> Download
+                          </button>
+                        )}
+                        {permissions.print && (
+                          <button className="btn btn-primary btn-sm" onClick={() => guard('print', handlePrintCard, 'ID cards')}>
+                            <i className="lni lni-printer"></i> Print
+                          </button>
+                        )}
                       </div>
                     </div>
                     <div className="id-preview">
