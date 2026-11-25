@@ -1147,8 +1147,10 @@ export default function StudentStatementPage() {
                       <SearchSelect
                         className="w-48"
                         options={CATEGORY_OPTIONS}
-                        value={selectedCategory}
-                        onChange={setSelectedCategory}
+                        // SearchSelect clears to ''. "All" is that same state, so it
+                        // shows as the placeholder with no ✕ left to click.
+                        value={selectedCategory === 'all' ? '' : selectedCategory}
+                        onChange={v => setSelectedCategory(v || 'all')}
                         placeholder="All Categories"
                       />
                     )}
