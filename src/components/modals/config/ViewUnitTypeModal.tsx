@@ -7,10 +7,11 @@ import { AuthError } from '@/lib/api/client'
 
 interface ViewUnitTypeModalProps extends ModalProps {
   unitTypeGuid: string | null
-  onEdit: () => void
+  onEdit?: () => void
+  canEdit?: boolean
 }
 
-export function ViewUnitTypeModal({ isOpen, onClose, unitTypeGuid, onEdit }: ViewUnitTypeModalProps) {
+export function ViewUnitTypeModal({ isOpen, onClose, unitTypeGuid, onEdit, canEdit = false }: ViewUnitTypeModalProps) {
   const { data: unitType, isLoading, isError, error } = useUnitType(unitTypeGuid, isOpen)
 
   const [unitTypeName, setUnitTypeName] = useState('')
@@ -68,9 +69,11 @@ export function ViewUnitTypeModal({ isOpen, onClose, unitTypeGuid, onEdit }: Vie
         </div>
         <div className="modal-footer">
           <span className="flex-1"></span>
-          <button className="btn btn-neu" onClick={onEdit} style={{ marginRight: 8 }}>
-            <i className="lni lni-pencil"></i> Edit
-          </button>
+          {canEdit && onEdit && (
+            <button className="btn btn-neu" onClick={onEdit} style={{ marginRight: 8 }}>
+              <i className="lni lni-pencil"></i> Edit
+            </button>
+          )}
           <button className="btn btn-primary" onClick={handleClose}>Close</button>
         </div>
       </div>

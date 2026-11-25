@@ -158,6 +158,7 @@ export default function Page() {
         onClose={() => closeModal('view-interest-level-modal')}
         showToast={showToast}
         interestLevelGuid={viewingLevelGuid}
+        canEdit={Boolean(permissions.edit)}
         onEdit={() => {
           closeModal('view-interest-level-modal')
           openEditModal(viewingLevelGuid!)

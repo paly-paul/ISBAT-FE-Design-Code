@@ -4,11 +4,12 @@ import { useIntakesDropdown } from '@/hooks/academic/useIntakes'
 interface ResitConfigViewModalProps {
   isOpen: boolean
   onClose: () => void
-  onEdit: () => void
+  onEdit?: () => void
   viewingGuid: string | null
+  canEdit?: boolean
 }
 
-export function ResitConfigViewModal({ isOpen, onClose, onEdit, viewingGuid }: ResitConfigViewModalProps) {
+export function ResitConfigViewModal({ isOpen, onClose, onEdit, viewingGuid, canEdit = false }: ResitConfigViewModalProps) {
   const { data, isLoading } = useResitConfig(viewingGuid, isOpen)
   const { data: intakes } = useIntakesDropdown()
 
@@ -86,9 +87,11 @@ export function ResitConfigViewModal({ isOpen, onClose, onEdit, viewingGuid }: R
 
         <div className="modal-footer border-t border-slate-200">
           <span className="flex-1"></span>
-          <button className="btn btn-neu" onClick={onEdit} disabled={isLoading || !data} style={{ marginRight: 8 }}>
-            <i className="lni lni-pencil"></i> Edit Details
-          </button>
+          {canEdit && onEdit && (
+            <button className="btn btn-neu" onClick={onEdit} disabled={isLoading || !data} style={{ marginRight: 8 }}>
+              <i className="lni lni-pencil"></i> Edit Details
+            </button>
+          )}
           <button className="btn btn-primary" onClick={onClose}>
             Close
           </button>

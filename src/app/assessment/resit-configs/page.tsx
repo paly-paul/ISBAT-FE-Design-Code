@@ -42,11 +42,13 @@ export default function ResitConfigsPage() {
   }
 
   function handleAddNew() {
+    if (!permissions.add) return
     setEditingGuid(null)
     setIsModalOpen(true)
   }
 
   function handleEdit(guid: string) {
+    if (!permissions.edit) return
     setEditingGuid(guid)
     setIsModalOpen(true)
   }
@@ -57,13 +59,14 @@ export default function ResitConfigsPage() {
   }
 
   function handleEditFromView() {
+    if (!permissions.edit) return
     setIsViewModalOpen(false)
     setEditingGuid(viewingGuid)
     setIsModalOpen(true)
   }
 
   async function confirmDelete() {
-    if (!deleteTarget) return
+    if (!deleteTarget || !permissions.delete) return
     try {
       await deleteMut.mutateAsync(deleteTarget)
       showToast('Resit Config deleted successfully', 'success')
@@ -178,7 +181,7 @@ export default function ResitConfigsPage() {
       </div>
 
       <ResitConfigFormModal
-        isOpen={isModalOpen}
+        isOpen={isModalOpen && (editingGuid ? Boolean(permissions.edit) : Boolean(permissions.add))}
         onClose={() => setIsModalOpen(false)}
         showToast={showToast}
         editingGuid={editingGuid}
@@ -189,11 +192,12 @@ export default function ResitConfigsPage() {
         onClose={() => setIsViewModalOpen(false)}
         onEdit={handleEditFromView}
         viewingGuid={viewingGuid}
+        canEdit={Boolean(permissions.edit)}
       />
 
       <Toast toast={toast} />
 
-      {deleteTarget && (
+      {deleteTarget && permissions.delete && (
         <div className="perm-delete-overlay" style={{ position: 'fixed', zIndex: 500 }} onClick={() => setDeleteTarget(null)}>
           <div className="perm-delete-card tab-panel-in" onClick={e => e.stopPropagation()}>
             <div className="perm-delete-icon"><i className="lni lni-trash-can"></i></div>

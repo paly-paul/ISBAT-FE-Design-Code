@@ -233,17 +233,19 @@ export default function QpUploadVettingPage() {
 
   // ── Actions ───────────────────────────────────────────────────────────────
   const handleOpenAddModal = () => {
+    if (!permissions.add) return
     setEditingQuestion(null)
     setIsAddEditModalOpen(true)
   }
 
   const handleOpenEditModal = (q: UeQuestionDto) => {
+    if (!permissions.edit) return
     setEditingQuestion(q)
     setIsAddEditModalOpen(true)
   }
 
   const handleConfirmVerify = () => {
-    if (!selectedCourseUnitGuid) return
+    if (!selectedCourseUnitGuid || !permissions.verify) return
     verifyMut.mutate(
       { courseUnitGuid: selectedCourseUnitGuid, category: 5, ueType },
       {
@@ -309,7 +311,7 @@ export default function QpUploadVettingPage() {
               <i className="lni lni-plus"></i> Add Question
             </button>
           )}
-          {!isLocked && summary.totalCount > 0 && (permissions.approve || permissions.edit) && (
+          {!isLocked && summary.totalCount > 0 && permissions.verify && (
             <button
               type="button"
               className="btn btn-neu"
@@ -589,7 +591,13 @@ export default function QpUploadVettingPage() {
                       <EmptyState
                         colSpan={5}
                         title="No questions found in this section"
-                        subtitle={isLocked ? 'Verified questions may be hidden for regular lecturers.' : 'Click "+ Add Question" above to prepare questions.'}
+                        subtitle={
+                          isLocked
+                            ? 'Verified questions may be hidden for regular lecturers.'
+                            : permissions.add
+                              ? 'Click "+ Add Question" above to prepare questions.'
+                              : 'No questions available in this section.'
+                        }
                         hasFilters={Boolean(search || filters['status']?.length || filters['type']?.length)}
                         onClearFilters={() => { setSearch(''); setFilters({}); }}
                       />
@@ -767,7 +775,7 @@ export default function QpUploadVettingPage() {
 
       {/* ── Add / Edit Question Modal ────────────────────────────────────────── */}
       <UeQuestionModal
-        isOpen={isAddEditModalOpen}
+        isOpen={isAddEditModalOpen && (editingQuestion ? Boolean(permissions.edit) : Boolean(permissions.add))}
         onClose={() => setIsAddEditModalOpen(false)}
         courseUnitGuid={selectedCourseUnitGuid}
         courseUnitCode={selectedUnit?.courseUnitCode ?? undefined}
@@ -789,11 +797,11 @@ export default function QpUploadVettingPage() {
         question={viewingQuestion}
         courseUnitCode={selectedUnit?.courseUnitCode ?? undefined}
         courseUnitName={selectedUnit?.courseUnitName ?? undefined}
-        onEdit={(q) => handleOpenEditModal(q)}
+        onEdit={!isLocked && permissions.edit ? (q) => handleOpenEditModal(q) : undefined}
       />
 
       {/* ── Confirm Verification Dialog ──────────────────────────────────────── */}
-      {isVerifyDialogOpen && (
+      {isVerifyDialogOpen && permissions.verify && (
         <div className="modal-overlay open" style={{ zIndex: 650 }}>
           <div className="modal modal-md flex flex-col" onClick={e => e.stopPropagation()} style={{ maxWidth: 480 }}>
             <div className="modal-hdr modal-hdr-blue shrink-0">

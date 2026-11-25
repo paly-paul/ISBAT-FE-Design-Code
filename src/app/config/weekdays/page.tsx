@@ -160,6 +160,7 @@ export default function Page() {
         onClose={() => closeModal('view-weekday-modal')}
         showToast={showToast}
         weekDayGuid={viewingWeekdayGuid}
+        canEdit={Boolean(permissions.edit)}
         onEdit={() => {
           closeModal('view-weekday-modal')
           openEditModal(viewingWeekdayGuid!)

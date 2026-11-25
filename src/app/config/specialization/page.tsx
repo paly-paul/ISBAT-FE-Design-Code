@@ -160,6 +160,7 @@ export default function Page() {
         onClose={() => closeModal('view-stream-modal')}
         showToast={showToast}
         streamGuid={viewingStreamGuid}
+        canEdit={Boolean(permissions.edit)}
         onEdit={() => {
           closeModal('view-stream-modal')
           openEditModal(viewingStreamGuid!)

@@ -7,10 +7,11 @@ import { AuthError } from '@/lib/api/client'
 
 interface ViewWeekdayModalProps extends ModalProps {
   weekDayGuid: string | null
-  onEdit: () => void
+  onEdit?: () => void
+  canEdit?: boolean
 }
 
-export function ViewWeekdayModal({ isOpen, onClose, weekDayGuid, onEdit }: ViewWeekdayModalProps) {
+export function ViewWeekdayModal({ isOpen, onClose, weekDayGuid, onEdit, canEdit = false }: ViewWeekdayModalProps) {
   const { data: weekday, isLoading, isError, error } = useWeekday(weekDayGuid, isOpen)
 
   const [dayCode, setDayCode] = useState('')
@@ -76,9 +77,11 @@ export function ViewWeekdayModal({ isOpen, onClose, weekDayGuid, onEdit }: ViewW
         </div>
         <div className="modal-footer">
           <span className="flex-1"></span>
-          <button className="btn btn-neu" onClick={onEdit} style={{ marginRight: 8 }}>
-            <i className="lni lni-pencil"></i> Edit
-          </button>
+          {canEdit && onEdit && (
+            <button className="btn btn-neu" onClick={onEdit} style={{ marginRight: 8 }}>
+              <i className="lni lni-pencil"></i> Edit
+            </button>
+          )}
           <button className="btn btn-primary" onClick={handleClose}>Close</button>
         </div>
       </div>

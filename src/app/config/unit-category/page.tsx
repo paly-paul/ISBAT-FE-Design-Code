@@ -155,6 +155,7 @@ export default function Page() {
         onClose={() => closeModal('view-unit-category-modal')}
         showToast={showToast}
         unitCatGuid={viewingUnitCatGuid}
+        canEdit={Boolean(permissions.edit)}
         onEdit={() => {
           closeModal('view-unit-category-modal')
           openEditModal(viewingUnitCatGuid!)

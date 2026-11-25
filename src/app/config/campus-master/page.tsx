@@ -217,6 +217,7 @@ export default function Page() {
         onClose={() => closeModal('view-campus-modal')}
         showToast={showToast}
         campus={viewingCampus}
+        canEdit={Boolean(permissions.edit)}
         onEdit={() => {
           closeModal('view-campus-modal')
           openEditModal(viewingCampus!)

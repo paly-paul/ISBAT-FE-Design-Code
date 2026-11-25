@@ -167,6 +167,7 @@ export default function Page() {
         onClose={() => closeModal('view-followup-status-modal')}
         showToast={showToast}
         followUpStatusGuid={viewingFollowUpStatusGuid}
+        canEdit={Boolean(permissions.edit)}
         onEdit={() => {
           closeModal('view-followup-status-modal')
           openEditModal(viewingFollowUpStatusGuid!)

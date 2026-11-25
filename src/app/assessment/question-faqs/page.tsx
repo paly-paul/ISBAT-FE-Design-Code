@@ -53,6 +53,7 @@ export default function QuestionFaqsPage() {
   }
 
   function handleEditFromView() {
+    if (!permissions.edit) return
     setIsViewModalOpen(false)
     setEditingGuid(viewingGuid)
     setIsModalOpen(true)
@@ -170,6 +171,7 @@ export default function QuestionFaqsPage() {
         onClose={() => setIsViewModalOpen(false)}
         onEdit={handleEditFromView}
         viewingGuid={viewingGuid}
+        canEdit={Boolean(permissions.edit)}
       />
 
       <Toast toast={toast} />

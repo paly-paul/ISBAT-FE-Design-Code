@@ -4,11 +4,12 @@ import { useAssessmentType } from '@/hooks/assessment/useAssessmentTypes'
 interface Props {
   isOpen: boolean
   onClose: () => void
-  onEdit: () => void
+  onEdit?: () => void
   viewingGuid: string | null
+  canEdit?: boolean
 }
 
-export function AssessmentTypeViewModal({ isOpen, onClose, onEdit, viewingGuid }: Props) {
+export function AssessmentTypeViewModal({ isOpen, onClose, onEdit, viewingGuid, canEdit = false }: Props) {
   const { data: record, isLoading } = useAssessmentType(viewingGuid, isOpen)
 
   if (!isOpen) return null
@@ -60,9 +61,13 @@ export function AssessmentTypeViewModal({ isOpen, onClose, onEdit, viewingGuid }
         </div>
 
         <div className="modal-footer flex justify-between">
-          <button className="btn btn-primary" onClick={onEdit} disabled={isLoading}>
-            <i className="lni lni-pencil"></i> Edit Fee
-          </button>
+          <div>
+            {canEdit && onEdit && (
+              <button className="btn btn-primary" onClick={onEdit} disabled={isLoading}>
+                <i className="lni lni-pencil"></i> Edit Fee
+              </button>
+            )}
+          </div>
           <button className="btn" onClick={onClose}>Close</button>
         </div>
       </div>

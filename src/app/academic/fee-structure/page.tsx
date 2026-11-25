@@ -250,11 +250,11 @@ export default function Page() {
           onClose={() => closeModal('view-fee-structure-modal')} 
           showToast={showToast} 
           feeStructure={viewRecord ?? undefined} 
-          onEdit={(r) => {
+          onEdit={permissions.edit ? (r) => {
             closeModal('view-fee-structure-modal')
             setEditRecord(r)
             openModal('edit-fee-structure-modal')
-          }}
+          } : undefined}
         />
       )}
       <Toast toast={toast} />

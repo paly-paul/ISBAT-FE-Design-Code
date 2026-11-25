@@ -7,10 +7,11 @@ import { AuthError } from '@/lib/api/client'
 
 interface ViewEnquirySourceModalProps extends ModalProps {
   isbatSourceGuid: string | null
-  onEdit: () => void
+  onEdit?: () => void
+  canEdit?: boolean
 }
 
-export function ViewEnquirySourceModal({ isOpen, onClose, isbatSourceGuid, onEdit }: ViewEnquirySourceModalProps) {
+export function ViewEnquirySourceModal({ isOpen, onClose, isbatSourceGuid, onEdit, canEdit = false }: ViewEnquirySourceModalProps) {
   const { data: source, isLoading, isError, error } = useEnquirySource(isbatSourceGuid, isOpen)
 
   const [sourceName, setSourceName] = useState('')
@@ -68,9 +69,11 @@ export function ViewEnquirySourceModal({ isOpen, onClose, isbatSourceGuid, onEdi
         </div>
         <div className="modal-footer">
           <span className="flex-1"></span>
-          <button className="btn btn-neu" onClick={onEdit} style={{ marginRight: 8 }}>
-            <i className="lni lni-pencil"></i> Edit
-          </button>
+          {canEdit && onEdit && (
+            <button className="btn btn-neu" onClick={onEdit} style={{ marginRight: 8 }}>
+              <i className="lni lni-pencil"></i> Edit
+            </button>
+          )}
           <button className="btn btn-primary" onClick={handleClose}>Close</button>
         </div>
       </div>

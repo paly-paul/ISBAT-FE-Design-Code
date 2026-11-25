@@ -3,11 +3,12 @@ import { useQuestionFaq } from '@/hooks/assessment/useQuestionFaqs'
 interface QuestionFaqViewModalProps {
   isOpen: boolean
   onClose: () => void
-  onEdit: () => void
+  onEdit?: () => void
   viewingGuid: string | null
+  canEdit?: boolean
 }
 
-export function QuestionFaqViewModal({ isOpen, onClose, onEdit, viewingGuid }: QuestionFaqViewModalProps) {
+export function QuestionFaqViewModal({ isOpen, onClose, onEdit, viewingGuid, canEdit = false }: QuestionFaqViewModalProps) {
   const { data, isLoading } = useQuestionFaq(viewingGuid, isOpen)
 
   if (!isOpen) return null
@@ -60,9 +61,11 @@ export function QuestionFaqViewModal({ isOpen, onClose, onEdit, viewingGuid }: Q
 
         <div className="modal-footer border-t border-slate-200">
           <span className="flex-1"></span>
-          <button className="btn btn-neu" onClick={onEdit} disabled={isLoading || !data} style={{ marginRight: 8 }}>
-            <i className="lni lni-pencil"></i> Edit Answer
-          </button>
+          {canEdit && onEdit && (
+            <button className="btn btn-neu" onClick={onEdit} disabled={isLoading || !data} style={{ marginRight: 8 }}>
+              <i className="lni lni-pencil"></i> Edit Answer
+            </button>
+          )}
           <button className="btn btn-primary" onClick={onClose}>
             Close
           </button>

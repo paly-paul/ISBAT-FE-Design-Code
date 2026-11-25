@@ -7,10 +7,11 @@ import { AuthError } from '@/lib/api/client'
 
 interface ViewInterestLevelModalProps extends ModalProps {
   interestLevelGuid: string | null
-  onEdit: () => void
+  onEdit?: () => void
+  canEdit?: boolean
 }
 
-export function ViewInterestLevelModal({ isOpen, onClose, interestLevelGuid, onEdit }: ViewInterestLevelModalProps) {
+export function ViewInterestLevelModal({ isOpen, onClose, interestLevelGuid, onEdit, canEdit = false }: ViewInterestLevelModalProps) {
   const { data: level, isLoading, isError, error } = useInterestLevel(interestLevelGuid, isOpen)
 
   const [interestLevelName, setInterestLevelName] = useState('')
@@ -68,9 +69,11 @@ export function ViewInterestLevelModal({ isOpen, onClose, interestLevelGuid, onE
         </div>
         <div className="modal-footer">
           <span className="flex-1"></span>
-          <button className="btn btn-neu" onClick={onEdit} style={{ marginRight: 8 }}>
-            <i className="lni lni-pencil"></i> Edit
-          </button>
+          {canEdit && onEdit && (
+            <button className="btn btn-neu" onClick={onEdit} style={{ marginRight: 8 }}>
+              <i className="lni lni-pencil"></i> Edit
+            </button>
+          )}
           <button className="btn btn-primary" onClick={handleClose}>Close</button>
         </div>
       </div>

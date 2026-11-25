@@ -7,10 +7,11 @@ import { AuthError } from '@/lib/api/client'
 
 interface ViewFollowUpStatusModalProps extends ModalProps {
   followUpStatusGuid: string | null
-  onEdit: () => void
+  onEdit?: () => void
+  canEdit?: boolean
 }
 
-export function ViewFollowUpStatusModal({ isOpen, onClose, followUpStatusGuid, onEdit }: ViewFollowUpStatusModalProps) {
+export function ViewFollowUpStatusModal({ isOpen, onClose, followUpStatusGuid, onEdit, canEdit = false }: ViewFollowUpStatusModalProps) {
   const { data: followUpStatus, isLoading, isError, error } = useFollowUpStatus(followUpStatusGuid, isOpen)
 
   const [followUpStatusCode, setFollowUpStatusCode] = useState('')
@@ -82,9 +83,11 @@ export function ViewFollowUpStatusModal({ isOpen, onClose, followUpStatusGuid, o
         </div>
         <div className="modal-footer">
           <span className="flex-1"></span>
-          <button className="btn btn-neu" onClick={onEdit} style={{ marginRight: 8 }}>
-            <i className="lni lni-pencil"></i> Edit
-          </button>
+          {canEdit && onEdit && (
+            <button className="btn btn-neu" onClick={onEdit} style={{ marginRight: 8 }}>
+              <i className="lni lni-pencil"></i> Edit
+            </button>
+          )}
           <button className="btn btn-primary" onClick={handleClose}>Close</button>
         </div>
       </div>
