@@ -160,6 +160,7 @@ export default function Page() {
         onClose={() => closeModal('view-enquiry-status-modal')}
         showToast={showToast}
         enquiryStatusGuid={viewingEnquiryStatusGuid}
+        canEdit={Boolean(permissions.edit)}
         onEdit={() => {
           closeModal('view-enquiry-status-modal')
           openEditModal(viewingEnquiryStatusGuid!)

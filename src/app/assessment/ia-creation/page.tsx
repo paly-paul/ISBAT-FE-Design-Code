@@ -436,17 +436,17 @@ export default function IaCreationPage() {
           progName={programs?.find(p => p.programGuid === selectedProgramGuid)?.programName || ''}
           semName={semesters?.find(s => s.semesterGuid === selectedSemesterGuid)?.semName || ''}
           onClose={() => setViewingRow(null)}
-          onEditCw={(guid) => setSelectedCwGuid(guid)}
-          onEditCt={(guid) => setSelectedCbtData({
+          onEditCw={permissions.edit ? (guid) => setSelectedCwGuid(guid) : undefined}
+          onEditCt={permissions.edit ? (guid) => setSelectedCbtData({
             testGuid: guid,
             unitCode: viewingRow.unitCode ?? '',
             unitName: viewingRow.unitName ?? ''
-          })}
-          onEditUe={(guid) => setSelectedUeData({
+          }) : undefined}
+          onEditUe={permissions.edit ? (guid) => setSelectedUeData({
             examGuid: guid,
             unitCode: viewingRow.unitCode ?? '',
             unitName: viewingRow.unitName ?? ''
-          })}
+          }) : undefined}
         />
       )}
 

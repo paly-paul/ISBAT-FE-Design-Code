@@ -7,10 +7,11 @@ import { AuthError } from '@/lib/api/client'
 
 interface ViewStreamModalProps extends ModalProps {
   streamGuid: string | null
-  onEdit: () => void
+  onEdit?: () => void
+  canEdit?: boolean
 }
 
-export function ViewStreamModal({ isOpen, onClose, streamGuid, onEdit }: ViewStreamModalProps) {
+export function ViewStreamModal({ isOpen, onClose, streamGuid, onEdit, canEdit = false }: ViewStreamModalProps) {
   const { data: stream, isLoading, isError, error } = useStream(streamGuid, isOpen)
 
   const [streamCode, setStreamCode] = useState('')
@@ -76,9 +77,11 @@ export function ViewStreamModal({ isOpen, onClose, streamGuid, onEdit }: ViewStr
         </div>
         <div className="modal-footer">
           <span className="flex-1"></span>
-          <button className="btn btn-neu" onClick={onEdit} style={{ marginRight: 8 }}>
-            <i className="lni lni-pencil"></i> Edit
-          </button>
+          {canEdit && onEdit && (
+            <button className="btn btn-neu" onClick={onEdit} style={{ marginRight: 8 }}>
+              <i className="lni lni-pencil"></i> Edit
+            </button>
+          )}
           <button className="btn btn-primary" onClick={handleClose}>Close</button>
         </div>
       </div>

@@ -7,10 +7,11 @@ import { AuthError } from '@/lib/api/client'
 
 interface ViewBatchTimeModalProps extends ModalProps {
   batchTimeGuid: string | null
-  onEdit: () => void
+  onEdit?: () => void
+  canEdit?: boolean
 }
 
-export function ViewBatchTimeModal({ isOpen, onClose, batchTimeGuid, onEdit }: ViewBatchTimeModalProps) {
+export function ViewBatchTimeModal({ isOpen, onClose, batchTimeGuid, onEdit, canEdit = false }: ViewBatchTimeModalProps) {
   const { data: batchTimeRecord, isLoading, isError, error } = useBatchTime(batchTimeGuid, isOpen)
 
   const [batchTime, setBatchTime]         = useState('')
@@ -76,9 +77,11 @@ export function ViewBatchTimeModal({ isOpen, onClose, batchTimeGuid, onEdit }: V
         </div>
         <div className="modal-footer">
           <span className="flex-1"></span>
-          <button className="btn btn-neu" onClick={onEdit} style={{ marginRight: 8 }}>
-            <i className="lni lni-pencil"></i> Edit
-          </button>
+          {canEdit && onEdit && (
+            <button className="btn btn-neu" onClick={onEdit} style={{ marginRight: 8 }}>
+              <i className="lni lni-pencil"></i> Edit
+            </button>
+          )}
           <button className="btn btn-primary" onClick={handleClose}>Close</button>
         </div>
       </div>

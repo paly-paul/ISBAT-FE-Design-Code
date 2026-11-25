@@ -160,6 +160,7 @@ export default function Page() {
         onClose={() => closeModal('view-batch-time-modal')}
         showToast={showToast}
         batchTimeGuid={viewingBatchTimeGuid}
+        canEdit={Boolean(permissions.edit)}
         onEdit={() => {
           closeModal('view-batch-time-modal')
           openEditModal(viewingBatchTimeGuid!)

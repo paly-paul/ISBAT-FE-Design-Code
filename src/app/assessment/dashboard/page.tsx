@@ -204,8 +204,10 @@ export default function AssessmentDashboard() {
 
   const term1Pending = term1?.pendingCount ?? 0
   const term1Issued = term1?.issuedCount ?? 0
+  const term1RequiredPct = term1?.requiredFeePercent != null ? Number(term1.requiredFeePercent) : 50
   const term2Pending = term2?.pendingCount ?? 0
   const term2Issued = term2?.issuedCount ?? 0
+  const term2RequiredPct = term2?.requiredFeePercent != null ? Number(term2.requiredFeePercent) : 100
   const totalRegisteredStudents = hallTicket?.registeredStudentCount ?? 0
   const totalPendingHallTickets = term1Pending + term2Pending
 
@@ -271,7 +273,7 @@ export default function AssessmentDashboard() {
       list.push({
         id: 'ht-term-1',
         title: `${term1Pending} Term 1 Hall Ticket${term1Pending > 1 ? 's' : ''} Not Issued`,
-        subtitle: `${totalRegisteredStudents.toLocaleString()} registered students · Fee clearance (50%) & CW completion required`,
+        subtitle: `${totalRegisteredStudents.toLocaleString()} registered students · Fee clearance (${term1RequiredPct}%) & CW completion required`,
         tag: 'Term 1 Pending',
         badgeClass: 'badge-blue',
         buttonText: 'View',
@@ -288,7 +290,7 @@ export default function AssessmentDashboard() {
       list.push({
         id: 'ht-term-2',
         title: `${term2Pending} Term 2 Hall Ticket${term2Pending > 1 ? 's' : ''} Not Issued`,
-        subtitle: '100% fee clearance required; Guild & NCHE fees too in even semesters',
+        subtitle: `${term2RequiredPct}% fee clearance required; Guild & NCHE fees too in even semesters`,
         tag: 'Term 2 Pending',
         badgeClass: 'badge-cyan',
         buttonText: 'View',
@@ -355,7 +357,9 @@ export default function AssessmentDashboard() {
     cwEvaluationPending,
     cwSubmissionPending,
     term1Pending,
+    term1RequiredPct,
     term2Pending,
+    term2RequiredPct,
     totalRegisteredStudents,
     resit,
     classTestSubmissionPending,

@@ -5,13 +5,14 @@ import { SkillMaster } from '@/lib/api/academic/skillMaster'
 
 interface ViewSkillModalProps extends ModalProps {
   skill: SkillMaster | null
-  onEdit: () => void
+  onEdit?: () => void
+  canEdit?: boolean
 }
 
 // No GetByGuid/GetById endpoint was given for this resource — same
 // row-passed exception receiptBook.ts's edit flow uses: seeded straight
 // from the already-loaded row instead of a fetch-by-guid.
-export function ViewSkillModal({ isOpen, onClose, skill, onEdit }: ViewSkillModalProps) {
+export function ViewSkillModal({ isOpen, onClose, skill, onEdit, canEdit = false }: ViewSkillModalProps) {
   const [skillName, setSkillName] = useState('')
 
   useEffect(() => {
@@ -37,9 +38,11 @@ export function ViewSkillModal({ isOpen, onClose, skill, onEdit }: ViewSkillModa
         </div>
         <div className="modal-footer">
           <span className="flex-1"></span>
-          <button className="btn btn-neu" onClick={onEdit} style={{ marginRight: 8 }}>
-            <i className="lni lni-pencil"></i> Edit
-          </button>
+          {canEdit && onEdit && (
+            <button className="btn btn-neu" onClick={onEdit} style={{ marginRight: 8 }}>
+              <i className="lni lni-pencil"></i> Edit
+            </button>
+          )}
           <button className="btn btn-primary" onClick={handleClose}>Close</button>
         </div>
       </div>

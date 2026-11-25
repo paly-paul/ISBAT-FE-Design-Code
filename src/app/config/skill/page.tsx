@@ -166,6 +166,7 @@ export default function SkillPage() {
         onClose={() => closeModal('view-skill-modal')}
         showToast={showToast}
         skill={viewingSkill}
+        canEdit={Boolean(permissions.edit)}
         onEdit={() => {
           closeModal('view-skill-modal')
           openEditModal(viewingSkill!)

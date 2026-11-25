@@ -6,10 +6,11 @@ import { useEmployeeDropdown } from '@/hooks/employee/useEmployees'
 
 interface ViewDepartmentModalProps extends ModalProps {
   department: Department | null
-  onEdit: () => void
+  onEdit?: () => void
+  canEdit?: boolean
 }
 
-export function ViewDepartmentModal({ isOpen, onClose, department, onEdit }: ViewDepartmentModalProps) {
+export function ViewDepartmentModal({ isOpen, onClose, department, onEdit, canEdit = false }: ViewDepartmentModalProps) {
   const [shortCode, setShortCode] = useState('')
   const [deptName, setDeptName]   = useState('')
   const [hod, setHod]             = useState('')
@@ -52,9 +53,11 @@ export function ViewDepartmentModal({ isOpen, onClose, department, onEdit }: Vie
         </div>
         <div className="modal-footer">
           <span className="flex-1"></span>
-          <button className="btn btn-neu" onClick={onEdit} style={{ marginRight: 8 }}>
-            <i className="lni lni-pencil"></i> Edit
-          </button>
+          {canEdit && onEdit && (
+            <button className="btn btn-neu" onClick={onEdit} style={{ marginRight: 8 }}>
+              <i className="lni lni-pencil"></i> Edit
+            </button>
+          )}
           <button className="btn btn-primary" onClick={handleClose}>Close</button>
         </div>
       </div>

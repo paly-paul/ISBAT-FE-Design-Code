@@ -238,6 +238,7 @@ export default function Page() {
         onClose={() => closeModal('view-country-modal')}
         showToast={showToast}
         country={viewingCountry}
+        canEdit={Boolean(permissions.edit)}
         onEdit={() => {
           closeModal('view-country-modal')
           openEditModal(viewingCountry!)

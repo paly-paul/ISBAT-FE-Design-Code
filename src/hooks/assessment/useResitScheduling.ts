@@ -26,11 +26,12 @@ export const RESIT_SCHEDULING_KEYS = {
   cw: () => [...RESIT_SCHEDULING_KEYS.all, 'cw'] as const,
 }
 
-export function useResitSchedules(params: { page: number; pageSize: number; search: string }) {
+export function useResitSchedules(params: { page: number; pageSize: number; search: string }, enabled = true) {
   return useQuery({
     queryKey: RESIT_SCHEDULING_KEYS.examList(params),
     queryFn: () => getResitSchedules({ ...params, search: params.search || undefined }),
     placeholderData: keepPreviousData,
+    enabled,
     retry: false,
   })
 }
@@ -75,8 +76,8 @@ export function useUpdateResitSchedule() {
   })
 }
 
-export function useResitCtSchedule() {
-  return useQuery({ queryKey: RESIT_SCHEDULING_KEYS.ct(), queryFn: getResitCtSchedule, retry: false })
+export function useResitCtSchedule(enabled = true) {
+  return useQuery({ queryKey: RESIT_SCHEDULING_KEYS.ct(), queryFn: getResitCtSchedule, enabled, retry: false })
 }
 
 // Refill the form and the card from the response, then reload for the
@@ -92,8 +93,8 @@ export function useUpdateResitCtSchedule() {
   })
 }
 
-export function useResitCwSchedule() {
-  return useQuery({ queryKey: RESIT_SCHEDULING_KEYS.cw(), queryFn: getResitCwSchedule, retry: false })
+export function useResitCwSchedule(enabled = true) {
+  return useQuery({ queryKey: RESIT_SCHEDULING_KEYS.cw(), queryFn: getResitCwSchedule, enabled, retry: false })
 }
 
 export function useUpdateResitCwSchedule() {

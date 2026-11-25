@@ -4,7 +4,8 @@ import { Campus } from '@/lib/api/academic/campus'
 
 interface ViewCampusModalProps extends ModalProps {
   campus: Campus | null
-  onEdit: () => void
+  onEdit?: () => void
+  canEdit?: boolean
 }
 
 // Same layout as the Academic view modals (ViewRoomModal, ViewBatchModal):
@@ -18,7 +19,7 @@ function Field({ label, value, mono, wide }: { label: string; value: React.React
   )
 }
 
-export function ViewCampusModal({ isOpen, onClose, campus, onEdit }: ViewCampusModalProps) {
+export function ViewCampusModal({ isOpen, onClose, campus, onEdit, canEdit = false }: ViewCampusModalProps) {
   if (!isOpen || !campus) return null
 
   // Addresses arrive as one line with ";" between parts — one part per line.
@@ -56,9 +57,11 @@ export function ViewCampusModal({ isOpen, onClose, campus, onEdit }: ViewCampusM
 
         <div className="modal-footer" style={{ borderTop: '1px solid var(--g200)' }}>
           <span className="flex-1"></span>
-          <button className="btn btn-neu" onClick={onEdit}>
-            <i className="lni lni-pencil"></i> Edit
-          </button>
+          {canEdit && onEdit && (
+            <button className="btn btn-neu" onClick={onEdit}>
+              <i className="lni lni-pencil"></i> Edit
+            </button>
+          )}
           <button className="btn btn-primary" onClick={onClose}>Close</button>
         </div>
       </div>

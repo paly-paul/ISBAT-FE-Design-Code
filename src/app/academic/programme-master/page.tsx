@@ -289,12 +289,12 @@ export default function Page() {
         onClose={() => closeModal('view-prog-modal')}
         showToast={showToast}
         programGuid={viewingProgramGuid}
-        onEdit={(guid) => {
+        onEdit={permissions.edit ? (guid) => {
           closeModal('view-prog-modal')
           setProgMode('edit')
           setEditingProgramGuid(guid)
           openModal('new-prog-modal')
-        }}
+        } : undefined}
       />
       <SpecializationModal
         isOpen={openModals.has('specialization-modal')}

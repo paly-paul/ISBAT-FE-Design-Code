@@ -5,10 +5,11 @@ import { Country } from '@/lib/api/academic/country'
 
 interface ViewCountryModalProps extends ModalProps {
   country: Country | null
-  onEdit: () => void
+  onEdit?: () => void
+  canEdit?: boolean
 }
 
-export function ViewCountryModal({ isOpen, onClose, country, onEdit }: ViewCountryModalProps) {
+export function ViewCountryModal({ isOpen, onClose, country, onEdit, canEdit = false }: ViewCountryModalProps) {
   const [countryCode, setCountryCode]       = useState('')
   const [countryName, setCountryName]       = useState('')
   const [nationality, setNationality]       = useState('')
@@ -62,9 +63,11 @@ export function ViewCountryModal({ isOpen, onClose, country, onEdit }: ViewCount
         </div>
         <div className="modal-footer">
           <span className="flex-1"></span>
-          <button className="btn btn-neu" onClick={onEdit} style={{ marginRight: 8 }}>
-            <i className="lni lni-pencil"></i> Edit
-          </button>
+          {canEdit && onEdit && (
+            <button className="btn btn-neu" onClick={onEdit} style={{ marginRight: 8 }}>
+              <i className="lni lni-pencil"></i> Edit
+            </button>
+          )}
           <button className="btn btn-primary" onClick={handleClose}>Close</button>
         </div>
       </div>

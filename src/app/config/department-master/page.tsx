@@ -193,6 +193,7 @@ export default function Page() {
         onClose={() => closeModal('view-dept-modal')}
         showToast={showToast}
         department={viewingDepartment}
+        canEdit={Boolean(permissions.edit)}
         onEdit={() => {
           closeModal('view-dept-modal')
           openEditModal(viewingDepartment!)

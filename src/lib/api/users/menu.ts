@@ -509,11 +509,27 @@ export function findCatalogPage(pathname: string): AppPage | undefined {
   return menuCatalog().pages.get(pathname.replace(/\/+$/, '') || '/')
 }
 
+// Multi-tab pages (e.g. Resit Scheduling with View Resit Class Test / Coursework
+// Schedule) or Student Master (`view`) can grant a specific view permission while
+// the page-level `get` flag is false. Allow the route if `get` isn't false OR an
+// explicit view/get key in the bag is true (avoiding substrings like `review`/`preview`).
+function hasExplicitViewPermission(permissions: MenuPermissions): boolean {
+  return Object.entries(permissions).some(([key, allowed]) => {
+    if (allowed !== true) return false
+    const k = key.toLowerCase()
+    if (k === 'get' || k === 'view') return true
+    if (/(^|[._-])(get|view)([._-]|$)/.test(k)) return true
+    if (/^(get|view)/.test(k)) return true
+    return /(ct|cw)(get|view)$/.test(k)
+  })
+}
+
 // Whether the user's own (RBAC-filtered) menu lets them open `pathname`.
 // Denied: anything under a module missing from their menu, and any known
-// menu page that their menu leaves out or marks `get: false`. Routes that
-// aren't menu items (profile, detail pages like /student/profile, dashboards
-// not in the catalog) are allowed — the backend still authorizes each call.
+// menu page that their menu leaves out or marks `get: false` (unless another
+// explicit view/get permission on that page is granted). Routes that aren't
+// menu items (profile, detail pages like /student/profile, dashboards not in
+// the catalog) are allowed — the backend still authorizes each call.
 export function isRouteAllowed(menu: MenuNode[], pathname: string): boolean {
   const path = pathname.replace(/\/+$/, '') || '/'
   const catalog = menuCatalog()
@@ -525,7 +541,9 @@ export function isRouteAllowed(menu: MenuNode[], pathname: string): boolean {
   if (!catalog.pages.has(path)) return true
 
   const permissions = findLeafPermissions(menu, path)
-  return permissions !== undefined && permissions?.get !== false
+  if (permissions === undefined) return false
+  if (permissions === null) return true
+  return permissions.get !== false || hasExplicitViewPermission(permissions)
 }
 
 // undefined: the page isn't in the menu; null: it is, with no permission data.

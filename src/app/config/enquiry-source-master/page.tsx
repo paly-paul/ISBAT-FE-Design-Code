@@ -155,6 +155,7 @@ export default function Page() {
         onClose={() => closeModal('view-enquiry-source-master-modal')}
         showToast={showToast}
         enquirySourceGuid={viewingSourceGuid}
+        canEdit={Boolean(permissions.edit)}
         onEdit={() => {
           closeModal('view-enquiry-source-master-modal')
           openEditModal(viewingSourceGuid!)
