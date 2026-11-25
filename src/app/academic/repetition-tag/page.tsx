@@ -187,23 +187,21 @@ export default function Page() {
                 {!(isLoading || searchPending) && pageItems.map((r) => (
                   <tr key={r.courseUnitRepetitionGuid}>
                     <td>
-                      {(permissions.edit || permissions.delete) && (
-                        <ActionMenu>
-                          <button className="btn btn-neu btn-sm" onClick={() => openViewModal(r.courseUnitRepetitionGuid)}>
-                            <i className="lni lni-eye"></i> View
+                      <ActionMenu>
+                        <button className="btn btn-neu btn-sm" onClick={() => openViewModal(r.courseUnitRepetitionGuid)}>
+                          <i className="lni lni-eye"></i> View
+                        </button>
+                        {permissions.edit && (
+                          <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.courseUnitRepetitionGuid)}>
+                            <i className="lni lni-pencil"></i> Edit
                           </button>
-                          {permissions.edit && (
-                            <button className="btn btn-neu btn-sm" onClick={() => openEditModal(r.courseUnitRepetitionGuid)}>
-                              <i className="lni lni-pencil"></i> Edit
-                            </button>
-                          )}
-                          {permissions.delete && (
-                            <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}>
-                              <i className="lni lni-trash-can"></i> Delete
-                            </button>
-                          )}
-                        </ActionMenu>
-                      )}
+                        )}
+                        {permissions.delete && (
+                          <button className="btn btn-neu btn-sm" onClick={() => setDeleteTarget(r)}>
+                            <i className="lni lni-trash-can"></i> Delete
+                          </button>
+                        )}
+                      </ActionMenu>
                     </td>
                     <td className="font-mono font-bold text-b700">{r.tagCode}</td>
                     <td>{r.tagName}</td>
