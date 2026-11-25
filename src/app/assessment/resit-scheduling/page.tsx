@@ -46,6 +46,41 @@ const PAGE_SIZE = 10
 const NO_RESIT_MSG = 'There is no active resit in this academic intake. Scheduling not possible.'
 const UNSAVED_MSG = 'You have unsaved changes. Discard them?'
 
+// Matches /me/menu action keys for Class Test / Coursework tabs regardless of
+// whether the backend preserves the prefix (e.g. `assessment.resitctschedule.get`),
+// strips the module (`resitctschedule.get`), or flattens the permission name.
+function matchScopedPermission(
+  permissions: Record<string, boolean>,
+  patterns: RegExp[],
+): { hasKeys: boolean; granted: boolean } {
+  const matched = Object.entries(permissions).filter(([k]) => patterns.some(re => re.test(k)))
+  return {
+    hasKeys: matched.length > 0,
+    granted: matched.some(([, v]) => v === true),
+  }
+}
+
+const CT_VIEW_PATTERNS = [
+  /^(?=.*(resit[_.-]?ct|class[_.-]?test))(?=.*(get|view))/i,
+  /^ct[._-]?(get|view)$/i,
+  /^(get|view)[._-]?ct$/i,
+]
+const CW_VIEW_PATTERNS = [
+  /^(?=.*(resit[_.-]?cw|course[_.-]?work))(?=.*(get|view))/i,
+  /^cw[._-]?(get|view)$/i,
+  /^(get|view)[._-]?cw$/i,
+]
+const CT_SAVE_PATTERNS = [
+  /^(?=.*(resit[_.-]?ct|class[_.-]?test))(?=.*(save|edit|update|create|add))/i,
+  /^ct[._-]?(save|edit|update)$/i,
+  /^(save|edit|update)[._-]?ct$/i,
+]
+const CW_SAVE_PATTERNS = [
+  /^(?=.*(resit[_.-]?cw|course[_.-]?work))(?=.*(save|edit|update|create|add))/i,
+  /^cw[._-]?(save|edit|update)$/i,
+  /^(save|edit|update)[._-]?cw$/i,
+]
+
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 function errCode(err: unknown) { return (err as { code?: string } | null)?.code }
@@ -241,6 +276,24 @@ function ResitSchedulingContent() {
   const urlTab = searchParams.get('tab') as TabId | null
   const [activeTab, setActiveTab] = useState<TabId>(urlTab && TAB_IDS.includes(urlTab) ? urlTab : 'exam')
 
+  const ctView = matchScopedPermission(permissions, CT_VIEW_PATTERNS)
+  const cwView = matchScopedPermission(permissions, CW_VIEW_PATTERNS)
+  const ctSave = matchScopedPermission(permissions, CT_SAVE_PATTERNS)
+  const cwSave = matchScopedPermission(permissions, CW_SAVE_PATTERNS)
+
+  const canView: Record<TabId, boolean> = {
+    exam: permissions.get !== false,
+    ct: ctView.hasKeys ? ctView.granted : permissions.get !== false,
+    cw: cwView.hasKeys ? cwView.granted : permissions.get !== false,
+  }
+  const canAddExam = Boolean(permissions.add || permissions.save)
+  const canEditExam = Boolean(permissions.edit || permissions.save)
+  const canSave: Record<TabId, boolean> = {
+    exam: Boolean(canAddExam || canEditExam),
+    ct: ctSave.hasKeys ? ctSave.granted : Boolean(permissions.save || permissions.edit || permissions.add),
+    cw: cwSave.hasKeys ? cwSave.granted : Boolean(permissions.save || permissions.edit || permissions.add),
+  }
+
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const showToast = useCallback((msg: string, type = 'success') => {
     setToast({ msg, type })
@@ -248,28 +301,29 @@ function ResitSchedulingContent() {
     setTimeout(() => setToast(null), timeout)
   }, [])
 
-  // ── Page load: the three calls in parallel ──────────────────────────────
-  const examSummary = useResitSchedules({ page: 1, pageSize: PAGE_SIZE, search: '' })
-  const ctQuery = useResitCtSchedule()
-  const cwQuery = useResitCwSchedule()
+  // ── Page load: authorized tab calls in parallel ───────────────────────────
+  const examSummary = useResitSchedules({ page: 1, pageSize: PAGE_SIZE, search: '' }, canView.exam)
+  const ctQuery = useResitCtSchedule(canView.ct)
+  const cwQuery = useResitCwSchedule(canView.cw)
 
   // Course units feed "units pending" and the Add drawer — after first paint.
   const forbidden: Record<TabId, boolean> = {
-    exam: errCode(examSummary.error) === 'forbidden',
-    ct: errCode(ctQuery.error) === 'forbidden',
-    cw: errCode(cwQuery.error) === 'forbidden',
+    exam: !canView.exam || errCode(examSummary.error) === 'forbidden',
+    ct: !canView.ct || errCode(ctQuery.error) === 'forbidden',
+    cw: !canView.cw || errCode(cwQuery.error) === 'forbidden',
   }
-  const unitsQuery = useResitScheduleCourseUnits(examSummary.isFetched && !forbidden.exam)
+  const unitsQuery = useResitScheduleCourseUnits(canView.exam && examSummary.isFetched && !forbidden.exam)
 
   const resit = examSummary.data?.resit ?? ctQuery.data?.resit ?? cwQuery.data?.resit ?? null
   const noResit = [examSummary.data, ctQuery.data, cwQuery.data].some(d => d && d.resit === null)
-  const loading = examSummary.isLoading || ctQuery.isLoading || cwQuery.isLoading
+  const loading = (canView.exam && examSummary.isLoading) || (canView.ct && ctQuery.isLoading) || (canView.cw && cwQuery.isLoading)
 
-  // Save permission is only known from a 403 on save.
+  // Save permission is only known from a 403 on save when backend enforces it.
   const [saveForbidden, setSaveForbidden] = useState<Record<TabId, boolean>>({ exam: false, ct: false, cw: false })
   const markSaveForbidden = useCallback((t: TabId) => setSaveForbidden(prev => ({ ...prev, [t]: true })), [])
 
   const visibleTabs = TAB_IDS.filter(t => !forbidden[t])
+  const currentTab: TabId = visibleTabs.includes(activeTab) ? activeTab : (visibleTabs[0] ?? activeTab)
 
   // ── Unsaved changes ─────────────────────────────────────────────────────
   const [dirty, setDirty] = useState<Record<TabId, boolean>>({ exam: false, ct: false, cw: false })
@@ -289,14 +343,14 @@ function ResitSchedulingContent() {
   }, [anyDirty])
 
   function goTab(t: TabId) {
-    setDirty(prev => ({ ...prev, [activeTab]: false }))
+    setDirty(prev => ({ ...prev, [currentTab]: false }))
     setActiveTab(t)
     setPendingTab(null)
     router.replace(`${pathname}?tab=${t}`, { scroll: false })
   }
   function requestTab(t: TabId) {
-    if (t === activeTab) return
-    if (dirty[activeTab]) setPendingTab(t)
+    if (t === currentTab) return
+    if (dirty[currentTab]) setPendingTab(t)
     else goTab(t)
   }
 
@@ -320,9 +374,9 @@ function ResitSchedulingContent() {
   const tabRefs = useRef<Partial<Record<TabId, HTMLButtonElement>>>({})
   const [indicator, setIndicator] = useState({ left: 0, width: 0 })
   useLayoutEffect(() => {
-    const el = tabRefs.current[activeTab]
+    const el = tabRefs.current[currentTab]
     if (el) setIndicator({ left: el.offsetLeft, width: el.offsetWidth })
-  }, [activeTab, examTotal, ctQuery.data, cwQuery.data, visibleTabs.length])
+  }, [currentTab, examTotal, ctQuery.data, cwQuery.data, visibleTabs.length])
 
   const tabLabel: Record<TabId, React.ReactNode> = {
     exam: <>University Exam{examTotal !== undefined && ` (${examTotal.toLocaleString()})`}</>,
@@ -353,7 +407,7 @@ function ResitSchedulingContent() {
           {/* Summary cards — clicking one opens its tab */}
           <div className="stat-grid-fluid mb-5">
             {!forbidden.exam && (
-              <SummaryCard label="University Exam" icon="lni-graduation" active={activeTab === 'exam'} onClick={() => requestTab('exam')}>
+              <SummaryCard label="University Exam" icon="lni-graduation" active={currentTab === 'exam'} onClick={() => requestTab('exam')}>
                 {examSummary.isLoading ? <CardLoading /> : examSummary.isError ? <CardError error={examSummary.error} /> : (
                   <>
                     <div className="stat-num">{(examTotal ?? 0).toLocaleString()} <span className="text-sm font-semibold text-g500">scheduled</span></div>
@@ -371,12 +425,12 @@ function ResitSchedulingContent() {
               </SummaryCard>
             )}
             {!forbidden.ct && (
-              <SummaryCard label="Class Test" icon="lni-pencil-alt" active={activeTab === 'ct'} onClick={() => requestTab('ct')}>
+              <SummaryCard label="Class Test" icon="lni-pencil-alt" active={currentTab === 'ct'} onClick={() => requestTab('ct')}>
                 <WindowCardBody query={ctQuery} duration />
               </SummaryCard>
             )}
             {!forbidden.cw && (
-              <SummaryCard label="Coursework" icon="lni-timer" active={activeTab === 'cw'} onClick={() => requestTab('cw')}>
+              <SummaryCard label="Coursework" icon="lni-timer" active={currentTab === 'cw'} onClick={() => requestTab('cw')}>
                 <WindowCardBody query={cwQuery} />
               </SummaryCard>
             )}
@@ -389,8 +443,8 @@ function ResitSchedulingContent() {
                   key={t}
                   ref={el => { if (el) tabRefs.current[t] = el }}
                   role="tab"
-                  aria-selected={activeTab === t}
-                  className={`tab-btn${activeTab === t ? ' active' : ''}`}
+                  aria-selected={currentTab === t}
+                  className={`tab-btn${currentTab === t ? ' active' : ''}`}
                   onClick={() => requestTab(t)}
                 >
                   <i className={`lni ${tabIcon[t]}`}></i> {tabLabel[t]}
@@ -399,11 +453,13 @@ function ResitSchedulingContent() {
               <span className="tab-indicator" style={{ left: indicator.left, width: indicator.width }} />
             </div>
 
-            <div key={activeTab} className="tab-panel-in">
-              {activeTab === 'exam' && (
+            <div key={currentTab} className="tab-panel-in">
+              {currentTab === 'exam' && (
                 <ExamTab
-                  readOnly={noResit || saveForbidden.exam || !permissions.save}
-                  readOnlyReason={noResit ? NO_RESIT_MSG : saveForbidden.exam || !permissions.save ? 'You do not have permission to save resit exam schedules.' : undefined}
+                  readOnly={noResit || saveForbidden.exam || !canSave.exam}
+                  readOnlyReason={noResit ? NO_RESIT_MSG : saveForbidden.exam || !canSave.exam ? 'You do not have permission to save resit exam schedules.' : undefined}
+                  canAdd={canAddExam}
+                  canEdit={canEditExam}
                   units={unitsQuery.data}
                   unitsLoading={unitsQuery.isLoading || !unitsQuery.isFetched}
                   showToast={showToast}
@@ -411,19 +467,19 @@ function ResitSchedulingContent() {
                   onDirtyChange={dirtyHandlers.exam}
                 />
               )}
-              {activeTab === 'ct' && (
+              {currentTab === 'ct' && (
                 <CtTab
-                  readOnly={noResit || saveForbidden.ct || !permissions.save}
-                  readOnlyReason={noResit ? NO_RESIT_MSG : saveForbidden.ct || !permissions.save ? 'You do not have permission to save the resit class test schedule.' : undefined}
+                  readOnly={noResit || saveForbidden.ct || !canSave.ct}
+                  readOnlyReason={noResit ? NO_RESIT_MSG : saveForbidden.ct || !canSave.ct ? 'You do not have permission to save the resit class test schedule.' : undefined}
                   showToast={showToast}
                   onForbidden={() => markSaveForbidden('ct')}
                   onDirtyChange={dirtyHandlers.ct}
                 />
               )}
-              {activeTab === 'cw' && (
+              {currentTab === 'cw' && (
                 <CwTab
-                  readOnly={noResit || saveForbidden.cw || !permissions.save}
-                  readOnlyReason={noResit ? NO_RESIT_MSG : saveForbidden.cw || !permissions.save ? 'You do not have permission to save the resit coursework schedule.' : undefined}
+                  readOnly={noResit || saveForbidden.cw || !canSave.cw}
+                  readOnlyReason={noResit ? NO_RESIT_MSG : saveForbidden.cw || !canSave.cw ? 'You do not have permission to save the resit coursework schedule.' : undefined}
                   showToast={showToast}
                   onForbidden={() => markSaveForbidden('cw')}
                   onDirtyChange={dirtyHandlers.cw}
@@ -503,11 +559,12 @@ interface TabProps {
   onDirtyChange: (dirty: boolean) => void
 }
 
-function ExamTab({ readOnly, readOnlyReason, units, unitsLoading, showToast, onForbidden, onDirtyChange }: TabProps & {
+function ExamTab({ readOnly, readOnlyReason, canAdd, canEdit: canEditExam, units, unitsLoading, showToast, onForbidden, onDirtyChange }: TabProps & {
+  canAdd: boolean
+  canEdit: boolean
   units: ResitScheduleCourseUnitDto[] | undefined
   unitsLoading: boolean
 }) {
-  const permissions = usePagePermissions()
   const qc = useQueryClient()
   const [page, setPage] = useState(1)
   const [searchInput, setSearchInput] = useState('')
@@ -539,7 +596,7 @@ function ExamTab({ readOnly, readOnlyReason, units, unitsLoading, showToast, onF
         </div>
         <button className="btn btn-neu" onClick={doSearch}>Search</button>
         <button className="btn btn-neu" onClick={doClear} disabled={!searchInput && !search}>Clear</button>
-        {permissions.add && (
+        {canAdd && (
           <span className="sm:ml-auto" title={readOnlyReason}>
             <button className="btn btn-primary" onClick={() => setModal({ mode: 'add', guid: null, viewOnly: false })} disabled={readOnly}>
               <i className="lni lni-plus"></i> Add
@@ -578,7 +635,7 @@ function ExamTab({ readOnly, readOnlyReason, units, unitsLoading, showToast, onF
             ) : (
               items.map(s => {
                 const started = resitExamStarted(s.examDate, s.startTime)
-                const canEdit = !readOnly && permissions.edit && !started
+                const rowEditable = !readOnly && canEditExam && !started
                 return (
                 <tr key={s.resitScheduleGuid}>
                   <td>
@@ -589,7 +646,7 @@ function ExamTab({ readOnly, readOnlyReason, units, unitsLoading, showToast, onF
                       >
                         <i className="lni lni-eye"></i> View
                       </button>
-                      {canEdit && (
+                      {rowEditable && (
                         <button
                           className="btn btn-neu btn-sm"
                           onClick={() => setModal({ mode: 'edit', guid: s.resitScheduleGuid, viewOnly: false })}
@@ -631,8 +688,8 @@ function ExamTab({ readOnly, readOnlyReason, units, unitsLoading, showToast, onF
         <ExamScheduleModal
           mode={modal.mode}
           guid={modal.guid}
-          readOnly={readOnly || !!modal.viewOnly || (modal.mode === 'edit' && !permissions.edit)}
-          readOnlyReason={readOnlyReason ?? (modal.viewOnly ? undefined : modal.mode === 'edit' && !permissions.edit ? 'You do not have permission to edit resit exam schedules.' : undefined)}
+          readOnly={readOnly || !!modal.viewOnly || (modal.mode === 'add' ? !canAdd : !canEditExam)}
+          readOnlyReason={readOnlyReason ?? (modal.viewOnly ? undefined : (modal.mode === 'add' ? !canAdd : !canEditExam) ? 'You do not have permission to save resit exam schedules.' : undefined)}
           units={units}
           unitsLoading={unitsLoading}
           showToast={showToast}
