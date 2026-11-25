@@ -35,6 +35,17 @@ export function useStudentLearningModeDetail(studentGuid: string | null) {
   })
 }
 
+// The same record for Learning Mode Approval, from its own route. Keyed under
+// 'detail' so the writes below refresh it too.
+export function useLearningModeApprovalDetail(studentGuid: string | null) {
+  return useQuery({
+    queryKey: [...LEARNING_MODE_KEY, 'detail', studentGuid, 'approval-view'],
+    queryFn: () => getStudentLearningModeDetail(studentGuid as string, true),
+    enabled: !!studentGuid,
+    staleTime: 0,
+  })
+}
+
 // Every write below can move a student in/out of the report (and the
 // approval queue, which is the report filtered to status 1) — cheap enough
 // to invalidate the whole report broadly rather than track exactly which

@@ -795,44 +795,19 @@ export default function PaymentConsolePage() {
   // semester's fee". Unknown category (null) is treated as self-paid.
   const isSponsored = !!profile && isSelfPaidStudent(profile) === false
   const billedLabel = isSponsored && !payingNextSemester
-  // Business rule (2026-09-04, per request): the discount is documented as
-  // conditional on "this group is paid in full" (see discountMessage's own
-  // wording), but this endpoint always shows it unconditionally — it has no
-  // proposed amount to check against, so it can't itself tell a fresh
-  // ledger from one that already took a partial payment without earning the
-  // discount. A paidAmount > 0 means exactly that already happened: some of
-  // this ledger was paid without the group being paid in full, so the
-  // discount is already forfeited and would double-count if still shown.
-  // Zeroed client-side here rather than trusted from the response, and
-  // netPayable falls back to the plain outstanding (no discount to net
-  // against) — every other field, including outstanding/paidAmount
-  // themselves, passes through unchanged.
-  const effectiveLedgers = useMemo(() => ledgers.map(l => {
-    if (l.paidAmount <= 0 || !l.discountGuid) return l
-    return {
-      ...l,
-      discountGuid: null,
-      discountName: null,
-      discountCalcType: null,
-      discountAmtPer: null,
-      discountGroupLedgerNums: [],
-      discountAmount: 0,
-      discountMessage: null,
-      discountExcessAmount: 0,
-      discountWarning: null,
-      netPayable: l.outstanding,
-    }
-  }), [ledgers])
+  // The discount on these ledgers is not applied yet, whatever has been paid:
+  // it's earned only by one payment of at least minimumPaymentForDiscount
+  // (2026-11-25). A partly paid ledger still shows it. What the typed amount
+  // really earns comes from the allocation preview (earnedDiscount below).
   // 2026-09-03 backend change: the endpoint used to return a
   // { ledgers, totals } wrapper with a server-computed per-currency totals[]
   // block; it now returns the flat ledger list only (see
   // getCurrentSemesterPayable's own comment) — sum client-side, per
   // currency, same grouping key (currencyGuid, falling back to currencyName)
-  // the old server-side totals used. Summed from effectiveLedgers, not the
-  // raw ledgers, so a forfeited discount above doesn't leak into the totals.
+  // the old server-side totals used.
   const ledgerTotals = useMemo<CurrentSemesterPayableTotal[]>(() => {
     const byCurrency = new Map<string, CurrentSemesterPayableTotal>()
-    for (const l of effectiveLedgers) {
+    for (const l of ledgers) {
       const key = l.currencyGuid ?? l.currencyName
       const entry = byCurrency.get(key) ?? { currencyGuid: l.currencyGuid, currencyName: l.currencyName, totalOutstanding: 0, totalDiscount: 0, totalNetPayable: 0 }
       entry.totalOutstanding += l.outstanding
@@ -841,7 +816,7 @@ export default function PaymentConsolePage() {
       byCurrency.set(key, entry)
     }
     return Array.from(byCurrency.values())
-  }, [effectiveLedgers])
+  }, [ledgers])
   // Outstanding Balance shows one currency's table at a time, converted
   // into whichever currency the cashier has picked as "Currency Received"
   // below — per a follow-up request (2026-09-05) that dropped the separate
@@ -914,45 +889,17 @@ export default function PaymentConsolePage() {
   // resolvable rate — shown as "—" rather than silently defaulting to the
   // original, unconverted figure, which would misreport what's actually
   // owed in the chosen currency.
-  const convertedLedgers = effectiveLedgers.map(l => ({
+  const convertedLedgers = ledgers.map(l => ({
     ...l,
     convScheduled: convertAmount(l.ledgerAmount, l.currencyGuid, targetCurrencyGuid, baseCurrency?.currencyGuid ?? null, ratesByGuid),
     convOutstanding: convertAmount(l.outstanding, l.currencyGuid, targetCurrencyGuid, baseCurrency?.currencyGuid ?? null, ratesByGuid),
-    convDiscount: convertAmount(l.discountAmount, l.currencyGuid, targetCurrencyGuid, baseCurrency?.currencyGuid ?? null, ratesByGuid),
   }))
-  // The Discount section's breakdown: one entry per discount (a discount can
-  // cover several ledgers, e.g. Tuition Fee and Semester Fee), with the
-  // ledgers it applies to, its rule (amount or %), its converted amount and
-  // the backend's condition / warning text. Shown under the Discount total,
-  // not under each ledger row.
-  const discountDetails = (() => {
-    const byGuid = new Map<string, { name: string; calcType: number | null; amtPer: number | null; ledgerNames: string[]; amount: number; unconverted: boolean; message: string | null; warnings: string[] }>()
-    for (const l of convertedLedgers) {
-      if (!l.discountGuid || l.discountAmount <= 0) continue
-      const d = byGuid.get(l.discountGuid) ?? { name: l.discountName ?? 'Discount', calcType: l.discountCalcType, amtPer: l.discountAmtPer, ledgerNames: [], amount: 0, unconverted: false, message: l.discountMessage, warnings: [] }
-      if (!d.ledgerNames.includes(l.ledgerName)) d.ledgerNames.push(l.ledgerName)
-      if (l.convDiscount == null) d.unconverted = true
-      else d.amount += l.convDiscount
-      if (l.discountWarning && !d.warnings.includes(l.discountWarning)) d.warnings.push(l.discountWarning)
-      byGuid.set(l.discountGuid, d)
-    }
-    return [...byGuid.values()]
-  })()
-  const convertedTotalDiscount = ledgerTotals.reduce((sum, t) => {
-    const conv = convertAmount(t.totalDiscount, t.currencyGuid, targetCurrencyGuid, baseCurrency?.currencyGuid ?? null, ratesByGuid)
-    return sum + (conv ?? 0)
-  }, 0)
-  // What the "Discount" row above the total actually needs to feed into —
-  // the footer used to just re-show the raw pre-discount outstanding sum
-  // here, which left the Discount line looking like a subtraction that
-  // never actually applied to the number below it (a student billed 250
-  // outstanding with a 187.50 discount kept showing "Total Outstanding:
-  // 250.00" instead of the 62.50 the backend's own netPayable already
-  // computes per-row). Summed from ledgerTotals' totalNetPayable, same
-  // per-currency-then-convert approach convertedTotalDiscount uses, rather
-  // than (per-ledger outstanding total) - convertedTotalDiscount, so a
-  // ledger with an unconvertible currency (convOutstanding null) doesn't
-  // desync the two.
+  // The backend's own wording, once each (a discount group's ledgers repeat it).
+  const discountMessages = [...new Set(ledgers.flatMap(l => l.discountMessage ? [l.discountMessage] : []))]
+  const discountWarnings = [...new Set(ledgers.flatMap(l => l.discountWarning ? [l.discountWarning] : []))]
+  const convertedTotalOutstanding = convertedLedgers.reduce((sum, l) => sum + (l.convOutstanding ?? 0), 0)
+  // Owed once every discount is earned: only the "Full semester balance"
+  // quick-fill, which is the amount that earns them.
   const convertedTotalNetPayable = ledgerTotals.reduce((sum, t) => {
     const conv = convertAmount(t.totalNetPayable, t.currencyGuid, targetCurrencyGuid, baseCurrency?.currencyGuid ?? null, ratesByGuid)
     return sum + (conv ?? 0)
@@ -1114,14 +1061,7 @@ export default function PaymentConsolePage() {
 
   const selectedCurrency = currencies.find(c => c.currencyGuid === currencyGuid)
 
-  // Fee Breakdown's coverage bar and Record Payment's summary. The ledger
-  // table converts into the Currency Received, so the typed amount and
-  // convertedTotalNetPayable are already in the same currency. Paying more
-  // than this semester owes is allowed (it carries on to later semesters),
-  // so a negative balance shows as "beyond this semester", not an error.
   const payAmountNum = parseFloat(amount) || 0
-  const balanceAfterPayment = convertedTotalNetPayable - payAmountNum
-  const paymentCoverage = convertedTotalNetPayable > 0 ? Math.min(1, payAmountNum / convertedTotalNetPayable) : 0
   const payCurrencyCode = selectedCurrency?.currencyCode ?? ''
 
   const payableLedgersParams = useMemo(() => {
@@ -1138,6 +1078,26 @@ export default function PaymentConsolePage() {
   // amount" a genuinely empty allocation gets, or the cashier has no idea
   // why the preview is blank.
   const { data: payableLedgers, isFetching: isPreviewLoading, isError: isPreviewError, error: previewError } = usePayableLedgers(payableLedgersParams, !!payableLedgersParams)
+
+  // The discount this payment earns, from the preview (what the POST will
+  // write), for the semesters on screen: a larger payment can also settle
+  // later ones. Ignored until the preview matches the typed amount, and in
+  // Apply Advance, which has no preview.
+  const previewCurrent = tuitionMode === 'payment' && (parseFloat(debouncedAmount) || 0) === payAmountNum
+  const previewPending = tuitionMode === 'payment' && payAmountNum > 0 && (!previewCurrent || isPreviewLoading)
+  const previewFailed = previewCurrent && payAmountNum > 0 && isPreviewError
+  const shownSemesterGuids = new Set(ledgers.map(l => l.semesterGuid))
+  const earnedDiscount = !previewCurrent ? 0 : (payableLedgers?.lines ?? [])
+    .filter(l => l.isDiscountLine && shownSemesterGuids.has(l.semesterGuid))
+    .reduce((sum, l) => sum + (convertAmount(Math.abs(l.amount), l.currencyGuid, targetCurrencyGuid, baseCurrency?.currencyGuid ?? null, ratesByGuid) ?? 0), 0)
+  // Fee Breakdown's total and coverage bar, and Record Payment's summary. The
+  // ledger table converts into the Currency Received, so the typed amount is
+  // already in the same currency. Paying more than this semester owes is
+  // allowed (it carries on to later semesters), so a negative balance shows as
+  // "beyond this semester", not an error.
+  const totalPayable = Math.max(0, convertedTotalOutstanding - earnedDiscount)
+  const balanceAfterPayment = totalPayable - payAmountNum
+  const paymentCoverage = totalPayable > 0 ? Math.min(1, payAmountNum / totalPayable) : 0
 
   const createPayment = useCreatePayment()
   const { data: ledgerOthers = [] } = useLedgerOthers()
@@ -2656,7 +2616,7 @@ export default function PaymentConsolePage() {
                           <div className="pcx-coverage-hdr">
                             <span className="pcx-coverage-title">Balance coverage after this payment</span>
                             <span className="pcx-coverage-of">
-                              <b>{(paymentCoverage * 100).toFixed(1).replace(/\.0$/, '')}%</b> of {payCurrencyCode} {fmtAmt(convertedTotalNetPayable)}
+                              <b>{(paymentCoverage * 100).toFixed(1).replace(/\.0$/, '')}%</b> of {payCurrencyCode} {fmtAmt(totalPayable)}
                             </span>
                           </div>
                           <div
@@ -2667,7 +2627,7 @@ export default function PaymentConsolePage() {
                             <span style={{ width: `${paymentCoverage * 100}%` }}></span>
                           </div>
                           <dl className="pcx-coverage-grid">
-                            <div><dt>Total payable</dt><dd>{fmtAmt(convertedTotalNetPayable)}</dd></div>
+                            <div><dt>Total payable</dt><dd>{fmtAmt(totalPayable)}</dd></div>
                             <div><dt><span className="pcx-key" aria-hidden="true"></span>This payment</dt><dd>{fmtAmt(payAmountNum)}</dd></div>
                             {balanceAfterPayment >= 0 ? (
                               <div><dt>Balance after</dt><dd className="text-amber">{fmtAmt(balanceAfterPayment)}</dd></div>
@@ -2709,7 +2669,7 @@ export default function PaymentConsolePage() {
                                   {isPaid && <span className="badge badge-green" style={{ marginLeft: 6 }}>Paid</span>}
                                 </span>
                                 {l.ledgerNum && <span className="pcx-ledger-sub">Ledger {l.ledgerNum}</span>}
-                                {/* Discount details live in the Discount section below, not here. */}
+                                {l.discountMessage && <span className="pcx-disc-msg">{l.discountMessage}</span>}
                               </span>
                               {/* Native — the raw fee-line amount, not run
                                   through convertAmount, with the ledger's
@@ -2770,56 +2730,38 @@ export default function PaymentConsolePage() {
                             class and would otherwise win over it. Discount
                             always shows, even at 0, and still carries the
                             "full payment only" caveat since that condition
-                            can't be read off the figure itself. Both are
-                            the converted totals (summed from
-                            convertedLedgers/ledgerTotals above), not the
-                            original per-currency totals. */}
+                            can't be read off the figure itself. It is what
+                            the typed amount earns, from the allocation
+                            preview, so it reads 0.00 until then. */}
                         <div className="recgrid-foot recgrid-total">
                           <span>
                             Discount
                             <span className="text-g400" style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0, marginLeft: 4 }}>(full payment only)</span>
                           </span>
-                          <span style={{ color: convertedTotalDiscount > 0 ? 'var(--green)' : 'var(--g400)' }}>
-                            {convertedTotalDiscount > 0 ? `− ${fmtAmt(convertedTotalDiscount)}` : fmtAmt(convertedTotalDiscount)}
+                          <span style={{ whiteSpace: 'nowrap', color: earnedDiscount > 0 ? 'var(--green)' : 'var(--g400)' }} title={previewFailed && previewError instanceof Error ? previewError.message : undefined}>
+                            {previewPending ? '…' : previewFailed ? '—' : earnedDiscount > 0 ? `− ${fmtAmt(earnedDiscount)}` : fmtAmt(0)}
                           </span>
                         </div>
-                        {/* One row per discount under the Discount total:
-                            name, rule, the ledgers it covers, the backend's
-                            condition and any warning, and its own amount. */}
-                        {discountDetails.map(d => (
-                          <div className="recgrid-foot pcx-disc-row" key={d.name + d.ledgerNames.join()}>
+                        {/* Why no discount is applied yet, and what earns it. */}
+                        {(discountWarnings.length > 0 || (earnedDiscount === 0 && discountMessages.length > 0)) && (
+                          <div className="recgrid-foot pcx-disc-row">
                             <span>
-                              <span className="pcx-disc-name">
-                                <i className="lni lni-tag" aria-hidden="true"></i> {d.name}
-                                {d.amtPer != null && (
-                                  <span className="pcx-disc-rule">
-                                    {d.calcType === 2 ? `${d.amtPer}%` : fmtAmt(d.amtPer)}
-                                  </span>
-                                )}
-                              </span>
-                              <span className="pcx-disc-meta">On {d.ledgerNames.join(', ')}</span>
-                              {d.message && <span className="pcx-disc-meta">{d.message}</span>}
-                              {d.warnings.map(w => (
-                                <span key={w} className="pcx-disc-meta pcx-disc-warn"><i className="lni lni-warning" aria-hidden="true"></i> {w}</span>
+                              {earnedDiscount === 0 && discountMessages.map(m => <span key={m} className="pcx-disc-msg">{m}</span>)}
+                              {discountWarnings.map(w => (
+                                <span key={w} className="pcx-disc-warn"><i className="lni lni-warning" aria-hidden="true"></i> {w}</span>
                               ))}
                             </span>
-                            <span title={d.unconverted ? 'Part of this discount is in a currency with no exchange rate today' : undefined}>
-                              − {fmtAmt(d.amount)}{d.unconverted ? ' *' : ''}
-                            </span>
+                            <span></span>
                           </div>
-                        ))}
+                        )}
                         <div className="recgrid-foot recgrid-total">
-                          {/* Net of the Discount row above it — was
-                              convertedTotalOutstanding (the raw, pre-
-                              discount sum) until 2026-09-04, which made
-                              the Discount line above look like a
-                              subtraction that never actually landed in
-                              this figure. Relabeled to "Total Payable" so
+                          {/* Outstanding less the Discount row above it, so
+                              the rows add up. Relabeled to "Total Payable" so
                               it doesn't read as the same "Outstanding"
                               figure the per-ledger column above already
                               shows pre-discount. */}
                           <span>Total Payable {targetCurrencyName && `(${targetCurrencyName})`}</span>
-                          <span style={{ color: 'var(--gold)' }}>{fmtAmt(convertedTotalNetPayable)}</span>
+                          <span style={{ color: 'var(--gold)' }}>{fmtAmt(totalPayable)}</span>
                         </div>
                       </div>
 
@@ -3086,7 +3028,7 @@ export default function PaymentConsolePage() {
                           </div>
 
                           <dl className="pcx-summary">
-                            <div><dt>{billedLabel ? 'Payable (billed to date)' : 'Payable this semester'}</dt><dd>{fmtAmt(convertedTotalNetPayable)}</dd></div>
+                            <div><dt>{billedLabel ? 'Payable (billed to date)' : 'Payable this semester'}</dt><dd>{fmtAmt(totalPayable)}</dd></div>
                             <div><dt>This payment</dt><dd>− {fmtAmt(payAmountNum)}</dd></div>
                             {balanceAfterPayment >= 0 ? (
                               <div className="pcx-summary-total"><dt>Balance after</dt><dd className="text-amber">{payCurrencyCode} {fmtAmt(balanceAfterPayment)}</dd></div>

@@ -1,4 +1,5 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import type { StudentSearchScope } from '@/lib/api/finance/paymentConsole'
 import { AuthError } from '@/lib/api/client'
 import {
   createAdvanceDeposit,
@@ -44,10 +45,10 @@ export function useSearchStudents(searchTerm: string, pageNumber: number, pageSi
 // search results is fetched for a given term it doesn't go stale from
 // under the user mid-scroll, and there's no case where refetching an
 // already-loaded page makes sense here.
-export function useSearchStudentsInfinite(searchTerm: string, pageSize: number, enabled: boolean) {
+export function useSearchStudentsInfinite(searchTerm: string, pageSize: number, enabled: boolean, scope: StudentSearchScope = 'payment-console') {
   return useInfiniteQuery({
-    queryKey: [...PAYMENT_CONSOLE_KEY, 'search-infinite', searchTerm, pageSize],
-    queryFn: ({ pageParam }) => searchStudents(searchTerm, pageParam, pageSize),
+    queryKey: [...PAYMENT_CONSOLE_KEY, 'search-infinite', searchTerm, pageSize, scope],
+    queryFn: ({ pageParam }) => searchStudents(searchTerm, pageParam, pageSize, scope),
     initialPageParam: 1,
     getNextPageParam: (lastPage, allPages) => {
       const fetched = allPages.reduce((sum, p) => sum + p.items.length, 0)
@@ -63,10 +64,10 @@ export function useSearchStudentsInfinite(searchTerm: string, pageSize: number, 
 // already has one (e.g. straight off a searchStudents() hit) so the backend
 // can resolve full student fields instead of falling back to
 // application-only ones.
-export function useStudentProfile(applicationGuid: string | null, enabled: boolean, studentGuid?: string | null) {
+export function useStudentProfile(applicationGuid: string | null, enabled: boolean, studentGuid?: string | null, scope: StudentSearchScope = 'payment-console') {
   return useQuery({
-    queryKey: [...PAYMENT_CONSOLE_KEY, 'profile', applicationGuid, studentGuid],
-    queryFn: () => getStudentProfile(applicationGuid as string, studentGuid),
+    queryKey: [...PAYMENT_CONSOLE_KEY, 'profile', applicationGuid, studentGuid, scope],
+    queryFn: () => getStudentProfile(applicationGuid as string, studentGuid, scope),
     enabled: enabled && !!applicationGuid,
   })
 }
@@ -146,6 +147,9 @@ export function usePayableLedgers(params: PayableLedgersParams | null, enabled: 
     queryKey: [...PAYMENT_CONSOLE_KEY, 'payable-ledgers', params],
     queryFn: () => getPayableLedgers(params as PayableLedgersParams),
     enabled: enabled && !!params,
+    // Never reused: the same amount allocates differently after a payment.
+    staleTime: 0,
+    gcTime: 0,
   })
 }
 

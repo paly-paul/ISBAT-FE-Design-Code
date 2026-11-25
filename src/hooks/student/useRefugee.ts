@@ -27,6 +27,16 @@ export function useStudentRefugeeDetails(studentGuid: string | null, enabled: bo
   })
 }
 
+// The same record for Refugee Approval, from its own route. Keyed under the
+// student's details so the writes below refresh it too.
+export function useRefugeeApprovalDetails(studentGuid: string | null, enabled: boolean) {
+  return useQuery({
+    queryKey: [...REFUGEE_DETAILS_KEY, studentGuid, 'approval-view'],
+    queryFn: () => getStudentRefugeeDetails(studentGuid as string, true),
+    enabled: enabled && !!studentGuid,
+  })
+}
+
 export function useEligibleRefugeeStudents(enabled: boolean) {
   return useQuery({
     queryKey: ELIGIBLE_STUDENTS_KEY,

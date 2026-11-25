@@ -6,7 +6,7 @@ import { Pagination } from '@/components/Pagination'
 import { BaselinePanel } from '@/components/student/BaselinePanel'
 import {
   usePendingRefugeeApprovals,
-  useStudentRefugeeDetails,
+  useRefugeeApprovalDetails,
   useApproveRefugeeStatus,
   PendingRefugeeApprovalRow,
 } from '@/hooks/student/useRefugee'
@@ -20,7 +20,7 @@ import { useActionGuard } from '@/hooks/users/useActionGuard'
 // Finance > Refugee Status. Same list → review shape as Learning Mode Approval:
 //  - List: GET /students/refugee/pending-approvals (server-paged, every
 //    campus) — get-pending-refugee-approvals.md.
-//  - Review: GET /students/refugee/{studentGuid} for the current status,
+//  - Review: GET /students/refugee/{studentGuid}/approval-view for the status,
 //    remarks and a fresh document URL, then POST .../{studentGuid}/approve.
 // There is no reject endpoint, so a request can only be approved here.
 // The assign/edit forms redirect here with the student's review open; an
@@ -83,7 +83,7 @@ function RefugeeApprovalContent() {
   // Picked from the list, or deep-linked as ?studentGuid=<guid>.
   const [selectedGuid, setSelectedGuid] = useState<string | null>(() => searchParams.get('studentGuid'))
   const [selectedRow, setSelectedRow] = useState<PendingRefugeeApprovalRow | null>(null)
-  const { data: detail, isLoading: detailLoading, isError: detailError } = useStudentRefugeeDetails(selectedGuid, true)
+  const { data: detail, isLoading: detailLoading, isError: detailError } = useRefugeeApprovalDetails(selectedGuid, true)
   const approve = useApproveRefugeeStatus()
   const [docPreviewOpen, setDocPreviewOpen] = useState(false)
 
