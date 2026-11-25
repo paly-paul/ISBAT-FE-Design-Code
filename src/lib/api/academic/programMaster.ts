@@ -439,12 +439,23 @@ export function getProgramDropdown(facultyGuid?: string): Promise<ProgramDropdow
     .then((data: any) => Array.isArray(data) ? data : (data && typeof data === 'object' ? (data.items || data.data || Object.values(data).find(Array.isArray) || []) : []))
 }
 
+// Same endpoint with only its ?search=, for InfiniteSearchSelect pickers via
+// dropdownAsPage.
+export function searchProgramDropdown(search = ''): Promise<ProgramDropdownItem[]> {
+  const q = search.trim()
+  if (MOCK_AUTH) {
+    return getProgramDropdown().then(rows => rows.filter(p => !q || `${p.programName} ${p.programCode}`.toLowerCase().includes(q.toLowerCase())))
+  }
+  const query = q ? `?search=${encodeURIComponent(q)}` : ''
+  return apiGet<ProgramDropdownItem[] | null>(`/api/v1/academic/program-master/dropdown${query}`).then(data => data ?? [])
+}
+
 // GET /api/v1/academic/program-master/dropdown?campusGuid=…&search=…
 // (get-program-dropdown.md): only APPROVED programmes whose faculty belongs
 // to the campus. Unpaged; search matches name and code; an unknown campus is
 // 200 with []. Items carry only guid/code/name — no applicationFee or
-// programLevelName (by-campus has those; Payment/Finance stay on by-campus).
-// Backs the enquiry create pages, so a pending programme can't be enquired on.
+// programLevelName (by-campus has those). Backs the enquiry create pages,
+// Application Payment and ODeL, so a pending programme can't be picked there.
 export function getApprovedProgramsByCampus(campusGuid: string, search = ''): Promise<ProgramDropdownItem[]> {
   const q = search.trim().toLowerCase()
   if (MOCK_AUTH) {

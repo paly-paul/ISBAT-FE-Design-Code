@@ -4,15 +4,14 @@ import { ModalProps } from '../types'
 import { SuccessPopup } from '../shared/SuccessPopup'
 import { FailurePopup } from '../shared/FailurePopup'
 import { SearchSelect } from '@/components/SearchSelect'
-import { EnquiryUpdateInput, formatEnquiryPhone } from '@/lib/api/admission/enquiry'
+import { EnquiryScope, EnquiryUpdateInput, formatEnquiryPhone } from '@/lib/api/admission/enquiry'
 import { useEnquiry, useEnquiryGenders } from '@/hooks/admission/useEnquiries'
-import { useSearchEmployeesInfinite } from '@/hooks/employee/useEmployees'
-import { useSearchProgramMastersInfinite } from '@/hooks/academic/useProgramMaster'
+import { useEmployeeDropdown } from '@/hooks/employee/useEmployees'
+import { useProgramDropdown } from '@/hooks/academic/useProgramMaster'
 import { useCampusDropdown } from '@/hooks/config/useCampuses'
-import { useCountriesByGuids } from '@/hooks/config/useCountries'
-import { useIntakesByGuids } from '@/hooks/academic/useIntakes'
+import { useCountriesForPicker } from '@/hooks/config/useCountries'
+import { useIntakesDropdown } from '@/hooks/academic/useIntakes'
 import { AuthError } from '@/lib/api/client'
-import { flattenUniquePages } from '@/lib/pagination'
 import { scrollToFirstError } from '@/lib/scrollToFirstError'
 
 interface EnquiryAssignModalProps extends ModalProps {
@@ -24,6 +23,8 @@ interface EnquiryAssignModalProps extends ModalProps {
   // The menu's `assign` key. Without it the details are view-only: the
   // fields are disabled and Save Assignment is hidden. Defaults to true.
   canAssign?: boolean
+  // Which page's enquiry route to load from (updateEnquiry must match it).
+  scope?: EnquiryScope
 }
 
 // put-enquiry.md: campusGuid required; enquiryStatusGuid, programGuid and
@@ -33,17 +34,17 @@ interface EnquiryAssignModalProps extends ModalProps {
 // action, not a full edit of the enquiry's original details, which are
 // shown read-only above the editable fields. enquiryStatus is left out —
 // see the note on EnquiryUpdateInput in lib/api/admission/enquiry.ts.
-export function EnquiryAssignModal({ isOpen, onClose, showToast, enquiryGuid, updateEnquiry, canAssign = true }: EnquiryAssignModalProps) {
-  const { data: enquiry, isLoading, isError, error } = useEnquiry(enquiryGuid, isOpen)
+export function EnquiryAssignModal({ isOpen, onClose, showToast, enquiryGuid, updateEnquiry, canAssign = true, scope = 'enquiries' }: EnquiryAssignModalProps) {
+  const { data: enquiry, isLoading, isError, error } = useEnquiry(enquiryGuid, isOpen, scope)
   const { data: campuses = [] }  = useCampusDropdown(isOpen)
-  const { countries } = useCountriesByGuids(isOpen && enquiry?.mobileCountryGuid ? [enquiry.mobileCountryGuid] : [])
+  const { countries } = useCountriesForPicker(isOpen)
   // No intakeName/intakeCode field exists on the enquiry response itself —
-  // resolve intakeGuid against the real Intake master, same client-side
+  // resolve intakeGuid against the intakes dropdown, same client-side
   // resolution pattern as the enquiry-list page's own resolveProgramName.
-  const intakesByGuid = useIntakesByGuids(isOpen && enquiry?.intakeGuid ? [enquiry.intakeGuid] : [])
+  const { data: intakes = [] } = useIntakesDropdown(isOpen)
   function resolveIntakeLabel(guid: string | null) {
     if (!guid) return '—'
-    const intake = intakesByGuid.get(guid)
+    const intake = intakes.find(i => i.intakeGuid === guid)
     return intake ? `${intake.intakeCode} — ${intake.description}` : '—'
   }
   // enquiry.campusName is confirmed null on both GET and this modal's own
@@ -70,39 +71,24 @@ export function EnquiryAssignModal({ isOpen, onClose, showToast, enquiryGuid, up
   const [programGuid, setProgramGuid] = useState('')
   const [campusGuid, setCampusGuid]   = useState('')
   const [errors, setErrors]   = useState<Record<string, string>>({})
-  const [programSearch, setProgramSearch] = useState('')
-  const [committedProgramSearch, setCommittedProgramSearch] = useState('')
-  const [programPickerOpen, setProgramPickerOpen] = useState(false)
-  const [advisorSearch, setAdvisorSearch] = useState('')
-  const [committedAdvisorSearch, setCommittedAdvisorSearch] = useState('')
-  const [advisorPickerOpen, setAdvisorPickerOpen] = useState(false)
 
-  useEffect(() => {
-    const timer = setTimeout(() => setCommittedProgramSearch(programSearch.trim()), 300)
-    return () => clearTimeout(timer)
-  }, [programSearch])
-
-  useEffect(() => {
-    const timer = setTimeout(() => setCommittedAdvisorSearch(advisorSearch.trim()), 300)
-    return () => clearTimeout(timer)
-  }, [advisorSearch])
-
-  const programQuery = useSearchProgramMastersInfinite(committedProgramSearch, 20, isOpen && programPickerOpen)
-  const advisorQuery = useSearchEmployeesInfinite(committedAdvisorSearch, 20, isOpen && advisorPickerOpen)
-  // The picker only loads once opened, so the enquiry's own advisor is added
-  // here to keep its name showing before then.
+  // Both from their dropdown APIs (GET /employees/dropdown,
+  // /program-master/dropdown): one cached call each, filtered in the browser.
+  const programQuery = useProgramDropdown(undefined, isOpen)
+  const advisorQuery = useEmployeeDropdown(isOpen)
+  // The dropdown lists approved staff only, so the enquiry's own advisor is
+  // added when it isn't there, to keep its name showing.
   const advisorOptions = useMemo(() => {
-    const options = flattenUniquePages(advisorQuery.data?.pages ?? [], e => e.employeeGuid)
-      .map(e => ({ value: e.employeeGuid, label: e.empName }))
+    const options = (advisorQuery.data ?? []).map(e => ({ value: e.employeeGuid, label: e.displayName }))
     if (enquiry?.advisorGuid && enquiry.advisorName && !options.some(o => o.value === enquiry.advisorGuid)) {
       options.unshift({ value: enquiry.advisorGuid, label: enquiry.advisorName })
     }
     return options
   }, [advisorQuery.data, enquiry?.advisorGuid, enquiry?.advisorName])
   const programs = useMemo(() => {
-    const items = flattenUniquePages(programQuery.data?.pages ?? [], p => p.programGuid)
+    const items = [...(programQuery.data ?? [])]
     if (enquiry?.programGuid && enquiry.programName && !items.some(p => p.programGuid === enquiry.programGuid)) {
-      items.unshift({ programGuid: enquiry.programGuid, programName: enquiry.programName, programCode: enquiry.programCode ?? '' } as typeof items[number])
+      items.unshift({ programGuid: enquiry.programGuid, programName: enquiry.programName, programCode: enquiry.programCode ?? '' })
     }
     return items
   }, [enquiry?.programCode, enquiry?.programGuid, enquiry?.programName, programQuery.data])
@@ -256,7 +242,7 @@ export function EnquiryAssignModal({ isOpen, onClose, showToast, enquiryGuid, up
               {/* PUT can reassign the advisor but never clear it (null/omitted
                   = keep), so once one is set the picker has no placeholder —
                   and with it no ✕ — to clear back to. */}
-              <SearchSelect placeholder={enquiry.advisorGuid ? undefined : '— unassigned —'} options={advisorOptions} onSearch={setAdvisorSearch} onOpenChange={setAdvisorPickerOpen} isLoading={advisorQuery.isLoading} hasNextPage={advisorQuery.hasNextPage} isFetchingNextPage={advisorQuery.isFetchingNextPage} onLoadMore={() => advisorQuery.fetchNextPage()} value={advisorGuid} onChange={v => { setAdvisorGuid(v); setErrors(prev => ({ ...prev, advisorGuid: '' })) }} />
+              <SearchSelect placeholder={enquiry.advisorGuid ? undefined : '— unassigned —'} options={advisorOptions} isLoading={advisorQuery.isLoading} value={advisorGuid} onChange={v => { setAdvisorGuid(v); setErrors(prev => ({ ...prev, advisorGuid: '' })) }} />
               {errors.advisorGuid && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{errors.advisorGuid}</p>}
             </div>
             <div className="fg">
@@ -266,12 +252,7 @@ export function EnquiryAssignModal({ isOpen, onClose, showToast, enquiryGuid, up
                 options={programOptions}
                 value={programGuid}
                 onChange={setProgramGuid}
-                onSearch={setProgramSearch}
-                onOpenChange={setProgramPickerOpen}
                 isLoading={programQuery.isLoading}
-                hasNextPage={programQuery.hasNextPage}
-                isFetchingNextPage={programQuery.isFetchingNextPage}
-                onLoadMore={() => programQuery.fetchNextPage()}
               />
             </div>
             <div className="fg">

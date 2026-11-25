@@ -263,34 +263,6 @@ export async function getCountriesPaged(page = 1, pageSize = 20, search = ''): P
   }
 }
 
-// POST /users/countries/by-guids (get-countries-by-guids.md): a raw array of
-// guids; unknown ones are dropped, and the order isn't guaranteed.
-export async function getCountriesByGuids(guids: string[]): Promise<Country[]> {
-  if (MOCK_AUTH) return mockCountries.filter(c => guids.includes(c.countryGuid))
-  try {
-    const data = await apiPost<Country[] | null>('/api/v1/users/countries/by-guids', guids)
-    if (data && data.length > 0) return data
-  } catch {
-    // fall through to dropdown
-  }
-  try {
-    const all = await getCountriesDropdown()
-    return all.filter(c => guids.includes(c.countryGuid)).map(dto => {
-      const dial = (dto.countryPrefix ?? '').replace(/^\+/, '').replace(/^0+(?=\d)/, '')
-      return {
-        countryGuid: dto.countryGuid,
-        countryCode: dial || dto.countryPrefix || '',
-        countryName: dto.countryName,
-        nationality: dto.nationality,
-        defaultCountry: dto.isDefault ? 1 : 0,
-        countryPrefix: dto.countryPrefix ?? '',
-      }
-    })
-  } catch {
-    return []
-  }
-}
-
 export function createCountry(input: CountryInput): Promise<Country> {
   if (MOCK_AUTH) {
     const country: Country = { countryGuid: crypto.randomUUID(), ...input }

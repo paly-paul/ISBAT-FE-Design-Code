@@ -1,8 +1,17 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createProcBank, deleteProcBank, getProcBankById, getProcBanks, getProcBanksPaged, ProcBank, ProcBankInput, updateProcBank } from '@/lib/api/finance/procBank'
+import { createProcBank, deleteProcBank, getActiveProcBankDropdown, getProcBankById, getProcBanks, getProcBanksPaged, ProcBank, ProcBankInput, updateProcBank } from '@/lib/api/finance/procBank'
 import { getNextPageParam } from '@/lib/pagination'
 
 const PROC_BANKS_KEY = ['proc-banks']
+
+// Active bank accounts for pickers, without Proc Bank Master's permission.
+export function useActiveProcBankDropdown(enabled = true) {
+  return useQuery({
+    queryKey: [...PROC_BANKS_KEY, 'dropdown', 'active'],
+    queryFn: getActiveProcBankDropdown,
+    enabled,
+  })
+}
 
 export function useProcBanksInfinite(pageSize: number) {
   return useInfiniteQuery({

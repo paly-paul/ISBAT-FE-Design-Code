@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createEnquiry, Enquiry, EnquiryCounts, EnquiryCountsFilters, EnquiryInput, EnquiryUpdateInput, GenderOption, getEnquiries, getEnquiryById, getEnquiryCounts, getEnquiryGenders, updateEnquiry, requestEnquiryEmailOtp, verifyEnquiryEmailOtp } from '@/lib/api/admission/enquiry'
+import { createEnquiry, Enquiry, EnquiryCounts, EnquiryCountsFilters, EnquiryInput, EnquiryScope, EnquiryUpdateInput, GenderOption, getEnquiries, getEnquiryById, getEnquiryCounts, getEnquiryGenders, updateEnquiry, requestEnquiryEmailOtp, verifyEnquiryEmailOtp } from '@/lib/api/admission/enquiry'
 
 const ENQUIRIES_KEY = ['enquiries']
 const ENQUIRY_COUNTS_KEY = ['enquiry-counts']
@@ -71,18 +71,18 @@ export function useCreateEnquiry() {
 // Fetches a single enquiry for the assign/view modal. Only enabled while
 // the modal is actually open with a guid, same convention as the other
 // fetch-by-guid Edit modals in this app.
-export function useEnquiry(guid: string | null, enabled: boolean) {
+export function useEnquiry(guid: string | null, enabled: boolean, scope: EnquiryScope = 'enquiries') {
   return useQuery({
-    queryKey: [...ENQUIRIES_KEY, guid],
-    queryFn: () => getEnquiryById(guid as string),
+    queryKey: [...ENQUIRIES_KEY, guid, scope],
+    queryFn: () => getEnquiryById(guid as string, scope),
     enabled: enabled && !!guid,
   })
 }
 
-export function useUpdateEnquiry() {
+export function useUpdateEnquiry(scope: EnquiryScope = 'enquiries') {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ guid, input }: { guid: string; input: EnquiryUpdateInput }) => updateEnquiry(guid, input),
+    mutationFn: ({ guid, input }: { guid: string; input: EnquiryUpdateInput }) => updateEnquiry(guid, input, scope),
     onSuccess: (_data, { guid }) => {
       queryClient.invalidateQueries({ queryKey: ENQUIRIES_KEY })
       queryClient.invalidateQueries({ queryKey: [...ENQUIRIES_KEY, guid] })

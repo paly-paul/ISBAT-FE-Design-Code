@@ -1,5 +1,5 @@
 import { useMutation, useQueries, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
-import { BatchDropdownItem, createBatch, deleteBatch, getBatchById, getBatchDropdown, getBatchFilterOptions, getBatches, getStudentCountsByBatch, updateBatch, Batch, BatchColumnFilters, BatchCreateInput, BatchDetail, BatchScope, BatchUpdateInput } from '@/lib/api/academic/batch'
+import { BatchDropdownItem, createBatch, deleteBatch, getAdmissionBatchDropdown, getBatchById, getBatchDropdown, getBatchFilterOptions, getBatches, getStudentCountsByBatch, updateBatch, Batch, BatchColumnFilters, BatchCreateInput, BatchDetail, BatchScope, BatchUpdateInput } from '@/lib/api/academic/batch'
 
 const BATCHES_KEY = ['batches']
 
@@ -85,6 +85,16 @@ export function useBatchDropdown(programGuid: string | null, semesterGuid: strin
     enabled: !!programGuid && !!semesterGuid,
     staleTime: Infinity,
     gcTime: Infinity,
+  })
+}
+
+// Application Payment / Filing: active batches of the current admission intake
+// for the picked programme, semester and batch time.
+export function useAdmissionBatchDropdown(programGuid: string, semesterGuid: string, batchTimeGuid: string, enabled = true) {
+  return useQuery({
+    queryKey: [...BATCHES_KEY, 'dropdown', 'admission', programGuid, semesterGuid, batchTimeGuid],
+    queryFn: () => getAdmissionBatchDropdown(programGuid, semesterGuid, batchTimeGuid),
+    enabled: enabled && !!programGuid && !!semesterGuid && !!batchTimeGuid,
   })
 }
 

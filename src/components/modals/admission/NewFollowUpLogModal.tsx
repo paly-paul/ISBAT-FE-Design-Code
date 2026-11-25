@@ -1,19 +1,18 @@
 'use client'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ModalProps } from '../types'
 import { SuccessPopup } from '../shared/SuccessPopup'
 import { FailurePopup } from '../shared/FailurePopup'
 import { SearchSelect } from '@/components/SearchSelect'
 import DatePicker from '@/components/DatePicker'
 import { EnquiryFollowUpInput } from '@/lib/api/admission/enquiryFollowUp'
-import { useSearchEmployeesInfinite } from '@/hooks/employee/useEmployees'
+import { useMyProfile } from '@/hooks/users/useMyProfile'
 import { useFollowUpStatusesDropdown } from '@/hooks/config/useFollowUpStatuses'
 import { useFollowUpModesDropdown } from '@/hooks/admission/useFollowUpModes'
 import { useEnquiryStatusesDropdown } from '@/hooks/config/useEnquiryStatuses'
 import { useInterestLevelsDropdown } from '@/hooks/admission/useInterestLevels'
 import { scrollToFirstError } from '@/lib/scrollToFirstError'
 import { AuthError } from '@/lib/api/client'
-import { getSessionIdentity, getLoggedInUserGuid } from '@/lib/session'
 
 export interface InitialFollowUpData {
   enquiryGuid?: string
@@ -49,28 +48,11 @@ export function NewFollowUpLogModal({ isOpen, onClose, showToast, createFollowUp
   const { data: enquiryStatuses = [] } = useEnquiryStatusesDropdown(isOpen)
   const { data: interestLevels = [] }  = useInterestLevelsDropdown(isOpen)
 
-  // The advisor is the logged-in user. The session normally carries their
-  // guid; only when it doesn't is their name looked up in the employee list.
-  const { sessionAdvisorGuid, sessionName } = useMemo(() => {
-    if (!isOpen) return { sessionAdvisorGuid: '', sessionName: '' }
-    const identity = getSessionIdentity()
-    return {
-      sessionAdvisorGuid:
-        getLoggedInUserGuid() ||
-        identity?.employeeGuid ||
-        identity?.userGuid ||
-        identity?.uuid ||
-        identity?.userId ||
-        '',
-      sessionName: identity?.displayName?.trim() || '',
-    }
-  }, [isOpen])
-  const advisorLookup = useSearchEmployeesInfinite(sessionName, 20, isOpen && !sessionAdvisorGuid && !!sessionName)
-  const lookedUpAdvisor = advisorLookup.data?.pages[0]?.items.find(e => {
-    const empName = e.empName?.trim().toLowerCase() ?? ''
-    return empName.includes(sessionName.toLowerCase()) || sessionName.toLowerCase().includes(empName)
-  })
-  const advisorGuid = sessionAdvisorGuid || lookedUpAdvisor?.employeeGuid || ''
+  // The advisor is the signed-in user (GET /employees/me, shared with the
+  // header). advisorGuid must be an employee guid, which the login session
+  // doesn't always hold.
+  const { data: me, isLoading: meLoading } = useMyProfile()
+  const advisorGuid = me?.employeeGuid ?? ''
 
   const followUpStatusOptions = followUpStatuses.map(s => ({ value: s.followUpStatusGuid, label: s.followUpStatusName }))
   const followUpModeOptions   = followUpModes.map(m => ({ value: m.followUpModeGuid, label: m.followUpModeName }))
@@ -307,7 +289,7 @@ export function NewFollowUpLogModal({ isOpen, onClose, showToast, createFollowUp
 
         <div className="modal-footer">
           <button className="btn btn-neu" onClick={handleClose}>Cancel</button>
-          <button className="btn btn-primary" disabled={createFollowUp.isPending} onClick={handleSubmit}>
+          <button className="btn btn-primary" disabled={createFollowUp.isPending || meLoading} onClick={handleSubmit}>
             <i className="lni lni-checkmark"></i> {createFollowUp.isPending ? 'Saving…' : 'Save Follow-up'}
           </button>
         </div>
