@@ -10,7 +10,7 @@ import { TableLoadingState } from '@/components/TableLoadingState'
 import { FailurePopup } from '@/components/modals/shared/FailurePopup'
 import { DocumentPreviewModal } from '@/components/modals/shared/DocumentPreviewModal'
 import { useCampusDropdown } from '@/hooks/config/useCampuses'
-import { useSearchProgramMastersByCampusInfinite } from '@/hooks/academic/useProgramMaster'
+import { useApprovedProgramsByCampus } from '@/hooks/academic/useProgramMaster'
 import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
 import { useBatchTimesDropdown } from '@/hooks/config/useBatchTimes'
 import { useCountriesForPicker } from '@/hooks/config/useCountries'
@@ -31,7 +31,6 @@ import { OdelApplication, OdelQualification, ODEL_SAVE_STATUS } from '@/lib/api/
 import { countryPickerOptions, dialCode, phoneCountryOptions } from '@/lib/api/academic/country'
 import { DocumentPreview, resolveDocumentPreview } from '@/lib/documentViewer'
 import { extractApiErrorMessage, sanitizePhoneInput } from '@/lib/errorMessages'
-import { flattenUniquePages } from '@/lib/pagination'
 import { scrollToFirstError } from '@/lib/scrollToFirstError'
 
 // ODeL (Online & Distance e-Learning) application — staff-side wizard over the
@@ -151,15 +150,6 @@ function latestDobYmd() {
   const d = new Date()
   d.setFullYear(d.getFullYear() - MIN_AGE_YEARS)
   return toYmd(d)
-}
-
-function useDebounced<T>(value: T, ms: number): T {
-  const [debounced, setDebounced] = useState(value)
-  useEffect(() => {
-    const t = setTimeout(() => setDebounced(value), ms)
-    return () => clearTimeout(t)
-  }, [value, ms])
-  return debounced
 }
 
 function toOptions(map: Map<string, string>) {
@@ -438,10 +428,10 @@ export default function OdelApplicationPage() {
 
   const { data: campuses = [], isLoading: campusesLoading } = useCampusDropdown(started)
 
-  const [programSearch, setProgramSearch] = useState('')
-  const committedProgramSearch = useDebounced(programSearch.trim(), 300)
-  const programQuery = useSearchProgramMastersByCampusInfinite(form.campusGuid, committedProgramSearch, 20, started)
-  const programs = useMemo(() => flattenUniquePages(programQuery.data?.pages ?? [], p => p.programGuid), [programQuery.data])
+  // Approved programmes of the campus (GET /program-master/dropdown?campusGuid=),
+  // filtered in the browser. Placeholder rows belong to the previous campus.
+  const programQuery = useApprovedProgramsByCampus(form.campusGuid, '', started)
+  const programs = useMemo(() => (programQuery.isPlaceholderData ? [] : programQuery.data ?? []), [programQuery.data, programQuery.isPlaceholderData])
 
   const { data: semesters = [] } = useSemestersForProgram(form.programGuid, started && !!form.programGuid)
   const { data: batchTimes = [] } = useBatchTimesDropdown(started)
@@ -1128,9 +1118,7 @@ export default function OdelApplicationPage() {
                           placeholder={form.campusGuid ? '-- Select Programme --' : '-- Select Campus First --'}
                           disabled={!form.campusGuid}
                           onChange={v => patch({ programGuid: v, semesterGuid: '' })}
-                          onSearch={setProgramSearch}
-                          isLoading={programQuery.isLoading} hasNextPage={programQuery.hasNextPage}
-                          isFetchingNextPage={programQuery.isFetchingNextPage} onLoadMore={() => programQuery.fetchNextPage()} />
+                          isLoading={programQuery.isFetching} />
                       </Field>
                       <Field label="Semester" req error={errors.semesterGuid}>
                         <SearchSelect options={semesterOptions} value={form.semesterGuid}

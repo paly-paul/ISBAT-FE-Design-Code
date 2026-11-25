@@ -75,8 +75,8 @@ export default function EnquiryFollowupMasterPage() {
     setPage(1)
   }, [debouncedSearch])
 
-  const updateEnquiry = useUpdateEnquiry()
-  const createFollowUp = useCreateEnquiryFollowUp()
+  const updateEnquiry = useUpdateEnquiry('enquiry-followup-master')
+  const createFollowUp = useCreateEnquiryFollowUp('enquiry-followup-master')
 
   function resolveProgramName(row: { programGuid: string | null; programName: string | null }) {
     return row.programName ?? '—'
@@ -221,6 +221,7 @@ export default function EnquiryFollowupMasterPage() {
         showToast={showToast}
         enquiryGuid={viewingGuid}
         updateEnquiry={updateEnquiry}
+        scope="enquiry-followup-master"
       />
       <NewFollowUpLogModal
         isOpen={openModals.has('new-followup-log-modal')}

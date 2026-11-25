@@ -47,8 +47,8 @@ export default function EnquiryFollowupPage() {
 
   const { data, isLoading, isFetching } = useEnquiryFollowUpsByAdvisor(page, PAGE_SIZE, debouncedSearch)
   const rows = data?.items ?? []
-  const updateEnquiry = useUpdateEnquiry()
-  const createFollowUp = useCreateEnquiryFollowUp()
+  const updateEnquiry = useUpdateEnquiry('enquiry-followups')
+  const createFollowUp = useCreateEnquiryFollowUp('enquiry-followups')
 
   function resolveProgramName(row: { programName: string | null; programCode: string | null }) {
     return row.programName ?? row.programCode ?? '—'
@@ -173,6 +173,7 @@ export default function EnquiryFollowupPage() {
         showToast={showToast}
         enquiryGuid={viewingGuid}
         updateEnquiry={updateEnquiry}
+        scope="enquiry-followups"
       />
       <NewFollowUpLogModal
         isOpen={openModals.has('new-followup-log-modal')}

@@ -109,6 +109,8 @@ function RefugeeApprovalContent() {
     })
   }
 
+  // Fills programme/semester when the detail leaves them blank.
+  const listRow = selectedRow ?? requests.find(r => r.studentGuid === selectedGuid)
   const isPending = detail?.refugeeAssignmentStatus === 1
   // Detail is re-fetched on open, so its pre-signed URL is the fresher one.
   const docUrl = detail?.documentUrl ?? selectedRow?.documentUrl ?? null
@@ -200,8 +202,8 @@ function RefugeeApprovalContent() {
                   items={[
                     { label: 'Student', value: detail.studentName ?? '—' },
                     { label: 'Student No.', value: selectedRow?.studentNum || detail.studentRegNo || '—', accent: true },
-                    { label: 'Programme', value: detail.programName ?? '—' },
-                    { label: 'Semester', value: detail.semesterName ?? '—' },
+                    { label: 'Programme', value: detail.programName || listRow?.programName || '—' },
+                    { label: 'Semester', value: detail.semesterName || listRow?.semesterName || '—' },
                     { label: 'Refugee ID', value: <span className="font-mono" style={{ color: 'var(--b700)', fontWeight: 700 }}>{detail.refugeeId ?? '—'}</span> },
                     { label: 'Country of Origin', value: country ?? '—' },
                     { label: 'Status', value: <span style={{ color: 'var(--amber)' }}>{detail.refugeeAssignmentStatusLabel ?? 'Applied'} — pending approval</span> },

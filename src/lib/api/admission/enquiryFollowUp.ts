@@ -2,6 +2,11 @@ import { apiGet, apiPost } from '../client'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
+// Enquiry Followup Master has its own list/create routes (2026-11-24) with the
+// same parameters, body and response as /enquiry-followups, under its own
+// permission. Enquiry Followup keeps /enquiry-followups.
+export type FollowUpScope = 'enquiry-followups' | 'enquiry-followup-master'
+
 // Confirmed via a real GET /api/v1/admissions/enquiry-followups response.
 // Notably different from Enquiry's own list shape: this one resolves
 // enquiryStatus/followUpStatus/enquirySource into name strings server-side
@@ -52,7 +57,7 @@ export function getEnquiryFollowUps(page = 1, pageSize = 10, search = ''): Promi
   const q = search.trim()
   const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) })
   if (q) params.set('search', q)
-  return apiGet<EnquiryFollowUpListResult | null>(`/api/v1/admissions/enquiry-followups?${params}`)
+  return apiGet<EnquiryFollowUpListResult | null>(`/api/v1/admissions/enquiry-followup-master?${params}`)
     .then(data => data ?? { items: [], totalCount: 0, pageNumber: page, pageSize })
 }
 
@@ -87,9 +92,9 @@ export interface EnquiryFollowUpInput {
   remarks: string | null
 }
 
-export function createEnquiryFollowUp(input: EnquiryFollowUpInput): Promise<unknown> {
+export function createEnquiryFollowUp(input: EnquiryFollowUpInput, scope: FollowUpScope): Promise<unknown> {
   if (MOCK_AUTH) {
     return Promise.resolve({ enquiryFollowUpGuid: crypto.randomUUID(), ...input })
   }
-  return apiPost<unknown>('/api/v1/admissions/enquiry-followups', input)
+  return apiPost<unknown>(`/api/v1/admissions/${scope}`, input)
 }

@@ -8,7 +8,6 @@ import {
   createCountry,
   deleteCountry,
   findDefaultCountry,
-  getCountriesByGuids,
   getCountriesDropdown,
   updateCountry } from '@/lib/api/academic/country'
 
@@ -51,18 +50,6 @@ export function useCountryDropdown(
 }
 
 const NO_COUNTRIES: Country[] = []
-
-// Only the given countries, in one request, for screens that hold a few guids
-// and need their names or dial codes rather than the whole list.
-export function useCountriesByGuids(guids: string[]) {
-  const unique = Array.from(new Set(guids.filter(Boolean))).sort()
-  const query = useQuery({
-    queryKey: [...COUNTRIES_KEY, 'by-guids', unique],
-    queryFn: () => getCountriesByGuids(unique),
-    enabled: unique.length > 0,
-    gcTime: Infinity })
-  return { countries: query.data ?? NO_COUNTRIES, isLoading: query.isLoading }
-}
 
 // Every country for a form's pickers, from GET /countries/dropdown (one
 // cached call, filtered in the browser by SearchSelect), in the Country shape

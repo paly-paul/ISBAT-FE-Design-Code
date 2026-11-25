@@ -87,6 +87,8 @@ function LearningModeApprovalContent() {
     })
   }
 
+  // Fills programme/semester when the detail leaves them blank.
+  const listRow = requests.find(r => r.studentGuid === selectedGuid)
   const isPending = detail?.learningModeChangeStatus === 1
   const requestedLabel = detail?.requestedLearningModeLabel ?? detail?.learningModeLabel ?? '—'
   const docUrl = detail?.learningModeChangeDocumentUrl ?? null
@@ -190,8 +192,8 @@ function LearningModeApprovalContent() {
                   items={[
                     { label: 'Student', value: detail.studentName ?? '—' },
                     { label: 'Student No.', value: detail.studentNum || detail.studentRegNo || '—', accent: true },
-                    { label: 'Programme', value: detail.programName ?? '—' },
-                    { label: 'Semester', value: detail.semesterName ?? '—' },
+                    { label: 'Programme', value: detail.programName || listRow?.programName || '—' },
+                    { label: 'Semester', value: detail.semesterName || listRow?.semesterName || '—' },
                     { label: 'Requested Mode', value: <span style={{ color: 'var(--b700)', fontWeight: 700 }}>{requestedLabel}</span> },
                     { label: 'Status', value: <span style={{ color: 'var(--amber)' }}>{detail.learningModeChangeStatusLabel ?? 'Applied'} — pending approval</span> },
                   ]}

@@ -1,5 +1,6 @@
 import { useInfiniteQuery, useQuery, useMutation, useQueryClient, keepPreviousData, type QueryClient } from '@tanstack/react-query'
 import {
+  getFeeStructureDropdown,
   getProgramFeeStructures,
   getProgramFeeLines,
   saveProgramFeeStructureComplete,
@@ -29,6 +30,15 @@ export function useProgramFeeStructures(pageNumber = 1, pageSize = 1000, program
     staleTime: Infinity,
     gcTime: Infinity,
     enabled,
+  })
+}
+
+// A programme's active fee structures, for pickers outside the Academic module.
+export function useFeeStructureDropdown(programGuid: string, enabled = true) {
+  return useQuery({
+    queryKey: [...PROGRAM_FEE_STRUCTURES_KEY, 'dropdown', programGuid],
+    queryFn: () => getFeeStructureDropdown(programGuid),
+    enabled: enabled && !!programGuid,
   })
 }
 

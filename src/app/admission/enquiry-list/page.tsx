@@ -17,7 +17,7 @@ import { useProgramDropdown } from '@/hooks/academic/useProgramMaster'
 import { useIntakesDropdown } from '@/hooks/academic/useIntakes'
 import { useEnquiryStatusesDropdown } from '@/hooks/config/useEnquiryStatuses'
 import { useMenuPagePermissions, usePagePermissions } from '@/hooks/users/usePagePermissions'
-import { useCountriesByGuids } from '@/hooks/config/useCountries'
+import { useCountriesForPicker } from '@/hooks/config/useCountries'
 import { formatEnquiryPhone } from '@/lib/api/admission/enquiry'
 
 // Real server-side pagination — only DISPLAY_PAGE_SIZE rows are ever
@@ -80,8 +80,8 @@ export default function EnquiryListPage() {
   const { data, isLoading: loading } = useEnquiries(page, DISPLAY_PAGE_SIZE, activeSearch, statusGuid, intakeGuid)
   const updateEnquiry = useUpdateEnquiry()
   const rows = data?.items ?? []
-  // Dial codes for just the countries on this page, for the Phone column.
-  const { countries } = useCountriesByGuids(rows.map(r => r.mobileCountryGuid ?? ''))
+  // Dial codes for the Phone column (GET /countries/dropdown, cached).
+  const { countries } = useCountriesForPicker()
   const totalCount = data?.totalCount ?? 0
   const totalPages = Math.max(1, Math.ceil(totalCount / DISPLAY_PAGE_SIZE))
   const hasActiveFilters = !!search.trim() || !!channel || !!intakeGuid || !!statusGuid

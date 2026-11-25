@@ -394,18 +394,27 @@ export function getEnquiryCounts(filters?: EnquiryCountsFilters): Promise<Enquir
     .then(data => data ?? EMPTY_COUNTS)
 }
 
+// The Edit / Assign popup opens from three pages, each with its own route and
+// permission for the same EnquiryDto and PUT body (2026-11-24): the Enquiry
+// List, Enquiry Followup and Enquiry Followup Master.
+export type EnquiryScope = 'enquiries' | 'enquiry-followups' | 'enquiry-followup-master'
+
+function enquiryPath(guid: string, scope: EnquiryScope) {
+  return scope === 'enquiries' ? `/api/v1/admissions/enquiries/${guid}` : `/api/v1/admissions/${scope}/enquiries/${guid}`
+}
+
 // Fetch one enquiry by its GUID — same EnquiryDto shape as the list items.
-export function getEnquiryById(guid: string): Promise<Enquiry> {
+export function getEnquiryById(guid: string, scope: EnquiryScope = 'enquiries'): Promise<Enquiry> {
   if (MOCK_AUTH) {
     const existing = mockEnquiries.find(e => e.enquiryGuid === guid)
     if (!existing) return Promise.reject(new Error('Enquiry not found'))
     return Promise.resolve(existing)
   }
-  return apiGet<Enquiry>(`/api/v1/admissions/enquiries/${guid}`)
+  return apiGet<Enquiry>(enquiryPath(guid, scope))
 }
 
 // Change status/programme/campus on an existing enquiry.
-export function updateEnquiry(guid: string, input: EnquiryUpdateInput): Promise<Enquiry> {
+export function updateEnquiry(guid: string, input: EnquiryUpdateInput, scope: EnquiryScope = 'enquiries'): Promise<Enquiry> {
   if (MOCK_AUTH) {
     const existing = mockEnquiries.find(e => e.enquiryGuid === guid)
     if (!existing) return Promise.reject(new Error('Enquiry not found'))
@@ -414,5 +423,5 @@ export function updateEnquiry(guid: string, input: EnquiryUpdateInput): Promise<
     existing.campusGuid = input.campusGuid
     return Promise.resolve(existing)
   }
-  return apiPut<Enquiry>(`/api/v1/admissions/enquiries/${guid}`, input)
+  return apiPut<Enquiry>(enquiryPath(guid, scope), input)
 }

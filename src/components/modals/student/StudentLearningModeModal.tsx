@@ -3,12 +3,16 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ModalProps } from '../types'
 import { SearchSelect } from '@/components/SearchSelect'
+import { AuthError } from '@/lib/api/client'
 import { useLearningModeOptions, useStudentLearningModeDetail, useApplyLearningModeChange } from '@/hooks/student/useLearningMode'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 interface Props extends ModalProps {
   studentGuid: string | null
   studentName?: string
+  // The row's own values, shown when the detail call fails or omits them.
+  programName?: string | null
+  semesterName?: string | null
 }
 
 // Max length the apply endpoint accepts (post-apply-learning-mode-change.md).
@@ -18,7 +22,7 @@ const REMARKS_MAX = 500
 // pulled into a modal so Student Master's row action menu can raise it in
 // place — same idea as StudentRefugeeModal. Reuses the same hooks, so the
 // page and this modal share one cache.
-export function StudentLearningModeModal({ isOpen, onClose, showToast, studentGuid, studentName }: Props) {
+export function StudentLearningModeModal({ isOpen, onClose, showToast, studentGuid, studentName, programName, semesterName }: Props) {
   const router = useRouter()
   const lmPermissions = usePagePermissions('/student/learning-mode', { fallbackToFullAccess: false })
   const canSubmit = Boolean(lmPermissions.submit)
@@ -85,9 +89,19 @@ export function StudentLearningModeModal({ isOpen, onClose, showToast, studentGu
           ) : (
             <>
               <div className="g2">
-                <div className="fg"><label className="lbl">Programme</label><input className="ctrl" readOnly value={detail?.programName ?? '—'} /></div>
-                <div className="fg"><label className="lbl">Semester</label><input className="ctrl" readOnly value={detail?.semesterName ?? '—'} /></div>
+                <div className="fg"><label className="lbl">Programme</label><input className="ctrl" readOnly value={detail?.programName || programName || '—'} /></div>
+                <div className="fg"><label className="lbl">Semester</label><input className="ctrl" readOnly value={detail?.semesterName || semesterName || '—'} /></div>
               </div>
+              {isError && (
+                <div className="info-box mb-3" role="alert">
+                  <i className="lni lni-warning" style={{ color: 'var(--amber)', fontSize: 15, flexShrink: 0 }}></i>
+                  <div style={{ fontSize: 12.5 }}>
+                    {error instanceof AuthError && error.code === 'forbidden'
+                      ? 'You don’t have permission to load this student’s learning mode.'
+                      : 'This student’s learning mode couldn’t be loaded.'}
+                  </div>
+                </div>
+              )}
               {isPending ? (
                 // While pending, detail.learningMode already holds the
                 // *requested* mode — the pre-request mode isn't returned.
@@ -99,7 +113,7 @@ export function StudentLearningModeModal({ isOpen, onClose, showToast, studentGu
                 </div>
               ) : (
                 <>
-                  <div className="fg"><label className="lbl">Current Mode</label><input className="ctrl" readOnly value={detail?.learningModeLabel ?? 'Not set'} /></div>
+                  <div className="fg"><label className="lbl">Current Mode</label><input className="ctrl" readOnly value={detail?.learningModeLabel ?? (isError ? '—' : 'Not set')} /></div>
                   <div className="fg">
                     <label className="lbl">New Learning Mode <span className="req">*</span></label>
                     <SearchSelect
