@@ -107,14 +107,12 @@ function listStateToQuery(page: number, search: string, colFilters: ColumnFilter
 
 function StudentMasterContent() {
   // Row actions gated by this page's own custom keys from /me/menu
-  // ({ get, view, learningmode, refugee, sponsor }). Each falls back to the
-  // generic flag (`?? permissions.get` / `?? permissions.edit`) — same
-  // convention as Employee Master's `assign ?? edit` — so mock mode and the
-  // fail-open default (both only carry add/edit/delete/get) still show every
-  // action, while a real response missing a key hides that action.
+  // ({ get, view, learningmode, refugee, sponsor }). `view` (`- View Details`)
+  // is required explicitly to open Student Profile — do not fall back to `get`,
+  // so View-only Student Master users don't see a dead/redirecting View button.
   const pagePermissions = usePagePermissions()
   const permissions = {
-    view: pagePermissions.view ?? pagePermissions.get ?? false,
+    view: pagePermissions.view ?? false,
     learningMode: pagePermissions.learningmode ?? pagePermissions.edit ?? false,
     refugee: pagePermissions.refugee ?? pagePermissions.edit ?? false,
     sponsor: pagePermissions.sponsor ?? pagePermissions.edit ?? false,

@@ -96,7 +96,9 @@ function normalizePermissions(raw: MenuPermissions | null | undefined): MenuPerm
     update: canEdit,
     delete: canDelete,
     get: canGet,
-    view: canGet,
+    // Keep `view` tied to its own key (`- View Details` on Student Master);
+    // pages that mean general read access already check `get || view`.
+    view: Boolean(raw.view),
     approve: canApprove,
     print: canPrint,
     import: canImport,
