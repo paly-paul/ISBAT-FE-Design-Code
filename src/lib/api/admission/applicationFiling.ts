@@ -206,8 +206,13 @@ export interface ApplicationDetailDto extends ApplicationListItem {
   actionLabel: string | null
   // Resolved from batchGuid on /by-payment; null when there's no batch.
   batchCode?: string | null
-  // Qualifications already saved on the application (/by-payment only).
+  // Qualifications saved on the application (/by-payment and all-detail).
   qualifications?: ApplicationQualificationDto[] | null
+  // all-detail only: every document, uploaded or not, with a signed link.
+  documents?: { documentType: string; uploaded: boolean; url: string | null }[] | null
+  nationality?: string | null
+  admissionType?: string | null
+  submittedDate?: string | null
 }
 
 export interface ApplicationQualificationDto {
@@ -221,7 +226,8 @@ export interface ApplicationQualificationDto {
   grade: string
   yearsTaken: number
   proofUserFileName: string | null
-  // Not sent yet (2026-11-25); the View button appears once it is.
+  // Signed link, sent by all-detail. /by-payment doesn't send it yet
+  // (2026-11-25); Filing's View button appears once it does.
   proofUrl?: string | null
 }
 
@@ -257,9 +263,10 @@ export function getApplicationByPaymentGuid(paymentGuid: string): Promise<Applic
   return apiGet<ApplicationDetailDto>(`/api/v1/admissions/application-filling/by-payment/${paymentGuid}`)
 }
 
-// GET /api/v1/admissions/application-filling/{applicationGuid}/all-detail —
-// the full record behind the View Applicant modal
-// (get-all-applicant-detail-by-guid.md, 2026-11-12). Unlike the base
+// GET /api/v1/admissions/all-applicants/{applicationGuid}/all-detail — the
+// full record, with documents and qualifications, behind the View Applicant
+// modal and Applicant Profile (get-all-applicant-detail-by-guid.md,
+// 2026-11-25). Needs admission.applicants.get. Unlike the base
 // /{applicationGuid} route it has no Action filter, so it works for every
 // stage: waiting, submitted, vetted, rejected and registered. `action`,
 // `saveStatus` and `docVerified` are hidden from the JSON; use `actionLabel`,
@@ -267,7 +274,7 @@ export function getApplicationByPaymentGuid(paymentGuid: string): Promise<Applic
 // application row nor a payment for the guid.
 export function getApplicationAllDetail(applicationGuid: string): Promise<ApplicationDetailDto> {
   if (MOCK_AUTH) return Promise.reject(new Error('Application not found.'))
-  return apiGet<ApplicationDetailDto>(`/api/v1/admissions/application-filling/${applicationGuid}/all-detail`)
+  return apiGet<ApplicationDetailDto>(`/api/v1/admissions/all-applicants/${applicationGuid}/all-detail`)
 }
 
 // Confirmed via Application-Filling/SaveGeneral.bru — countryGuid/

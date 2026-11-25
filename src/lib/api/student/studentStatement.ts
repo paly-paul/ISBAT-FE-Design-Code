@@ -240,17 +240,27 @@ export function searchStudentStatement(filters: StudentStatementSearchFilters, p
     .then(data => data ?? { items: [], totalCount: 0, page, pageSize })
 }
 
-export function getStudentStatement(studentGuid: string): Promise<StudentStatementDto> {
+// Dropout Rejoin's Financial Record tab has its own routes (2026-11-25) for the
+// same statement, fee summary and PDF, under student.dropoutrejoin.get.
+export type StatementScope = 'statement' | 'dropout-rejoin'
+
+function statementPath(studentGuid: string, scope: StatementScope) {
+  return scope === 'dropout-rejoin'
+    ? `/api/v1/students/dropout-rejoin/statement/${studentGuid}`
+    : `/api/v1/students/studentstatement/${studentGuid}`
+}
+
+export function getStudentStatement(studentGuid: string, scope: StatementScope = 'statement'): Promise<StudentStatementDto> {
   if (MOCK_AUTH) return Promise.resolve(mockStatement)
-  return apiGet<RawStatement>(`/api/v1/students/studentstatement/${studentGuid}`).then(normalizeStatement)
+  return apiGet<RawStatement>(statementPath(studentGuid, scope)).then(normalizeStatement)
 }
 
-export function getStudentFeeSummary(studentGuid: string): Promise<GetStudentFeeSummaryDto> {
+export function getStudentFeeSummary(studentGuid: string, scope: StatementScope = 'statement'): Promise<GetStudentFeeSummaryDto> {
   if (MOCK_AUTH) return Promise.resolve({ totalAmountPaidUgx: 422042, totalAmountPaidUsd: 1.2, toBePaidUgx: 0, toBePaidUsd: 749.62 })
-  return apiGet<GetStudentFeeSummaryDto>(`/api/v1/students/studentstatement/${studentGuid}/fee-summary`)
+  return apiGet<GetStudentFeeSummaryDto>(`${statementPath(studentGuid, scope)}/fee-summary`)
 }
 
-export function getStudentStatementPdfUrl(studentGuid: string): string {
+export function getStudentStatementPdfUrl(studentGuid: string, scope: StatementScope = 'statement'): string {
   // Returning the URL so the frontend can just window.open or window.location.href it
-  return `/api/v1/students/studentstatement/${studentGuid}/pdf`
+  return `${statementPath(studentGuid, scope)}/pdf`
 }

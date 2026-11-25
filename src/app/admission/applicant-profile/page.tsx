@@ -3,7 +3,8 @@ import { Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { formatDate } from '@/lib/date'
 import { useVettingApplicationDetail } from '@/hooks/admission/useVetting'
-import { useApplicationPhoto } from '@/hooks/admission/useApplicationFiling'
+import { useApplicationAllDetail } from '@/hooks/admission/useApplicationFiling'
+import { useMenuPagePermissions } from '@/hooks/users/usePagePermissions'
 import { sameOriginApiUrl } from '@/lib/apiFileUrl'
 import { documentTitle, genderText, orDash } from '@/lib/admission/applicantDisplay'
 import { DocumentPreviewModal } from '@/components/modals/shared/DocumentPreviewModal'
@@ -11,9 +12,10 @@ import { QualificationCard } from '@/components/admission/QualificationCard'
 
 // Read-only profile opened from "View Full Profile" (Vetting Desk review, View
 // Applicant, Complete Registration). Everything comes from
-// GET /admissions/vetting/applications/{applicationGuid}
-// (get-vetting-application-detail.md): the applicant's details plus their
-// qualifications and documents. The link only carries the guid.
+// GET /admissions/all-applicants/{applicationGuid}/all-detail, which needs All
+// Applicants access. A Vetting user without it keeps the vetting detail
+// (GET /admissions/vetting/applications/{guid}) so the Vetting Desk's link
+// still opens. The link only carries the guid.
 
 type Tab = 'personal' | 'application' | 'qualification' | 'documents'
 const TABS: { id: Tab; label: string; icon: string }[] = [
@@ -42,10 +44,16 @@ function PageState({ icon, title, sub, spin }: { icon: string; title: string; su
 function ApplicantProfileContent() {
   const searchParams = useSearchParams()
   const applicationGuid = searchParams.get('applicationGuid')
-  const { data: detail, isLoading, isError, error } = useVettingApplicationDetail(applicationGuid, !!applicationGuid)
-  const { data: rawPhotoFromApi } = useApplicationPhoto(applicationGuid, !!applicationGuid)
+  // RouteGuard holds the page until the menu has loaded, so these are settled.
+  const canUseApplicants = !!useMenuPagePermissions('/admission/applicants')?.get
+  const canUseVetting = !!useMenuPagePermissions('/admission/vetting')?.get
+  const viaVetting = !canUseApplicants && canUseVetting
+  const allDetail = useApplicationAllDetail(applicationGuid, !!applicationGuid && !viaVetting)
+  const vettingDetail = useVettingApplicationDetail(applicationGuid, !!applicationGuid && viaVetting)
+  const { isLoading, isError, error } = viaVetting ? vettingDetail : allDetail
+  const detail = viaVetting ? vettingDetail.data : allDetail.data
   const photoDoc = detail?.documents?.find(d => d.documentType?.toLowerCase() === 'photo' && d.uploaded && d.url)
-  const rawPhotoUrl = photoDoc?.url || rawPhotoFromApi || null
+  const rawPhotoUrl = photoDoc?.url ?? null
   const photoUrl = sameOriginApiUrl(rawPhotoUrl)
   const [photoError, setPhotoError] = useState(false)
 
@@ -87,10 +95,12 @@ function ApplicantProfileContent() {
   const lastName = orDash(detail.lastName)
   const fullName = [detail.firstName, detail.lastName].map(v => orDash(v)).filter(v => v !== '—').join(' ') || '—'
   const initials = fullName !== '—' ? fullName.split(' ').slice(0, 2).map(p => p[0]).join('').toUpperCase() : '—'
-  const intake = orDash(String(detail.intakeName || detail.intakeCode || detail.intake || ''))
+  const intake = orDash(String(detail.intakeName || detail.intakeCode || ''))
   const admissionType = orDash(detail.admissionType)
-  const uploadedDocs = detail.documents.filter(d => d.uploaded).length
-  const withProof = detail.qualifications.filter(q => q.proofUrl).length
+  const documents = detail.documents ?? []
+  const qualifications = (detail.qualifications ?? []).map(q => ({ ...q, proofUrl: q.proofUrl ?? null }))
+  const uploadedDocs = documents.filter(d => d.uploaded).length
+  const withProof = qualifications.filter(q => q.proofUrl).length
 
   return (
     <div id="page-applicant-profile">
@@ -164,13 +174,13 @@ function ApplicantProfileContent() {
           )}
 
           {activeTab === 'qualification' && (
-            detail.qualifications.length === 0 ? (
+            qualifications.length === 0 ? (
               <p className="text-sm text-g500">No qualifications submitted yet.</p>
             ) : (
               <>
-                <p className="text-sm text-g500 mb-3">{withProof} of {detail.qualifications.length} with proof</p>
+                <p className="text-sm text-g500 mb-3">{withProof} of {qualifications.length} with proof</p>
                 <div className="vd-list">
-                  {detail.qualifications.map((q, i) => (
+                  {qualifications.map((q, i) => (
                     <QualificationCard key={q.applicationQualGuid} q={q} index={i} onViewProof={(url, title) => setPreview({ url, title })} />
                   ))}
                 </div>
@@ -179,13 +189,13 @@ function ApplicantProfileContent() {
           )}
 
           {activeTab === 'documents' && (
-            detail.documents.length === 0 ? (
+            documents.length === 0 ? (
               <p className="text-sm text-g500">No documents required for this application.</p>
             ) : (
               <>
-                <p className="text-sm text-g500 mb-3">{uploadedDocs} of {detail.documents.length} uploaded</p>
+                <p className="text-sm text-g500 mb-3">{uploadedDocs} of {documents.length} uploaded</p>
                 <div className="vd-list">
-                  {detail.documents.map(doc => (
+                  {documents.map(doc => (
                     <div key={doc.documentType} className={`vd-doc${doc.uploaded ? '' : ' missing'}`}>
                       <span className="vd-doc-icon"><i className={`lni ${doc.uploaded ? 'lni-folder' : 'lni-question-circle'}`} aria-hidden="true" /></span>
                       <div className="vd-doc-body">
