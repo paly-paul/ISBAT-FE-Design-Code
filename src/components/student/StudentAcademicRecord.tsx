@@ -143,7 +143,7 @@ export function StudentAcademicRecord({ studentGuid, source }: { studentGuid: st
         </div>
         <div className="sp-tl-stat"><dt>Units Passed</dt><dd>{overall.pass} <span className="sp-ar-stat-of">of {allUnits.length}</span></dd></div>
         <div className="sp-tl-stat"><dt>Awaiting Results</dt><dd>{awaiting}{overall.fail > 0 && <span className="sp-ar-stat-of"> · {overall.fail} failed</span>}</dd></div>
-        <div className="sp-tl-stat"><dt>Current Semester</dt><dd>{current?.semesterName || '—'}</dd></div>
+        <div className="sp-tl-stat"><dt>Current Semester</dt><dd>{record.currentSemesterName?.trim() || current?.semesterName || '—'}</dd></div>
       </dl>
 
       {semesters.length === 0 ? (
