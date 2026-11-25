@@ -30,6 +30,7 @@ export interface HallTicketTermCount {
   term: number // 1 or 2
   issuedCount: number
   pendingCount: number
+  requiredFeePercent?: number
 }
 
 export interface HallTicketDashboardDto {

@@ -35,6 +35,9 @@ export interface HallTicketEligibilityDto {
   examOver?: boolean
   // The only gate the UI should use; POST / re-checks it server-side.
   canIssue: boolean
+  // Fee-clearance percentage required by the term (decimal: e.g. 50 for
+  // Term 1, 100 for Term 2). Always returned including on alreadyIssued.
+  requiredFeePercent?: number
   // The term the checks ran for (get-eligibility.md 2026-11-13) — the term
   // sent by caller, or the one the server automatically picked when omitted.
   term?: HallTicketTerm

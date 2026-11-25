@@ -208,8 +208,9 @@ export default function HallTicketIssuancePage() {
           // Guild and NCHE are checked only for Term 2 of an even semester
           // (2, 4, 6, 8); otherwise both are null (not applicable) and their
           // rows are hidden. Decided by the value, never by the term alone.
+          const feePct = elig?.requiredFeePercent != null ? Number(elig.requiredFeePercent) : (effectiveTerm === 1 ? 50 : 100)
           const checks = elig ? [
-            { label: 'Fee clearance', ok: elig.feeOk, note: elig.isFeeExcepted ? 'No fee clearance needed' : elig.isExempted ? 'Exemption student' : `Needs ${effectiveTerm === 1 ? '50%' : '100%'} of fees paid` },
+            { label: 'Fee clearance', ok: elig.feeOk, note: elig.isFeeExcepted ? 'No fee clearance needed' : elig.isExempted ? 'Exemption student' : `Needs ${feePct}% of fees paid` },
             { label: 'Coursework', ok: elig.cwOk, note: 'First coursework submitted on every unit with coursework' },
             { label: 'Class test', ok: elig.ctOk, note: 'First class test submitted on every unit with a mid-semester test' },
             ...(elig.guildOk !== null ? [{ label: 'Guild fee', ok: elig.guildOk, note: 'Current-semester Guild fee paid' }] : []),
