@@ -17542,14 +17542,17 @@ button.sp-link:hover .sp-link-go { color: var(--b700); transform: translateX(3px
 .pcx-ledger-name { font-weight: 600; color: var(--g900) }
 .pcx-ledger-sub { font-size: var(--fs-sm); color: var(--g500) }
 .pcx-ledgers .recgrid-total > span:first-child { text-transform: none; letter-spacing: 0; font-size: var(--fs-base); color: var(--g700) }
-/* A ledger's discount condition, as worded by the backend: under its row, and
-   under the Discount total while no discount is earned. */
+/* A discount's condition, as worded by the backend: on the Discount row
+   while none is earned (left, in line with the ledger names), and under the
+   ledger in the Upcoming Semesters modal. */
 .pcx-disc-msg { display: block; margin-top: 3px; font-size: var(--fs-xs); font-weight: 500; line-height: 1.4; color: var(--green); text-transform: none; letter-spacing: 0; white-space: normal }
-.pcx-ledgers .pcx-disc-row { background: var(--white); border-top: 1px dashed var(--g100) }
-.pcx-ledgers .pcx-disc-row > span:first-child { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; padding-top: 8px; padding-bottom: 8px; text-align: right }
-.pcx-disc-warn { font-size: var(--fs-xs); color: var(--amber) }
+.pcx-ledgers .pcx-disc-row > span { align-self: center }
+.pcx-ledgers .pcx-disc-row > span:first-child { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding-left: 16px }
+.pcx-disc-notes { display: flex; flex-direction: column; gap: 2px; min-width: 0; text-align: left }
+.pcx-disc-row .pcx-disc-msg { margin-top: 0 }
+.pcx-disc-warn { font-size: var(--fs-xs); font-weight: 500; color: var(--amber) }
 @media (max-width: 640px) {
-  .pcx-ledgers .pcx-disc-row > span:first-child { align-items: flex-start; text-align: left }
+  .pcx-ledgers .pcx-disc-row > span:first-child { flex-direction: column-reverse; align-items: flex-start; gap: 4px; padding-left: 14px }
 }
 .pcx-ledgers .recgrid-total:last-child { background: var(--surface) }
 .pcx-ledgers .recgrid-total:last-child > span { padding-top: 13px; padding-bottom: 13px }

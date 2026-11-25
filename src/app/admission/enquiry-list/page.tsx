@@ -292,7 +292,8 @@ export default function EnquiryListPage() {
         <EnquiryAssignModal
           isOpen
           onClose={() => closeModal('enquiry-assign-modal')}
-          canAssign={!!permissions.assign}
+          // PUT /enquiries/{guid} needs admission.enquiry.edit, not assign.
+          canAssign={!!permissions.edit}
           showToast={showToast}
           enquiryGuid={viewingGuid}
           updateEnquiry={updateEnquiry}

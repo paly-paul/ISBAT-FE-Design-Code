@@ -20,7 +20,7 @@ interface EnquiryAssignModalProps extends ModalProps {
     mutate: (variables: { guid: string; input: EnquiryUpdateInput }, options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => void
     isPending: boolean
   }
-  // The menu's `assign` key. Without it the details are view-only: the
+  // The menu's `assign` key (`edit` on Enquiry List). Without it the details are view-only: the
   // fields are disabled and Save Assignment is hidden. Defaults to true.
   canAssign?: boolean
   // Which page's enquiry route to load from (updateEnquiry must match it).
