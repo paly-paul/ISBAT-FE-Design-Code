@@ -280,7 +280,6 @@ export default function OnDeskEnquiryPage() {
   function handleSavedClose() {
     setSavedCode(null)
     resetForm()
-    router.push('/admission/enquiry-list')
   }
 
   return (

@@ -898,6 +898,8 @@ export default function PaymentConsolePage() {
   const discountMessages = [...new Set(ledgers.flatMap(l => l.discountMessage ? [l.discountMessage] : []))]
   const discountWarnings = [...new Set(ledgers.flatMap(l => l.discountWarning ? [l.discountWarning] : []))]
   const convertedTotalOutstanding = convertedLedgers.reduce((sum, l) => sum + (l.convOutstanding ?? 0), 0)
+  // What the ledgers offer (discountAmount), earned or not.
+  const availableDiscount = ledgers.reduce((sum, l) => sum + (convertAmount(l.discountAmount, l.currencyGuid, targetCurrencyGuid, baseCurrency?.currencyGuid ?? null, ratesByGuid) ?? 0), 0)
   // Owed once every discount is earned: only the "Full semester balance"
   // quick-fill, which is the amount that earns them.
   const convertedTotalNetPayable = ledgerTotals.reduce((sum, t) => {
@@ -2669,7 +2671,6 @@ export default function PaymentConsolePage() {
                                   {isPaid && <span className="badge badge-green" style={{ marginLeft: 6 }}>Paid</span>}
                                 </span>
                                 {l.ledgerNum && <span className="pcx-ledger-sub">Ledger {l.ledgerNum}</span>}
-                                {l.discountMessage && <span className="pcx-disc-msg">{l.discountMessage}</span>}
                               </span>
                               {/* Native — the raw fee-line amount, not run
                                   through convertAmount, with the ledger's
@@ -2728,32 +2729,25 @@ export default function PaymentConsolePage() {
                             inline since .recgrid-total>span:last-child's
                             own color is more specific than a plain text-*
                             class and would otherwise win over it. Discount
-                            always shows, even at 0, and still carries the
-                            "full payment only" caveat since that condition
-                            can't be read off the figure itself. It is what
-                            the typed amount earns, from the allocation
-                            preview, so it reads 0.00 until then. */}
-                        <div className="recgrid-foot recgrid-total">
+                            always shows, even at 0. Until the payment earns it,
+                            the available discount shows greyed and without a
+                            minus, as Total Payable doesn't deduct it; once
+                            earned (allocation preview) it's green with one. */}
+                        <div className="recgrid-foot recgrid-total pcx-disc-row">
                           <span>
-                            Discount
-                            <span className="text-g400" style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0, marginLeft: 4 }}>(full payment only)</span>
-                          </span>
-                          <span style={{ whiteSpace: 'nowrap', color: earnedDiscount > 0 ? 'var(--green)' : 'var(--g400)' }} title={previewFailed && previewError instanceof Error ? previewError.message : undefined}>
-                            {previewPending ? '…' : previewFailed ? '—' : earnedDiscount > 0 ? `− ${fmtAmt(earnedDiscount)}` : fmtAmt(0)}
-                          </span>
-                        </div>
-                        {/* Why no discount is applied yet, and what earns it. */}
-                        {(discountWarnings.length > 0 || (earnedDiscount === 0 && discountMessages.length > 0)) && (
-                          <div className="recgrid-foot pcx-disc-row">
-                            <span>
+                            {/* Why no discount is applied yet, and what earns it. */}
+                            <span className="pcx-disc-notes">
                               {earnedDiscount === 0 && discountMessages.map(m => <span key={m} className="pcx-disc-msg">{m}</span>)}
                               {discountWarnings.map(w => (
                                 <span key={w} className="pcx-disc-warn"><i className="lni lni-warning" aria-hidden="true"></i> {w}</span>
                               ))}
                             </span>
-                            <span></span>
-                          </div>
-                        )}
+                            <span>Discount</span>
+                          </span>
+                          <span style={{ whiteSpace: 'nowrap', color: earnedDiscount > 0 ? 'var(--green)' : 'var(--g400)' }} title={previewFailed && previewError instanceof Error ? previewError.message : undefined}>
+                            {previewPending ? '…' : previewFailed ? '—' : earnedDiscount > 0 ? `− ${fmtAmt(earnedDiscount)}` : fmtAmt(availableDiscount)}
+                          </span>
+                        </div>
                         <div className="recgrid-foot recgrid-total">
                           {/* Outstanding less the Discount row above it, so
                               the rows add up. Relabeled to "Total Payable" so

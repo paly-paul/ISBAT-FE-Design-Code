@@ -971,6 +971,7 @@ function PaymentPageContent() {
               <i className="lni lni-download" /> Import from Enquiry
             </button>
             */}
+            {/* Import from ODel App / CRM hidden for now, per request (2026-11-25).
             {permissions.import && (
               <>
                 <button className="btn btn-neu btn-sm" onClick={() => openModal('import-odel')}>
@@ -981,6 +982,7 @@ function PaymentPageContent() {
                 </button>
               </>
             )}
+            */}
           </div>
         </div>
 

@@ -1,0 +1,2151 @@
+{
+    "success": true,
+    "data": [
+        {
+            "name": "Admission",
+            "icon": "lni lni-clipboard",
+            "url": null,
+            "permissions": null,
+            "children": [
+                {
+                    "name": "General",
+                    "icon": null,
+                    "url": null,
+                    "permissions": null,
+                    "children": [
+                        {
+                            "name": "Dashboard",
+                            "icon": "lni lni-dashboard",
+                            "url": "/admission/dashboard",
+                            "permissions": {
+                                "get": true
+                            },
+                            "children": []
+                        }
+                    ]
+                },
+                {
+                    "name": "Enquiry",
+                    "icon": null,
+                    "url": null,
+                    "permissions": null,
+                    "children": [
+                        {
+                            "name": "On-Desk Enquiry",
+                            "icon": "lni lni-pencil-alt",
+                            "url": "/admission/ondesk-enquiry",
+                            "permissions": {
+                                "add": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Enquiry List",
+                            "icon": "lni lni-folder",
+                            "url": "/admission/enquiry-list",
+                            "permissions": {
+                                "add": true,
+                                "assign": true,
+                                "edit": true,
+                                "get": true,
+                                "verify": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Enquiry Followup Master",
+                            "icon": "lni lni-calendar",
+                            "url": "/admission/enquiry-followup-master",
+                            "permissions": {
+                                "add": true,
+                                "assign": true,
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Enquiry Followup",
+                            "icon": "lni lni-phone",
+                            "url": "/admission/enquiry-followup",
+                            "permissions": {
+                                "assign": true,
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        }
+                    ]
+                },
+                {
+                    "name": "Admission Flow",
+                    "icon": null,
+                    "url": null,
+                    "permissions": null,
+                    "children": [
+                        {
+                            "name": "Application Payment",
+                            "icon": "lni lni-credit-cards",
+                            "url": "/admission/payment",
+                            "permissions": {
+                                "add": true,
+                                "get": true,
+                                "import": true,
+                                "print": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Application Filing",
+                            "icon": "lni lni-pencil-alt",
+                            "url": "/admission/filing",
+                            "permissions": {
+                                "add": true,
+                                "delete": true,
+                                "get": true,
+                                "submit": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Vetting Desk",
+                            "icon": "lni lni-search-alt",
+                            "url": "/admission/vetting",
+                            "permissions": {
+                                "approve": true,
+                                "get": true,
+                                "hold": true,
+                                "reject": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Registrar's Desk",
+                            "icon": "lni lni-graduation",
+                            "url": "/admission/registration",
+                            "permissions": {
+                                "get": true,
+                                "print": true,
+                                "register": true
+                            },
+                            "children": []
+                        }
+                    ]
+                },
+                {
+                    "name": "Records",
+                    "icon": null,
+                    "url": null,
+                    "permissions": null,
+                    "children": [
+                        {
+                            "name": "All Applicants",
+                            "icon": "lni lni-users",
+                            "url": "/admission/applicants",
+                            "permissions": {
+                                "export": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Application Payment Status",
+                            "icon": "lni lni-wallet",
+                            "url": "/admission/paid-students",
+                            "permissions": {
+                                "get": true,
+                                "print": true
+                            },
+                            "children": []
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Student",
+            "icon": "lni lni-user",
+            "url": null,
+            "permissions": null,
+            "children": [
+                {
+                    "name": "Student Records",
+                    "icon": null,
+                    "url": null,
+                    "permissions": null,
+                    "children": [
+                        {
+                            "name": "Student Master",
+                            "icon": "lni lni-graduation",
+                            "url": "/student/student-master",
+                            "permissions": {
+                                "edit": true,
+                                "get": true,
+                                "learningmode": true,
+                                "refugee": true,
+                                "sponsor": true,
+                                "view": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Student Profile",
+                            "icon": "lni lni-user",
+                            "url": "/student/profile",
+                            "permissions": {
+                                "academicrecord": true,
+                                "download": true,
+                                "edit": true,
+                                "get": true,
+                                "print": true,
+                                "send": true
+                            },
+                            "children": []
+                        }
+                    ]
+                },
+                {
+                    "name": "Transfers",
+                    "icon": null,
+                    "url": null,
+                    "permissions": null,
+                    "children": [
+                        {
+                            "name": "Batch Transfer",
+                            "icon": "lni lni-shuffle",
+                            "url": "/student/batch-transfer",
+                            "permissions": {
+                                "edit": true,
+                                "execute": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Programme Transfer",
+                            "icon": "lni lni-graduation",
+                            "url": "/student/prog-transfer",
+                            "permissions": {
+                                "edit": true,
+                                "execute": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Dropout Rejoin",
+                            "icon": "lni lni-calendar",
+                            "url": "/student/intake-transfer",
+                            "permissions": {
+                                "edit": true,
+                                "execute": true,
+                                "get": true,
+                                "getresume": true,
+                                "resume": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Fee Structure Transfer",
+                            "icon": "lni lni-dollar",
+                            "url": "/student/fee-structure-transfer",
+                            "permissions": {
+                                "edit": true,
+                                "execute": true,
+                                "get": true
+                            },
+                            "children": []
+                        }
+                    ]
+                },
+                {
+                    "name": "Approvals",
+                    "icon": null,
+                    "url": null,
+                    "permissions": null,
+                    "children": [
+                        {
+                            "name": "Learning Mode Approval",
+                            "icon": "lni lni-checkmark-circle",
+                            "url": "/student/learning-mode-approval",
+                            "permissions": {
+                                "approve": true,
+                                "download": true,
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Refugee Status Approval",
+                            "icon": "lni lni-checkmark-circle",
+                            "url": "/student/refugee-approval",
+                            "permissions": {
+                                "approve": true,
+                                "download": true,
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Passout Confirmation",
+                            "icon": "lni lni-graduation",
+                            "url": "/student/passout-confirmation",
+                            "permissions": {
+                                "approve": true,
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        }
+                    ]
+                },
+                {
+                    "name": "Operations",
+                    "icon": null,
+                    "url": null,
+                    "permissions": null,
+                    "children": [
+                        {
+                            "name": "Learning Mode",
+                            "icon": "lni lni-display",
+                            "url": "/student/learning-mode",
+                            "permissions": {
+                                "edit": true,
+                                "get": true,
+                                "submit": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Terminate Student",
+                            "icon": "lni lni-shield",
+                            "url": "/student/terminate-student",
+                            "permissions": {
+                                "add": true,
+                                "execute": true,
+                                "get": true
+                            },
+                            "children": []
+                        }
+                    ]
+                },
+                {
+                    "name": "Student Services",
+                    "icon": null,
+                    "url": null,
+                    "permissions": null,
+                    "children": [
+                        {
+                            "name": "Service Tickets",
+                            "icon": "lni lni-ticket",
+                            "url": "/student/service-tickets",
+                            "permissions": {
+                                "edit": true,
+                                "get": true,
+                                "manage": true
+                            },
+                            "children": []
+                        }
+                    ]
+                },
+                {
+                    "name": "Communications",
+                    "icon": null,
+                    "url": null,
+                    "permissions": null,
+                    "children": [
+                        {
+                            "name": "Send Communication",
+                            "icon": "lni lni-envelope",
+                            "url": "/student/communications",
+                            "permissions": {
+                                "add": true,
+                                "get": true,
+                                "send": true
+                            },
+                            "children": []
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Academic",
+            "icon": "lni lni-graduation",
+            "url": null,
+            "permissions": null,
+            "children": [
+                {
+                    "name": "General",
+                    "icon": null,
+                    "url": null,
+                    "permissions": null,
+                    "children": [
+                        {
+                            "name": "Dashboard",
+                            "icon": "lni lni-dashboard",
+                            "url": "/academic/acad-dashboard",
+                            "permissions": {
+                                "export": true,
+                                "get": true
+                            },
+                            "children": []
+                        }
+                    ]
+                },
+                {
+                    "name": "Academic Core",
+                    "icon": null,
+                    "url": null,
+                    "permissions": null,
+                    "children": [
+                        {
+                            "name": "Intake Master",
+                            "icon": "lni lni-calendar",
+                            "url": "/academic/intake-master",
+                            "permissions": {
+                                "add": true,
+                                "delete": true,
+                                "edit": true,
+                                "export": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Bulk Intake Edit",
+                            "icon": "lni lni-layers",
+                            "url": "/academic/bulk-intake-edit",
+                            "permissions": {
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Batch Management",
+                            "icon": "lni lni-users",
+                            "url": "/academic/batch-management",
+                            "permissions": {
+                                "add": true,
+                                "delete": true,
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Session Movement",
+                            "icon": "lni lni-reload",
+                            "url": "/academic/session-movement",
+                            "permissions": {
+                                "execute": true,
+                                "get": true
+                            },
+                            "children": []
+                        }
+                    ]
+                },
+                {
+                    "name": "Course Unit Master",
+                    "icon": null,
+                    "url": null,
+                    "permissions": null,
+                    "children": [
+                        {
+                            "name": "Repetition Tag",
+                            "icon": "lni lni-reload",
+                            "url": "/academic/repetition-tag",
+                            "permissions": {
+                                "add": true,
+                                "delete": true,
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Course Units",
+                            "icon": "lni lni-book",
+                            "url": "/academic/course-units",
+                            "permissions": {
+                                "add": true,
+                                "delete": true,
+                                "edit": true,
+                                "export": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Course Allocation",
+                            "icon": "lni lni-agenda",
+                            "url": "/academic/course-allocation",
+                            "permissions": {
+                                "add": true,
+                                "delete": true,
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        }
+                    ]
+                },
+                {
+                    "name": "Programme Master",
+                    "icon": null,
+                    "url": null,
+                    "permissions": null,
+                    "children": [
+                        {
+                            "name": "Programme Master",
+                            "icon": "lni lni-graduation",
+                            "url": "/academic/programme-master",
+                            "permissions": {
+                                "add": true,
+                                "delete": true,
+                                "edit": true,
+                                "export": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Fee Structure",
+                            "icon": "lni lni-dollar",
+                            "url": "/academic/fee-structure",
+                            "permissions": {
+                                "add": true,
+                                "delete": true,
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Programme Approval",
+                            "icon": "lni lni-check-box",
+                            "url": "/academic/programme-approval",
+                            "permissions": {
+                                "approve": true,
+                                "delete": true,
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        }
+                    ]
+                },
+                {
+                    "name": "Timetable",
+                    "icon": null,
+                    "url": null,
+                    "permissions": null,
+                    "children": [
+                        {
+                            "name": "Schedule Timetable",
+                            "icon": "lni lni-calendar",
+                            "url": "/academic/timetable",
+                            "permissions": {
+                                "add": true,
+                                "delete": true,
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Lecturer View",
+                            "icon": "lni lni-user",
+                            "url": "/academic/timetable-lecturer",
+                            "permissions": {
+                                "export": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Batch View",
+                            "icon": "lni lni-users",
+                            "url": "/academic/timetable-batch",
+                            "permissions": {
+                                "export": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Time Slot Audit",
+                            "icon": "lni lni-alarm-clock",
+                            "url": "/academic/timetable-slot-audit",
+                            "permissions": {
+                                "export": true,
+                                "get": true
+                            },
+                            "children": []
+                        }
+                    ]
+                },
+                {
+                    "name": "Events and Announcements",
+                    "icon": null,
+                    "url": null,
+                    "permissions": null,
+                    "children": [
+                        {
+                            "name": "Event Management",
+                            "icon": "lni lni-calendar",
+                            "url": "/student/event-management",
+                            "permissions": {
+                                "add": true,
+                                "delete": true,
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Announcement Management",
+                            "icon": "lni lni-bullhorn",
+                            "url": "/student/announcement-management",
+                            "permissions": {
+                                "add": true,
+                                "delete": true,
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Finance",
+            "icon": "lni lni-dollar",
+            "url": null,
+            "permissions": null,
+            "children": [
+                {
+                    "name": "General",
+                    "icon": null,
+                    "url": null,
+                    "permissions": null,
+                    "children": [
+                        {
+                            "name": "Dashboard",
+                            "icon": "lni lni-dashboard",
+                            "url": "/finance/dashboard",
+                            "permissions": {
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Student Statement",
+                            "icon": "lni lni-files",
+                            "url": "/finance/student-statements",
+                            "permissions": {
+                                "get": true,
+                                "print": true
+                            },
+                            "children": []
+                        }
+                    ]
+                },
+                {
+                    "name": "Payment Collection",
+                    "icon": null,
+                    "url": null,
+                    "permissions": null,
+                    "children": [
+                        {
+                            "name": "Payment Console",
+                            "icon": "lni lni-credit-cards",
+                            "url": "/finance/payment-console",
+                            "permissions": {
+                                "add": true,
+                                "edit": true,
+                                "get": true,
+                                "print": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Payment Refund",
+                            "icon": "lni lni-reload",
+                            "url": "/finance/payment-refund",
+                            "permissions": {
+                                "add": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "NCHE & Guild Payment",
+                            "icon": "lni lni-graduation",
+                            "url": "/finance/nche-guild-payment",
+                            "permissions": {
+                                "add": true,
+                                "delete": true,
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Discount Allocation",
+                            "icon": "lni lni-tag",
+                            "url": "/finance/discount-allocation",
+                            "permissions": {
+                                "add": true,
+                                "cancel": true,
+                                "delete": true,
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Refugee Status",
+                            "icon": "lni lni-shield",
+                            "url": "/finance/refugee-status",
+                            "permissions": {
+                                "add": true,
+                                "delete": true,
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Ledger Adjustments",
+                            "icon": "lni lni-lock",
+                            "url": "/finance/ledger-adjustments",
+                            "permissions": {
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Advanced Payments",
+                            "icon": "lni lni-wallet",
+                            "url": "/finance/advanced-payments",
+                            "permissions": {
+                                "add": true,
+                                "create": true,
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Assessment",
+            "icon": "lni lni-pencil-alt",
+            "url": null,
+            "permissions": null,
+            "children": [
+                {
+                    "name": "General",
+                    "icon": null,
+                    "url": null,
+                    "permissions": null,
+                    "children": [
+                        {
+                            "name": "Assessment Dashboard",
+                            "icon": "lni lni-dashboard",
+                            "url": "/assessment/dashboard",
+                            "permissions": {
+                                "export": true,
+                                "get": true,
+                                "hallticket": true,
+                                "lecturer": true,
+                                "overviewall": true,
+                                "overviewfaculty": true,
+                                "resit": true
+                            },
+                            "children": []
+                        }
+                    ]
+                },
+                {
+                    "name": "Assessment Structure",
+                    "icon": null,
+                    "url": null,
+                    "permissions": null,
+                    "children": [
+                        {
+                            "name": "Question Bank Upload",
+                            "icon": "lni lni-upload",
+                            "url": "/assessment/cw-qbank",
+                            "permissions": {
+                                "add": true,
+                                "delete": true,
+                                "download": true,
+                                "edit": true,
+                                "get": true,
+                                "import": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Bulk Exam Scheduler",
+                            "icon": "lni lni-calendar",
+                            "url": "/assessment/bulk-exam-scheduler",
+                            "permissions": {
+                                "add": true,
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Assessment Scheduler",
+                            "icon": "lni lni-graduation",
+                            "url": "/assessment/ia-creation",
+                            "permissions": {
+                                "add": true,
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        }
+                    ]
+                },
+                {
+                    "name": "IA Internal Assessment",
+                    "icon": null,
+                    "url": null,
+                    "permissions": null,
+                    "children": [
+                        {
+                            "name": "IA Evaluation",
+                            "icon": "lni lni-checkmark-circle",
+                            "url": "/assessment/ia-evaluation",
+                            "permissions": {
+                                "add": true,
+                                "edit": true,
+                                "get": true,
+                                "submit": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "CW Rectification",
+                            "icon": "lni lni-reload",
+                            "url": "/assessment/cw-rectify",
+                            "permissions": {
+                                "add": true,
+                                "delete": true,
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Project Proposals",
+                            "icon": "lni lni-folder",
+                            "url": "/assessment/project-proposals",
+                            "permissions": {
+                                "add": true,
+                                "delete": true,
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Project Reviews",
+                            "icon": "lni lni-folder",
+                            "url": "/assessment/project-reviews",
+                            "permissions": {
+                                "add": true,
+                                "delete": true,
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Exam Cancel",
+                            "icon": "lni lni-timer",
+                            "url": "/assessment/exam-cancel",
+                            "permissions": {
+                                "cancel": true,
+                                "delete": true,
+                                "edit": true,
+                                "extratime": true,
+                                "get": true,
+                                "search": true,
+                                "view": true
+                            },
+                            "children": []
+                        }
+                    ]
+                },
+                {
+                    "name": "University Exam (UE)",
+                    "icon": null,
+                    "url": null,
+                    "permissions": null,
+                    "children": [
+                        {
+                            "name": "Question Paper Vetting",
+                            "icon": "lni lni-upload",
+                            "url": "/assessment/qp-vetting",
+                            "permissions": {
+                                "add": true,
+                                "approve": true,
+                                "delete": true,
+                                "edit": true,
+                                "get": true,
+                                "verify": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Hall Ticket Issuance",
+                            "icon": "lni lni-ticket",
+                            "url": "/assessment/hall-ticket",
+                            "permissions": {
+                                "add": true,
+                                "get": true,
+                                "issue": true,
+                                "verify": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Hall Ticket Print",
+                            "icon": "lni lni-printer",
+                            "url": "/assessment/hall-print",
+                            "permissions": {
+                                "get": true,
+                                "print": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Hall Ticket Print All",
+                            "icon": "lni lni-printer",
+                            "url": "/assessment/hall-ticket-print-all",
+                            "permissions": {
+                                "get": true,
+                                "print": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "UE Material Print",
+                            "icon": "lni lni-printer",
+                            "url": "/assessment/university-exam-material-print",
+                            "permissions": {
+                                "add": true,
+                                "get": true,
+                                "getattendancesheet": true,
+                                "getconsolidatedmarksheet": true,
+                                "getcoverletter": true,
+                                "print": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "UE QP/Booklet Print",
+                            "icon": "lni lni-printer",
+                            "url": "/assessment/university-exam-qp-booklet-print",
+                            "permissions": {
+                                "delete": true,
+                                "generate": true,
+                                "get": true,
+                                "getanswerkey": true,
+                                "print": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "UE Practical QP Print",
+                            "icon": "lni lni-printer",
+                            "url": "/assessment/university-exam-practical-qp-print",
+                            "permissions": {
+                                "delete": true,
+                                "download": true,
+                                "generate": true,
+                                "get": true,
+                                "print": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "UE Project Booklet Print",
+                            "icon": "lni lni-printer",
+                            "url": "/assessment/university-exam-project-booklet-print",
+                            "permissions": {
+                                "download": true,
+                                "get": true,
+                                "print": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "UE Attendance",
+                            "icon": "lni lni-users",
+                            "url": "/assessment/ue-attendance",
+                            "permissions": {
+                                "edit": true,
+                                "get": true,
+                                "save": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "UE Mark Import",
+                            "icon": "lni lni-upload",
+                            "url": "/assessment/ue-mark-import",
+                            "permissions": {
+                                "get": true,
+                                "import": true,
+                                "preview": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Mark Entry — UE",
+                            "icon": "lni lni-pencil-alt",
+                            "url": "/assessment/mark-ue",
+                            "permissions": {
+                                "edit": true,
+                                "get": true,
+                                "save": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Mark Verify — UE",
+                            "icon": "lni lni-shield",
+                            "url": "/assessment/mark-ue-verify",
+                            "permissions": {
+                                "edit": true,
+                                "get": true,
+                                "verify": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Exam Mark Import",
+                            "icon": "lni lni-upload",
+                            "url": "/assessment/exam-mark-import",
+                            "permissions": {
+                                "download": true,
+                                "get": true,
+                                "import": true,
+                                "preview": true,
+                                "publish": true
+                            },
+                            "children": []
+                        }
+                    ]
+                },
+                {
+                    "name": "Results & Graduation",
+                    "icon": null,
+                    "url": null,
+                    "permissions": null,
+                    "children": [
+                        {
+                            "name": "Result & Moderation",
+                            "icon": "lni lni-bar-chart",
+                            "url": "/assessment/moderation",
+                            "permissions": {
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Generate Result",
+                            "icon": "lni lni-cogs",
+                            "url": "/assessment/generate-result",
+                            "permissions": {
+                                "delete": true,
+                                "edit": true,
+                                "export": true,
+                                "generate": true,
+                                "get": true,
+                                "moderate": true,
+                                "publish": true,
+                                "withdraw": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Transcript Print",
+                            "icon": "lni lni-printer",
+                            "url": "/assessment/transcript-print",
+                            "permissions": {
+                                "get": true,
+                                "print": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Graduate Transcript",
+                            "icon": "lni lni-certificate",
+                            "url": "/assessment/graduate-transcript",
+                            "permissions": {
+                                "generate": true,
+                                "get": true,
+                                "recordcollection": true,
+                                "searchforcollection": true,
+                                "verify": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "HEC Graduate Transcript",
+                            "icon": "lni lni-certificate",
+                            "url": "/assessment/hec-graduate-transcript",
+                            "permissions": {
+                                "generate": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Transcript Collection",
+                            "icon": "lni lni-check-box",
+                            "url": "/assessment/graduate-transcript/collection",
+                            "permissions": {
+                                "add": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Gown Collection",
+                            "icon": "lni lni-check-box",
+                            "url": "/assessment/gown-collection",
+                            "permissions": {
+                                "add": true,
+                                "get": true,
+                                "record": true,
+                                "search": true
+                            },
+                            "children": []
+                        }
+                    ]
+                },
+                {
+                    "name": "Resit",
+                    "icon": null,
+                    "url": null,
+                    "permissions": null,
+                    "children": [
+                        {
+                            "name": "Resit Master",
+                            "icon": "lni lni-cogs",
+                            "url": "/assessment/resit-configs",
+                            "permissions": {
+                                "add": true,
+                                "delete": true,
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Resit Question Print",
+                            "icon": "lni lni-printer",
+                            "url": "/assessment/resit-question-print",
+                            "permissions": {
+                                "delete": true,
+                                "generate": true,
+                                "get": true,
+                                "getanswerkey": true,
+                                "getattendancesheet": true,
+                                "getbooklet": true,
+                                "getconsolidatedmarksheet": true,
+                                "getcoverletter": true,
+                                "print": true,
+                                "printbooklet": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Resit Applications",
+                            "icon": "lni lni-folder",
+                            "url": "/assessment/resit-applications",
+                            "permissions": {
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Resit Apply",
+                            "icon": "lni lni-pencil-alt",
+                            "url": "/assessment/resit-apply",
+                            "permissions": {
+                                "add": true,
+                                "delete": true,
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Resit Scheduling",
+                            "icon": "lni lni-calendar",
+                            "url": "/assessment/resit-scheduling",
+                            "permissions": {
+                                "add": true,
+                                "edit": true,
+                                "get": true,
+                                "getclasstest": true,
+                                "getcoursework": true,
+                                "save": true,
+                                "saveclasstest": true,
+                                "savecoursework": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Resit IA Evaluation",
+                            "icon": "lni lni-checkmark-circle",
+                            "url": "/assessment/resit-evaluation",
+                            "permissions": {
+                                "get": true,
+                                "save": true,
+                                "submit": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Resit IA Result",
+                            "icon": "lni lni-bar-chart",
+                            "url": "/assessment/resit-ia-results",
+                            "permissions": {
+                                "export": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Resit UE Mark Import",
+                            "icon": "lni lni-upload",
+                            "url": "/assessment/resit-ue-mark-import",
+                            "permissions": {
+                                "download": true,
+                                "edit": true,
+                                "get": true,
+                                "import": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Resit Mark Update",
+                            "icon": "lni lni-reload",
+                            "url": "/assessment/resit-mark-update",
+                            "permissions": {
+                                "get": true,
+                                "publish": true,
+                                "push": true
+                            },
+                            "children": []
+                        }
+                    ]
+                },
+                {
+                    "name": "Exam Grievances",
+                    "icon": null,
+                    "url": null,
+                    "permissions": null,
+                    "children": [
+                        {
+                            "name": "Exam Grievances",
+                            "icon": "lni lni-files",
+                            "url": "/assessment/exam-grievances",
+                            "permissions": {
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Attendance",
+            "icon": "lni lni-alarm-clock",
+            "url": null,
+            "permissions": null,
+            "children": [
+                {
+                    "name": "Class Attendance",
+                    "icon": null,
+                    "url": null,
+                    "permissions": null,
+                    "children": [
+                        {
+                            "name": "Record Attendance",
+                            "icon": "lni lni-checkmark-circle",
+                            "url": "/attendance/record",
+                            "permissions": {
+                                "add": true,
+                                "edit": true,
+                                "get": true,
+                                "record": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Pending Outlines",
+                            "icon": "lni lni-list",
+                            "url": "/attendance/pending-outlines",
+                            "permissions": {
+                                "get": true
+                            },
+                            "children": []
+                        }
+                    ]
+                },
+                {
+                    "name": "Management",
+                    "icon": null,
+                    "url": null,
+                    "permissions": null,
+                    "children": [
+                        {
+                            "name": "Attendance Sessions",
+                            "icon": "lni lni-calendar",
+                            "url": "/attendance/sessions",
+                            "permissions": {
+                                "add": true,
+                                "delete": true,
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Employee",
+            "icon": "lni lni-briefcase",
+            "url": null,
+            "permissions": null,
+            "children": [
+                {
+                    "name": "Employee Records",
+                    "icon": null,
+                    "url": null,
+                    "permissions": null,
+                    "children": [
+                        {
+                            "name": "Employee Master",
+                            "icon": "lni lni-user",
+                            "url": "/employee/employee-master",
+                            "permissions": {
+                                "add": true,
+                                "assign": true,
+                                "delete": true,
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Employee Approvals",
+                            "icon": "lni lni-checkmark-circle",
+                            "url": "/employee/employee-approve",
+                            "permissions": {
+                                "approve": true,
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        }
+                    ]
+                },
+                {
+                    "name": "Access Control",
+                    "icon": null,
+                    "url": null,
+                    "permissions": null,
+                    "children": [
+                        {
+                            "name": "Permission Master",
+                            "icon": "lni lni-lock",
+                            "url": "/config/permission-master",
+                            "permissions": {
+                                "add": true,
+                                "assign": true,
+                                "delete": true,
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Analytics",
+            "icon": "lni lni-bar-chart",
+            "url": null,
+            "permissions": null,
+            "children": [
+                {
+                    "name": "Student",
+                    "icon": null,
+                    "url": null,
+                    "permissions": null,
+                    "children": [
+                        {
+                            "name": "Students in Programme Report",
+                            "icon": "lni lni-bar-chart",
+                            "url": "/student/reports/students-in-programme",
+                            "permissions": {
+                                "export": true,
+                                "get": true
+                            },
+                            "children": []
+                        }
+                    ]
+                },
+                {
+                    "name": "Finance",
+                    "icon": null,
+                    "url": null,
+                    "permissions": null,
+                    "children": [
+                        {
+                            "name": "Payment History",
+                            "icon": "lni lni-bar-chart",
+                            "url": "/finance/payment-history",
+                            "permissions": {
+                                "edit": true,
+                                "get": true,
+                                "print": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Discount Report",
+                            "icon": "lni lni-tag",
+                            "url": "/finance/reports/discount",
+                            "permissions": {
+                                "export": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Transaction Report",
+                            "icon": "lni lni-list",
+                            "url": "/finance/reports/transaction",
+                            "permissions": {
+                                "export": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Outstanding Report",
+                            "icon": "lni lni-alarm-clock",
+                            "url": "/finance/reports/outstanding",
+                            "permissions": {
+                                "export": true,
+                                "get": true
+                            },
+                            "children": []
+                        }
+                    ]
+                },
+                {
+                    "name": "Admission",
+                    "icon": null,
+                    "url": null,
+                    "permissions": null,
+                    "children": [
+                        {
+                            "name": "Enquiry Report",
+                            "icon": "lni lni-bar-chart",
+                            "url": "/admission/reports/enquiry",
+                            "permissions": {
+                                "export": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Application Status Report",
+                            "icon": "lni lni-bar-chart",
+                            "url": "/admission/reports/application-status",
+                            "permissions": {
+                                "export": true,
+                                "get": true
+                            },
+                            "children": []
+                        }
+                    ]
+                },
+                {
+                    "name": "Attendance",
+                    "icon": null,
+                    "url": null,
+                    "permissions": null,
+                    "children": [
+                        {
+                            "name": "Attendance by Date",
+                            "icon": "lni lni-calendar",
+                            "url": "/attendance/reports/by-date",
+                            "permissions": {
+                                "export": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Student Attendance %",
+                            "icon": "lni lni-users",
+                            "url": "/attendance/reports/student-pct",
+                            "permissions": {
+                                "export": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Faculty Attendance %",
+                            "icon": "lni lni-library",
+                            "url": "/attendance/reports/faculty-pct",
+                            "permissions": {
+                                "get": true
+                            },
+                            "children": []
+                        }
+                    ]
+                },
+                {
+                    "name": "Assessment",
+                    "icon": null,
+                    "url": null,
+                    "permissions": null,
+                    "children": [
+                        {
+                            "name": "Exam Schedule Report",
+                            "icon": "lni lni-bar-chart",
+                            "url": "/assessment/reports/exam-schedule",
+                            "permissions": {
+                                "export": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "IA Evaluation Report",
+                            "icon": "lni lni-bar-chart",
+                            "url": "/assessment/reports/ia-evaluation",
+                            "permissions": {
+                                "export": true,
+                                "get": true
+                            },
+                            "children": []
+                        }
+                    ]
+                },
+                {
+                    "name": "Employee",
+                    "icon": null,
+                    "url": null,
+                    "permissions": null,
+                    "children": [
+                        {
+                            "name": "Activity Log",
+                            "icon": "lni lni-list",
+                            "url": "/activity-log/logs",
+                            "permissions": {
+                                "get": true
+                            },
+                            "children": []
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Configuration",
+            "icon": "lni lni-cog",
+            "url": null,
+            "permissions": null,
+            "children": [
+                {
+                    "name": "Student",
+                    "icon": null,
+                    "url": null,
+                    "permissions": null,
+                    "children": [
+                        {
+                            "name": "Specialization Management",
+                            "icon": "lni lni-graduation",
+                            "url": "/student/specialization",
+                            "permissions": {
+                                "assign": true,
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Termination Reason Master",
+                            "icon": "lni lni-shield",
+                            "url": "/student/termination-reasons",
+                            "permissions": {
+                                "add": true,
+                                "delete": true,
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Feedback Master",
+                            "icon": "lni lni-comments",
+                            "url": "/student/feedback-master",
+                            "permissions": {
+                                "add": true,
+                                "delete": true,
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Student Category Master",
+                            "icon": "lni lni-users",
+                            "url": "/config/student-category-master",
+                            "permissions": {
+                                "add": true,
+                                "delete": true,
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Service Category Master",
+                            "icon": "lni lni-list",
+                            "url": "/config/service-category-master",
+                            "permissions": {
+                                "add": true,
+                                "delete": true,
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        }
+                    ]
+                },
+                {
+                    "name": "Finance",
+                    "icon": null,
+                    "url": null,
+                    "permissions": null,
+                    "children": [
+                        {
+                            "name": "Exchange Rates",
+                            "icon": "lni lni-world",
+                            "url": "/finance/exchange-rates",
+                            "permissions": {
+                                "add": true,
+                                "delete": true,
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Cooperates",
+                            "icon": "lni lni-handshake",
+                            "url": "/finance/cooperates",
+                            "permissions": {
+                                "add": true,
+                                "delete": true,
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Discounts",
+                            "icon": "lni lni-tag",
+                            "url": "/finance/discounts",
+                            "permissions": {
+                                "add": true,
+                                "delete": true,
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Ledgers",
+                            "icon": "lni lni-book",
+                            "url": "/finance/ledgers",
+                            "permissions": {
+                                "add": true,
+                                "delete": true,
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Other Ledgers",
+                            "icon": "lni lni-book",
+                            "url": "/finance/ledger-others",
+                            "permissions": {
+                                "add": true,
+                                "delete": true,
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Currency Master",
+                            "icon": "lni lni-dollar",
+                            "url": "/finance/currency-master",
+                            "permissions": {
+                                "add": true,
+                                "delete": true,
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Receipt Books",
+                            "icon": "lni lni-ticket",
+                            "url": "/finance/receipt-books",
+                            "permissions": {
+                                "add": true,
+                                "delete": true,
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "General Settings",
+                            "icon": "lni lni-cog",
+                            "url": "/finance/gen-sets",
+                            "permissions": {
+                                "add": true,
+                                "delete": true,
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Banks",
+                            "icon": "lni lni-coin",
+                            "url": "/finance/banks",
+                            "permissions": {
+                                "add": true,
+                                "delete": true,
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Bank Branches",
+                            "icon": "lni lni-map-marker",
+                            "url": "/finance/bank-branches",
+                            "permissions": {
+                                "add": true,
+                                "delete": true,
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Proc Banks",
+                            "icon": "lni lni-wallet",
+                            "url": "/finance/proc-banks",
+                            "permissions": {
+                                "add": true,
+                                "delete": true,
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Proc GL Accounts",
+                            "icon": "lni lni-calculator",
+                            "url": "/finance/proc-gl-accounts",
+                            "permissions": {
+                                "add": true,
+                                "delete": true,
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        }
+                    ]
+                },
+                {
+                    "name": "Academic",
+                    "icon": null,
+                    "url": null,
+                    "permissions": null,
+                    "children": [
+                        {
+                            "name": "Faculty Master",
+                            "icon": "lni lni-library",
+                            "url": "/config/faculty-master",
+                            "permissions": {
+                                "add": true,
+                                "delete": true,
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Campus Master",
+                            "icon": "lni lni-home",
+                            "url": "/config/campus-master",
+                            "permissions": {
+                                "add": true,
+                                "delete": true,
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Skill Management",
+                            "icon": "lni lni-bulb",
+                            "url": "/academic/skill-master",
+                            "permissions": {
+                                "add": true,
+                                "delete": true,
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Room Management",
+                            "icon": "lni lni-home",
+                            "url": "/academic/room-management",
+                            "permissions": {
+                                "add": true,
+                                "delete": true,
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Programme Level",
+                            "icon": "lni lni-layers",
+                            "url": "/academic/programme-level",
+                            "permissions": {
+                                "add": true,
+                                "delete": true,
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Programme Group",
+                            "icon": "lni lni-folder",
+                            "url": "/academic/programme-group",
+                            "permissions": {
+                                "add": true,
+                                "delete": true,
+                                "edit": true,
+                                "export": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Specialization",
+                            "icon": "lni lni-certificate",
+                            "url": "/config/specialization",
+                            "permissions": {
+                                "add": true,
+                                "delete": true,
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Skill Master",
+                            "icon": "lni lni-bulb",
+                            "url": "/config/skill",
+                            "permissions": {
+                                "add": true,
+                                "delete": true,
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Unit Type Master",
+                            "icon": "lni lni-tag",
+                            "url": "/config/unit-type",
+                            "permissions": {
+                                "add": true,
+                                "delete": true,
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Unit Category Master",
+                            "icon": "lni lni-tag",
+                            "url": "/config/unit-category",
+                            "permissions": {
+                                "add": true,
+                                "delete": true,
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Weekdays",
+                            "icon": "lni lni-calendar",
+                            "url": "/config/weekdays",
+                            "permissions": {
+                                "add": true,
+                                "delete": true,
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Batch Times",
+                            "icon": "lni lni-timer",
+                            "url": "/config/batch-times",
+                            "permissions": {
+                                "add": true,
+                                "delete": true,
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        }
+                    ]
+                },
+                {
+                    "name": "Admission",
+                    "icon": null,
+                    "url": null,
+                    "permissions": null,
+                    "children": [
+                        {
+                            "name": "Enquiry Source",
+                            "icon": "lni lni-volume",
+                            "url": "/config/enquiry-source-master",
+                            "permissions": {
+                                "add": true,
+                                "delete": true,
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Followup Status",
+                            "icon": "lni lni-phone",
+                            "url": "/config/followup-status",
+                            "permissions": {
+                                "add": true,
+                                "delete": true,
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Followup Mode",
+                            "icon": "lni lni-comments",
+                            "url": "/config/followup-mode",
+                            "permissions": {
+                                "add": true,
+                                "delete": true,
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Interest Level",
+                            "icon": "lni lni-signal",
+                            "url": "/config/interest-level",
+                            "permissions": {
+                                "add": true,
+                                "delete": true,
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Enquiry Status",
+                            "icon": "lni lni-flag",
+                            "url": "/config/enquiry-status",
+                            "permissions": {
+                                "add": true,
+                                "delete": true,
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Isbat Enquiry Source",
+                            "icon": "lni lni-compass",
+                            "url": "/config/enquiry-source",
+                            "permissions": {
+                                "add": true,
+                                "delete": true,
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        }
+                    ]
+                },
+                {
+                    "name": "Assessment",
+                    "icon": null,
+                    "url": null,
+                    "permissions": null,
+                    "children": [
+                        {
+                            "name": "Fee Clearance Master",
+                            "icon": "lni lni-list",
+                            "url": "/assessment/assessment-master",
+                            "permissions": {
+                                "add": true,
+                                "delete": true,
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Exam Rules Master",
+                            "icon": "lni lni-files",
+                            "url": "/assessment/exam-rules",
+                            "permissions": {
+                                "add": true,
+                                "delete": true,
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Question FAQs",
+                            "icon": "lni lni-comments",
+                            "url": "/assessment/question-faqs",
+                            "permissions": {
+                                "add": true,
+                                "delete": true,
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        }
+                    ]
+                },
+                {
+                    "name": "General",
+                    "icon": null,
+                    "url": null,
+                    "permissions": null,
+                    "children": [
+                        {
+                            "name": "Department Master",
+                            "icon": "lni lni-briefcase",
+                            "url": "/config/department-master",
+                            "permissions": {
+                                "add": true,
+                                "delete": true,
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Designation Master",
+                            "icon": "lni lni-tag",
+                            "url": "/config/designation-master",
+                            "permissions": {
+                                "add": true,
+                                "delete": true,
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Course Level Master",
+                            "icon": "lni lni-graduation",
+                            "url": "/config/course-level-master",
+                            "permissions": {
+                                "add": true,
+                                "delete": true,
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        },
+                        {
+                            "name": "Country Master",
+                            "icon": "lni lni-world",
+                            "url": "/config/country-master",
+                            "permissions": {
+                                "add": true,
+                                "delete": true,
+                                "edit": true,
+                                "get": true
+                            },
+                            "children": []
+                        }
+                    ]
+                }
+            ]
+        }
+    ],
+    "message": null,
+    "code": null,
+    "errors": null
+}

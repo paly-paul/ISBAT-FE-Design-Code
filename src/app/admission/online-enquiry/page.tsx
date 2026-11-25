@@ -283,7 +283,6 @@ export default function OnlineEnquiryPage() {
   function handleSavedClose() {
     setSavedCode(null)
     resetForm()
-    router.push('/admission/enquiry-list')
   }
 
   return (
