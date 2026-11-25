@@ -1,5 +1,5 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
-import { createEnquiryFollowUp, EnquiryFollowUpInput, EnquiryFollowUpListItem, getEnquiryFollowUps, getEnquiryFollowUpsByAdvisor } from '@/lib/api/admission/enquiryFollowUp'
+import { createEnquiryFollowUp, EnquiryFollowUpInput, EnquiryFollowUpListItem, FollowUpScope, getEnquiryFollowUps, getEnquiryFollowUpsByAdvisor } from '@/lib/api/admission/enquiryFollowUp'
 
 const ENQUIRY_FOLLOW_UPS_KEY = ['enquiryFollowUps']
 const ENQUIRY_FOLLOW_UPS_BY_ADVISOR_KEY = ['enquiryFollowUpsByAdvisor']
@@ -87,10 +87,10 @@ export function useEnquiryFollowUpsByAdvisor(page: number, pageSize: number, sea
 // enquiryGuid and returns the saved follow-up, so refresh on success:
 // follow-up lists + count (partial key match), the advisor-scoped list, and
 // the enquiries (their follow-up / enquiry status changes with each log).
-export function useCreateEnquiryFollowUp() {
+export function useCreateEnquiryFollowUp(scope: FollowUpScope) {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (input: EnquiryFollowUpInput) => createEnquiryFollowUp(input),
+    mutationFn: (input: EnquiryFollowUpInput) => createEnquiryFollowUp(input, scope),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ENQUIRY_FOLLOW_UPS_KEY })
       queryClient.invalidateQueries({ queryKey: ENQUIRY_FOLLOW_UPS_BY_ADVISOR_KEY })

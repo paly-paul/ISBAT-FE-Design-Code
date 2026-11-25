@@ -9,28 +9,28 @@ import { ImportCrmModal } from '@/components/modals/admission/ImportCrmModal'
 import { ImportOdelModal } from '@/components/modals/admission/ImportOdelModal'
 import { SearchSelect } from '@/components/SearchSelect'
 import DatePicker from '@/components/DatePicker'
-import { useCurrentAcademicIntake, useCurrentAdmissionIntake, useIntake } from '@/hooks/academic/useIntakes'
+import { useCurrentAcademicIntake, useCurrentAdmissionIntake, useIntakesDropdown } from '@/hooks/academic/useIntakes'
 import { useCampusDropdown } from '@/hooks/config/useCampuses'
 import { useCountriesForPicker } from '@/hooks/config/useCountries'
-import { useSearchProgramMastersByCampusInfinite } from '@/hooks/academic/useProgramMaster'
+import { useApprovedProgramsByCampus } from '@/hooks/academic/useProgramMaster'
 import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
-import { useProgramFeeStructures } from '@/hooks/academic/useProgramFeeStructure'
+import { useFeeStructureDropdown } from '@/hooks/academic/useProgramFeeStructure'
 import { useBatchTimesDropdown } from '@/hooks/config/useBatchTimes'
-import { useFilteredBatches } from '@/hooks/academic/useBatches'
+import { useAdmissionBatchDropdown } from '@/hooks/academic/useBatches'
 import { getDefaultFinanceCurrencyGuid } from '@/hooks/finance/useFinanceCurrencies'
 import { useCurrenciesDropdown } from '@/hooks/finance/useCurrencies'
-import { ProcBankSearchSelect } from '@/components/ProcBankSearchSelect'
+import { useActiveProcBankDropdown } from '@/hooks/finance/useProcBanks'
 import { useExchangeRateExists, useExchangeRatesByDate } from '@/hooks/finance/useExchangeRates'
 import { TodayExchangeRateModal } from '@/components/modals/finance/TodayExchangeRateModal'
 import { RatesAlreadySetNote } from '@/components/finance/RatesAlreadySetNote'
 import { useReceiptBookDropdown } from '@/hooks/finance/useReceiptBooks'
 import { Country, dialCode, findDefaultCountry } from '@/lib/api/academic/country'
 import { EMPTY_GUID } from '@/lib/api/academic/batch'
-import { useEnquiry, useEnquiries } from '@/hooks/admission/useEnquiries'
 import {
   useApplicationPaymentExemptionTypes,
   useApplicationPaymentTypes,
   useCreateApplicationPayment,
+  usePaymentEnquiry,
   useUnconvertedEnquiriesInfinite,
 } from '@/hooks/admission/useApplicationPayments'
 import { useMenuPagePermissions, usePagePermissions } from '@/hooks/users/usePagePermissions'
@@ -234,9 +234,6 @@ function PaymentPageContent() {
   const [failure, setFailure] = useState<string | null>(null)
   const [form, setForm]         = useState<FormData>({ ...initialForm })
   const [enquirySearch, setEnquirySearch] = useState('')
-  const [programSearch, setProgramSearch] = useState('')
-  const [committedProgramSearch, setCommittedProgramSearch] = useState('')
-  const [programPickerOpen, setProgramPickerOpen] = useState(false)
   const [payProofFile, setPayProofFile] = useState<File | null>(null)
   // Per Application_Payment_Change_Requests_Final_Updated.md #6 — Receipt
   // Type/No. are no longer user-entered; populated from the create
@@ -382,11 +379,6 @@ function PaymentPageContent() {
   function setSemester(v: string) { setForm(prev => ({ ...prev, semesterGuid: v, batchGuid: '' })) }
   function setBatchTime(v: string) { setForm(prev => ({ ...prev, batchTimeGuid: v, batchGuid: '' })) }
 
-  useEffect(() => {
-    const timer = setTimeout(() => setCommittedProgramSearch(programSearch.trim()), 300)
-    return () => clearTimeout(timer)
-  }, [programSearch])
-
   // ── Real data ──────────────────────────────────────────────────────────
   // enquiryGuid is optional on Create — a payment can be taken without
   // linking an enquiry (an earlier backend build 400'd without it; no
@@ -406,11 +398,11 @@ function PaymentPageContent() {
   // then rejects the conversion with its "previous intake" message.
   const currentIntakeQuery = useCurrentAcademicIntake()
   const admissionIntakeQuery = useCurrentAdmissionIntake()
-  // Campus and Country from their dropdown APIs (GET /campus/dropdown,
-  // /countries/dropdown): one cached call each, filtered in the browser.
-  // Programme stays on by-campus, as the backend asked for this page.
+  // Campus, Country and Programme from their dropdown APIs (GET
+  // /campus/dropdown, /countries/dropdown, /program-master/dropdown?campusGuid=):
+  // one cached call each, filtered in the browser.
   const { data: campuses = [], isLoading: campusesLoading } = useCampusDropdown()
-  const programQuery = useSearchProgramMastersByCampusInfinite(form.campusGuid, committedProgramSearch, 20, programPickerOpen)
+  const programQuery = useApprovedProgramsByCampus(form.campusGuid, '', true)
   const { countries, home: homeCountry, isLoading: countriesLoading } = useCountriesForPicker()
   const intakes = useMemo(() => {
     const list = [admissionIntakeQuery.data, currentIntakeQuery.data].filter((i): i is NonNullable<typeof i> => !!i)
@@ -418,38 +410,14 @@ function PaymentPageContent() {
   }, [admissionIntakeQuery.data, currentIntakeQuery.data])
   const intakesLoading = currentIntakeQuery.isLoading || admissionIntakeQuery.isLoading
   const noOpenIntake = !intakesLoading && currentIntakeQuery.isSuccess && admissionIntakeQuery.isSuccess && intakes.length === 0
-  const programsByCampus = useMemo(() => flattenUniquePages(programQuery.data?.pages ?? [], p => p.programGuid), [programQuery.data])
+  // Placeholder rows belong to the previous campus.
+  const programsByCampus = programQuery.isPlaceholderData ? [] : programQuery.data ?? []
   const { data: semesters = [] } = useSemestersForProgram(form.programGuid, !!form.programGuid)
   const { data: batchTimes = [] } = useBatchTimesDropdown()
-  // The payment-scoped Dropdowns/Batches.bru endpoint returns a real 200
-  // with an empty array for combinations that do have a matching batch in
-  // the generic Batches list — its filtering logic looks broken server-side,
-  // not just unconfirmed. Falls back to the already-confirmed-correct
-  // generic Batches list (same one Batch Management uses, real
-  // programGuid/semesterGuid/batchTimeGuid), filtered client-side instead.
-  // Same "payment-scoped endpoint is unreliable, use the generic one"
-  // pattern as the Receipt Books field below. The server narrows by programme
-  // and batch time (it filters by semCode, not semesterGuid), the semester
-  // here; fetched once all three are picked.
-  const { data: batchesData } = useFilteredBatches(
-    1, 100, '', {},
-    { programGuids: [form.programGuid], batchTimeGuids: [form.batchTimeGuid] },
-    !!form.programGuid && !!form.semesterGuid && !!form.batchTimeGuid,
-  )
-  const batches = (batchesData?.items ?? []).filter(b =>
-    b.programGuid === form.programGuid && b.semesterGuid === form.semesterGuid && b.batchTimeGuid === form.batchTimeGuid,
-  )
-  // The payment-scoped Dropdowns/Fees.bru endpoint (getApplicationPaymentFees
-  // in lib/api/admission/applicationPayment.ts) is what this dropdown used to
-  // run on — reported blank for a selected Programme that does have real fee
-  // structures under it. Same
-  // "payment-scoped endpoint is unreliable for this page, use the generic
-  // master instead" pattern already applied to Batches and Receipt Books
-  // above: fall back to the already-confirmed-real Programme Fee Structure
-  // list (same one /academic/fee-structure's own table uses), asked for just
-  // the selected Programme, with Active status filtered client-side.
-  const { data: feeStructuresData } = useProgramFeeStructures(1, 100, form.programGuid, !!form.programGuid)
-  const fees = (feeStructuresData?.items ?? []).filter(f => f.programGuid === form.programGuid && f.status)
+  // Active batches of the current admission intake; fetched once programme,
+  // semester and batch time are all picked.
+  const { data: batches = [] } = useAdmissionBatchDropdown(form.programGuid, form.semesterGuid, form.batchTimeGuid)
+  const { data: fees = [] } = useFeeStructureDropdown(form.programGuid)
   const { data: exemptionTypes = [] } = useApplicationPaymentExemptionTypes()
   const { data: paymentTypes = [] }  = useApplicationPaymentTypes()
   // The dropdown's isDefault is a boolean, GET /currencies' a number; the rest
@@ -486,9 +454,9 @@ function PaymentPageContent() {
 
   // Fetch full detail for the selected enquiry (fresh fields — intake/
   // campus/programme/candidate info — that the dropdown's own label doesn't
-  // carry) and prefill the form from it, confirmed via a real GET
-  // /api/v1/admissions/enquiries/:guid response.
-  const { data: selectedEnquiry } = useEnquiry(form.enquiryGuid || null, !!form.enquiryGuid)
+  // carry) and prefill the form from it
+  // (GET /application-payments/enquiries/:guid).
+  const { data: selectedEnquiry } = usePaymentEnquiry(form.enquiryGuid)
   // The full country dropdown, so the enquiry's countries are always in it.
   const allCountries = countries
   // Guards against re-applying the same enquiry's data over edits the user
@@ -625,7 +593,8 @@ function PaymentPageContent() {
   // field — and the Preview panel's labelFor() — showed blank. Keep the
   // selected value listed with a label from data we already have until the
   // real option pages in.
-  const { data: selectedIntakeDetail } = useIntake(form.intakeGuid || null, !!form.intakeGuid)
+  const { data: allIntakes = [] } = useIntakesDropdown()
+  const selectedIntakeDetail = allIntakes.find(i => i.intakeGuid === form.intakeGuid)
   function withSelected(options: Option[], value: string, label: string | null | undefined): Option[] {
     return value && label && !options.some(o => o.value === value) ? [{ value, label }, ...options] : options
   }
@@ -635,7 +604,7 @@ function PaymentPageContent() {
   const intakeOptions   = withSelected(
     intakes.map(i => ({ value: i.intakeGuid, label: `${i.intakeCode} — ${i.description}` })),
     form.intakeGuid,
-    selectedIntakeDetail?.intakeGuid === form.intakeGuid ? `${selectedIntakeDetail.intakeCode} — ${selectedIntakeDetail.description}` : null,
+    selectedIntakeDetail ? `${selectedIntakeDetail.intakeCode} — ${selectedIntakeDetail.description}` : null,
   )
   const campusOptions   = campuses.map(c => ({ value: c.campusGuid, label: c.campusName }))
   const programOptions  = withSelected(
@@ -667,6 +636,8 @@ function PaymentPageContent() {
   const semesterOptions = semesters.map(s => ({ value: s.semesterGuid, label: s.semName }))
   const batchTimeOptions = batchTimes.map(bt => ({ value: bt.batchTimeGuid, label: bt.batchTime }))
   const batchOptions    = batches.map(b => ({ value: b.batchGuid, label: b.batchCode }))
+  const { data: banks = [], isLoading: banksLoading } = useActiveProcBankDropdown()
+  const bankOptions     = banks.map(b => ({ value: b.procBankGuid, label: b.bankName }))
   const feeOptions      = fees.map(f => ({ value: f.feeHdGuid, label: `${f.feeDesc} (${f.feeCode})` }))
   const exemptionOptions: Option[] = [{ value: '', label: '-- None (Pay Full Fee) --' }, ...exemptionTypes.map(e => ({ value: e.exemptionTypeGuid, label: e.label }))]
   const payTypeOptions  = paymentTypes.map(t => ({ value: String(t.intPaymentType), label: t.paymentTypeName }))
@@ -879,7 +850,7 @@ function PaymentPageContent() {
               studentName,
               mobile: mobileDigits || null,
               email: form.email.trim() || null,
-              intakeCode: (intakes.find(i => i.intakeGuid === form.intakeGuid) ?? (selectedIntakeDetail?.intakeGuid === form.intakeGuid ? selectedIntakeDetail : undefined))?.intakeCode ?? null,
+              intakeCode: (intakes.find(i => i.intakeGuid === form.intakeGuid) ?? selectedIntakeDetail)?.intakeCode ?? null,
               intakeGuid: form.intakeGuid || null,
               enquiryGuid: form.enquiryGuid || null,
               countryGuid: form.countryGuid || null,
@@ -1139,12 +1110,7 @@ function PaymentPageContent() {
                   placeholder={form.campusGuid ? '-- Select Programme --' : '-- Select Campus First --'}
                   onChange={setProgram}
                   disabled={!form.campusGuid}
-                  onSearch={setProgramSearch}
-                  onOpenChange={setProgramPickerOpen}
-                  isLoading={programQuery.isLoading}
-                  hasNextPage={programQuery.hasNextPage}
-                  isFetchingNextPage={programQuery.isFetchingNextPage}
-                  onLoadMore={() => programQuery.fetchNextPage()}
+                  isLoading={programQuery.isFetching}
                 />
               </Field>
               <Field label="Fee Structure" req error={errorFor('feeHdGuid')}>
@@ -1281,7 +1247,14 @@ function PaymentPageContent() {
                   {/* Proc Bank Master, not the generic Banks master: bankGuid must
                       be a real bank account, or submit fails with "Bank account
                       not found" (Application_Payment_Change_Requests_Final_Updated.md #4). */}
-                  <ProcBankSearchSelect value={form.bankGuid} onChange={v => set('bankGuid', v)} disabled={isWaived} />
+                  <SearchSelect
+                    placeholder="Select bank"
+                    options={bankOptions}
+                    value={form.bankGuid}
+                    onChange={v => set('bankGuid', v)}
+                    disabled={isWaived}
+                    isLoading={banksLoading}
+                  />
                 </Field>
               </div>
             )}

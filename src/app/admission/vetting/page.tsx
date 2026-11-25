@@ -17,14 +17,15 @@ import { VettingQueueItem, VettingRejectionItem } from '@/lib/api/admission/vett
 import { searchIntakesDropdown } from '@/lib/api/academic/intake'
 import { searchCampusDropdown } from '@/lib/api/academic/campus'
 import { dropdownAsPage } from '@/lib/pagination'
-import { getProgramMastersPage } from '@/lib/api/academic/programMaster'
+import { searchProgramDropdown } from '@/lib/api/academic/programMaster'
 import { formatDate } from '@/lib/date'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
-// Intake and Campus filters read their dropdown APIs (GET /intakes/dropdown,
+// Intake, Campus and Programme filters read their dropdown APIs (GET /intakes/dropdown,
 // /campus/dropdown) — one call per search, no paging.
 const intakeDropdownPage = dropdownAsPage(searchIntakesDropdown)
 const campusDropdownPage = dropdownAsPage(searchCampusDropdown)
+const programDropdownPage = dropdownAsPage(searchProgramDropdown)
 
 // Real server-side pagination — only DISPLAY_PAGE_SIZE rows are ever
 // requested for the page currently on screen (studentName search is also a
@@ -406,7 +407,7 @@ export default function VettingPage() {
               <div style={{ width: 240 }}>
                 <InfiniteSearchSelect
                   queryKey={['program-masters', 'vetting-waiting']}
-                  fetchPage={getProgramMastersPage}
+                  fetchPage={programDropdownPage}
                   toOption={p => ({ value: p.programGuid, label: p.programName || p.programCode })}
                   allLabel="All programmes"
                   value={waitProgram}
@@ -500,7 +501,7 @@ export default function VettingPage() {
               <div style={{ width: 240 }}>
                 <InfiniteSearchSelect
                   queryKey={['program-masters', 'vetting-rejections']}
-                  fetchPage={getProgramMastersPage}
+                  fetchPage={programDropdownPage}
                   toOption={p => ({ value: p.programGuid, label: p.programName || p.programCode })}
                   allLabel="All programmes"
                   value={rejProgram}

@@ -204,6 +204,8 @@ const mockApplications: ApplicationListItem[] = []
 // something here, trust the live response over this interface.
 export interface ApplicationDetailDto extends ApplicationListItem {
   actionLabel: string | null
+  // Resolved from batchGuid on /by-payment; null when there's no batch.
+  batchCode?: string | null
 }
 
 // Only ever returns data for an application whose Action == Submitted — a

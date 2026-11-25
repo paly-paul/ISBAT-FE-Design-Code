@@ -8,13 +8,17 @@ export { loginUrlForCurrentPage } from '@/lib/loginNext'
 // Where to land after staff login:
 //  1. the link the user was trying to open when they were sent to login
 //     (carried as /login/staff?next=…), if their menu allows it;
-//  2. otherwise the first page of their own menu;
-//  3. otherwise the login API's own redirect (e.g. '/academic').
+//  2. otherwise the first page of their own menu they can open;
+//  3. otherwise (no access assigned yet) their profile, which isn't
+//     permission-gated, rather than a module page that would answer 403;
+//  4. if the menu couldn't be loaded, the link from 1 or the login API's own
+//     redirect (e.g. '/academic').
 //
 // `next` is kept in sessionStorage between the login form and the OTP step,
 // since router.push('/login/otp') drops the query string.
 
 const NEXT_KEY = 'isbat_login_next'
+const NO_ACCESS_HOME = '/profile'
 
 // Called when the login form mounts: keeps ?next= for after login (and OTP).
 export function rememberNextFromUrl() {
@@ -42,7 +46,7 @@ export async function resolvePostLoginTarget(queryClient: QueryClient, fallback:
     // Same cache entry the sidebar uses, so it isn't fetched twice.
     const { menu } = await queryClient.fetchQuery({ queryKey: MENU_KEY, queryFn: getMenu, staleTime: Infinity })
     if (next && isRouteAllowed(menu, next.split(/[?#]/)[0])) return next
-    return flattenMenuPages(menu)[0]?.url ?? fallback
+    return flattenMenuPages(menu).find(p => isRouteAllowed(menu, p.url))?.url ?? NO_ACCESS_HOME
   } catch {
     return next ?? fallback
   }

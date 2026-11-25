@@ -4,6 +4,7 @@ import {
   createApplicationPayment,
   getApplicationPaymentExemptionTypes,
   getApplicationPaymentTypes,
+  getPaymentEnquiry,
   getUnconvertedEnquiries,
 } from '@/lib/api/admission/applicationPayment'
 
@@ -51,6 +52,15 @@ export function useUnconvertedEnquiriesInfinite(intakeGuid: string, searchTerm: 
     enabled: enabled && !!intakeGuid,
     staleTime: Infinity,
     gcTime: Infinity,
+  })
+}
+
+// The selected enquiry's prefill fields.
+export function usePaymentEnquiry(enquiryGuid: string) {
+  return useQuery({
+    queryKey: [...APPLICATION_PAYMENTS_KEY, 'enquiry', enquiryGuid],
+    queryFn: () => getPaymentEnquiry(enquiryGuid),
+    enabled: !!enquiryGuid,
   })
 }
 
