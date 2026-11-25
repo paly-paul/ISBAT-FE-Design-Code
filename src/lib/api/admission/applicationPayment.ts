@@ -225,6 +225,33 @@ export function getUnconvertedEnquiries(intakeGuid: string, page = 1, pageSize =
   })
 }
 
+// GET /api/v1/admissions/application-payments/enquiries/{enquiryGuid}
+// (get-payment-enquiry.md): the enquiry fields that prefill the payment form,
+// under the payment page's own permission (admission.payment.get).
+export interface PaymentEnquiryDto {
+  enquiryGuid: string
+  enquiryCode: string
+  studentName: string
+  mobile: string
+  mobileCountryGuid: string | null
+  mobileCountryPrefix: string | null
+  email: string
+  countryGuid: string
+  countryName: string | null
+  intakeGuid: string
+  campusGuid: string
+  campusName: string | null
+  programGuid: string | null
+  programCode: string | null
+  programName: string | null
+  remarks: string | null
+}
+
+export function getPaymentEnquiry(enquiryGuid: string): Promise<PaymentEnquiryDto> {
+  if (MOCK_AUTH) return Promise.reject(new Error('Enquiry not found.'))
+  return apiGet<PaymentEnquiryDto>(`/api/v1/admissions/application-payments/enquiries/${enquiryGuid}`)
+}
+
 // search matches batch code.
 export function getApplicationPaymentBatches(programGuid: string, semesterGuid: string, batchTimeGuid: string, search?: string): Promise<BatchInfoDto[]> {
   if (MOCK_AUTH) return Promise.resolve(mockMatch(mockBatches, search, b => [b.batchCode]))

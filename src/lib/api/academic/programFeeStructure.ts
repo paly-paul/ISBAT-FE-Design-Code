@@ -94,6 +94,21 @@ export function getProgramFeeStructures(pageNumber = 1, pageSize = 20, programGu
     .then(data => data ?? { items: [], totalCount: 0, pageNumber, pageSize })
 }
 
+export interface FeeStructureDropdownItem {
+  feeHdGuid: string
+  feeCode: string
+  feeDesc: string
+}
+
+// GET /api/v1/academic/Programfee-structure/dropdown (get-fee-hd-dropdown.md):
+// a programme's active fee structures. Needs only a signed-in user, unlike the
+// list above (academic.program.get).
+export function getFeeStructureDropdown(programGuid: string): Promise<FeeStructureDropdownItem[]> {
+  if (MOCK_AUTH) return Promise.resolve([])
+  return apiGet<FeeStructureDropdownItem[] | null>(`/api/v1/academic/Programfee-structure/dropdown?programGuid=${encodeURIComponent(programGuid)}`)
+    .then(data => data ?? [])
+}
+
 // One real fee line as returned by GET fee-lines/:feeHdGuid. ledgerNum here
 // is confirmed to be an independent, real per-line priority set by whoever
 // created the structure — a real sample has three lines for the same

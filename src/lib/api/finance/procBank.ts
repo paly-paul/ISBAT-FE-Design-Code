@@ -45,6 +45,20 @@ export function getProcBanks(): Promise<ProcBank[]> {
   return apiGet<ProcBankListResponse | null>(`/api/v1/finance/proc-banks?page=1&pageSize=${PROC_BANKS_LOAD_SIZE}`).then(data => data?.items ?? [])
 }
 
+export interface ProcBankDropdownItem {
+  procBankGuid: string
+  bankName: string
+  shortCode: string
+  accountCode: string
+}
+
+// GET /api/v1/finance/proc-banks/dropdown?activeOnly=true
+// (get-proc-bank-dropdown.md): unpaged, sorted by name, any signed-in user.
+export function getActiveProcBankDropdown(): Promise<ProcBankDropdownItem[]> {
+  if (MOCK_AUTH) return Promise.resolve(mockProcBanks.filter(b => b.status === STATUS_VALUES.Active))
+  return apiGet<ProcBankDropdownItem[] | null>('/api/v1/finance/proc-banks/dropdown?activeOnly=true').then(data => data ?? [])
+}
+
 // One page at a time, for scrolling pickers.
 export function getProcBanksPaged(page: number, pageSize: number): Promise<ProcBankListResponse> {
   if (MOCK_AUTH) {

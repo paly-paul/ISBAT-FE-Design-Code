@@ -7,18 +7,15 @@ import DatePicker from '@/components/DatePicker'
 import { FailurePopup } from '@/components/modals/shared/FailurePopup'
 import { DocumentPreviewModal } from '@/components/modals/shared/DocumentPreviewModal'
 import { useCampusDropdown } from '@/hooks/config/useCampuses'
-import { useProgramMaster, useProgramMasterByGuid, useSearchProgramMastersInfinite } from '@/hooks/academic/useProgramMaster'
 import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
 import { useBatchTimesDropdown } from '@/hooks/config/useBatchTimes'
-import { useBatch, useFilteredBatches } from '@/hooks/academic/useBatches'
+import { useAdmissionBatchDropdown } from '@/hooks/academic/useBatches'
 import { useCountriesForPicker } from '@/hooks/config/useCountries'
-import { useProgramFeeStructures } from '@/hooks/academic/useProgramFeeStructure'
+import { useFeeStructureDropdown } from '@/hooks/academic/useProgramFeeStructure'
 import { useMenuPagePermissions, usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { sanitizePhoneInput, sanitizeNameInput } from '@/lib/errorMessages'
 import { consumeFilingPrefill } from '@/lib/filingHandoff'
-import { getEnquiryById, getEnquiries } from '@/lib/api/admission/enquiry'
 import { AuthError } from '@/lib/api/client'
-import { flattenUniquePages } from '@/lib/pagination'
 import { scrollToFirstError } from '@/lib/scrollToFirstError'
 import {
   FilingApplicationSearchResult,
@@ -422,30 +419,8 @@ export default function FilingPage() {
     setIsRefugee(a.refugee === 1)
     setRefugeeId(a.refugeeId ?? '')
 
-    if (!a.dob) {
-      if (a.enquiryGuid) {
-        getEnquiryById(a.enquiryGuid)
-          .then(enq => {
-            if (enq.dob) setDob(enq.dob.slice(0, 10))
-            if (enq.countryGuid && !a.countryGuid) setCountryGuid(enq.countryGuid)
-          })
-          .catch(() => {})
-      } else if (a.phone || a.emailId) {
-        getEnquiries(1, 10, a.phone || a.emailId || '')
-          .then(res => {
-            const found = res.items.find(
-              e =>
-                (a.phone && e.mobile && e.mobile.replace(/\D/g, '').includes(a.phone.replace(/\D/g, ''))) ||
-                (a.emailId && e.email && e.email.toLowerCase() === a.emailId.toLowerCase()),
-            )
-            if (found && found.dob) {
-              setDob(found.dob.slice(0, 10))
-            }
-          })
-          .catch(() => {})
-      }
-    }
-
+    // A missing date of birth (and country) is filled from the by-payment
+    // detail, which falls back to the linked enquiry's dob.
     setIntakeGuid(a.intakeGuid ?? '')
     setCampusGuid(a.campusGuid ?? '')
     setProgramGuidState(a.programGuid ?? '')
@@ -504,85 +479,17 @@ export default function FilingPage() {
   // /campus/dropdown): one cached call each, filtered in the browser.
   const { home: homeCountry, known: knownCountries, isLoading: countriesLoading } = useCountriesForPicker()
   const { data: campuses = [] } = useCampusDropdown(!!selectedApplication)
-  const programQuery = useSearchProgramMastersInfinite('', 20, !!selectedApplication)
-  const programs = useMemo(() => flattenUniquePages(programQuery.data?.pages ?? [], p => p.programGuid), [programQuery.data])
-  const { data: singleProgram }   = useProgramMaster(
-    programGuid,
-    !!programGuid && !programs.some(p => p.programGuid === programGuid)
-  )
   const { data: semesters = [] }  = useSemestersForProgram(programGuid, !!programGuid)
   const { data: batchTimes = [] } = useBatchTimesDropdown(!!selectedApplication)
-  // Same payment-scoped Dropdowns/Batches.bru endpoint that turned out
-  // unreliable on the Payment page (200 with an empty array for
-  // combinations that do have a matching batch) — use the generic,
-  // already-confirmed-correct Batches list instead. The server narrows by
-  // programme and batch time (it filters by semCode, not semesterGuid), the
-  // semester here; fetched once all three are set.
-  const { data: batchesData } = useFilteredBatches(
-    1, 100, '', {},
-    { programGuids: [programGuid], batchTimeGuids: [batchTimeGuid] },
-    !!selectedApplication && !!programGuid && !!semesterGuid && !!batchTimeGuid,
-  )
-  const batches = (batchesData?.items ?? []).filter(b =>
-    b.programGuid === programGuid && b.semesterGuid === semesterGuid && b.batchTimeGuid === batchTimeGuid,
-  )
-  // Same gap as Programme above: a real selected application's batchGuid
-  // (prefilled from the payment record) may not be among those, or its batch
-  // time may not be set yet. Fetches that one specific batch directly and
-  // merges it in below, same "guarantee the selected option's label
-  // resolves even if the general list doesn't carry it" fix.
-  const missingSelectedBatch = !!batchGuid && !batches.some(b => b.batchGuid === batchGuid)
-  const { data: selectedBatchFallback } = useBatch(batchGuid || null, missingSelectedBatch)
-  // Same payment-scoped Dropdowns/Fees.bru endpoint that turned out
-  // unreliable on the Payment page (blank for a Programme that does have
-  // real fee structures) — use the generic, already-confirmed-correct
-  // Programme Fee Structure list instead, asked for just this Programme, same
-  // fix as applied there.
-  const { data: feeStructuresData } = useProgramFeeStructures(1, 100, programGuid, !!selectedApplication && !!programGuid)
-  const fees = (feeStructuresData?.items ?? []).filter(f => f.programGuid === programGuid && f.status)
-
-  // CONFIRMED live: a real selected application's programGuid (locked/
-  // prefilled from the payment record, see selectApplication above) can
-  // resolve a real Fee Structure and Semester (both filtered/fetched by
-  // that same programGuid) while having no matching entry in
-  // useProgramMasters()' own list — the Programme field then renders
-  // unselected even though a real, valid programGuid is set. Fetches that
-  // one specific programme directly and merges it in below, same
-  // "guarantee the selected option's label resolves even if the general
-  // list doesn't carry it" fix as the Payment page's own
-  // enquiryOptionsWithSelected.
-  const missingSelectedProgram = !!programGuid && !programs.some(p => p.programGuid === programGuid)
-  const { data: selectedProgramFallback } = useProgramMasterByGuid(programGuid, missingSelectedProgram)
+  // Active batches of the current admission intake, and the programme's active
+  // fee structures. The application's own batch / fee may be in neither list;
+  // their labels come from the by-payment detail (see batchOptions, feeOptions).
+  const { data: batches = [] } = useAdmissionBatchDropdown(programGuid, semesterGuid, batchTimeGuid, !!selectedApplication)
+  const { data: fees = [] } = useFeeStructureDropdown(programGuid, !!selectedApplication)
 
   const campusOptions    = campuses.map(c => ({ value: c.campusGuid, label: c.campusName }))
-  // Merges every source of a Programme label this page can see: the
-  // (possibly paginated/scoped) programs list, the supplementary
-  // programDropdown list, and — same "guarantee the selected option's label
-  // resolves even if the general list doesn't carry it" fix as batchOptions
-  // below — selectedProgramFallback, the one-off fetch-by-guid for a real
-  // selected application's programGuid that isn't in either list.
-  const programOptions   = useMemo(() => {
-    const map = new Map<string, string>()
-    for (const p of programs) {
-      map.set(p.programGuid, `${p.programName} (${p.programCode})`)
-    }
-    if (selectedProgramFallback && !map.has(selectedProgramFallback.programGuid)) {
-      map.set(selectedProgramFallback.programGuid, `${selectedProgramFallback.programName} (${selectedProgramFallback.programCode})`)
-    }
-    const currentProgGuid = programGuid || selectedApplication?.programGuid
-    if (currentProgGuid && !map.has(currentProgGuid)) {
-      const fallback = selectedApplication?.programName || singleProgram?.programName || 'Selected Programme'
-      map.set(currentProgGuid, fallback)
-    }
-    return Array.from(map.entries()).map(([value, label]) => ({ value, label }))
-  }, [programs, selectedProgramFallback, singleProgram, programGuid, selectedApplication?.programGuid, selectedApplication?.programName])
-
   const semesterOptions  = semesters.map(s => ({ value: s.semesterGuid, label: s.semName }))
   const batchTimeOptions = batchTimes.map(bt => ({ value: bt.batchTimeGuid, label: bt.batchTime }))
-  const batchOptions     = [
-    ...batches.map(b => ({ value: b.batchGuid, label: b.batchCode })),
-    ...(selectedBatchFallback ? [{ value: selectedBatchFallback.batchGuid, label: selectedBatchFallback.batchCode }] : []),
-  ]
 
   // Passport/Visa/Refugee sections only apply to non-home-country nationals.
   // findDefaultCountry (in useCountriesForPicker), not "first flagged": the live
@@ -643,6 +550,19 @@ export default function FilingPage() {
     // as a quiet no-op by the enrichment effect below, not a real failure.
     !!selectedApplication,
   )
+
+  // Programme is locked to the application's own, so its one option is labelled
+  // from the by-payment detail (or the search result until that loads).
+  const programLabel = (applicationDetail?.programGuid === programGuid ? applicationDetail?.programName : null)
+    || selectedApplication?.programName || 'Selected Programme'
+  const programOptions = programGuid ? [{ value: programGuid, label: programLabel }] : []
+
+  // The application's own batch, when it isn't in the current-intake list.
+  // Only while its batch time is unchanged: picking another clears the batch.
+  const batchOptions = batches.map(b => ({ value: b.batchGuid, label: b.batchCode }))
+  if (batchGuid && batchGuid === applicationDetail?.batchGuid && applicationDetail.batchCode && !batchOptions.some(o => o.value === batchGuid)) {
+    batchOptions.push({ value: batchGuid, label: applicationDetail.batchCode })
+  }
 
   // Country pickers: the full country dropdown, so a saved country (the
   // applicant's or the sponsor's) is always in the list.
