@@ -141,18 +141,22 @@ export function useMenuPagePermissions(path: string): MenuPermissions | null {
 // is actually allowed to do rather than always rendering every action.
 // Returns FULL_ACCESS (see above) while permission data is loading or the
 // route isn't found in the tree, and NO_ACCESS if the menu call failed.
-export function usePagePermissions(overridePath?: string): MenuPermissions {
+export function usePagePermissions(
+  overridePath?: string,
+  options?: { fallbackToFullAccess?: boolean }
+): MenuPermissions {
   const routerPathname = usePathname()
   const pathname = overridePath || routerPathname
   const { data, isLoading, isError } = useMenu()
+  const fallback = options?.fallbackToFullAccess === false ? NO_ACCESS : FULL_ACCESS
 
   return useMemo(() => {
     if (isError) return NO_ACCESS
-    if (isLoading || !data) return FULL_ACCESS
+    if (isLoading || !data) return fallback
     for (const moduleNode of data.menu) {
       const found = findNode(moduleNode.children, moduleNode.name.toLowerCase(), pathname)
       if (found) return normalizePermissions(found.permissions)
     }
-    return FULL_ACCESS
-  }, [data, isLoading, isError, pathname])
+    return fallback
+  }, [data, isLoading, isError, pathname, fallback])
 }

@@ -179,9 +179,11 @@ function LearningModeContent() {
               </div>
               <div className="flex gap-2" style={{ justifyContent: 'flex-end' }}>
                 <button className="btn btn-neu" onClick={handleClear}>Cancel</button>
-                <button className="btn btn-primary" disabled={isPending || applyChange.isPending || !permissions.submit} onClick={handleSubmit}>
-                  <i className="lni lni-telegram-original"></i> {applyChange.isPending ? 'Submitting…' : 'Submit for Approval'}
-                </button>
+                {permissions.submit && (
+                  <button className="btn btn-primary" disabled={isPending || applyChange.isPending} onClick={handleSubmit}>
+                    <i className="lni lni-telegram-original"></i> {applyChange.isPending ? 'Submitting…' : 'Submit for Approval'}
+                  </button>
+                )}
               </div>
             </div>
           </>

@@ -208,6 +208,7 @@ export default function ExamRulesPage() {
         onClose={() => setIsViewModalOpen(false)}
         onEdit={handleEditFromView}
         viewingGuid={viewingGuid}
+        canEdit={Boolean(permissions.edit)}
       />
 
       <Toast toast={toast} />

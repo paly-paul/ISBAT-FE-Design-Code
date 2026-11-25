@@ -6,9 +6,10 @@ interface ExamRuleViewModalProps {
   onClose: () => void
   onEdit: () => void
   viewingGuid: string | null
+  canEdit?: boolean
 }
 
-export function ExamRuleViewModal({ isOpen, onClose, onEdit, viewingGuid }: ExamRuleViewModalProps) {
+export function ExamRuleViewModal({ isOpen, onClose, onEdit, viewingGuid, canEdit = false }: ExamRuleViewModalProps) {
   const { data, isLoading } = useExamRule(viewingGuid, isOpen)
   const [sectionAccordion, setSectionAccordion] = useState(0)
 
@@ -127,9 +128,11 @@ export function ExamRuleViewModal({ isOpen, onClose, onEdit, viewingGuid }: Exam
 
         <div className="modal-footer" style={{ borderTop: '1px solid var(--g200)' }}>
           <span className="flex-1"></span>
-          <button className="btn btn-neu" onClick={onEdit} disabled={isLoading || !data} style={{ marginRight: 8 }}>
-            <i className="lni lni-pencil"></i> Edit Rule
-          </button>
+          {canEdit && (
+            <button className="btn btn-neu" onClick={onEdit} disabled={isLoading || !data} style={{ marginRight: 8 }}>
+              <i className="lni lni-pencil"></i> Edit Rule
+            </button>
+          )}
           <button className="btn btn-primary" onClick={onClose}>
             Close
           </button>
