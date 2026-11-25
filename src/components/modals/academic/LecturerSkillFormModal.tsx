@@ -5,7 +5,7 @@ import { SuccessPopup } from '../shared/SuccessPopup'
 import { FailurePopup } from '../shared/FailurePopup'
 import { SearchSelect } from '@/components/SearchSelect'
 import { MultiSelect } from '@/components/MultiSelect'
-import { useEmployee, useEmployeeDropdown } from '@/hooks/employee/useEmployees'
+import { useEmployeeDropdown } from '@/hooks/employee/useEmployees'
 import { useSearchSkillMastersInfinite } from '@/hooks/config/useSkillMaster'
 import { useEmployeeSkills, useLecturerSkill } from '@/hooks/academic/useLecturerSkills'
 import { CreateLecturerSkillInput, EMPTY_GUID, LecturerSkillItemInput, UpdateLecturerSkillsInput } from '@/lib/api/users/skills'
@@ -65,7 +65,6 @@ export function LecturerSkillFormModal({ isOpen, onClose, showToast, mode, lectu
   const [skillSearch, setSkillSearch] = useState('')
   const [committedSkillSearch, setCommittedSkillSearch] = useState('')
 
-  const selectedEmployee = useEmployee(employeeGuid || null)
   const employeeDropdownQuery = useEmployeeDropdown(isOpen)
   const skillQuery = useSearchSkillMastersInfinite(committedSkillSearch, 20, isOpen)
 
@@ -87,16 +86,10 @@ export function LecturerSkillFormModal({ isOpen, onClose, showToast, mode, lectu
     }
   }, [isOpen, isEdit, skill, employeeSkillsQ.data])
 
-  const employeeOptions = useMemo(() => {
-    const arr = (employeeDropdownQuery.data ?? []).map(e => ({
-      value: e.employeeGuid,
-      label: e.displayName,
-    }))
-    if (employeeGuid && !arr.some(option => option.value === employeeGuid) && selectedEmployee.data) {
-      arr.unshift({ value: employeeGuid, label: selectedEmployee.data.empName })
-    }
-    return arr
-  }, [employeeGuid, employeeDropdownQuery.data, selectedEmployee.data])
+  const employeeOptions = useMemo(
+    () => (employeeDropdownQuery.data ?? []).map(e => ({ value: e.employeeGuid, label: e.displayName })),
+    [employeeDropdownQuery.data],
+  )
 
   const catalogOptions = useMemo(() => (
     flattenUniquePages(skillQuery.data?.pages ?? [], s => s.skillGuid).map(s => ({ value: s.skillGuid, label: s.skillName }))

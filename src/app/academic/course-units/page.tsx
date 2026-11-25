@@ -14,13 +14,12 @@ import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { useCourseUnits, useAllCourseUnits, useCreateCourseUnit, useUpdateCourseUnit, useDeleteCourseUnit, CourseUnit } from '@/hooks/academic/useCourseUnits'
-import { useProgramCourseUnits } from '@/hooks/academic/useProgramCourseUnits'
-import { useSearchProgramMastersInfinite } from '@/hooks/academic/useProgramMaster'
+import { useProgramCourseUnitsDropdown } from '@/hooks/academic/useProgramCourseUnits'
+import { useProgramDropdown } from '@/hooks/academic/useProgramMaster'
 import { getCourseUnitById } from '@/lib/api/academic/courseUnit'
 import { downloadDocument } from '@/lib/documentViewer'
 import { DocumentPreviewModal } from '@/components/modals/shared/DocumentPreviewModal'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
-import { flattenUniquePages } from '@/lib/pagination'
 
 const PAGE_SIZE = 10
 // Don't hit the search endpoint (or open the results dropdown) until the
@@ -41,8 +40,6 @@ export default function Page() {
   // of the currently loaded server-search page.
   const [programFilterLabel, setProgramFilterLabel] = useState<string | null>(null)
   const [programPickerOpen, setProgramPickerOpen] = useState(false)
-  const [programSearch, setProgramSearch] = useState('')
-  const [committedProgramSearch, setCommittedProgramSearch] = useState('')
   const [page, setPage] = useState(1)
   const [editingCourseUnitGuid, setEditingCourseUnitGuid] = useState<string | null>(null)
   const [viewingCourseUnitGuid, setViewingCourseUnitGuid] = useState<string | null>(null)
@@ -110,11 +107,6 @@ export default function Page() {
     return () => clearTimeout(t)
   }, [search])
 
-  useEffect(() => {
-    const t = setTimeout(() => setCommittedProgramSearch(programSearch.trim()), 300)
-    return () => clearTimeout(t)
-  }, [programSearch])
-
   // Real server-side pagination AND search — fetches PAGE_SIZE (10) rows at
   // a time instead of the whole table up front, refetching the next 10 only
   // when the user actually pages forward, and `debouncedSearch` is a real
@@ -132,16 +124,14 @@ export default function Page() {
   // "All Programmes" dropdown — there's no programGuid filter on the
   // course-units endpoint itself (CourseUnit carries no programme field at
   // all), so a picked programme is resolved via program-course-units.ts's
-  // GET /program-course-units/{programGuid} instead — the same endpoint
-  // ProgrammeModal's Curriculum view uses — which lists exactly which
+  // GET /program-course-units/{programGuid}/dropdown instead, which lists exactly which
   // course-unit guids are actually assigned to that programme. Mock mode
   // always returns [] here (see programCourseUnits.ts), so the filter has
   // no matches to show under NEXT_PUBLIC_AUTH_MOCK=true. The filter's own
-  // options now come from a lazy SearchSelect-backed server search with
-  // scroll-to-load-more, so no full programme list needs to be kept here.
-  const { data: programCourseUnits = [], isLoading: isProgramCourseUnitsLoading } = useProgramCourseUnits(programFilter || null, !!programFilter)
-  const programQuery = useSearchProgramMastersInfinite(committedProgramSearch, 20, programPickerOpen)
-  const programOptions = flattenUniquePages(programQuery.data?.pages ?? [], p => p.programGuid)
+  // options come from GET /program-master/dropdown, loaded on first open.
+  const { data: programCourseUnits = [], isLoading: isProgramCourseUnitsLoading } = useProgramCourseUnitsDropdown(programFilter || null, !!programFilter)
+  const programQuery = useProgramDropdown(undefined, programPickerOpen)
+  const programOptions = (programQuery.data ?? [])
     .map(p => ({ value: p.programGuid, label: `${p.programCode} — ${p.programName}` }))
   if (programFilter && programFilterLabel && !programOptions.some(p => p.value === programFilter)) {
     programOptions.unshift({ value: programFilter, label: programFilterLabel })
@@ -260,12 +250,8 @@ export default function Page() {
                 placeholder="All Programmes"
                 options={programOptions}
                 value={programFilter}
-                onSearch={setProgramSearch}
                 onOpenChange={setProgramPickerOpen}
                 isLoading={programQuery.isLoading}
-                hasNextPage={programQuery.hasNextPage}
-                isFetchingNextPage={programQuery.isFetchingNextPage}
-                onLoadMore={() => programQuery.fetchNextPage()}
                 onChange={value => {
                   const selected = programOptions.find(option => option.value === value)
                   setProgramFilter(value)

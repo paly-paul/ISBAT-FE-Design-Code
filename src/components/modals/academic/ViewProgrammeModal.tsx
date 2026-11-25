@@ -2,10 +2,7 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { ModalProps } from '../types'
 import { useProgramMasterFullDetails } from '@/hooks/academic/useProgramMaster'
-import { useProgramGroup } from '@/hooks/academic/useProgramGroups'
-import { useProgramLevel } from '@/hooks/academic/useProgramLevels'
-import { useFacultiesByGuids } from '@/hooks/config/useFaculties'
-import { useIntakesByGuids } from '@/hooks/academic/useIntakes'
+import { useIntakesDropdown } from '@/hooks/academic/useIntakes'
 import { useCurrenciesDropdown } from '@/hooks/finance/useCurrencies'
 import { AuthError } from '@/lib/api/client'
 import { FailurePopup } from '../shared/FailurePopup'
@@ -110,12 +107,7 @@ export function ViewProgrammeModal({ isOpen, onClose, programGuid, onEdit }: Vie
     if (el) setIndicator({ left: el.offsetLeft, width: el.offsetWidth })
   }, [activeTab, isOpen, program])
 
-  // Labels for just this programme's own guids, fetched by guid rather than
-  // loading every group/level/faculty/intake.
-  const { data: programGroup } = useProgramGroup(program?.programGroupGuid ?? null, isOpen && !!program)
-  const { data: programLevel } = useProgramLevel(program?.programLevelGuid ?? null, isOpen && !!program)
-  const facultiesByGuid = useFacultiesByGuids(program?.facultyGuid ? [program.facultyGuid] : [])
-  const intakesByGuid = useIntakesByGuids(program?.intakeGuid ? [program.intakeGuid] : [])
+  const { data: intakes = [] } = useIntakesDropdown(isOpen)
   const { data: financeCurrencies = [] } = useCurrenciesDropdown(isOpen)
 
   if (!isOpen) return null
@@ -155,11 +147,11 @@ export function ViewProgrammeModal({ isOpen, onClose, programGuid, onEdit }: Vie
     )
   }
 
-  const groupName = programGroup?.groupName || '—'
-  const levelName = programLevel?.levelName || '—'
-  const facultyName = facultiesByGuid.get(program.facultyGuid)?.facultyName || '—'
-  const intakeName = (program.intakeGuid ? intakesByGuid.get(program.intakeGuid) : undefined)?.description || '—'
-  // Campus straight from full-details (campusName).
+  // Names come straight from full-details.
+  const groupName = program.programGroupName?.trim() || '—'
+  const levelName = program.programLevelName?.trim() || '—'
+  const facultyName = program.schoolName?.trim() || '—'
+  const intakeName = intakes.find(i => i.intakeGuid === program.intakeGuid)?.description || '—'
   const campusName = program.campusName?.trim() || '—'
 
   const semesters = program.semesters ?? []

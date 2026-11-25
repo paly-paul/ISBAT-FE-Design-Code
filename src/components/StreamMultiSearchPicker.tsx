@@ -1,47 +1,32 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { useSearchStreamsInfinite, useStreamsByGuids } from '@/hooks/config/useStreams'
+import { useSpecializationsDropdown } from '@/hooks/config/useStreams'
 
 interface StreamMultiSearchPickerProps {
   value: string[]
+  // Names of already-saved picks the dropdown may not list, by guid.
+  savedNames?: Record<string, string>
   onChange: (vals: string[]) => void
   placeholder?: string
   className?: string
   style?: React.CSSProperties
 }
 
-const PAGE_SIZE = 20
-
 // Multi-pick sibling of ProgramSearchPicker/IntakeSearchPicker/
 // FacultySearchPicker (2026-09-10) — same closed-button/portal-dropdown
 // chrome, but checkbox-driven like MultiSelect (reusing its
 // .col-filter-select-all/.col-filter-opt-row rows) instead of single-select.
-// Replaces ProgrammeModal's Specialization(s) MultiSelect, which used to read
-// off useStreams(isOpen)'s capped 1000-row snapshot, with real server search
-// + scroll-to-load-more underneath (useSearchStreamsInfinite/getStreamsPaged)
-// — confirmed live that GET /api/v1/academic/specializations genuinely
-// supports page/pageSize/search together.
-//
-// Already-selected guids that have scrolled out of (or never entered) the
-// currently loaded pages still need a label to show as a chip/trigger text —
-// resolved via useStreamsByGuids, the same bounded batched-by-guid lookup
-// IntakeSearchPicker's label resolution in ProgrammeModal uses.
-export function StreamMultiSearchPicker({ value, onChange, placeholder = '— Select specialization(s) —', className, style }: StreamMultiSearchPickerProps) {
+// Lists GET /specializations/dropdown (one cached call, filtered here).
+export function StreamMultiSearchPicker({ value, onChange, savedNames, placeholder = '— Select specialization(s) —', className, style }: StreamMultiSearchPickerProps) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
-  const [committedSearch, setCommittedSearch] = useState('')
   const [pos, setPos] = useState<{ top?: number; bottom?: number; left: number; width: number; maxHeight: number }>({ top: 0, left: 0, width: 0, maxHeight: 200 })
 
   const triggerRef = useRef<HTMLButtonElement>(null)
   const dropRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const optsRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    const t = setTimeout(() => setCommittedSearch(search.trim()), 300)
-    return () => clearTimeout(t)
-  }, [search])
 
   function calcPos() {
     if (!triggerRef.current) return
@@ -65,7 +50,6 @@ export function StreamMultiSearchPicker({ value, onChange, placeholder = '— Se
       inputRef.current?.focus()
     } else {
       setSearch('')
-      setCommittedSearch('')
     }
   }, [open])
 
@@ -85,40 +69,26 @@ export function StreamMultiSearchPicker({ value, onChange, placeholder = '— Se
     }
   }, [open])
 
-  const {
-    data, fetchNextPage, hasNextPage, isFetchingNextPage, isFetching, isError,
-  } = useSearchStreamsInfinite(committedSearch, PAGE_SIZE, open)
-
-  const seenGuids = new Set<string>()
-  const items = (data?.pages.flatMap(p => p.items) ?? []).filter(s => {
-    if (seenGuids.has(s.streamGuid)) return false
-    seenGuids.add(s.streamGuid)
-    return true
-  })
-
-  const selectedByGuid = useStreamsByGuids(value)
-
-  function handleScroll(e: React.UIEvent<HTMLDivElement>) {
-    if (!hasNextPage || isFetchingNextPage) return
-    const el = e.currentTarget
-    if (el.scrollTop > 0 && el.scrollHeight - el.scrollTop - el.clientHeight < 48) fetchNextPage()
-  }
+  const { data, isFetching, isError } = useSpecializationsDropdown(open || value.length > 0)
+  const all = (data ?? []).map(s => ({ guid: s.guid || s.streamGuid || '', name: s.name || s.streamName || '' }))
+  const query = search.trim().toLowerCase()
+  const items = query ? all.filter(s => s.name.toLowerCase().includes(query)) : all
 
   function toggleOne(guid: string) {
     onChange(value.includes(guid) ? value.filter(v => v !== guid) : [...value, guid])
   }
 
-  const allLoadedChecked = items.length > 0 && items.every(s => value.includes(s.streamGuid))
+  const allLoadedChecked = items.length > 0 && items.every(s => value.includes(s.guid))
   function toggleAllLoaded() {
-    if (allLoadedChecked) onChange(value.filter(v => !items.some(s => s.streamGuid === v)))
-    else onChange([...new Set([...value, ...items.map(s => s.streamGuid)])])
+    if (allLoadedChecked) onChange(value.filter(v => !items.some(s => s.guid === v)))
+    else onChange([...new Set([...value, ...items.map(s => s.guid)])])
   }
 
   const isEmpty = value.length === 0
   const displayLabel = isEmpty
     ? placeholder
     : value.length === 1
-      ? (() => { const s = selectedByGuid.get(value[0]); return s ? `${s.streamCode} — ${s.streamName}` : '1 selected' })()
+      ? all.find(s => s.guid === value[0])?.name || savedNames?.[value[0]] || '1 selected'
       : `${value.length} selected`
 
   return (
@@ -172,30 +142,27 @@ export function StreamMultiSearchPicker({ value, onChange, placeholder = '— Se
           {items.length > 0 && (
             <label className="col-filter-select-all">
               <input type="checkbox" checked={allLoadedChecked} onChange={toggleAllLoaded} />
-              Select All {committedSearch ? 'Matching' : 'Loaded'}
+              Select All{query ? ' Matching' : ''}
             </label>
           )}
-          <div className="ss-opts" ref={optsRef} style={{ maxHeight: pos.maxHeight }} onScroll={handleScroll}>
+          <div className="ss-opts" ref={optsRef} style={{ maxHeight: pos.maxHeight }}>
             {isFetching && items.length === 0 ? (
               <div className="ss-no-match">Searching…</div>
             ) : isError ? (
               <div className="ss-no-match"><i className="lni lni-warning"></i> Search failed. Please try again.</div>
             ) : items.length === 0 ? (
-              <div className="ss-no-match">{committedSearch ? 'No matching specializations.' : 'No specializations available.'}</div>
+              <div className="ss-no-match">{query ? 'No matching specializations.' : 'No specializations available.'}</div>
             ) : (
               <>
                 {items.map(s => (
                   <label
-                    key={s.streamGuid}
-                    className={`col-filter-opt-row${value.includes(s.streamGuid) ? ' fil-active' : ''}`}
+                    key={s.guid}
+                    className={`col-filter-opt-row${value.includes(s.guid) ? ' fil-active' : ''}`}
                   >
-                    <input type="checkbox" checked={value.includes(s.streamGuid)} onChange={() => toggleOne(s.streamGuid)} />
-                    <span className="font-mono text-b700">{s.streamCode}</span> — {s.streamName}
+                    <input type="checkbox" checked={value.includes(s.guid)} onChange={() => toggleOne(s.guid)} />
+                    {s.name}
                   </label>
                 ))}
-                {isFetchingNextPage && (
-                  <div className="ss-no-match">Loading more…</div>
-                )}
               </>
             )}
           </div>
