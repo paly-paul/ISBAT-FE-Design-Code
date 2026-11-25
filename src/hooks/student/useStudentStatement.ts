@@ -18,9 +18,11 @@ export function useStudentStatementSearch(term: string, enabled = true) {
     queryKey: ['student-statement-search', trimmed],
     queryFn: ({ pageParam = 1 }) => searchStudentStatement(statementSearchFilters(trimmed), pageParam, 15),
     initialPageParam: 1,
-    getNextPageParam: (lastPage) => {
-      const loaded = lastPage.page * lastPage.pageSize
-      return loaded < lastPage.totalCount ? lastPage.page + 1 : undefined
+    // Counted from the rows loaded, not the response's page number, which the
+    // paged endpoints don't all send as `page`
+    getNextPageParam: (lastPage, allPages) => {
+      const loaded = allPages.reduce((n, p) => n + p.items.length, 0)
+      return lastPage.items.length > 0 && loaded < lastPage.totalCount ? allPages.length + 1 : undefined
     },
     enabled,
     staleTime: 60 * 1000,

@@ -60,6 +60,9 @@ export interface ProgramUnitsDto {
   studentName: string
   studentRegNo: string
   programGroupName: string
+  // Sent by the profile academic-record call; can be empty. Not tied to any
+  // row in semesters, which may have none flagged isCurrentSemester.
+  currentSemesterName?: string | null
   totalProgramCredit: number
   // 0-based index into semesters; -1 = collapse all.
   autoExpandSemesterIndex: number

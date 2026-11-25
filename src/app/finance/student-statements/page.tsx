@@ -69,6 +69,12 @@ function sumByCurrency<T extends { currencyName?: string | null; currencyCode?: 
   return [...byCurrency.entries()].map(([currency, total]) => ({ currency, total }))
 }
 
+// Money as displayed (2 decimals). The API can send a leftover fraction
+// (0.004) that prints as 0.00, and statuses must agree with what's printed.
+function roundMoney(amount?: number | null) {
+  return Math.round((amount ?? 0) * 100) / 100
+}
+
 // The fee clearance figures, kept apart per currency as fee-summary sends them.
 const SUMMARY_CURRENCIES = ['UGX', 'USD'] as const
 type CurrencyPair = Record<(typeof SUMMARY_CURRENCIES)[number], number>
@@ -234,7 +240,11 @@ export default function StudentStatementPage() {
 
   const header = statement?.header
   const paymentHistory = statement?.paymentHistory ?? []
-  const outstandingItems = statement?.outstandingItems ?? []
+  // Rows that print as 0.00 aren't outstanding.
+  const outstandingItems = useMemo(
+    () => (statement?.outstandingItems ?? []).filter(o => roundMoney(o.outstanding) !== 0),
+    [statement],
+  )
   const futurePayments = statement?.futurePayments ?? []
 
   // Rate boards for every distinct payDate in the history, for the USD column.
@@ -243,18 +253,19 @@ export default function StudentStatementPage() {
     paymentHistory.length > 0,
   )
 
-  // Summary totals — fee-summary reports paid / to-be-paid per currency with
-  // no conversion, so each figure is a UGX + USD pair. Until it loads, the
-  // statement rows stand in, grouped the same way. Future payments aren't in
-  // fee-summary, so they always come from the statement rows.
+  // Summary totals, each a UGX + USD pair with no conversion. Paid comes from
+  // fee-summary (the statement rows stand in until it loads). Pending and
+  // future come from the statement rows: fee-summary's toBePaid* counts future
+  // payments and leaves out NCHE / Guild dues (seen 2026-11-25), so it would
+  // report fees not yet due as pending.
   const { data: feeSummary } = useStudentFeeSummary(selectedGuid)
 
   const paidBy: CurrencyPair = feeSummary
     ? { UGX: feeSummary.totalAmountPaidUgx, USD: feeSummary.totalAmountPaidUsd }
     : currencyPair(sumByCurrency(paymentHistory, 'amount'))
-  const pendingBy: CurrencyPair = feeSummary
-    ? { UGX: feeSummary.toBePaidUgx, USD: feeSummary.toBePaidUsd }
-    : currencyPair(sumByCurrency(outstandingItems, 'outstanding'))
+  const outstandingTotals = sumByCurrency(outstandingItems, 'outstanding')
+  const rawPending = currencyPair(outstandingTotals)
+  const pendingBy: CurrencyPair = { UGX: roundMoney(rawPending.UGX), USD: roundMoney(rawPending.USD) }
   const futureBy = currencyPair(sumByCurrency(futurePayments, 'amountDue'))
   // Not shown as a figure (it isn't a billed total) — only decides which
   // currencies the card needs.
@@ -284,7 +295,8 @@ export default function StudentStatementPage() {
   const totalFuture = inUgx(futureBy)
   // Pending in either currency holds clearance back, whatever the rate.
   // Future payments aren't due yet, so they don't.
-  const balanceDueCurrent = Math.max(pendingBy.UGX, pendingBy.USD)
+  // Checked over every currency in the list, not just the two shown.
+  const balanceCleared = outstandingTotals.every(t => roundMoney(t.total) <= 0)
 
   // Paid share of the donut (paid · pending · future), so the centre figure
   // matches the green slice.
@@ -834,9 +846,9 @@ export default function StudentStatementPage() {
                       <div className="min-w-0">
                         <div className="pcx-name-row">
                           <h2 className="pcx-name">{name}</h2>
-                          <span className={`pcx-pill ${balanceDueCurrent <= 0 ? 'pcx-pill-green' : 'pcx-pill-amber'}`}>
+                          <span className={`pcx-pill ${balanceCleared ? 'pcx-pill-green' : 'pcx-pill-amber'}`}>
                             <span className="pcx-dot" aria-hidden="true"></span>
-                            {balanceDueCurrent <= 0 ? 'In good standing' : 'Balance pending'}
+                            {balanceCleared ? 'Balance cleared' : 'Balance pending'}
                           </span>
                         </div>
                         <p className="pcx-sub">{header.programName || '—'}</p>
@@ -878,7 +890,7 @@ export default function StudentStatementPage() {
                 <div className="card fd-kpis ss-kpi-panel abd-kpis">
                   {([
                     { tone: 'blue', icon: 'lni-checkmark-circle', label: 'Amount paid', value: paidBy, sub: `${paymentHistory.length} recorded ${paymentHistory.length === 1 ? 'payment' : 'payments'}` },
-                    { tone: balanceDueCurrent > 0 ? 'red' : 'green', icon: 'lni-wallet', label: 'Pending fee', value: pendingBy, sub: `${outstandingItems.length} pending ${outstandingItems.length === 1 ? 'due' : 'dues'}` },
+                    { tone: !balanceCleared ? 'red' : 'green', icon: 'lni-wallet', label: 'Pending fee', value: pendingBy, sub: `${outstandingItems.length} pending ${outstandingItems.length === 1 ? 'due' : 'dues'}` },
                     { tone: 'cyan', icon: 'lni-alarm-clock', label: 'Future payments', value: futureBy, sub: `${futurePayments.length} upcoming ${futurePayments.length === 1 ? 'fee' : 'fees'}` },
                   ]).map(k => (
                     <div key={k.label} className={`fd-kpi fd-kpi-${k.tone}`}>
@@ -909,10 +921,10 @@ export default function StudentStatementPage() {
                       const R = 40
                       const C = 2 * Math.PI * R
                       const segs = [
-                        // fee-summary's totalAmountPaid* / toBePaid* (toBePaid is already the balance).
+                        // Paid is fee-summary's totalAmountPaid*; pending and future are the statement rows.
                         // `value` is the UGX-weighed share for the arcs; `by` is what's shown.
                         { key: 'paid', label: 'Amount Paid', short: 'Paid', sub: `${paymentHistory.length} recorded ${paymentHistory.length === 1 ? 'payment' : 'payments'}`, value: totalPaid, by: paidBy, color: 'var(--green)' },
-                        { key: 'outstanding', label: 'Pending Fee', short: 'Pending', sub: balanceDueCurrent > 0 ? `${outstandingItems.length} pending ${outstandingItems.length === 1 ? 'due' : 'dues'}` : 'Nothing overdue', value: currentOutstanding, by: pendingBy, color: 'var(--red)' },
+                        { key: 'outstanding', label: 'Pending Fee', short: 'Pending', sub: !balanceCleared ? `${outstandingItems.length} pending ${outstandingItems.length === 1 ? 'due' : 'dues'}` : 'Nothing overdue', value: currentOutstanding, by: pendingBy, color: 'var(--red)' },
                         { key: 'future', label: 'Future Payments', short: 'Future', sub: `${futurePayments.length} upcoming ${futurePayments.length === 1 ? 'fee' : 'fees'}`, value: totalFuture, by: futureBy, color: 'var(--b300)' },
                       ]
                       // Mixed currencies are only comparable through a rate — say which.
@@ -932,7 +944,6 @@ export default function StudentStatementPage() {
                       })
                       const pct = (v: number) => Math.round((v / chartTotal) * 100)
                       const focus = segs.find(s => s.key === hoveredChartSegment)
-                      const cleared = balanceDueCurrent <= 0
                       return (
                         <div className="card mb-0 ss-panel ss-chart">
                           <div className="pcx-panel-hdr">
@@ -940,9 +951,9 @@ export default function StudentStatementPage() {
                               <h3 className="pcx-panel-title">Fee clearance</h3>
                               <p className="pcx-panel-sub">{shareNote}</p>
                             </div>
-                            <span className={`pcx-pill ${cleared ? 'pcx-pill-green' : 'pcx-pill-amber'}`}>
-                              <i className={`lni ${cleared ? 'lni-checkmark-circle' : 'lni-warning'}`} aria-hidden="true"></i>
-                              {cleared ? 'Exam clearance eligible' : 'Fee clearance pending'}
+                            <span className={`pcx-pill ${balanceCleared ? 'pcx-pill-green' : 'pcx-pill-amber'}`}>
+                              <i className={`lni ${balanceCleared ? 'lni-checkmark-circle' : 'lni-warning'}`} aria-hidden="true"></i>
+                              {balanceCleared ? 'Cleared' : 'Fee clearance pending'}
                             </span>
                           </div>
 
@@ -988,7 +999,7 @@ export default function StudentStatementPage() {
                                     {s.label}
                                     <span className="ss-eq-pct">{pct(s.value)}%</span>
                                   </span>
-                                  <span className={`ss-eq-amt${s.key === 'outstanding' && balanceDueCurrent > 0 ? ' is-due' : ''}`}>
+                                  <span className={`ss-eq-amt${s.key === 'outstanding' && !balanceCleared ? ' is-due' : ''}`}>
                                     {shownCurrencies.map(c => (
                                       <span key={c} className="ss-eq-line"><span className="ss-eq-cur">{c}</span>{formatMoney(s.by[c])}</span>
                                     ))}
