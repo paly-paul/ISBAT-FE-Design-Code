@@ -26,7 +26,7 @@ export function StudentLearningModeModal({ isOpen, onClose, showToast, studentGu
   const router = useRouter()
   const lmPermissions = usePagePermissions('/student/learning-mode', { fallbackToFullAccess: false })
   const canSubmit = Boolean(lmPermissions.submit)
-  const { data: detail, isLoading } = useStudentLearningModeDetail(isOpen ? studentGuid : null)
+  const { data: detail, isLoading, isError, error } = useStudentLearningModeDetail(isOpen ? studentGuid : null)
   const { data: options = [] } = useLearningModeOptions()
   const applyChange = useApplyLearningModeChange()
   const [selectedMode, setSelectedMode] = useState('')
