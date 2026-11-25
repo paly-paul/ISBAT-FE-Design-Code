@@ -5,6 +5,7 @@ import { ModalProps } from '../types'
 import { SearchSelect } from '@/components/SearchSelect'
 import { useStudentRefugeeDetails, useAssignRefugeeStatus, useUpdateRefugeeStatus, useRemoveRefugeeStatus } from '@/hooks/student/useRefugee'
 import { useCountryDropdown } from '@/hooks/config/useCountries'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 interface Props extends ModalProps {
   studentGuid: string | null
@@ -20,6 +21,10 @@ interface Props extends ModalProps {
 // useRefugee.ts) and vice versa.
 export function StudentRefugeeModal({ isOpen, onClose, showToast, studentGuid, studentName }: Props) {
   const router = useRouter()
+  const refugeePermissions = usePagePermissions('/finance/refugee-status', { fallbackToFullAccess: false })
+  const canCreate = Boolean(refugeePermissions.add || refugeePermissions.create)
+  const canEdit = Boolean(refugeePermissions.edit || refugeePermissions.update)
+  const canDelete = Boolean(refugeePermissions.delete)
   const { data: refugeeDetail, isLoading } = useStudentRefugeeDetails(studentGuid, isOpen)
   const assignRefugeeStatus = useAssignRefugeeStatus()
   const updateRefugeeStatus = useUpdateRefugeeStatus()
@@ -178,18 +183,22 @@ export function StudentRefugeeModal({ isOpen, onClose, showToast, studentGuid, s
           {!isLoading && (
             refugeeDetail && !editing ? (
               <>
-                <button className="btn btn-neu" onClick={startEdit} disabled={removeRefugeeStatus.isPending}>
-                  <i className="lni lni-pencil"></i> Edit
-                </button>
-                <button className="btn btn-primary" style={{ background: 'var(--red)' }} onClick={handleRemove} disabled={removeRefugeeStatus.isPending}>
-                  <i className="lni lni-close"></i> {removeRefugeeStatus.isPending ? 'Removing…' : 'Remove Status'}
-                </button>
+                {canEdit && (
+                  <button className="btn btn-neu" onClick={startEdit} disabled={removeRefugeeStatus.isPending}>
+                    <i className="lni lni-pencil"></i> Edit
+                  </button>
+                )}
+                {canDelete && (
+                  <button className="btn btn-primary" style={{ background: 'var(--red)' }} onClick={handleRemove} disabled={removeRefugeeStatus.isPending}>
+                    <i className="lni lni-close"></i> {removeRefugeeStatus.isPending ? 'Removing…' : 'Remove Status'}
+                  </button>
+                )}
               </>
-            ) : (
+            ) : (editing ? canEdit : canCreate) ? (
               <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
                 <i className="lni lni-checkmark"></i> {saving ? 'Saving…' : editing ? 'Save Changes' : 'Grant Status'}
               </button>
-            )
+            ) : null
           )}
         </div>
       </div>

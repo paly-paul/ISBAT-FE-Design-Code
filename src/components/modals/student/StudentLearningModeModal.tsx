@@ -5,6 +5,7 @@ import { ModalProps } from '../types'
 import { SearchSelect } from '@/components/SearchSelect'
 import { AuthError } from '@/lib/api/client'
 import { useLearningModeOptions, useStudentLearningModeDetail, useApplyLearningModeChange } from '@/hooks/student/useLearningMode'
+import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 interface Props extends ModalProps {
   studentGuid: string | null
@@ -23,7 +24,9 @@ const REMARKS_MAX = 500
 // page and this modal share one cache.
 export function StudentLearningModeModal({ isOpen, onClose, showToast, studentGuid, studentName, programName, semesterName }: Props) {
   const router = useRouter()
-  const { data: detail, isLoading, isError, error } = useStudentLearningModeDetail(isOpen ? studentGuid : null)
+  const lmPermissions = usePagePermissions('/student/learning-mode', { fallbackToFullAccess: false })
+  const canSubmit = Boolean(lmPermissions.submit)
+  const { data: detail, isLoading } = useStudentLearningModeDetail(isOpen ? studentGuid : null)
   const { data: options = [] } = useLearningModeOptions()
   const applyChange = useApplyLearningModeChange()
   const [selectedMode, setSelectedMode] = useState('')
@@ -149,11 +152,11 @@ export function StudentLearningModeModal({ isOpen, onClose, showToast, studentGu
             <button className="btn btn-primary" onClick={() => goToApproval(studentGuid)}>
               <i className="lni lni-eye"></i> Review Request
             </button>
-          ) : (
+          ) : canSubmit ? (
             <button className="btn btn-primary" onClick={handleApply} disabled={applyChange.isPending}>
               <i className="lni lni-telegram-original"></i> {applyChange.isPending ? 'Submitting…' : 'Submit for Approval'}
             </button>
-          ))}
+          ) : null)}
         </div>
       </div>
     </div>
