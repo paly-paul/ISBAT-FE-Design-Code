@@ -206,6 +206,23 @@ export interface ApplicationDetailDto extends ApplicationListItem {
   actionLabel: string | null
   // Resolved from batchGuid on /by-payment; null when there's no batch.
   batchCode?: string | null
+  // Qualifications already saved on the application (/by-payment only).
+  qualifications?: ApplicationQualificationDto[] | null
+}
+
+export interface ApplicationQualificationDto {
+  // The id the delete call takes.
+  intApplicationQual: number
+  applicationQualGuid: string
+  intApplication: number
+  institution: string
+  university: string
+  passYear: number
+  grade: string
+  yearsTaken: number
+  proofUserFileName: string | null
+  // Not sent yet (2026-11-25); the View button appears once it is.
+  proofUrl?: string | null
 }
 
 // Only ever returns data for an application whose Action == Submitted — a
