@@ -27,7 +27,7 @@ import {
 } from '@/hooks/finance/useNcheGuildPayment'
 import { refugeeLabel, sponsorCategoryLabel } from '@/lib/api/finance/paymentConsole'
 import { formatTotalAmount } from '@/lib/api/finance/totalPaid'
-import { REFERENCE_FIELD, REFERENCE_MAX, regulatoryErrorField, validateReference } from '@/lib/api/finance/ncheGuildPayment'
+import { digitsOnly, REFERENCE_FIELD, REFERENCE_MAX, regulatoryErrorField, validateReference } from '@/lib/api/finance/ncheGuildPayment'
 import { useCurrenciesDropdown } from '@/hooks/finance/useCurrencies'
 import { scrollToFirstError } from '@/lib/scrollToFirstError'
 import { stripLeadingZeros } from '@/lib/errorMessages'
@@ -802,11 +802,13 @@ export default function NcheGuildPaymentPage() {
                     <label className="lbl" htmlFor="reg-reference">{REFERENCE_FIELD[category].label} <span className="req">*</span></label>
                     <input
                       id="reg-reference" className="ctrl" type="text" maxLength={REFERENCE_MAX}
+                      inputMode={category === 'nche' ? 'numeric' : undefined}
                       placeholder={REFERENCE_FIELD[category].placeholder}
                       aria-invalid={!!errors.reference}
                       style={errors.reference ? { borderColor: 'var(--red)' } : undefined}
                       value={category === 'nche' ? pnrNumber : bankDeposit}
-                      onChange={e => { (category === 'nche' ? setPnrNumber : setBankDeposit)(e.target.value); clearError('reference') }}
+                      // PNR: digits only, anything else is dropped as it's typed or pasted.
+                      onChange={e => { if (category === 'nche') setPnrNumber(digitsOnly(e.target.value)); else setBankDeposit(e.target.value); clearError('reference') }}
                     />
                     {fieldErr('reference')}
                   </div>

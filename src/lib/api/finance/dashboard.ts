@@ -1,10 +1,12 @@
 import { apiGet } from '../client'
 
 // Finance Dashboard (finance-dashboard-page.md). Docs:
-// finance-service/dashboard/get-dashboard-*.md. All seven need the
-// finance.dashboard.get permission (403 forbidden otherwise). Every amount
-// comes in its own currency and as …InBase (the default currency); only the
-// …InBase figures may be added across currencies.
+// finance-service/dashboard/get-dashboard-*.md. All need the
+// finance.dashboard.get permission (403 forbidden otherwise).
+// Nothing is converted (2026-11-26): every amount is in its own currency and
+// is never added across currencies. The API still sends …InBase,
+// baseCurrencyCode and hasMissingRates, but they're deprecated and left out
+// of these types so nothing can use them.
 
 // ── Summary ────────────────────────────────────────────────────────────────
 
@@ -22,13 +24,6 @@ export interface DashboardSummary {
   previousToDate: string
   studentCount: number
   previousStudentCount: number
-  baseCurrencyCode: string
-  currentInBase: DashboardTotals
-  previousInBase: DashboardTotals
-  // Growth of the converted total, to one decimal; null when the previous
-  // period is 0. The Collected Today card doesn't use it.
-  netChangePercentInBase: number | null
-  hasMissingRates: boolean
   // Only currencies with activity in either period, sorted by code. Never add
   // them together. netChangePercent comes from the API (one decimal, null when
   // previous.net is 0): show it as it is.
@@ -45,18 +40,33 @@ export interface DashboardRangeParams {
 
 export interface DashboardOutstanding {
   generatedAt: string    // local business time; cached 5 min per intake
-  baseCurrencyCode: string
-  hasMissingRates: boolean
   studentCount: number
   owingStudentCount: number
   clearedStudentCount: number
   blockedStudentCount: number
+  owingNotBlockedStudentCount: number
+  // Shares of studentCount, whole numbers adding up to 100. Shown as sent.
+  clearedStudentPercent: number
+  owingNotBlockedStudentPercent: number
+  blockedStudentPercent: number
   blockedBelowPercent: number
-  totalOutstandingInBase: number
-  currentOutstandingInBase: number
-  previousOutstandingInBase: number
-  // Current semester figures, plus what's carried over. Never add across currencies.
+  // Sorted by code. fee/collected/discount cover all students, cleared included.
   byCurrency: {
+    currencyCode: string
+    owingStudentCount: number
+    fee: number
+    collected: number
+    discount: number
+    outstanding: number          // current semester
+    previousOutstanding: number  // earlier semesters
+    totalOutstanding: number
+  }[]
+  // Owed per ledger and currency. Instalment ledgers share the name
+  // "Tuition", so always show ledgerCode with it.
+  byLedger: {
+    ledgerGuid: string | null
+    ledgerCode: string | null
+    ledgerName: string
     currencyCode: string
     owingStudentCount: number
     fee: number
@@ -66,22 +76,28 @@ export interface DashboardOutstanding {
     previousOutstanding: number
     totalOutstanding: number
   }[]
+  // Below: ordered by currencyCode, then largest first (ranked per currency).
   byProgram: {
     programName: string | null
+    currencyCode: string
     owingStudentCount: number
-    outstandingInBase: number
-    previousOutstandingInBase: number
-    totalOutstandingInBase: number
+    outstanding: number
+    previousOutstanding: number
+    totalOutstanding: number
   }[]
-  bySponsorCategory: { sponsorCategory: string; studentCount: number; owingStudentCount: number; totalOutstandingInBase: number }[]
+  bySponsorCategory: { sponsorCategory: string; currencyCode: string; owingStudentCount: number; totalOutstanding: number }[]
+  // One ranked list per currency (topCount each). A student owing in two
+  // currencies is in both.
   topDefaulters: {
-    studentGuid: string
-    studentNumber: string
-    studentName: string
-    programName: string | null
-    clearancePercent: number
-    totalOutstandingInBase: number
-    amounts: { currencyCode: string; totalOutstanding: number }[]
+    currencyCode: string
+    defaulters: {
+      studentGuid: string
+      studentNumber: string
+      studentName: string
+      programName: string | null
+      clearancePercent: number
+      totalOutstanding: number
+    }[]
   }[]
 }
 
@@ -101,22 +117,15 @@ export interface DashboardFeeType {
   discount: number
   outstanding: number
   collectionRatePercent: number | null // null when nothing is payable
-  expectedInBase: number
-  collectedInBase: number
-  overpaidInBase: number
-  discountInBase: number
-  outstandingInBase: number
 }
 
 export interface DashboardCollectionByFeeType {
   generatedAt: string
-  baseCurrencyCode: string
-  hasMissingRates: boolean
   studentCount: number
   registeredCount: number
   feeTypes: DashboardFeeType[]
   // NCHE & Guild: collected only, no target.
-  regulatoryFees: { category: number; categoryName: string; currencyCode: string; collected: number; collectedInBase: number; receiptCount: number; studentCount: number }[]
+  regulatoryFees: { category: number; categoryName: string; currencyCode: string; collected: number; receiptCount: number; studentCount: number }[]
 }
 
 // ── Recent payments ────────────────────────────────────────────────────────
@@ -130,8 +139,7 @@ export interface DashboardRecentPayment {
   programName: string | null
   feeTypes: string[]
   amount: number
-  currencyCode: string
-  amountInBase: number | null          // null when the currency has no rate
+  currencyCode: string                 // the currency it was paid in
   payType: number | null
   payTypeName: string                  // "Unclassified" for NCHE & Guild
   payDate: string
@@ -139,11 +147,9 @@ export interface DashboardRecentPayment {
 }
 
 export interface DashboardRecentPayments {
-  // The day the rows belong to. Without a date in the request: today, or the
-  // latest earlier day with payments when today has none.
+  // The day the rows belong to: the date sent, or without one, today (or the
+  // latest earlier day with payments when today has none).
   date: string
-  baseCurrencyCode: string
-  hasMissingRates: boolean
   totalCount: number
   items: DashboardRecentPayment[]
 }
@@ -167,48 +173,50 @@ export interface DashboardAttention {
 // Only these two; anything else is a 500 from the server.
 export type DashboardGranularity = 'Day' | 'Month'
 
-interface PerCurrencyNet { currencyCode: string; net: number; netInBase: number }
+interface PerCurrencyNet { currencyCode: string; net: number }
 
+// Every list is per currency, ordered by currencyCode and then largest
+// first; topLedgers is the top 10 per currency by gross.
 export interface DashboardCollections {
   fromDate: string
   toDate: string
-  baseCurrencyCode: string
-  hasMissingRates: boolean
   trend: (PerCurrencyNet & { periodStart: string })[]
   byCategory: (PerCurrencyNet & { category: number; categoryName: string; receiptCount: number })[]
   byPayType: (PerCurrencyNet & { payType: number | null; payTypeName: string; receiptCount: number })[]
   // Gross, not net.
-  topLedgers: { ledgerGuid: string | null; ledgerCode: string | null; ledgerName: string; category: number; categoryName: string; currencyCode: string; gross: number; grossInBase: number }[]
+  topLedgers: { ledgerGuid: string | null; ledgerCode: string | null; ledgerName: string; category: number; categoryName: string; currencyCode: string; gross: number }[]
   byUser: (PerCurrencyNet & { userName: string; receiptCount: number })[]
 }
 
 // ── Discounts ──────────────────────────────────────────────────────────────
 
+export interface DashboardDiscountType {
+  discountGuid: string | null
+  discountCode: string | null
+  discountName: string
+  studentCount: number
+  lineCount: number
+  amount: number
+  sharePercent: number   // of this currency's discount, one decimal
+}
+
 export interface DashboardDiscounts {
   fromDate: string
   toDate: string
-  baseCurrencyCode: string
-  hasMissingRates: boolean
-  discountedStudentCount: number
-  totalDiscountInBase: number
-  tuitionGrossInBase: number
-  percentOfTuitionGross: number | null
-  byCurrency: { currencyCode: string; discount: number; tuitionGross: number; percentOfTuitionGross: number | null }[]
-  byType: {
-    discountGuid: string | null
-    discountCode: string | null
-    discountName: string
-    studentCount: number
-    lineCount: number
-    amountInBase: number
-    sharePercent: number
-    amounts: { currencyCode: string; amount: number }[]
+  discountedStudentCount: number   // all currencies
+  // Sorted by code; each a complete block. No overall total.
+  byCurrency: {
+    currencyCode: string
+    discount: number
+    tuitionGross: number
+    percentOfTuitionGross: number | null
+    types: DashboardDiscountType[]  // largest first
   }[]
 }
 
 // ── Cleared / blocked student lists (the two clickable cards) ──────────────
 // Cached 5 min per intake on the server, shared with the Outstanding card.
-// Never add amounts across currencies; the …InBase fields are for totals.
+// Never add amounts across currencies.
 
 export interface DashboardStudentListParams {
   intakeGuid: string        // required (400 "Intake is required." otherwise)
@@ -229,40 +237,29 @@ export interface DashboardClearedStudent {
   studentNumber: string
   studentName: string
   programName: string | null
-  feeInBase: number
-  collectedInBase: number
-  discountInBase: number
   amounts: DashboardStudentAmount[]
 }
 
 export interface DashboardBlockedStudent extends Omit<DashboardClearedStudent, 'amounts'> {
   clearancePercent: number            // 0–49
-  outstandingInBase: number           // this semester
-  previousOutstandingInBase: number
-  totalOutstandingInBase: number
   amounts: (DashboardStudentAmount & { outstanding: number; previousOutstanding: number; totalOutstanding: number })[]
 }
 
-interface DashboardStudentListBase<T> {
+interface DashboardStudentListBase<T, A> {
   generatedAt: string
-  baseCurrencyCode: string
-  hasMissingRates: boolean
   totalCount: number                  // equals the card figure when no filter is set
   pageNumber: number
   pageSize: number
-  // Whole filtered list, not just this page.
-  totalFeeInBase: number
-  totalCollectedInBase: number
-  totalDiscountInBase: number
+  // Whole filtered list, not just this page, one entry per currency.
+  totalsByCurrency: A[]
   items: T[]
 }
 
-export type DashboardClearedStudents = DashboardStudentListBase<DashboardClearedStudent>
+export type DashboardClearedStudents = DashboardStudentListBase<DashboardClearedStudent, DashboardStudentAmount>
 
 // Sorted lowest clearance first.
-export interface DashboardBlockedStudents extends DashboardStudentListBase<DashboardBlockedStudent> {
+export interface DashboardBlockedStudents extends DashboardStudentListBase<DashboardBlockedStudent, DashboardBlockedStudent['amounts'][number]> {
   blockedBelowPercent: number
-  totalOutstandingInBase: number
 }
 
 function studentListParams(p: DashboardStudentListParams) {
@@ -312,10 +309,11 @@ export function getDashboardBlockedStudents(p: DashboardStudentListParams): Prom
   return apiGet<DashboardBlockedStudents>(`/api/v1/finance/dashboard/blocked-students?${studentListParams(p).toString()}`)
 }
 
-// GET /finance/dashboard/recent-payments. Sent without a date: today, falling
-// back to the latest earlier day with payments (response.date says which).
-export function getDashboardRecentPayments(intakeGuid: string, limit = 20): Promise<DashboardRecentPayments> {
+// GET /finance/dashboard/recent-payments. Without a date: today, falling
+// back to the latest earlier day with payments. With one: exactly that day.
+export function getDashboardRecentPayments(intakeGuid: string, limit = 20, date?: string): Promise<DashboardRecentPayments> {
   const params = new URLSearchParams({ intakeGuid, limit: String(limit) })
+  if (date) params.set('date', date)
   return apiGet<DashboardRecentPayments>(`/api/v1/finance/dashboard/recent-payments?${params.toString()}`)
 }
 
@@ -331,8 +329,7 @@ export function getDashboardCollections(p: DashboardRangeParams & { granularity:
   return apiGet<DashboardCollections>(`/api/v1/finance/dashboard/collections?${params.toString()}`)
 }
 
-// GET /finance/dashboard/discounts. totalDiscountInBase equals the summary's
-// currentInBase.discount for the same range.
+// GET /finance/dashboard/discounts.
 export function getDashboardDiscounts(p: DashboardRangeParams): Promise<DashboardDiscounts> {
   return apiGet<DashboardDiscounts>(`/api/v1/finance/dashboard/discounts?${rangeParams(p).toString()}`)
 }

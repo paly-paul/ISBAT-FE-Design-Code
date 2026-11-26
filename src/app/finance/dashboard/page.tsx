@@ -15,22 +15,25 @@ import {
   useDashboardDiscounts,
   useDashboardOutstanding,
   useDashboardRecentPayments,
-  useDashboardSummaryToday,
+  useDashboardSummary,
 } from '@/hooks/finance/useFinanceDashboard'
 import { FEE_TYPE_REGISTRATION, type DashboardCollections, type DashboardFeeType, type DashboardRecentPayment } from '@/lib/api/finance/dashboard'
 import { StudentListModal, type StudentListKind } from './_components/StudentListModal'
 
-// Finance Dashboard — finance-dashboard-page.md. Seven APIs, loaded in
-// parallel; each section renders as its own call returns, with its own
-// loading and error state. Money on cards and charts is always the …InBase
-// figure in the base currency.
+// Finance Dashboard — finance-dashboard-page.md. The APIs load in parallel;
+// each section renders as its own call returns, with its own loading and
+// error state.
+//
+// Nothing is converted (2026-11-26): every amount is shown in its own
+// currency and never added across currencies, and the page works out no
+// figure the API doesn't send. Where the API ranks, it ranks per currency,
+// so those views have a currency switch and show one currency at a time.
 //
 // Layout: cards and needs attention first; then the analysis parts
 // (trends, discounts, outstanding detail) in one tabbed card; then the
 // fee-type bars; the latest few payments close the page, with View all
 // going to the Transaction Report for that day.
 
-const FALLBACK_BASE = 'UGX'
 const RECENT_LIMIT = 3
 const MAX_RANGE_DAYS = 366
 
@@ -47,7 +50,6 @@ function fmtShort(n: number) {
   return String(Math.round(n))
 }
 
-function pct(part: number, whole: number) { return whole > 0 ? (part / whole) * 100 : 0 }
 
 // "2026-10-22T15:50:02.947" (local business time) → "15:50".
 function hhmm(local: string | null | undefined) { return local && local.length >= 16 ? local.slice(11, 16) : '—' }
@@ -103,13 +105,14 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 
 function toYmd(d: Date) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
 
-// Recent Payments heading: "Today", or "02 Nov 2026" when the server fell back
-// to the latest earlier day with payments.
-function recentDayLabel(ymd: string) {
-  if (ymd === toYmd(new Date())) return 'Today'
+// "24 Nov 2026".
+function dayLabel(ymd: string) {
   const [y, m, d] = ymd.split('-').map(Number)
   return `${String(d).padStart(2, '0')} ${MONTHS[m - 1]} ${y}`
 }
+
+// Recent Payments heading: "Today", or the day the rows are from.
+function recentDayLabel(ymd: string) { return ymd === toYmd(new Date()) ? 'Today' : dayLabel(ymd) }
 function fromYmd(s: string) { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d) }
 function daysInclusive(from: string, to: string) { return Math.round((fromYmd(to).getTime() - fromYmd(from).getTime()) / 86_400_000) + 1 }
 
@@ -122,37 +125,37 @@ function periodOf(d: Date, gran: Granularity) {
   return { key: toYmd(d), label: `${d.getDate()} ${MONTHS[d.getMonth()]}` }
 }
 
-interface TrendPoint { key: string; label: string; byCur: Record<string, number>; total: number }
+interface TrendPoint { key: string; label: string; value: number }
 
-// Every period in the range gets a point (days with no payments are zero, not
-// missing); each API row is added to its period, per currency, in base.
-function buildTrend(data: DashboardCollections | undefined, from: string, to: string, gran: Granularity): TrendPoint[] {
-  if (!data || !from || !to || from > to) return []
+// One currency's line: every period in the range gets a point (days with no
+// payments are zero, not missing). Only that currency's own `net` is used;
+// Week puts the API's days of one currency into their week.
+function buildTrend(data: DashboardCollections | undefined, from: string, to: string, gran: Granularity, cur: string): TrendPoint[] {
+  if (!data || !cur || !from || !to || from > to) return []
   const map = new Map<string, TrendPoint>()
   for (let d = fromYmd(from); toYmd(d) <= to; d.setDate(d.getDate() + 1)) {
     const p = periodOf(d, gran)
-    if (!map.has(p.key)) map.set(p.key, { ...p, byCur: {}, total: 0 })
+    if (!map.has(p.key)) map.set(p.key, { ...p, value: 0 })
   }
   for (const row of data.trend) {
+    if (row.currencyCode !== cur) continue
     const p = map.get(periodOf(fromYmd(row.periodStart.slice(0, 10)), gran).key)
-    if (!p) continue
-    p.byCur[row.currencyCode] = (p.byCur[row.currencyCode] ?? 0) + row.netInBase
-    p.total += row.netInBase
+    if (p) p.value += row.net
   }
   return [...map.values()]
 }
 
-// The breakdown lists come per currency; rows for the same name are merged
-// on their …InBase amounts (the only figures that may be added).
-function combine<T>(rows: T[], key: (r: T) => string, label: (r: T) => string, value: (r: T) => number, count?: (r: T) => number) {
-  const map = new Map<string, { label: string; value: number; count: number }>()
-  for (const r of rows) {
-    const k = key(r)
-    const e = map.get(k) ?? { label: label(r), value: 0, count: 0 }
-    e.value += value(r); e.count += count?.(r) ?? 0
-    map.set(k, e)
-  }
-  return [...map.values()].sort((a, b) => b.value - a.value)
+// The currencies a response covers, in its own order (by code), once each.
+function currenciesOf(...lists: ({ currencyCode: string }[] | undefined)[]) {
+  return [...new Set(lists.flatMap(l => (l ?? []).map(r => r.currencyCode)))].sort()
+}
+
+// A currency switch's selection: what the user picked while it's still in the
+// list, otherwise UGX (the usual currency) or the first one.
+function usePickedCurrency(codes: string[]) {
+  const [picked, setPicked] = useState('')
+  const cur = codes.includes(picked) ? picked : codes.includes('UGX') ? 'UGX' : (codes[0] ?? '')
+  return [cur, setPicked] as const
 }
 
 // ── Charts ─────────────────────────────────────────────────────────────────
@@ -256,32 +259,30 @@ function LineChart({ labels, series, cur }: { labels: string[]; series: Series[]
   )
 }
 
-// Ranked horizontal bars — a category's share reads off the bar length and
-// its label, not off a colour. With a limit, only the top rows show; "Show
-// all" expands the rest inside a bounded scroll box so a 30-programme list
-// doesn't stretch the page. Shares are always of the full list.
-function BarList({ rows, cur, color = 'var(--b500)', limit, noun = 'rows' }: {
-  rows: { label: string; value: number; sub?: string; unconverted?: boolean }[]; cur: string; color?: string; limit?: number; noun?: string
+// Ranked horizontal bars for one currency, in the API's order. The amount
+// reads off the label, the bar length is only relative to the largest row.
+// No shares or sums: the page shows the API's figures only. With a limit,
+// only the top rows show; "Show all" expands the rest inside a bounded
+// scroll box so a 30-programme list doesn't stretch the page.
+function BarList({ rows, cur, color = 'var(--b500)', limit, noun = 'rows', empty = 'Nothing in this range.' }: {
+  rows: { key?: string; label: string; value: number; sub?: string }[]; cur: string; color?: string; limit?: number; noun?: string; empty?: string
 }) {
   const [expanded, setExpanded] = useState(false)
-  if (!rows.length) return <p className="fd-none">Nothing in this range.</p>
+  if (!rows.length) return <p className="fd-none">{empty}</p>
   const max = Math.max(1, ...rows.map(r => r.value))
-  const total = rows.reduce((s, r) => s + r.value, 0)
   const collapsible = limit !== undefined && rows.length > limit + 1
   const shown = collapsible && !expanded ? rows.slice(0, limit) : rows
   const hidden = rows.length - shown.length
   return (
     <div className={`fd-bars-wrap${collapsible && expanded ? ' open' : ''}`}>
     <ul className="fd-bars">
-      {shown.map(r => (
-        <li key={r.label}>
+      {shown.map((r, i) => (
+        <li key={r.key ?? `${r.label}-${i}`}>
           <div className="fd-bars-top">
             <span className="fd-bars-lbl" title={r.label}>{r.label}{r.sub && <span className="fd-bars-sub"> · {r.sub}</span>}</span>
-            {r.unconverted
-              ? <span className="fd-bars-val fd-bars-na" title="Owed only in a currency with no exchange rate, so it can’t be shown in the base currency">No rate set</span>
-              : <span className="fd-bars-val"><Money value={r.value} cur={cur} /> <span className="fd-bars-pct">{pct(r.value, total).toFixed(0)}%</span></span>}
+            <span className="fd-bars-val"><Money value={r.value} cur={cur} /></span>
           </div>
-          <div className="fd-bars-track"><div className="fd-bars-fill" style={{ width: `${(r.value / max) * 100}%`, background: color }} /></div>
+          <div className="fd-bars-track"><div className="fd-bars-fill" style={{ width: `${Math.max(0, (r.value / max) * 100)}%`, background: color }} /></div>
         </li>
       ))}
     </ul>
@@ -289,7 +290,7 @@ function BarList({ rows, cur, color = 'var(--b500)', limit, noun = 'rows' }: {
       <button type="button" className="fd-more" aria-expanded={expanded} onClick={() => setExpanded(e => !e)}>
         {expanded
           ? <>Show top {limit} only <i className="lni lni-chevron-up" aria-hidden="true" /></>
-          : <>Show all {rows.length} {noun} <span className="fd-more-sub">+{hidden} · <Money value={rows.slice(limit).reduce((s, r) => s + r.value, 0)} cur={cur} /></span> <i className="lni lni-chevron-down" aria-hidden="true" /></>}
+          : <>Show all {rows.length} {noun} <span className="fd-more-sub">+{hidden}</span> <i className="lni lni-chevron-down" aria-hidden="true" /></>}
       </button>
     )}
     </div>
@@ -302,24 +303,25 @@ const CAT = ['var(--fd-c1)', 'var(--fd-c2)', 'var(--fd-c3)', 'var(--fd-c4)', 'va
 // Colour follows the currency everywhere it appears on the page.
 const CUR_COLOR: Record<string, string> = { UGX: 'var(--fd-c1)', USD: 'var(--fd-c2)' }
 function curColor(code: string) { return CUR_COLOR[code] ?? 'var(--fd-c3)' }
-function baseFirst(base: string) { return (a: string, b: string) => (a === base ? -1 : b === base ? 1 : a.localeCompare(b)) }
 
-interface Part { label: string; value: number; color: string; sub?: string }
+// `pct` is the API's percent for the part; without it the legend shows no
+// percent (the page doesn't work one out).
+interface Part { label: string; value: number; color: string; sub?: string; pct?: number | null }
 
 // Part-to-whole: one stacked bar plus a legend that carries every value, so
 // identity never rests on colour alone. Hovering a segment or its legend row
-// highlights the pair.
+// highlights the pair. Segment widths are only drawn proportionally.
 function ShareBar({ parts, format, ariaLabel, inline }: { parts: Part[]; format: (v: number) => React.ReactNode; ariaLabel: string; inline?: boolean }) {
   const [active, setActive] = useState<number | null>(null)
   if (!parts.length) return <p className="fd-none">Nothing in this range.</p>
-  const total = parts.reduce((s, p) => s + p.value, 0)
   const state = (i: number) => (active === null ? '' : active === i ? ' on' : ' dim')
+  const pctText = (p: Part) => (p.pct == null ? '' : `${fmtFull(p.pct)}%`)
   return (
     <div className={`fd-share${inline ? ' fd-share-inline' : ''}`} onMouseLeave={() => setActive(null)}>
-      <div className="fd-share-bar" role="img" aria-label={`${ariaLabel}: ${parts.map(p => `${p.label} ${pct(p.value, total).toFixed(0)}%`).join(', ')}`}>
+      <div className="fd-share-bar" role="img" aria-label={`${ariaLabel}: ${parts.map(p => `${p.label} ${pctText(p) || fmtFull(p.value)}`).join(', ')}`}>
         {parts.map((p, i) => p.value > 0 && (
           <span key={p.label} className={`fd-share-seg${state(i)}`} style={{ flexGrow: p.value, background: p.color }}
-            onMouseEnter={() => setActive(i)} title={`${p.label}: ${pct(p.value, total).toFixed(1)}%`} />
+            onMouseEnter={() => setActive(i)} title={pctText(p) ? `${p.label}: ${pctText(p)}` : p.label} />
         ))}
       </div>
       <ul className="fd-share-legend">
@@ -328,12 +330,18 @@ function ShareBar({ parts, format, ariaLabel, inline }: { parts: Part[]; format:
             <span className="fd-sw" style={{ background: p.color }} />
             <span className="fd-share-name">{p.label}{p.sub && <small>{p.sub}</small>}</span>
             <span className="fd-share-val">{format(p.value)}</span>
-            <span className="fd-share-pct">{pct(p.value, total).toFixed(inline ? 0 : 1)}%</span>
+            <span className="fd-share-pct">{pctText(p)}</span>
           </li>
         ))}
       </ul>
     </div>
   )
+}
+
+// One button per currency; nothing when there's only one (it's in the titles).
+function CurrencySwitch({ codes, value, onChange }: { codes: string[]; value: string; onChange: (c: string) => void }) {
+  if (codes.length < 2) return null
+  return <Segmented label="Currency" value={value} options={codes.map(c => ({ value: c, label: c }))} onChange={onChange} />
 }
 
 // Small pill switch for flipping one panel between related views.
@@ -395,10 +403,12 @@ function Section<T>({ query, what, note, children }: { query: UseQueryResult<T>;
 // cell's tone, one line of context. A loaded cell with a destination is a
 // button that opens the detail behind it; while loading or failed it's a
 // plain cell (its Retry is the control).
-function Kpi<T>({ label, icon, tone, query, value, foot, onOpen, openLabel }: {
+// `extra` (a control such as a date picker) sits under the label; a card with
+// one is never a button.
+function Kpi<T>({ label, icon, tone, query, value, foot, onOpen, openLabel, extra }: {
   label: string; icon: string; tone?: 'green' | 'amber' | 'red'; query: UseQueryResult<T>
   value: (d: T) => React.ReactNode; foot: (d: T) => React.ReactNode
-  onOpen?: () => void; openLabel?: string
+  onOpen?: () => void; openLabel?: string; extra?: React.ReactNode
 }) {
   const d = query.data
   const ready = d !== undefined && !query.isError
@@ -409,6 +419,7 @@ function Kpi<T>({ label, icon, tone, query, value, foot, onOpen, openLabel }: {
         <span className="fd-kpi-ic" aria-hidden="true"><i className={`lni ${icon}`}></i></span>
         <span className="fd-kpi-lbl">{label}</span>
       </span>
+      {extra && <div className="fd-kpi-extra">{extra}</div>}
       {query.isError ? (
         <>
           <span className="fd-kpi-num">—</span>
@@ -427,11 +438,11 @@ function Kpi<T>({ label, icon, tone, query, value, foot, onOpen, openLabel }: {
           <span className="fd-kpi-foot">{foot(d)}</span>
         </>
       )}
-      {ready && onOpen && <span className="sr-only">, open {openLabel}</span>}
+      {ready && onOpen && !extra && <span className="sr-only">, open {openLabel}</span>}
     </>
   )
-  return ready && onOpen
-    ? <button type="button" className={`${cls} fd-kpi-btn`} onClick={onOpen}>{body}</button>
+  return ready && onOpen && !extra
+    ?<button type="button" className={`${cls} fd-kpi-btn`} onClick={onOpen}>{body}</button>
     : <div className={cls}>{body}</div>
 }
 
@@ -498,11 +509,20 @@ export default function FinanceDashboardPage() {
   const intakeLoading = currentIntakeQ.isPending || (needDropdown && intakesQ.isPending)
   const intakeLabel = intake ? `${intake.description} (${intake.intakeCode})` : ''
 
+  // The Collected card's date ('' = today, the default). It drives only the
+  // summary and recent payments. `today` is set after mount so the static
+  // export doesn't bake in the build date.
+  const [today, setToday] = useState('')
+  const [collectedDate, setCollectedDate] = useState('')
+  useEffect(() => { setToday(toYmd(new Date())) }, [])
+  function pickCollectedDate(ymd: string) { setCollectedDate(ymd && ymd !== toYmd(new Date()) ? ymd : '') }
+  const collectedLabel = collectedDate ? `Collected ${dayLabel(collectedDate)}` : 'Collected Today'
+
   // Step 2: everything in parallel.
-  const summaryQ = useDashboardSummaryToday(intakeGuid)
+  const summaryQ = useDashboardSummary(intakeGuid, collectedDate)
   const outQ = useDashboardOutstanding(intakeGuid)
   const feesQ = useDashboardCollectionByFeeType(intakeGuid)
-  const recentQ = useDashboardRecentPayments(intakeGuid, RECENT_LIMIT)
+  const recentQ = useDashboardRecentPayments(intakeGuid, RECENT_LIMIT, collectedDate)
   const attQ = useDashboardAttention()
 
   // ── Analysis tabs ───────────────────────────────────────────────────────
@@ -519,7 +539,6 @@ export default function FinanceDashboardPage() {
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
   const [gran, setGran] = useState<Granularity>('day')
-  const [perCurrency, setPerCurrency] = useState(false)
   const [breakdown, setBreakdown] = useState<Breakdown>('category')
   useEffect(() => {
     const now = new Date()
@@ -533,24 +552,27 @@ export default function FinanceDashboardPage() {
   const discQ = useDashboardDiscounts(intakeGuid, from, to, rangeOk)
 
   const queries = [summaryQ, outQ, feesQ, recentQ, attQ, collQ, discQ]
-  const base = summaryQ.data?.baseCurrencyCode ?? outQ.data?.baseCurrencyCode ?? feesQ.data?.baseCurrencyCode
-    ?? recentQ.data?.baseCurrencyCode ?? collQ.data?.baseCurrencyCode ?? discQ.data?.baseCurrencyCode ?? FALLBACK_BASE
-  const hasMissingRates = !!(summaryQ.data?.hasMissingRates || outQ.data?.hasMissingRates || feesQ.data?.hasMissingRates
-    || recentQ.data?.hasMissingRates || collQ.data?.hasMissingRates || discQ.data?.hasMissingRates)
 
-  const trend = useMemo(() => buildTrend(collQ.data, from, to, gran), [collQ.data, from, to, gran])
-  const trendTotal = trend.reduce((s, p) => s + p.total, 0)
-  const trendCurrencies = useMemo(() => [...new Set((collQ.data?.trend ?? []).map(t => t.currencyCode))].sort(baseFirst(base)), [collQ.data, base])
-  const trendSeries: Series[] = perCurrency
-    ? trendCurrencies.map(c => ({ name: c === base ? c : `${c} (in ${base})`, color: curColor(c), values: trend.map(p => p.byCur[c] ?? 0) }))
-    : [{ name: 'Net collected', color: 'var(--b500)', values: trend.map(p => p.total) }]
+  // One currency at a time in each analysis tab (its own switch), since the
+  // API ranks per currency and amounts are never combined.
+  const coll = collQ.data
+  const trendCodes = useMemo(() => currenciesOf(coll?.trend, coll?.byCategory, coll?.byPayType, coll?.topLedgers, coll?.byUser), [coll])
+  const [trendCur, setTrendCur] = usePickedCurrency(trendCodes)
+  const discCodes = useMemo(() => currenciesOf(discQ.data?.byCurrency), [discQ.data])
+  const [discCur, setDiscCur] = usePickedCurrency(discCodes)
+  const outCodes = useMemo(() => currenciesOf(outQ.data?.byCurrency), [outQ.data])
+  const [outCur, setOutCur] = usePickedCurrency(outCodes)
+
+  const trend = useMemo(() => buildTrend(coll, from, to, gran, trendCur), [coll, from, to, gran, trendCur])
+  const trendSeries: Series[] = trendCur ? [{ name: `Net collected (${trendCur})`, color: curColor(trendCur), values: trend.map(p => p.value) }] : []
 
   // Live status for the header. "Live" is only true while both 60 s timers
   // run; a failed refresh stops its timer, so the page says it's paused.
   // Refresh is user-triggered only: invalidating re-fetches the active
   // queries and never wakes a disabled one.
   const queryClient = useQueryClient()
-  const livePaused = summaryQ.isError || recentQ.isError
+  // A past day on the Collected card doesn't change, so it isn't polled.
+  const livePaused = !collectedDate && (summaryQ.isError || recentQ.isError)
   const lastUpdated = Math.max(summaryQ.dataUpdatedAt, recentQ.dataUpdatedAt)
   const refreshing = queries.some(q => q.isFetching)
   function refreshAll() { queryClient.invalidateQueries({ queryKey: ['finance', 'dashboard'] }) }
@@ -558,8 +580,9 @@ export default function FinanceDashboardPage() {
   // KPI cards open the detail behind them.
   const recentRef = useRef<HTMLDivElement>(null)
   const analysisRef = useRef<HTMLDivElement>(null)
+  // Outstanding Balances opens the Outstanding tab, where the per-ledger
+  // breakdown is (on the currency clicked, when one line was clicked).
   function openOutstanding() { setTab('outstanding'); analysisRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }
-  function openRecent() { recentRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }
 
   // Students Fully Cleared / Access Blocked open their student list. It
   // remembers the intake it was opened for, so a change of intake closes it.
@@ -580,17 +603,20 @@ export default function FinanceDashboardPage() {
     setFreshKeys(prev && prev.intake === intakeGuid ? new Set(keys.filter(k => !prev.keys.has(k))) : new Set())
   }, [recentQ.data, intakeGuid])
 
+  // The selected currency's rows, in the API's order (already ranked).
   const breakdownRows = useMemo(() => {
-    const d = collQ.data
+    const d = coll
     if (!d) return []
     const receipts = (n: number) => `${fmtFull(n)} receipts`
-    if (breakdown === 'category') return combine(d.byCategory, r => String(r.category), r => r.categoryName, r => r.netInBase, r => r.receiptCount).map(r => ({ ...r, sub: receipts(r.count) }))
-    if (breakdown === 'method') return combine(d.byPayType, r => String(r.payType), r => (r.payType ? REPORT_PAYMODE_LABEL[r.payType] ?? r.payTypeName : r.payTypeName), r => r.netInBase, r => r.receiptCount).map(r => ({ ...r, sub: receipts(r.count) }))
+    const mine = <R extends { currencyCode: string }>(rows: R[]) => rows.filter(r => r.currencyCode === trendCur)
+    if (breakdown === 'category') return mine(d.byCategory).map(r => ({ key: String(r.category), label: r.categoryName, value: r.net, sub: receipts(r.receiptCount) }))
+    if (breakdown === 'method') return mine(d.byPayType).map(r => ({ key: String(r.payType), label: r.payType ? REPORT_PAYMODE_LABEL[r.payType] ?? r.payTypeName : r.payTypeName, value: r.net, sub: receipts(r.receiptCount) }))
     // Code with the name ("TF · Tuition Fee"): different ledgers can share a
     // name ("INST 1" and "INST 3" are both "Tuition"); the code tells them apart.
-    if (breakdown === 'ledger') return combine(d.topLedgers, r => `${r.category}:${r.ledgerGuid ?? r.ledgerName}`, r => (r.ledgerCode ? `${r.ledgerCode} · ${r.ledgerName}` : r.ledgerName), r => r.grossInBase).map(r => ({ label: r.label, value: r.value }))
-    return combine(d.byUser, r => r.userName, r => r.userName, r => r.netInBase, r => r.receiptCount).map(r => ({ ...r, sub: receipts(r.count) }))
-  }, [collQ.data, breakdown])
+    if (breakdown === 'ledger') return mine(d.topLedgers).map(r => ({ key: `${r.category}:${r.ledgerGuid ?? r.ledgerName}`, label: r.ledgerCode ? `${r.ledgerCode} · ${r.ledgerName}` : r.ledgerName, value: r.gross }))
+    // Imported payments have no recorded cashier: "Unknown user" is expected.
+    return mine(d.byUser).map(r => ({ key: r.userName, label: r.userName, value: r.net, sub: receipts(r.receiptCount) }))
+  }, [coll, breakdown, trendCur])
 
   // ── Whole-page states ───────────────────────────────────────────────────
 
@@ -635,8 +661,8 @@ export default function FinanceDashboardPage() {
             <div className={`fd-status${livePaused ? ' paused' : ''}`} role="status">
               <span className="fd-pulse" aria-hidden="true" />
               <span>
-                <strong>{livePaused ? 'Updates paused' : 'Live'}</strong>
-                {lastUpdated > 0 && <> · {livePaused ? 'last' : 'updated'} {clock(lastUpdated)}</>}
+                <strong>{collectedDate ? 'Past day' : livePaused ? 'Updates paused' : 'Live'}</strong>
+                {lastUpdated > 0 && <> · {livePaused || collectedDate ? 'last' : 'updated'} {clock(lastUpdated)}</>}
               </span>
               <button type="button" className="fd-refresh" onClick={refreshAll} disabled={refreshing}
                 aria-label="Refresh the dashboard" title={livePaused ? 'Refresh to resume' : 'Refresh now'}>
@@ -648,14 +674,6 @@ export default function FinanceDashboardPage() {
           <button className="btn btn-primary btn-lg" onClick={() => nav('payment-console')}><i className="lni lni-credit-cards"></i> Collect Payment</button>
         </div>
       </div>
-
-      {hasMissingRates && (
-        <div className="fd-banner" role="status">
-          <i className="lni lni-warning" aria-hidden="true"></i>
-          <span>Some amounts could not be converted. Set the exchange rate.</span>
-          <button className="fd-link" onClick={() => nav('exchange-rates')}>Set exchange rate <i className="lni lni-arrow-right"></i></button>
-        </div>
-      )}
 
       {noIntake ? (
         <div className="card">
@@ -675,7 +693,9 @@ export default function FinanceDashboardPage() {
       <div className="fd-top">
       <div className="card fd-kpis">
         <Kpi
-          label="Collected Today" icon="lni-wallet" query={summaryQ} onOpen={openRecent} openLabel="Today’s payments"
+          label={collectedLabel} icon="lni-wallet" query={summaryQ}
+          // Single day, today or earlier (ranges are the Trends tab's job).
+          extra={<DatePicker value={collectedDate || today} onChange={pickCollectedDate} maxYmd={today || undefined} rangeMessage="Pick today or an earlier day" />}
           // One block per currency, as collected: never converted or added together.
           value={s => s.currencies.length === 0 ? '0' : (
             <span className="fd-ccys">
@@ -684,29 +704,34 @@ export default function FinanceDashboardPage() {
                   <span className="fd-ccy-code">{c.currencyCode}</span>
                   <CollectedAmount value={c.current.net} cur={c.currencyCode} />
                   <span className="fd-ccy-chg">
-                    <NetChange percent={c.netChangePercent} title={`Yesterday ${c.currencyCode} ${fmtFull(c.previous.net)}`} />
-                    <span className="fd-nw">vs yesterday</span>
+                    <NetChange percent={c.netChangePercent} title={`${collectedDate ? 'Day before' : 'Yesterday'} ${c.currencyCode} ${fmtFull(c.previous.net)}`} />
+                    <span className="fd-nw">{collectedDate ? 'vs day before' : 'vs yesterday'}</span>
                   </span>
                 </span>
               ))}
             </span>
           )}
-          foot={s => (s.currencies.length === 0 ? 'Nothing collected today or yesterday' : null)}
+          foot={s => (s.currencies.length === 0 ? (collectedDate ? 'Nothing collected that day or the day before' : 'Nothing collected today or yesterday') : null)}
         />
         <Kpi
           label="Students Fully Cleared" icon="lni-checkmark-circle" tone="green" query={outQ} onOpen={() => setStudentList('cleared')} openLabel="the list of cleared students"
           value={o => <>{fmtFull(o.clearedStudentCount)}<span className="fd-kpi-unit">{o.clearedStudentCount === 1 ? 'student' : 'students'}</span></>}
-          foot={o => <><span className="fd-nw">{pct(o.clearedStudentCount, o.studentCount).toFixed(0)}% of</span> <span className="fd-nw">{fmtFull(o.studentCount)} students</span></>}
+          foot={o => <span className="fd-nw">of {fmtFull(o.studentCount)} students</span>}
         />
         <Kpi
-          label="Outstanding Balances" icon="lni-hourglass" tone="amber" query={outQ} onOpen={openOutstanding} openLabel="Breakdown"
-          value={o => fmtFull(o.owingStudentCount)}
-          foot={o => <><span className="fd-nw"><Money value={o.totalOutstandingInBase} cur={o.baseCurrencyCode} words /> owed</span> · <span className="fd-nw">{pct(o.owingStudentCount, o.studentCount).toFixed(0)}% of students</span></>}
+          label="Outstanding Balances" icon="lni-hourglass" tone="amber" query={outQ} onOpen={openOutstanding} openLabel="the breakdown by ledger"
+          value={o => <>{fmtFull(o.owingStudentCount)}<span className="fd-kpi-unit">owing</span></>}
+          // One "owed" line per currency, never added together.
+          foot={o => o.byCurrency.length === 0 ? 'Nothing owed' : (
+            <span className="fd-owed">
+              {o.byCurrency.map(c => <span key={c.currencyCode} className="fd-nw"><Money value={c.totalOutstanding} cur={c.currencyCode} words /> owed</span>)}
+            </span>
+          )}
         />
         <Kpi
           label="Access Blocked" icon="lni-lock-alt" tone="red" query={outQ} onOpen={() => setStudentList('blocked')} openLabel="the list of blocked students"
           value={o => <>{fmtFull(o.blockedStudentCount)}<span className="fd-kpi-unit">{o.blockedStudentCount === 1 ? 'student' : 'students'}</span></>}
-          foot={o => <><span className="fd-nw">Below {o.blockedBelowPercent}% clearance</span> · <span className="fd-nw">{pct(o.blockedStudentCount, o.studentCount).toFixed(0)}% of students</span></>}
+          foot={o => <span className="fd-nw">Below {o.blockedBelowPercent}% clearance</span>}
         />
       </div>
 
@@ -810,11 +835,10 @@ export default function FinanceDashboardPage() {
                   <label className="lbl">Group by</label>
                   <SearchSelect options={GRANULARITY_OPTIONS} value={gran} onChange={v => setGran((v || 'day') as Granularity)} />
                 </div>
-                <label className="fd-check">
-                  <input type="checkbox" checked={perCurrency} onChange={e => setPerCurrency(e.target.checked)} /> Per currency
-                </label>
+                <CurrencySwitch codes={trendCodes} value={trendCur} onChange={setTrendCur} />
               </>
             )}
+            {tab === 'discounts' && <CurrencySwitch codes={discCodes} value={discCur} onChange={setDiscCur} />}
             {rangeError && <span className="fd-toolbar-note fd-toolbar-err" role="alert">{rangeError}</span>}
             {tab === 'discounts' && (
               <button className="fd-link fd-toolbar-end" onClick={() => nav('reports/discount')}>Discount report <i className="lni lni-arrow-right"></i></button>
@@ -832,21 +856,19 @@ export default function FinanceDashboardPage() {
                   <div className={`fd-panel fd-trends${collQ.isPlaceholderData ? ' fd-busy' : ''}`}>
                     <div className="min-w-0">
                       <PanelHead
-                        title="Collected over time"
-                        meta={trend.length ? <><strong>{base} {fmtFull(trendTotal)}</strong> in this range</> : undefined}
-                        action={perCurrency && trendSeries.length > 0 ? (
-                          <div className="fd-legend">{trendSeries.map(s => <span key={s.name}><span className="fd-key" style={{ background: s.color }} />{s.name}</span>)}</div>
-                        ) : undefined}
+                        title={trendCur ? `Collected over time · ${trendCur}` : 'Collected over time'}
+                        meta={trendCur ? `Net in ${trendCur}, as paid · one currency at a time` : undefined}
                       />
-                      <LineChart labels={trend.map(p => p.label)} series={trendSeries} cur={base} />
+                      <LineChart labels={trend.map(p => p.label)} series={trendSeries} cur={trendCur} />
                     </div>
                     <div className="fd-side">
                       <PanelHead
                         title="Breakdown"
-                        meta={breakdown === 'ledger' ? 'Top fee types, fee value before discount' : undefined}
+                        meta={breakdown === 'ledger' ? `Top fee types in ${trendCur || 'this currency'}, fee value before discount`
+                          : breakdown === 'cashier' ? 'Imported payments show as “Unknown user”' : undefined}
                         action={<Segmented label="Break down collections by" value={breakdown} options={BREAKDOWN_OPTIONS} onChange={setBreakdown} />}
                       />
-                      <BarList key={breakdown} rows={breakdownRows} cur={base} limit={8} noun={breakdown === 'cashier' ? 'cashiers' : 'rows'} color={breakdown === 'method' ? 'var(--cyan)' : 'var(--b500)'} />
+                      <BarList key={breakdown + trendCur} rows={breakdownRows} cur={trendCur} limit={8} noun={breakdown === 'cashier' ? 'cashiers' : 'rows'} color={breakdown === 'method' ? 'var(--cyan)' : 'var(--b500)'} />
                     </div>
                   </div>
                 )}
@@ -862,27 +884,33 @@ export default function FinanceDashboardPage() {
             ) : (
               <Section query={discQ} what="discounts">
                 {disc => {
-                  const share = disc.percentOfTuitionGross
+                  // The selected currency's block; no overall total exists.
+                  const block = disc.byCurrency.find(c => c.currencyCode === discCur)
+                  if (!block) return <p className="fd-none fd-panel">No discounts given in this range.</p>
+                  const share = block.percentOfTuitionGross
                   return (
                     <div className={`fd-panel fd-disc${discQ.isPlaceholderData ? ' fd-busy' : ''}`}>
                       <div className="fd-hero">
-                        <div className="fd-hero-lbl">Total discount given</div>
-                        <div className="fd-hero-num"><Money value={disc.totalDiscountInBase} cur={disc.baseCurrencyCode} words /></div>
-                        <div className="fd-hero-sub">{fmtFull(disc.discountedStudentCount)} students · {disc.byType.length} discount types</div>
+                        <div className="fd-hero-lbl">Total discount given · {block.currencyCode}</div>
+                        <div className="fd-hero-num"><Money value={block.discount} cur={block.currencyCode} words /></div>
+                        <div className="fd-hero-sub">
+                          {block.types.length} discount {block.types.length === 1 ? 'type' : 'types'}
+                          {' · '}{fmtFull(disc.discountedStudentCount)} students in all currencies
+                        </div>
                         <div className="fd-ratio">
-                          <div className="fd-ratio-top"><span>Share of tuition fee value</span><strong>{share === null ? '—' : `${share.toFixed(1)}%`}</strong></div>
-                          <div className="fd-ratio-track" role="meter" aria-valuenow={Math.round(share ?? 0)} aria-valuemin={0} aria-valuemax={100} aria-label="Discount as a share of tuition fee value">
-                            <span style={{ width: `${share ?? 0}%` }} />
+                          <div className="fd-ratio-top"><span>Share of {block.currencyCode} tuition fee value</span><strong>{share === null ? '—' : `${fmtFull(share)}%`}</strong></div>
+                          <div className="fd-ratio-track" role="meter" aria-valuenow={Math.round(share ?? 0)} aria-valuemin={0} aria-valuemax={100} aria-label={`Discount as a share of ${block.currencyCode} tuition fee value`}>
+                            <span style={{ width: `${Math.min(100, share ?? 0)}%` }} />
                           </div>
                           <div className="fd-ratio-scale"><span>0%</span><span>100%</span></div>
                         </div>
                       </div>
                       <div className="min-w-0">
-                        <PanelHead title="By discount type" meta={`Share of ${disc.baseCurrencyCode} discount given in this range`} />
+                        <PanelHead title="By discount type" meta={`Share of the ${block.currencyCode} discount given in this range`} />
                         <ShareBar
-                          ariaLabel="Discount by type"
-                          format={v => <Money value={v} cur={disc.baseCurrencyCode} />}
-                          parts={disc.byType.map((r, i) => ({ label: r.discountName, value: r.amountInBase, color: CAT[Math.min(i, CAT.length - 1)], sub: `${fmtFull(r.studentCount)} students` }))}
+                          ariaLabel={`${block.currencyCode} discount by type`}
+                          format={v => <Money value={v} cur={block.currencyCode} />}
+                          parts={block.types.map((r, i) => ({ label: r.discountName, value: r.amount, pct: r.sharePercent, color: CAT[Math.min(i, CAT.length - 1)], sub: `${fmtFull(r.studentCount)} ${r.studentCount === 1 ? 'student' : 'students'}` }))}
                         />
                       </div>
                     </div>
@@ -897,40 +925,93 @@ export default function FinanceDashboardPage() {
           <div key="outstanding" className="tab-panel-in">
             <Section query={outQ} what="outstanding balances" note="The first load can take a few seconds.">
               {out => {
-                const ob = out.baseCurrencyCode
-                // Blocked students owe on the current semester, so they're a subset of owing.
-                const owingNotBlocked = Math.max(0, out.owingStudentCount - out.blockedStudentCount)
-                const showSponsors = !(out.bySponsorCategory.length <= 1 && (out.bySponsorCategory[0]?.sponsorCategory ?? 'Not specified') === 'Not specified')
+                // Every list below is the selected currency's rows, in the API's order.
+                const owed = out.byCurrency.find(c => c.currencyCode === outCur)
+                const ledgers = out.byLedger.filter(l => l.currencyCode === outCur)
+                const programs = out.byProgram.filter(p => p.currencyCode === outCur)
+                const sponsors = out.bySponsorCategory.filter(s => s.currencyCode === outCur)
+                const defaulters = out.topDefaulters.find(t => t.currencyCode === outCur)?.defaulters ?? []
+                // Hidden while "Not specified" is the only group (no categories set up).
+                const sponsorNames = new Set(out.bySponsorCategory.map(s => s.sponsorCategory))
+                const showSponsors = sponsorNames.size > 1 || (sponsorNames.size === 1 && !sponsorNames.has('Not specified'))
                 return (
                   <>
                     <div className="fd-toolbar">
                       <span className="fd-toolbar-note">Includes balances from earlier semesters · Updated {hhmm(out.generatedAt)}</span>
+                      <CurrencySwitch codes={outCodes} value={outCur} onChange={setOutCur} />
                       <button className="fd-link fd-toolbar-end" onClick={() => nav('reports/outstanding')}>Outstanding report <i className="lni lni-arrow-right"></i></button>
                     </div>
                     <div className="fd-panel">
+                      {/* Counts and percents straight from the API; no currency. */}
                       <PanelHead title="Student clearance" meta={`${fmtFull(out.studentCount)} students in this intake`} />
                       <ShareBar
                         inline
                         ariaLabel="Students by clearance"
                         format={v => fmtFull(v)}
                         parts={[
-                          { label: 'Fully cleared', value: out.clearedStudentCount, color: 'var(--green)' },
-                          { label: 'Owing, not blocked', value: owingNotBlocked, color: 'var(--amber)' },
-                          { label: `Blocked · below ${out.blockedBelowPercent}%`, value: out.blockedStudentCount, color: 'var(--red)' },
+                          { label: 'Fully cleared', value: out.clearedStudentCount, pct: out.clearedStudentPercent, color: 'var(--green)' },
+                          { label: 'Owing, not blocked', value: out.owingNotBlockedStudentCount, pct: out.owingNotBlockedStudentPercent, color: 'var(--amber)' },
+                          { label: `Blocked · below ${out.blockedBelowPercent}%`, value: out.blockedStudentCount, pct: out.blockedStudentPercent, color: 'var(--red)' },
                         ]}
                       />
 
+                      {!owed ? (
+                        <p className="fd-none fd-gap">Nothing is owed by this intake’s students.</p>
+                      ) : (
                       <div className="fd-cols2">
                         <div className="min-w-0">
-                          <PanelHead title="Total owed" meta={<><strong><Money value={out.totalOutstandingInBase} cur={ob} words /></strong> in {ob}, at today’s rate</>} />
+                          <PanelHead title={`Total owed · ${owed.currencyCode}`} meta={<><strong><Money value={owed.totalOutstanding} cur={owed.currencyCode} words /></strong> owed by {fmtFull(owed.owingStudentCount)} students</>} />
                           <ShareBar
-                            ariaLabel="Outstanding by semester"
-                            format={v => <Money value={v} cur={ob} />}
+                            ariaLabel={`${owed.currencyCode} outstanding by semester`}
+                            format={v => <Money value={v} cur={owed.currencyCode} />}
                             parts={[
-                              { label: 'Current semester', value: out.currentOutstandingInBase, color: 'var(--fd-c1)' },
-                              { label: 'Earlier semesters', value: out.previousOutstandingInBase, color: 'var(--fd-c2)' },
+                              { label: 'Current semester', value: owed.outstanding, color: 'var(--fd-c1)' },
+                              { label: 'Earlier semesters', value: owed.previousOutstanding, color: 'var(--fd-c2)' },
                             ]}
                           />
+                          <div className="fd-gap">
+                            {/* Code with the name: the instalment ledgers are all "Tuition". */}
+                            <PanelHead title="By ledger" meta={`What is still owed on each ledger, in ${owed.currencyCode}`} />
+                            <BarList cur={owed.currencyCode} color="var(--amber)" limit={6} noun="ledgers" empty="Nothing owed on any ledger."
+                              rows={ledgers.map(l => ({ key: `${l.ledgerGuid ?? l.ledgerName}`, label: l.ledgerCode ? `${l.ledgerCode} · ${l.ledgerName}` : l.ledgerName, value: l.totalOutstanding, sub: `${fmtFull(l.owingStudentCount)} owing` }))} />
+                          </div>
+                          {showSponsors && (
+                            <div className="fd-gap">
+                              <PanelHead title="By sponsor category" />
+                              <BarList cur={owed.currencyCode} color="var(--amber)" limit={5} noun="categories" empty={`No ${owed.currencyCode} balances by sponsor.`}
+                                rows={sponsors.map(s => ({ label: s.sponsorCategory, value: s.totalOutstanding, sub: `${fmtFull(s.owingStudentCount)} owing` }))} />
+                            </div>
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <PanelHead title="By programme" meta={`${fmtFull(programs.length)} programmes, highest ${owed.currencyCode} balance first`} />
+                          <BarList cur={owed.currencyCode} color="var(--amber)" limit={8} noun="programmes" empty={`No ${owed.currencyCode} balances by programme.`}
+                            rows={programs.map((p, i) => ({ label: p.programName ?? `Unknown programme ${i + 1}`, value: p.totalOutstanding, sub: `${fmtFull(p.owingStudentCount)} students` }))} />
+                          <div className="fd-gap">
+                            <PanelHead title="Top defaulters" meta={`Owing the most in ${owed.currencyCode}`} />
+                            {defaulters.length === 0 ? <p className="fd-none">No defaulters in {owed.currencyCode}.</p> : (
+                              <ScrollTable className="fd-scroll">
+                                <table>
+                                  <thead>
+                                    <tr><th>Student</th><th>Programme</th><th className="text-right">Clearance</th><th className="text-right">Owed ({owed.currencyCode})</th></tr>
+                                  </thead>
+                                  <tbody>
+                                    {defaulters.map(s => (
+                                      <tr key={s.studentGuid}>
+                                        <td><strong>{s.studentName}</strong><div className="text-muted font-mono text-[length:var(--fs-xs)]">{s.studentNumber}</div></td>
+                                        <td>{s.programName ?? <span className="text-muted">—</span>}</td>
+                                        <td className="text-right tabular-nums">{s.clearancePercent}%</td>
+                                        <td className="text-right tabular-nums font-bold">{fmtFull(s.totalOutstanding)}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </ScrollTable>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      )}
                           {out.byCurrency.length > 0 && (
                             <div className="fd-gap">
                               {/* Fee, discount and collected cover every student in the intake, cleared
@@ -967,22 +1048,6 @@ export default function FinanceDashboardPage() {
                               </ScrollTable>
                             </div>
                           )}
-                          {showSponsors && (
-                            <div className="fd-gap">
-                              <PanelHead title="By sponsor category" />
-                              <BarList cur={ob} color="var(--amber)" limit={5} noun="categories" rows={out.bySponsorCategory.map(s => ({ label: s.sponsorCategory, value: s.totalOutstandingInBase, sub: `${fmtFull(s.owingStudentCount)} of ${fmtFull(s.studentCount)} owing` }))} />
-                            </div>
-                          )}
-                        </div>
-                        <div className="min-w-0">
-                          <PanelHead title="By programme" meta={`${fmtFull(out.byProgram.length)} programmes, highest balance first`} />
-                          <BarList cur={ob} color="var(--amber)" limit={8} noun="programmes" rows={out.byProgram.map((p, i) => ({
-                            label: p.programName ?? `Unknown programme ${i + 1}`, value: p.totalOutstandingInBase, sub: `${fmtFull(p.owingStudentCount)} students`,
-                            // Owing, but only in a currency with no exchange rate: …InBase is 0.
-                            unconverted: p.totalOutstandingInBase === 0 && p.owingStudentCount > 0,
-                          }))} />
-                        </div>
-                      </div>
                     </div>
                   </>
                 )
@@ -1005,8 +1070,8 @@ export default function FinanceDashboardPage() {
 
         <Section query={feesQ} what="fee-type collection" note="The first load can take a few seconds.">
           {fees => {
-            // One group per fee type, one compact line per currency. The
-            // group header carries the combined figure, from …InBase only.
+            // One group per fee type, one bar per currency. No headline total:
+            // currencies are never added together.
             const groups: { feeType: number; name: string; rows: DashboardFeeType[] }[] = []
             for (const f of fees.feeTypes) {
               let g = groups.find(x => x.feeType === f.feeType)
@@ -1020,19 +1085,11 @@ export default function FinanceDashboardPage() {
                 ) : (
                   <div className="fd-fees">
                     {groups.map(g => {
-                      const collectedInBase = g.rows.reduce((s, f) => s + f.collectedInBase, 0)
-                      const payableInBase = g.rows.reduce((s, f) => s + f.expectedInBase - f.discountInBase, 0)
                       return (
                         <section key={g.feeType} className="fd-fee">
                           <div className="fd-fee-hd">
                             <h4 className="fd-fee-name">{g.name}</h4>
                             {g.feeType === FEE_TYPE_REGISTRATION && <span className="fd-fee-note">{fmtFull(fees.registeredCount)}/{fmtFull(fees.studentCount)} registered</span>}
-                            {g.rows.length > 1 && (
-                              <span className="fd-fee-sum">
-                                <Money value={collectedInBase} cur={fees.baseCurrencyCode} /> of <Money value={payableInBase} cur={fees.baseCurrencyCode} />
-                                <strong>{pct(collectedInBase, payableInBase).toFixed(1)}%</strong>
-                              </span>
-                            )}
                           </div>
                           <ul className="fd-fee-rows">
                             {g.rows.map(f => {
@@ -1051,7 +1108,7 @@ export default function FinanceDashboardPage() {
                                     <span>{fmtFull(f.outstanding)} outstanding</span>
                                     {flagOverpaid && (
                                       <span className="fd-overpaid" title="Collected is capped at what is owed; the excess is shown separately">
-                                        <i className="lni lni-warning" aria-hidden="true"></i> Overpaid {fmtFull(f.overpaid)}: check payments
+                                        <i className="lni lni-warning" aria-hidden="true"></i> Overpaid {f.currencyCode} {fmtFull(f.overpaid)}: check payments
                                       </span>
                                     )}
                                   </span>
@@ -1084,10 +1141,11 @@ export default function FinanceDashboardPage() {
       <div className="card fd-anchor" ref={recentRef}>
         <div className="card-hdr">
           <div>
-            {/* The server falls back to the latest earlier day with payments when
-                today has none; `date` says which day the rows are from. */}
+            {/* Follows the Collected card's date. With today chosen, the server
+                falls back to the latest earlier day with payments when today has
+                none; `date` says which day the rows are from. */}
             <div className="card-title"><span className="ctitle-icon"><i className="lni lni-credit-cards"></i></span> Recent Payments{recentDay ? ` — ${recentDayLabel(recentDay)}` : ''}</div>
-            {recentQ.data && (recentDay && recentDayLabel(recentDay) !== 'Today'
+            {recentQ.data && (!collectedDate && recentDay && recentDayLabel(recentDay) !== 'Today'
               ? <div className="card-sub">No payments yet today · showing the latest day with payments{recentQ.data.totalCount > recentQ.data.items.length ? ` (${recentQ.data.items.length} of ${fmtFull(recentQ.data.totalCount)})` : ''}</div>
               : recentQ.data.totalCount > recentQ.data.items.length && <div className="card-sub">Showing {recentQ.data.items.length} of {fmtFull(recentQ.data.totalCount)}</div>)}
           </div>
@@ -1096,14 +1154,14 @@ export default function FinanceDashboardPage() {
         </div>
         <Section query={recentQ} what="recent payments">
           {recent => recent.items.length === 0 ? (
-            <p className="fd-none">No payments recorded yet.</p>
+            <p className="fd-none">{collectedDate ? 'No payments on this day.' : 'No payments recorded yet.'}</p>
           ) : (
             <ScrollTable className="fd-scroll">
               <table>
                 <thead>
                   <tr>
                     <th>Receipt</th><th>Student</th><th>Programme</th><th>Fee Type</th>
-                    <th className="text-right">Amount Paid</th><th>Cur.</th><th className="text-right">{recent.baseCurrencyCode} Value</th><th>Method</th><th>Time</th>
+                    <th className="text-right">Amount Paid</th><th>Cur.</th><th>Method</th><th>Time</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1120,7 +1178,6 @@ export default function FinanceDashboardPage() {
                         <td>{p.feeTypes.join(', ')}</td>
                         <td className="text-right tabular-nums font-bold">{fmtFull(p.amount)}</td>
                         <td><span className="badge badge-gold">{p.currencyCode}</span></td>
-                        <td className="text-right tabular-nums">{p.amountInBase === null ? <span className="text-muted" title="No exchange rate for this currency">—</span> : fmtFull(p.amountInBase)}</td>
                         <td>{method ? <span className={`pill ${PAY_PILL[p.payTypeName] ?? 'pill-blue'}`}>{method}</span> : <span className="badge badge-grey">Unclassified</span>}</td>
                         <td className="text-muted tabular-nums">{hhmm(p.entryTime)}</td>
                       </tr>

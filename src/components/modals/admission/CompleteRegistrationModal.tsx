@@ -5,7 +5,6 @@ import { FailurePopup } from '../shared/FailurePopup'
 import { SearchSelect } from '@/components/SearchSelect'
 import { applicantProfileHref } from '@/lib/applicantProfileLink'
 import { useRegistrationDetail, useRegisterStudent, RegisterStudentResponse } from '@/hooks/admission/useRegistrarDesk'
-import { useApplicationPhoto } from '@/hooks/admission/useApplicationFiling'
 import { sameOriginApiUrl } from '@/lib/apiFileUrl'
 import { AuthError } from '@/lib/api/client'
 import { scrollToFirstError } from '@/lib/scrollToFirstError'
@@ -42,7 +41,7 @@ function Field({ label, value }: { label: string; value: string }) {
 // Refugee ID — the actual POST /register body.
 export function CompleteRegistrationModal({ isOpen, onClose, showToast, applicationGuid, onRegistered }: Props) {
   const { data: detail, isLoading, isError, error } = useRegistrationDetail(applicationGuid, isOpen && !!applicationGuid)
-  const { data: rawPhotoUrl } = useApplicationPhoto(applicationGuid, isOpen && !!applicationGuid)
+  const rawPhotoUrl = detail?.photoUrl ?? null
   const photoUrl = sameOriginApiUrl(rawPhotoUrl)
   const [photoError, setPhotoError] = useState(false)
 

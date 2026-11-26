@@ -32,23 +32,27 @@ function todayYmd() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-// Collected Today. "Today" is worked out on every fetch, so a tab left open
-// past midnight rolls over on the next tick.
-export function useDashboardSummaryToday(intakeGuid: string) {
+// The Collected card's date: '' means today. For today, "today" is worked out
+// on every fetch (a tab left open past midnight rolls over on the next tick)
+// and the figures refresh every 60 s; an earlier day doesn't change, so it
+// isn't polled. The date is sent as both fromDate and toDate.
+export function useDashboardSummary(intakeGuid: string, date: string) {
   return useQuery({
-    queryKey: [...DASHBOARD_KEY, 'summary-today', intakeGuid],
-    queryFn: () => { const today = todayYmd(); return getDashboardSummary({ fromDate: today, toDate: today, intakeGuid }) },
+    queryKey: [...DASHBOARD_KEY, 'summary', intakeGuid, date || 'today'],
+    queryFn: () => { const d = date || todayYmd(); return getDashboardSummary({ fromDate: d, toDate: d, intakeGuid }) },
     enabled: !!intakeGuid,
-    refetchInterval: every(FAST_MS),
+    refetchInterval: date ? false : every(FAST_MS),
   })
 }
 
-export function useDashboardRecentPayments(intakeGuid: string, limit = 20) {
+// Follows the Collected card's date. Today: no date sent, so the API falls
+// back to the latest day with payments; another day: exactly that day.
+export function useDashboardRecentPayments(intakeGuid: string, limit: number, date: string) {
   return useQuery({
-    queryKey: [...DASHBOARD_KEY, 'recent-payments', intakeGuid, limit],
-    queryFn: () => getDashboardRecentPayments(intakeGuid, limit),
+    queryKey: [...DASHBOARD_KEY, 'recent-payments', intakeGuid, limit, date || 'today'],
+    queryFn: () => getDashboardRecentPayments(intakeGuid, limit, date || undefined),
     enabled: !!intakeGuid,
-    refetchInterval: every(FAST_MS),
+    refetchInterval: date ? false : every(FAST_MS),
   })
 }
 

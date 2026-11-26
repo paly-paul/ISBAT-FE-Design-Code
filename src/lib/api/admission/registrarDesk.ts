@@ -106,6 +106,9 @@ export interface RegistrationDetail {
   provisionalLetterIssued: boolean
   registrationFeeConfirmed: boolean
   academicDocumentsVerified: boolean
+  // The applicant's uploaded photo, null when there is none (backend,
+  // 2026-11-26). Replaces the Filing photo call, which needs Filing access.
+  photoUrl?: string | null
 }
 
 export interface RegisterStudentInput {

@@ -14327,6 +14327,10 @@ body:has(.drawer-overlay) {
 .fd-ccy-chg .fd-chg { margin-right: 0; }
 .fd-ccy-chg .fd-chg:not(.up):not(.dn) { background: var(--g100); color: var(--g500); }
 .fd-kpi-foot:empty { display: none; }
+/* Collected card's day picker, under its label. */
+.fd-kpi-extra { margin: 8px 0 2px; max-width: 180px; font-size: var(--fs-sm); }
+/* Outstanding Balances: one "owed" line per currency, stacked. */
+.fd-owed { display: flex; flex-direction: column; gap: 2px; }
 /* A cell with a destination: the cell washes with its tone on hover and the
    icon tile fills. */
 .fd-kpi-btn {
@@ -14630,6 +14634,9 @@ body:has(.drawer-overlay) {
 .fd-sl-count-main strong { color: var(--g900); font-variant-numeric: tabular-nums; }
 .fd-sl-count-sub { font-size: var(--fs-xs); color: var(--g500); }
 .fd-sl-stats { margin: 0 0 0 auto; display: flex; align-items: flex-end; flex-wrap: wrap; gap: 4px 22px; font-variant-numeric: tabular-nums; }
+/* One totals row per currency (totalsByCurrency), stacked on the right. */
+.fd-sl-totals { margin-left: auto; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.fd-sl-totals .fd-sl-stats { margin: 0; }
 .fd-sl-stats > div { display: flex; flex-direction: column; align-items: flex-end; }
 .fd-sl-stats dt { font-size: var(--fs-xs); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--g500); }
 .fd-sl-stats dd { margin: 0; font-size: var(--fs-base); font-weight: 700; color: var(--g900); }

@@ -2,17 +2,19 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   createServiceCategory,
   deleteServiceCategory,
-  getServiceCategories,
+  getServiceCategoryDropdown,
   ServiceCategoryRequest,
   updateServiceCategory,
 } from '@/lib/api/student/serviceCategories'
 
 export const SERVICE_CATEGORIES_KEY = ['service-categories']
 
-export function useServiceCategories() {
+// Picker list, loaded once and filtered in the browser. Under
+// SERVICE_CATEGORIES_KEY, so master-page saves refresh it too.
+export function useServiceCategoryDropdown() {
   return useQuery({
-    queryKey: SERVICE_CATEGORIES_KEY,
-    queryFn: () => getServiceCategories(),
+    queryKey: [...SERVICE_CATEGORIES_KEY, 'dropdown'],
+    queryFn: () => getServiceCategoryDropdown(),
     staleTime: Infinity,
     gcTime: Infinity,
   })

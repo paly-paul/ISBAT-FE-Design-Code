@@ -4,7 +4,7 @@ import { stripLeadingZeros } from '@/lib/errorMessages'
 import { ModalProps } from '../types'
 import DatePicker from '@/components/DatePicker'
 import { useUpdateRegulatoryPayment, PaymentCategory, RegulatoryPaymentHistoryEntry } from '@/hooks/finance/useNcheGuildPayment'
-import { REFERENCE_FIELD, REFERENCE_MAX, REFERENCE_REQUIRED, regulatoryErrorField, validateReference } from '@/lib/api/finance/ncheGuildPayment'
+import { digitsOnly, REFERENCE_FIELD, REFERENCE_MAX, REFERENCE_REQUIRED, regulatoryErrorField, validateReference } from '@/lib/api/finance/ncheGuildPayment'
 
 interface EditRegulatoryPaymentModalProps extends ModalProps {
   target: RegulatoryPaymentHistoryEntry | null
@@ -59,7 +59,9 @@ export function EditRegulatoryPaymentModal({ isOpen, onClose, showToast, target,
     const amt = parseFloat(amount)
     if (!amount.trim() || isNaN(amt) || amt <= 0) { showToast('Amount must be greater than 0.', 'warn'); return }
     if (!payDate) { showToast('Please select a payment date.', 'warn'); return }
-    const refError = validateReference(category, category === 'nche' ? pnrNumber : bankDeposit)
+    const refError = category === 'nche'
+      ? validateReference(category, pnrNumber, target.pnrNumber)
+      : validateReference(category, bankDeposit)
     setReferenceError(refError)
     if (refError) return
 
@@ -107,12 +109,15 @@ export function EditRegulatoryPaymentModal({ isOpen, onClose, showToast, target,
           <div className="fg mb-[14px]">
             <label className="lbl" htmlFor="edit-reg-reference">{REFERENCE_FIELD[category].label} {REFERENCE_REQUIRED ? <span className="req">*</span> : <span className="text-g400" style={{ fontWeight: 500 }}>(optional)</span>}</label>
             <input
-              id="edit-reg-reference" className="ctrl" type="text" maxLength={REFERENCE_REQUIRED ? REFERENCE_MAX : undefined}
+              id="edit-reg-reference" className="ctrl" type="text" maxLength={REFERENCE_REQUIRED || category === 'nche' ? REFERENCE_MAX : undefined}
+              inputMode={category === 'nche' ? 'numeric' : undefined}
               placeholder={REFERENCE_FIELD[category].placeholder}
               aria-invalid={!!referenceError}
               style={referenceError ? { borderColor: 'var(--red)' } : undefined}
               value={category === 'nche' ? pnrNumber : bankDeposit}
-              onChange={e => { (category === 'nche' ? setPnrNumber : setBankDeposit)(e.target.value); setReferenceError(null) }}
+              // An old PNR with letters or slashes stays as loaded until it's
+              // edited; once changed, only digits are kept.
+              onChange={e => { if (category === 'nche') setPnrNumber(digitsOnly(e.target.value)); else setBankDeposit(e.target.value); setReferenceError(null) }}
             />
             {referenceError && <p className="field-err" style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{referenceError}</p>}
           </div>

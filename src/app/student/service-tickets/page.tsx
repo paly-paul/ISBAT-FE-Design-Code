@@ -1,13 +1,13 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { SearchSelect } from '@/components/SearchSelect'
 import { ScrollTable } from '@/components/ScrollTable'
 import { Pagination } from '@/components/Pagination'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { EmptyState } from '@/components/EmptyState'
 import { Toast } from '@/components/Toast'
-import { useServiceCategories } from '@/hooks/student/useServiceCategories'
+import { useServiceCategoryDropdown } from '@/hooks/student/useServiceCategories'
 import {
   useServiceTicket,
   useServiceTicketQueue,
@@ -73,8 +73,7 @@ export default function ServiceTicketsPage() {
   const [page, setPage] = useState(1)
 
   const { data: statuses = [], isLoading: statusesLoading } = useTicketStatuses()
-  const { data: categoriesData, isLoading: categoriesLoading } = useServiceCategories()
-  const categories = useMemo(() => categoriesData?.items ?? [], [categoriesData])
+  const { data: categories = [], isLoading: categoriesLoading } = useServiceCategoryDropdown()
 
   const statusOptions = [{ value: '', label: 'All statuses' }, ...statuses.map(s => ({ value: String(s.value), label: statusLabel(s.name) }))]
   const categoryOptions = [{ value: '', label: 'All categories' }, ...categories.map(c => ({ value: c.serviceCategoryGuid, label: c.categoryName ?? '—' }))]
