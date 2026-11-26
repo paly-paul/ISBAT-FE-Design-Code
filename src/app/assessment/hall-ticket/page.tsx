@@ -1,14 +1,12 @@
 'use client'
-import { useEffect, useState, useMemo } from 'react'
-import Link from 'next/link'
+import { useEffect, useMemo, useState } from 'react'
 import { ScrollTable } from '@/components/ScrollTable'
 import { SearchSelect } from '@/components/SearchSelect'
 import { Pagination } from '@/components/Pagination'
 import { Toast } from '@/components/Toast'
-import { usePagePermissions } from '@/hooks/users/usePagePermissions'
+import { usePagePermissions, useRawPagePermissions } from '@/hooks/users/usePagePermissions'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { StudentAvatar } from '@/components/StudentAvatar'
-import { useStudent } from '@/hooks/student/useStudents'
 import { useIntakesDropdown } from '@/hooks/academic/useIntakes'
 import { useProgramDropdown } from '@/hooks/academic/useProgramMaster'
 import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
@@ -26,24 +24,29 @@ import {
   HallTicketTerm,
 } from '@/hooks/assessment/useHallTicket'
 import type { HallTicketSearchResultDto } from '@/lib/api/student/hallTicketSearch'
+import {
+  formatIntakeLabel,
+  HALL_TICKET_TERM_OPTIONS,
+  PrintOneHandoff,
+  resolveHallTicketPermissions,
+} from './_components/hallTicketShared'
+import { PrintOneTab } from './_components/PrintOneTab'
+import { PrintAllTab } from './_components/PrintAllTab'
 
-// Hall Ticket Eligibility & Issue (pages/assessment/hall-ticket-eligibility-
-// and-issue-page.md) — successor to legacy frmTrnUEHallTicketIssue. This
-// page only ISSUES; printing lives on /assessment/hall-print (one student)
-// and /assessment/hall-ticket-print-all (whole intake).
-//  1. Intake + term — sent with every call.
-//  2. Search → GET /students/hall-ticket-search (registered students of the intake).
-//  3. Select a row → GET /eligibility, one call for every clearance.
-//  4. Issue → POST /, shown only when canIssue (the server re-checks).
-//  5/6. Bulk issue + issue status → POST /bulk and GET /bulk in one modal,
-//     scoped to the intake or one program/semester.
+// Unified Hall Ticket screen (merged Issuance, Print One Student, and Print All):
+//  - Tab 1 (Issue & Eligibility): search registered student → GET /eligibility →
+//    POST / (single) or Bulk Issue & Status modal (GET /bulk & POST /bulk).
+//  - Tab 2 (Print One Student): Intake → Programme → Semester → GET /{studentGuid}/pdf.
+//  - Tab 3 (Print All): Intake → Term → GET /bulk?status=Issued preview → GET /bulk/pdf.
+
+type HallTicketTab = 'issue' | 'print' | 'print-all'
+const HALL_TICKET_TABS: { id: HallTicketTab; label: string; icon: string }[] = [
+  { id: 'issue', label: 'Issue & Eligibility', icon: 'lni-ticket' },
+  { id: 'print', label: 'Print One Student', icon: 'lni-user' },
+  { id: 'print-all', label: 'Print All', icon: 'lni-printer' },
+]
 
 const PAGE_SIZE = 10
-const TERM_OPTIONS = [
-  { value: '', label: 'Auto' },
-  { value: '1', label: 'Term 1' },
-  { value: '2', label: 'Term 2' },
-]
 const STATUS_OPTIONS = [
   { value: 'NotIssued', label: 'Not issued' },
   { value: 'Issued', label: 'Issued' },
@@ -84,8 +87,75 @@ function getReasonIcon(code: string): string {
 
 export default function HallTicketIssuancePage() {
   const permissions = usePagePermissions()
+  const rawPermissions = useRawPagePermissions()
+  const htPerms = useMemo(
+    () => resolveHallTicketPermissions(permissions, rawPermissions),
+    [permissions, rawPermissions],
+  )
+
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
-  function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
+  function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 5000) }
+
+  // ---- Tabs & Deep-link handoff -------------------------------------------
+  const visibleTabs = useMemo(
+    () =>
+      HALL_TICKET_TABS.filter(t =>
+        t.id === 'issue'
+          ? htPerms.canViewIssue
+          : t.id === 'print'
+            ? htPerms.canViewPrintOne
+            : htPerms.canViewPrintAll,
+      ),
+    [htPerms.canViewIssue, htPerms.canViewPrintOne, htPerms.canViewPrintAll],
+  )
+  const [activeTab, setActiveTab] = useState<HallTicketTab>('issue')
+  const [printHandoff, setPrintHandoff] = useState<PrintOneHandoff | null>(null)
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const t = params.get('tab') as HallTicketTab | null
+    if (t && HALL_TICKET_TABS.some(x => x.id === t)) {
+      setActiveTab(t)
+    }
+    const term = params.get('term') ?? undefined
+    const semCode = params.get('semCode') ?? undefined
+    const program = params.get('program') ?? undefined
+    const q = params.get('q') ?? undefined
+    if (term || semCode || program || q) {
+      setPrintHandoff({ term, semCode, program, q, nonce: Date.now() })
+    }
+  }, [])
+
+  const currentTab: HallTicketTab = visibleTabs.some(t => t.id === activeTab)
+    ? activeTab
+    : (visibleTabs[0]?.id ?? 'issue')
+
+  useEffect(() => {
+    if (visibleTabs.length > 0 && !visibleTabs.some(t => t.id === activeTab)) {
+      setActiveTab(visibleTabs[0].id)
+    }
+  }, [visibleTabs, activeTab])
+
+  function selectTab(next: HallTicketTab) {
+    setActiveTab(next)
+    const url = new URL(window.location.href)
+    if (next === 'issue') url.searchParams.delete('tab')
+    else url.searchParams.set('tab', next)
+    if (next !== 'print') {
+      url.searchParams.delete('term')
+      url.searchParams.delete('semCode')
+      url.searchParams.delete('program')
+      url.searchParams.delete('q')
+    }
+    window.history.replaceState(null, '', url.pathname + url.search)
+  }
+
+  function handleGoToPrintOne(handoff?: Omit<PrintOneHandoff, 'nonce'>) {
+    if (!htPerms.canViewPrintOne) return
+    setSelected(null)
+    if (handoff) setPrintHandoff({ ...handoff, nonce: Date.now() })
+    selectTab('print')
+  }
 
   // ---- Scope ---------------------------------------------------------------
   // Hall tickets are only issued for the current academic intake — the field
@@ -93,7 +163,7 @@ export default function HallTicketIssuancePage() {
   const { data: intakes = [], isLoading: intakesLoading } = useIntakesDropdown()
   const currentIntake = intakes.find(i => i.currentIntake)
   const intakeGuid = currentIntake?.intakeGuid ?? ''
-  const intakeLabel = currentIntake ? (currentIntake.description ? `${currentIntake.description} (${currentIntake.intakeCode})` : String(currentIntake.intakeCode)) : ''
+  const intakeLabel = formatIntakeLabel(currentIntake)
   const [termOverride, setTermOverride] = useState<string>('')
   const termParam = termOverride ? (Number(termOverride) as HallTicketTerm) : null
 
@@ -115,9 +185,6 @@ export default function HallTicketIssuancePage() {
   const [selected, setSelected] = useState<HallTicketSearchResultDto | null>(null)
   const { data: elig, isFetching: checking, isError: eligError, error: eligErr } = useHallTicketEligibility(selected?.studentGuid ?? null, intakeGuid || null, termParam)
   const issue = useIssueHallTicket()
-  // The search row has no photo; the student record (GET /students/{guid})
-  // carries the uploaded one. Initials show until it loads or if it fails.
-  const { data: selectedDetail } = useStudent(selected?.studentGuid ?? null, !!selected)
 
   useEffect(() => {
     issue.reset()
@@ -129,7 +196,7 @@ export default function HallTicketIssuancePage() {
   const termDisplayLabel = effectiveTerm ? `Term ${effectiveTerm}${isAutoTerm ? ' (auto)' : ''}` : 'Term (auto)'
 
   function handleIssue() {
-    if (!selected || !elig?.canIssue) return
+    if (!htPerms.canIssue || !selected || !elig?.canIssue) return
     issue.mutate({ studentGuid: selected.studentGuid, intakeGuid, term: termParam }, {
       // "Already issued" is a success too — the server refreshed the
       // existing ticket's issue date rather than creating a new one.
@@ -156,12 +223,39 @@ export default function HallTicketIssuancePage() {
     <>
       <div className="page active">
         <div className="pg-hdr">
-          <div><div className="pg-title">Hall Ticket Issuance</div><div className="pg-sub">Check a student&apos;s exam clearances and issue their University Exam hall ticket</div></div>
-          {(permissions.add || permissions.edit) && (
-            <button className="btn btn-neu" onClick={() => setBulkOpen(true)} disabled={!intakeGuid}><i className="lni lni-ticket"></i> Bulk Issue &amp; Status</button>
+          <div>
+            <div className="pg-title">Hall Ticket</div>
+            <div className="pg-sub">Check exam clearances, issue hall tickets, and download single or batch PDFs</div>
+          </div>
+          {currentTab === 'issue' && htPerms.canIssue && (
+            <button type="button" className="btn btn-neu" onClick={() => setBulkOpen(true)} disabled={!intakeGuid}>
+              <i className="lni lni-ticket"></i> Bulk Issue &amp; Status
+            </button>
           )}
         </div>
 
+        {visibleTabs.length === 0 ? (
+          <div className="card p-6 text-sm text-g500">You do not have permission to view hall tickets.</div>
+        ) : (
+          <>
+            {/* Pill switcher matching Question Bank & Repository (cw-qbank) */}
+            <div className="pc-tabs" role="tablist" aria-label="Hall ticket views">
+              {visibleTabs.map(t => (
+                <button
+                  key={t.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={currentTab === t.id}
+                  className={`pc-tab-btn${currentTab === t.id ? ' active' : ''}`}
+                  onClick={() => selectTab(t.id)}
+                >
+                  <i className={`lni ${t.icon}`}></i> {t.label}
+                </button>
+              ))}
+            </div>
+
+            {currentTab === 'issue' && (
+              <>
         <div className="card">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="fg">
@@ -188,7 +282,7 @@ export default function HallTicketIssuancePage() {
               <label className="lbl">Term Override <span className="text-slate-400 font-normal text-xs">(Optional)</span></label>
               <SearchSelect
                 placeholder="Auto"
-                options={TERM_OPTIONS}
+                options={HALL_TICKET_TERM_OPTIONS}
                 value={termOverride}
                 onChange={v => setTermOverride(v)}
               />
@@ -228,7 +322,7 @@ export default function HallTicketIssuancePage() {
                 <button type="button" className="modal-close" onClick={() => setSelected(null)} aria-label="Close"><i className="lni lni-close"></i></button>
               </div>
               <header className="ht-id">
-                <StudentAvatar className="ht-avatar" photoUrl={selectedDetail?.photoUrl} initials={initials(name)} />
+                <StudentAvatar className="ht-avatar" photoUrl={null} initials={initials(name)} />
                 <div className="ht-id-main">
                   <div className="ht-name-row">
                     <h2 className="ht-name" id="ht-student-name">{name}</h2>
@@ -306,19 +400,24 @@ export default function HallTicketIssuancePage() {
                   <footer className="ht-verdict ok">
                     <div className="ht-verdict-msg">
                       <i className="lni lni-checkmark-circle" aria-hidden="true"></i>
-                      <div><div className="ht-verdict-title">{termDisplayLabel} hall ticket already issued</div><div className="ht-verdict-sub">Nothing left to check. Print it from Hall Ticket Print.</div></div>
+                      <div><div className="ht-verdict-title">{termDisplayLabel} hall ticket already issued</div><div className="ht-verdict-sub">Nothing left to check. Print it from Print One Student.</div></div>
                     </div>
-                    <Link
-                      className="btn btn-neu"
-                      // Hall Ticket Print reads these to open on this student
-                      // (it resolves programme + semester GUIDs from them).
-                      href={`/assessment/hall-print?${new URLSearchParams({
-                        ...(effectiveTerm ? { term: String(effectiveTerm) } : {}),
-                        semCode: selected.semCode ?? '',
-                        program: selected.programName ?? '',
-                        q: selected.studentRegNo ?? selected.studentName ?? '',
-                      })}`}
-                    ><i className="lni lni-printer"></i> Go to Hall Ticket Print</Link>
+                    {htPerms.canViewPrintOne && (
+                      <button
+                        type="button"
+                        className="btn btn-neu"
+                        onClick={() =>
+                          handleGoToPrintOne({
+                            term: effectiveTerm ? String(effectiveTerm) : undefined,
+                            semCode: selected.semCode ?? '',
+                            program: selected.programName ?? '',
+                            q: selected.studentRegNo ?? selected.studentName ?? '',
+                          })
+                        }
+                      >
+                        <i className="lni lni-printer"></i> Go to Hall Ticket Print
+                      </button>
+                    )}
                   </footer>
                 ) : elig.examOver ? (
                   <footer className="ht-verdict bad">
@@ -336,7 +435,7 @@ export default function HallTicketIssuancePage() {
                       <i className="lni lni-checkmark-circle" aria-hidden="true"></i>
                       <div><div className="ht-verdict-title">Eligible for a {termDisplayLabel} hall ticket</div><div className="ht-verdict-sub">Every clearance is in place.</div></div>
                     </div>
-                    {(permissions.add || permissions.edit) && (
+                    {htPerms.canIssue && (
                     <button type="button" className="btn btn-primary" onClick={handleIssue} disabled={issue.isPending}>
                       <i className="lni lni-ticket"></i> {issue.isPending ? 'Issuing…' : 'Issue Hall Ticket'}
                     </button>
@@ -392,10 +491,36 @@ export default function HallTicketIssuancePage() {
           </ScrollTable>
           {students.length > PAGE_SIZE && <Pagination page={page} totalPages={totalPages} totalCount={students.length} itemLabel="students" onPageChange={setPage} />}
         </div>
+              </>
+            )}
+
+            {currentTab === 'print' && (
+              <PrintOneTab
+                intakes={intakes}
+                canPrint={htPerms.canPrintOne}
+                canViewIssue={htPerms.canViewIssue}
+                onGoToIssue={() => selectTab('issue')}
+                handoff={printHandoff}
+                showToast={showToast}
+              />
+            )}
+
+            {currentTab === 'print-all' && (
+              <PrintAllTab
+                intakes={intakes}
+                canPrintAll={htPerms.canPrintAll}
+                canViewIssue={htPerms.canViewIssue}
+                onGoToIssue={() => selectTab('issue')}
+                showToast={showToast}
+              />
+            )}
+          </>
+        )}
       </div>
 
       <BulkIssueModal
-        isOpen={bulkOpen}
+        isOpen={bulkOpen && htPerms.canIssue}
+        canIssue={htPerms.canIssue}
         onClose={() => setBulkOpen(false)}
         intakeGuid={intakeGuid}
         intakeLabel={intakeLabel}
@@ -435,15 +560,15 @@ function sentenceList(items: string[]) {
 // Bulk issue (POST /bulk) + issue status list (GET /bulk), per steps 5–6:
 // filter Not issued, bulk issue, and the list reloads to show who's left.
 // Program + semester narrow the scope; leaving program empty = whole intake.
-function BulkIssueModal({ isOpen, onClose, intakeGuid, intakeLabel, initialTermOverride, showToast }: {
+function BulkIssueModal({ isOpen, canIssue, onClose, intakeGuid, intakeLabel, initialTermOverride, showToast }: {
   isOpen: boolean
+  canIssue: boolean
   onClose: () => void
   intakeGuid: string
   intakeLabel: string
   initialTermOverride?: string
   showToast: (msg: string, type?: string) => void
 }) {
-  const permissions = usePagePermissions('/assessment/hall-ticket')
   const [termOverride, setTermOverride] = useState<string>(initialTermOverride || '')
   const [programGuid, setProgramGuid] = useState('')
   const [semesterGuid, setSemesterGuid] = useState('')
@@ -494,11 +619,12 @@ function BulkIssueModal({ isOpen, onClose, intakeGuid, intakeLabel, initialTermO
     : `the whole of ${intakeLabel || 'this intake'}`
 
   function handleBulkIssue() {
-    if (scopeIncomplete || !intakeGuid) return
+    if (!canIssue || scopeIncomplete || !intakeGuid) return
     setShowConfirmModal(true)
   }
 
   function confirmBulkIssue() {
+    if (!canIssue) return
     setShowConfirmModal(false)
     setSummary(null)
     bulk.mutate(scope, {
@@ -569,7 +695,7 @@ function BulkIssueModal({ isOpen, onClose, intakeGuid, intakeLabel, initialTermO
             <div className="fg mb-0">
               <label className="lbl">Term Override <span className="text-slate-400 font-normal text-xs">(Optional)</span></label>
               <SearchSelect
-                options={TERM_OPTIONS}
+                options={HALL_TICKET_TERM_OPTIONS}
                 value={termOverride}
                 onChange={v => { setTermOverride(v); setPage(1) }}
                 placeholder="Auto"
@@ -736,7 +862,7 @@ function BulkIssueModal({ isOpen, onClose, intakeGuid, intakeLabel, initialTermO
         </div>
         <div className="modal-footer">
           <button className="btn btn-neu" onClick={onClose} disabled={bulk.isPending}>Close</button>
-          {(permissions.add || permissions.edit) && (
+          {canIssue && (
           <button className="btn btn-primary" onClick={handleBulkIssue} disabled={bulk.isPending || scopeIncomplete || !intakeGuid}>
             <i className="lni lni-ticket"></i> {bulk.isPending ? 'Issuing…' : 'Bulk Issue'}
           </button>
@@ -744,7 +870,7 @@ function BulkIssueModal({ isOpen, onClose, intakeGuid, intakeLabel, initialTermO
         </div>
       </div>
 
-      {showConfirmModal && (
+      {showConfirmModal && canIssue && (
         <div
           className="perm-delete-overlay"
           style={{ position: 'fixed', zIndex: 600 }}
