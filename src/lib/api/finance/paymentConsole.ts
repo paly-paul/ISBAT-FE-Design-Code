@@ -1,4 +1,5 @@
 import { apiGet, apiGetBlob, apiPost, apiPut, AuthError } from '../client'
+import type { CancelledFields } from './paymentCancel'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
@@ -173,8 +174,9 @@ export interface OutstandingLedger {
 // treated it as a bare number per a since-superseded .bru sample; use
 // `payType.name` directly instead of cross-referencing PAY_TYPE_LABELS for
 // this endpoint. Likewise currencyGuid, not intCurrency; receiptBookGuid,
-// not intReceipt.
-export interface PaymentHistoryEntry {
+// not intReceipt. Cancelled payments stay in the list with CancelledFields
+// set and are never counted as paid (2026-11-26).
+export interface PaymentHistoryEntry extends CancelledFields {
   paymentGuid: string
   category: number
   paymentCode: string
@@ -641,7 +643,9 @@ export function getPaymentHistory(applicationGuid: string): Promise<PaymentHisto
 // PAY_TYPE_LABELS for this one. Confirmed via a real production crash that
 // `payType` itself can come back `null` on some rows (not just always an
 // object) — treat it as genuinely optional, don't assume every row has one.
-export interface PaymentHistoryListEntry {
+// Cancelled receipts stay in the register (and in totalCount) with the
+// CancelledFields set (get-payment-receipts.md, 2026-11-26).
+export interface PaymentHistoryListEntry extends CancelledFields {
   paymentGuid: string
   category: number
   // Empty (or null) on NCHE/Guild fee rows, as is currencyCode.

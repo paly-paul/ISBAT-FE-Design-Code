@@ -136,6 +136,24 @@ export function useMenuPagePermissions(path: string): MenuPermissions | null {
   }, [data, isLoading, isError, path])
 }
 
+// One permission key of a menu page exactly as the menu grants it, with none
+// of normalizePermissions' fallbacks (there, `cancel` falls back to `edit`).
+// For actions the backend gates on their own permission, such as cancelling a
+// payment: false while the menu loads, if it failed, or if the page or key is
+// missing.
+export function useStrictMenuPermission(path: string, key: string): boolean {
+  const { data, isLoading, isError } = useMenu()
+
+  return useMemo(() => {
+    if (isError || isLoading || !data) return false
+    for (const moduleNode of data.menu) {
+      const found = findNode(moduleNode.children, moduleNode.name.toLowerCase(), path)
+      if (found) return found.permissions?.[key] === true
+    }
+    return false
+  }, [data, isLoading, isError, path, key])
+}
+
 // Looks up the current route's permissions from the real /me/menu tree, so a
 // page can gate its own Add/Edit/Delete actions on what the logged-in user
 // is actually allowed to do rather than always rendering every action.

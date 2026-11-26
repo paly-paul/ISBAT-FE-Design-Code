@@ -15,6 +15,10 @@ import { ViewPaymentReceiptModal } from '@/components/modals/finance/ViewPayment
 import { EditPaymentModal, EditablePaymentTarget } from '@/components/modals/finance/EditPaymentModal'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { useActionGuard } from '@/hooks/users/useActionGuard'
+import { CancelPaymentModal } from '@/components/modals/finance/CancelPaymentModal'
+import { CancelledBadge } from '@/components/finance/CancelledBadge'
+import { useCancelPayment, useCancelPermissions } from '@/hooks/finance/usePaymentCancel'
+import { CancellableCategory, isCancellableCategory } from '@/lib/api/finance/paymentCancel'
 
 const PAGE_SIZE = 10
 // Don't narrow the table (or open the search dropdown) until the user's
@@ -83,6 +87,12 @@ export default function Page() {
   // Other have no matching update endpoint, so the action is hidden rather
   // than offered and rejected.
   const [editEntry, setEditEntry] = useState<EditablePaymentTarget | null>(null)
+
+  // Cancel (post-*-cancel.md): every category in this register has its own
+  // cancel route, keyed by the row's category + paymentGuid.
+  const cancelPerms = useCancelPermissions()
+  const cancelPayment = useCancelPayment()
+  const [cancelTarget, setCancelTarget] = useState<{ category: CancellableCategory; guid: string; label: string } | null>(null)
 
   const { data, isLoading } = usePaymentHistoryList(page, PAGE_SIZE)
   const rows = data?.items ?? []
@@ -215,6 +225,7 @@ export default function Page() {
                   <tr key={`${r.paymentGuid}-${r.feeType}-${i}`}>
                     <td>
                       <ActionMenu>
+                        {/* A cancelled receipt still prints, with a CANCELLED stamp. */}
                         <button className="btn btn-neu btn-sm" onClick={() => guard('print', () => openReceipt(r, true), 'receipts')}>
                           <i className="lni lni-printer"></i> Print
                         </button>
@@ -224,16 +235,32 @@ export default function Page() {
                         {r.category === 1 && permissions.edit && (
                           <button
                             className="btn btn-neu btn-sm"
+                            disabled={!!r.isCancelled}
                             onClick={() => setEditEntry({ paymentGuid: r.paymentGuid, amount: r.amount, payDate: r.payDate, payType: r.payType, label: r.receiptNo || '—' })}
                           >
                             <i className="lni lni-pencil-alt"></i> Edit
+                          </button>
+                        )}
+                        {isCancellableCategory(r.category) && cancelPerms.canCancel(r.category) && !r.isCancelled && (
+                          <button
+                            className="btn btn-neu btn-sm"
+                            onClick={() => setCancelTarget({
+                              category: r.category as CancellableCategory,
+                              guid: r.paymentGuid,
+                              label: `${r.feeType || 'Payment'} · ${r.receiptNo || 'no receipt'} · ${fmtAmount(r.amount)} ${r.currencyCode || ''} · ${r.studentName || r.studentNo || '—'}`,
+                            })}
+                          >
+                            <i className="lni lni-ban"></i> Cancel
                           </button>
                         )}
                       </ActionMenu>
                     </td>
                     {/* `||`, not `??` — NCHE/Guild rows can send receiptNo and
                         currencyCode empty, not just null. */}
-                    <td className="text-blue font-bold font-mono">{r.receiptNo || <span className="text-g400">—</span>}</td>
+                    <td className="text-blue font-bold font-mono">
+                      {r.receiptNo || <span className="text-g400">—</span>}
+                      {r.isCancelled && <div className="font-sans font-normal mt-1"><CancelledBadge row={r} /></div>}
+                    </td>
                     <td className="text-muted">{formatDate(r.payDate)}</td>
                     <td className="font-mono text-blue">{r.studentNo || '—'}</td>
                     <td><strong>{r.studentName || '—'}</strong></td>
@@ -264,6 +291,13 @@ export default function Page() {
         onClose={() => setEditEntry(null)}
         showToast={showToast}
         target={editEntry}
+      />
+      <CancelPaymentModal
+        target={cancelTarget && { label: cancelTarget.label }}
+        onClose={() => setCancelTarget(null)}
+        showToast={showToast}
+        isPending={cancelPayment.isPending}
+        onConfirm={reason => cancelPayment.mutateAsync({ category: cancelTarget!.category, guid: cancelTarget!.guid, reason })}
       />
       <Toast toast={toast} />
     </>

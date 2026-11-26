@@ -1,7 +1,6 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   createRegulatoryPayment,
-  deleteRegulatoryPayment,
   getRegulatoryPaymentHistory,
   getRegulatorySemesterStatus,
   searchNcheStudents,
@@ -42,19 +41,6 @@ export function useUpdateRegulatoryPayment(category: PaymentCategory) {
   return useMutation({
     mutationFn: ({ paymentGuid, input }: { paymentGuid: string; input: RegulatoryPaymentUpdateInput; applicationGuid: string; studentGuid: string | null }) =>
       updateRegulatoryPayment(category, paymentGuid, input),
-    onSuccess: (_result, { applicationGuid, studentGuid }) => {
-      invalidateAfterCategoryPayment(queryClient, applicationGuid)
-      if (studentGuid) queryClient.invalidateQueries({ queryKey: [...keyFor(category), 'history', studentGuid] })
-      queryClient.invalidateQueries({ queryKey: [...keyFor(category), 'semester-status', applicationGuid] })
-    },
-  })
-}
-
-export function useDeleteRegulatoryPayment(category: PaymentCategory) {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: ({ paymentGuid }: { paymentGuid: string; applicationGuid: string; studentGuid: string | null }) =>
-      deleteRegulatoryPayment(category, paymentGuid),
     onSuccess: (_result, { applicationGuid, studentGuid }) => {
       invalidateAfterCategoryPayment(queryClient, applicationGuid)
       if (studentGuid) queryClient.invalidateQueries({ queryKey: [...keyFor(category), 'history', studentGuid] })

@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   AnnouncementCreateInput, AnnouncementItem, AnnouncementUpdateInput, StudentAnnouncementItem,
   createAnnouncement, deleteAnnouncement, getAnnouncementById, getAnnouncements,
@@ -8,13 +8,14 @@ import {
 const ANNOUNCEMENTS_KEY = ['student-announcements']
 const PORTAL_ANNOUNCEMENTS_KEY = ['portal-student-announcements']
 
-// The endpoint returns the full unpaginated list (see
-// get-admin-announcements.md) — search/pagination are handled client-side.
-// Default staleTime (0) on purpose: attachment URLs are short-lived presigns.
-export function useAnnouncements() {
+// Server-side paged (page/pageSize). keepPreviousData keeps the current rows
+// on screen while the next page loads. Default staleTime (0) on purpose:
+// attachment URLs are short-lived presigns.
+export function useAnnouncements(page: number, pageSize: number) {
   return useQuery({
-    queryKey: ANNOUNCEMENTS_KEY,
-    queryFn: () => getAnnouncements(),
+    queryKey: [...ANNOUNCEMENTS_KEY, 'list', page, pageSize],
+    queryFn: () => getAnnouncements(page, pageSize),
+    placeholderData: keepPreviousData,
   })
 }
 

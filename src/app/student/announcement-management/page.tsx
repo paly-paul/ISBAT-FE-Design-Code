@@ -7,9 +7,6 @@ import { Toast } from '@/components/Toast'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
-import { usePagination } from '@/hooks/usePagination'
-
-const PAGE_SIZE = 10
 import { AnnouncementFormModal } from '@/components/modals/student/AnnouncementFormModal'
 import { AnnouncementViewModal } from '@/components/modals/student/AnnouncementViewModal'
 import {
@@ -19,6 +16,8 @@ import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { DocumentPreviewModal } from '@/components/modals/shared/DocumentPreviewModal'
 import { imageSrcFor } from '@/lib/documentViewer'
 import { formatDate } from '@/lib/date'
+
+const PAGE_SIZE = 10
 
 // programName is null both for global announcements and for ones whose
 // programme has since been deactivated (see get-admin-announcements.md).
@@ -73,26 +72,23 @@ export default function Page() {
   function closeModal(id: string) { setOpenModals(prev => { const s = new Set(prev); s.delete(id); return s }) }
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 
-  // Unpaginated — the endpoint returns every announcement in one response
-  // (see get-admin-announcements.md), so search/sort run client-side.
-  const { data, isLoading } = useAnnouncements()
-  const allAnnouncements = useMemo(() => data ?? [], [data])
+  // Server-side pages of PAGE_SIZE (?page=&pageSize=). The endpoint has no
+  // search param, so search filters only the rows of the page on screen.
+  const [page, setPage] = useState(1)
+  const { data, isLoading } = useAnnouncements(page, PAGE_SIZE)
+  const pageAnnouncements = useMemo(() => data?.announcements ?? [], [data])
+  const totalCount = data?.totalCount ?? 0
+  const totalPages = data?.totalPages ?? 0
 
   const searchTrimmed = search.trim().toLowerCase()
   const filteredRows = useMemo(() => {
-    const base = searchTrimmed
-      ? allAnnouncements.filter(a =>
-          (a.subject ?? '').toLowerCase().includes(searchTrimmed) ||
-          programLabel(a).toLowerCase().includes(searchTrimmed) ||
-          (a.announcementBody ?? '').toLowerCase().includes(searchTrimmed),
-        )
-      : allAnnouncements
-    // Newest Visible Upto first — matches the endpoint's own ordering.
-    return [...base].sort((a, b) => b.announceDate.localeCompare(a.announceDate))
-  }, [allAnnouncements, searchTrimmed])
-
-  // Client-side pages over the full list; resets to page 1 on a new search.
-  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
+    if (!searchTrimmed) return pageAnnouncements
+    return pageAnnouncements.filter(a =>
+      (a.subject ?? '').toLowerCase().includes(searchTrimmed) ||
+      programLabel(a).toLowerCase().includes(searchTrimmed) ||
+      (a.announcementBody ?? '').toLowerCase().includes(searchTrimmed),
+    )
+  }, [pageAnnouncements, searchTrimmed])
 
   const searchMatches = useMemo(
     () => (searchTrimmed ? filteredRows.slice(0, 8) : []),
@@ -120,7 +116,12 @@ export default function Page() {
   function confirmDeleteAnnouncement() {
     if (!deleteTarget) return
     deleteAnnouncement.mutate(deleteTarget.announcementGuid, {
-      onSuccess: () => { setDeleteTarget(null); showToast('Announcement deleted successfully', 'success') },
+      onSuccess: () => {
+        // Deleting the only row on a later page would leave an empty page.
+        if (pageAnnouncements.length === 1 && page > 1) setPage(page - 1)
+        setDeleteTarget(null)
+        showToast('Announcement deleted successfully', 'success')
+      },
       onError: (error: Error) => showToast(error.message || 'Failed to delete announcement', 'error'),
     })
   }
@@ -145,7 +146,7 @@ export default function Page() {
               className="w-56"
               placeholder="Search subject, programme or content…"
               value={search}
-              onChange={v => { setSearch(v); setPage(1) }}
+              onChange={v => setSearch(v)}
               results={searchMatches.map(a => ({ id: a.announcementGuid, primary: a.subject || 'Untitled announcement', secondary: programLabel(a) }))}
               minChars={1}
               onSelect={() => {}}
@@ -166,9 +167,9 @@ export default function Page() {
                 {isLoading
                   ? <TableLoadingState colSpan={999} />
                   : filteredRows.length === 0
-                    ? <EmptyState colSpan={999} hasFilters={!!search} onClearFilters={() => { setSearch(''); setPage(1) }} />
+                    ? <EmptyState colSpan={999} hasFilters={!!search} onClearFilters={() => setSearch('')} />
                     : null}
-                {!isLoading && pageItems.map(a => (
+                {!isLoading && filteredRows.map(a => (
                   <tr key={a.announcementGuid}>
                     <td>
                       {/* View needs only the page's own access, so the menu

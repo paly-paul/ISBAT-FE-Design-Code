@@ -13,6 +13,9 @@ import { ViewOtherPaymentReceiptModal } from '@/components/modals/finance/ViewOt
 import { getPaymentOtherReceiptPdf, type OtherReceiptRef, type PaymentOtherDto } from '@/lib/api/finance/paymentOthers'
 import { EditPaymentModal, EditablePaymentTarget } from '@/components/modals/finance/EditPaymentModal'
 import { EditPaymentOtherModal, EditablePaymentOtherTarget } from '@/components/modals/finance/EditPaymentOtherModal'
+import { CancelPaymentModal } from '@/components/modals/finance/CancelPaymentModal'
+import { CancelledBadge } from '@/components/finance/CancelledBadge'
+import { useCancelAdvanceAdjustment, useCancelPayment, useCancelPermissions } from '@/hooks/finance/usePaymentCancel'
 import DatePicker from '@/components/DatePicker'
 import { SearchSelect } from '@/components/SearchSelect'
 import { ProcBankSearchSelect } from '@/components/ProcBankSearchSelect'
@@ -977,9 +980,11 @@ export default function PaymentConsolePage() {
   // payment-history/{applicationGuid} has no totalPaid (MR !137 didn't cover
   // it), but it returns every payment at once, so the semester total is
   // summed here: one entry per currency, never converted or added together.
+  // Cancelled payments stay in the list but never count as paid.
   const tuitionTotalPaid = useMemo(() => {
     const byCurrency = new Map<string, { currencyName: string; totalAmount: number }>()
     tuitionPaymentHistory.forEach(h => {
+      if (h.isCancelled) return
       const key = h.currencyGuid ?? h.currencyName ?? ''
       const entry = byCurrency.get(key) ?? { currencyName: h.currencyName ?? '—', totalAmount: 0 }
       entry.totalAmount += h.amount ?? 0
@@ -999,6 +1004,19 @@ export default function PaymentConsolePage() {
   // genuinely different shape/endpoint from Tuition's editTarget above, so
   // kept as its own state rather than reused.
   const [editOtherTarget, setEditOtherTarget] = useState<EditablePaymentOtherTarget | null>(null)
+  // Cancel (post-payment-cancel.md, post-payment-other-cancel.md,
+  // post-adjustment-cancel.md): tuition and other history rows, and the
+  // selected deposit's adjustments. Each needs its own cancel permission.
+  const cancelPerms = useCancelPermissions()
+  const cancelPayment = useCancelPayment()
+  const cancelAdjustment = useCancelAdvanceAdjustment()
+  const [cancelTarget, setCancelTarget] = useState<{ category: 1 | 2 | 'adjustment'; guid: string; label: string } | null>(null)
+  function confirmCancel(reason: string) {
+    if (!cancelTarget) return Promise.resolve()
+    return cancelTarget.category === 'adjustment'
+      ? cancelAdjustment.mutateAsync({ adjustmentGuid: cancelTarget.guid, reason })
+      : cancelPayment.mutateAsync({ category: cancelTarget.category, guid: cancelTarget.guid, reason })
+  }
   // Which of this application's payments are advance-funded — put-payment.md
   // rejects editing those outright ("adjust the advance deposit instead"),
   // and the fee-line row itself has no `advance` field to check ahead of
@@ -1995,7 +2013,7 @@ export default function PaymentConsolePage() {
                                     {permissions.edit && (
                                       <button
                                         className="btn btn-neu btn-sm"
-                                        disabled={isAdvanceFunded}
+                                        disabled={isAdvanceFunded || !!h.isCancelled}
                                         title={isAdvanceFunded ? 'Linked to an advance deposit — adjust the deposit instead.' : undefined}
                                         onClick={() => setEditTarget({ paymentGuid: h.paymentGuid, amount: h.amount, payDate: h.payDate, payType: h.payType, label: h.paymentCode })}
                                       >
@@ -2008,9 +2026,20 @@ export default function PaymentConsolePage() {
                                         <i className="lni lni-printer"></i> {printingGuid === h.paymentGuid ? 'Loading…' : 'Print / Reprint'}
                                       </button>
                                     )}
+                                    {cancelPerms.canCancel(1) && !h.isCancelled && (
+                                      <button
+                                        className="btn btn-neu btn-sm"
+                                        onClick={() => setCancelTarget({ category: 1, guid: h.paymentGuid, label: `Tuition payment ${h.paymentCode} · ${h.receipt ?? 'no receipt'} · ${h.amount.toLocaleString()} ${h.currencyName ?? ''}` })}
+                                      >
+                                        <i className="lni lni-ban"></i> Cancel
+                                      </button>
+                                    )}
                                   </ActionMenu>
                                 </td>
-                                <td className="font-mono whitespace-nowrap">{h.paymentCode ?? '—'}</td>
+                                <td className="font-mono whitespace-nowrap">
+                                  {h.paymentCode ?? '—'}
+                                  {h.isCancelled && <div className="font-sans mt-1" style={{ whiteSpace: 'normal' }}><CancelledBadge row={h} /></div>}
+                                </td>
                                 <td className="whitespace-nowrap">
                                   <span className="font-mono">{h.receipt ?? '—'}</span>
                                   {h.bookCode && <span className="text-g400" style={{ display: 'block', fontSize: 11 }}>Book {h.bookCode}</span>}
@@ -2079,15 +2108,26 @@ export default function PaymentConsolePage() {
                                     )}
                                     <button
                                       className="btn btn-neu btn-sm"
-                                      disabled={h.advance === 1}
+                                      disabled={h.advance === 1 || !!h.isCancelled}
                                       title={h.advance === 1 ? 'Linked to an advance deposit — adjust the deposit instead.' : undefined}
                                       onClick={() => setEditOtherTarget({ paymentOtherGuid: h.paymentOtherGuid, amount: h.amount, payDate: h.payDate, bankGuid: h.bank?.bankGuid ?? null, label: h.paymentCode })}
                                     >
                                       <i className="lni lni-pencil-alt"></i> Edit
                                     </button>
+                                    {cancelPerms.canCancel(2) && !h.isCancelled && (
+                                      <button
+                                        className="btn btn-neu btn-sm"
+                                        onClick={() => setCancelTarget({ category: 2, guid: h.paymentOtherGuid, label: `Other payment ${h.paymentCode} · ${h.receipt ?? 'no receipt'} · ${h.amount.toLocaleString()} ${h.currency.currencyCode}` })}
+                                      >
+                                        <i className="lni lni-ban"></i> Cancel
+                                      </button>
+                                    )}
                                   </ActionMenu>
                                 </td>
-                                <td className="font-mono whitespace-nowrap">{h.paymentCode ?? '—'}</td>
+                                <td className="font-mono whitespace-nowrap">
+                                  {h.paymentCode ?? '—'}
+                                  {h.isCancelled && <div className="font-sans mt-1" style={{ whiteSpace: 'normal' }}><CancelledBadge row={h} /></div>}
+                                </td>
                                 {/* No receipt when the payment drew down an advance deposit. */}
                                 <td className="font-mono whitespace-nowrap" title={h.receipt ? undefined : h.advance === 1 ? 'Paid from an advance deposit — no new receipt' : undefined}>{h.receipt ?? '—'}</td>
                                 <td>{h.payDate.slice(0, 10)}</td>
@@ -3164,9 +3204,20 @@ export default function PaymentConsolePage() {
                                 <button className="btn btn-neu btn-sm" onClick={() => setBreakdownGuid(a.adjustmentGuid)}>
                                   <i className="lni lni-eye"></i> View
                                 </button>
+                                {cancelPerms.advance && !a.isCancelled && (
+                                  <button
+                                    className="btn btn-neu btn-sm"
+                                    onClick={() => setCancelTarget({ category: 'adjustment', guid: a.adjustmentGuid, label: `Advance adjustment ${a.adjustmentCode ?? ''} · ${fmtAmt(a.adjustedAmount)} ${a.currencyName ?? ''}` })}
+                                  >
+                                    <i className="lni lni-ban"></i> Cancel
+                                  </button>
+                                )}
                               </ActionMenu>
                             </td>
-                            <td className="font-mono text-blue">{a.adjustmentCode ?? '—'}</td>
+                            <td className="font-mono text-blue">
+                              {a.adjustmentCode ?? '—'}
+                              {a.isCancelled && <div className="font-sans mt-1"><CancelledBadge row={a} /></div>}
+                            </td>
                             <td className="text-green font-bold">{fmtAmt(a.adjustedAmount)}</td>
                             <td>{a.currencyName ?? '—'}</td>
                             <td>{formatDate(a.adjustmentDate)}</td>
@@ -3356,6 +3407,13 @@ export default function PaymentConsolePage() {
       <ViewPaymentModal isOpen={!!viewEntry} onClose={() => setViewEntry(null)} showToast={showToast} entry={viewEntry} />
       <EditPaymentModal isOpen={!!editTarget} onClose={() => setEditTarget(null)} showToast={showToast} target={editTarget} applicationGuid={selectedApplicationGuid ?? undefined} />
       <EditPaymentOtherModal isOpen={!!editOtherTarget} onClose={() => setEditOtherTarget(null)} showToast={showToast} target={editOtherTarget} />
+      <CancelPaymentModal
+        target={cancelTarget && { label: cancelTarget.label }}
+        onClose={() => setCancelTarget(null)}
+        showToast={showToast}
+        isPending={cancelPayment.isPending || cancelAdjustment.isPending}
+        onConfirm={confirmCancel}
+      />
       <ViewOtherPaymentReceiptModal
         isOpen={!!otherReceipt}
         onClose={() => setOtherReceipt(null)}

@@ -1,4 +1,5 @@
 import { apiGet, apiPost, AuthError } from '../client'
+import type { CancelledFields } from './paymentCancel'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
@@ -98,7 +99,8 @@ export function createAdjustment(paymentAdvanceGuid: string, input: CreateAdjust
 
 // ─── GET /advance-payment/{paymentAdvanceGuid}/adjustments ───────────────
 // Every adjustment made against one advance deposit, newest-relevant first.
-export interface AdjustmentSummaryDto {
+// Cancelled adjustments stay in the list with CancelledFields set.
+export interface AdjustmentSummaryDto extends CancelledFields {
   adjustmentGuid: string
   adjustmentCode: string | null
   adjustmentDate: string

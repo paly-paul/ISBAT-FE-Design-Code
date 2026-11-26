@@ -3,12 +3,10 @@ import { apiDelete, apiGet, apiPost, apiPut } from '../client'
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
 // Confirmed via events/get-events.md, get-event-by-guid.md,
-// post-create-event.md, put-update-event.md, delete-event.md — a flat,
-// unpaginated list of campus events/announcements (exam dates, term
-// milestones, etc.). GET /api/v1/students/events returns every active event
-// (soft-deleted rows excluded server-side), newest eventDate first — there is
-// no pageNumber/pageSize/search param on this endpoint, unlike most other
-// list endpoints in this app.
+// post-create-event.md, put-update-event.md, delete-event.md — campus
+// events/announcements (exam dates, term milestones, etc.). GET
+// /api/v1/students/events returns active events (soft-deleted rows excluded
+// server-side), newest eventDate first; see getEvents for paging.
 export interface EventItem {
   eventGuid: string
   subject: string | null
@@ -51,12 +49,56 @@ const mockEvents: EventItem[] = [
 
 // Lists every active event, newest first — matches the real endpoint's own
 // ordering so mock mode and the real backend behave identically.
-export function getEvents(): Promise<EventItem[]> {
+export interface EventPage {
+  events: EventItem[]
+  totalCount: number
+  totalPages: number
+}
+
+// The paged list comes back grouped by date, like get-grouped-events.md:
+// { eventDate, isSelected, events: [{ eventGuid, subject, eventBody }] }.
+interface EventGroup {
+  eventDate: string | null
+  events: Omit<EventItem, 'eventDate'>[]
+}
+type EventRow = EventItem | EventGroup
+
+type EventListResponse =
+  | EventRow[]
+  | { groups?: EventRow[]; events?: EventRow[]; items?: EventRow[]; totalCount?: number; totalPages?: number }
+  | null
+
+// Flattens date groups into one row per event, each carrying its group's date.
+function flattenEvents(rows: EventRow[]): EventItem[] {
+  return rows.flatMap(r =>
+    'events' in r && Array.isArray(r.events)
+      ? r.events.map(e => ({ ...e, eventDate: r.eventDate }))
+      : [r as EventItem],
+  )
+}
+
+// Server-side paged with page/pageSize, the same convention as the
+// announcements list (get-events.md hasn't been updated yet). Rows may be
+// flat events or date groups (flattened above). If the response is a bare
+// array, or has no totalCount, the requested page is sliced from the full
+// list so the table still pages.
+export function getEvents(page: number, pageSize: number): Promise<EventPage> {
+  const toPage = (all: EventItem[]): EventPage => ({
+    events: all.slice((page - 1) * pageSize, page * pageSize),
+    totalCount: all.length,
+    totalPages: Math.ceil(all.length / pageSize),
+  })
   if (MOCK_AUTH) {
     const sorted = [...mockEvents].sort((a, b) => (b.eventDate ?? '').localeCompare(a.eventDate ?? ''))
-    return Promise.resolve(sorted)
+    return Promise.resolve(toPage(sorted))
   }
-  return apiGet<EventItem[] | null>('/api/v1/students/events').then(data => data ?? [])
+  return apiGet<EventListResponse>(`/api/v1/students/events?page=${page}&pageSize=${pageSize}`).then(data => {
+    if (!data) return toPage([])
+    if (Array.isArray(data)) return toPage(flattenEvents(data))
+    const rows = flattenEvents(data.groups ?? data.events ?? data.items ?? [])
+    if (typeof data.totalCount !== 'number') return toPage(rows)
+    return { events: rows, totalCount: data.totalCount, totalPages: data.totalPages ?? Math.ceil(data.totalCount / pageSize) }
+  })
 }
 
 export function getEventById(guid: string): Promise<EventItem> {

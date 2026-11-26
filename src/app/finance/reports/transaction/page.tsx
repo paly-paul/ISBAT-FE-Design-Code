@@ -63,10 +63,11 @@ interface FormState {
   batchGuids: string[]
   sponsorCategoryGuid: string
   payTypes: string[]         // MultiSelect values; sent as numbers
+  showCancelled: boolean
 }
 const EMPTY_FORM: FormState = {
   fromDate: '', toDate: '', intakeGuid: '', applicationGuid: '', receiptBookGuids: [], ledgerGuids: [], otherLedgerGuids: [],
-  campusGuid: '', programGuid: '', semesterGuids: [], batchGuids: [], sponsorCategoryGuid: '', payTypes: [],
+  campusGuid: '', programGuid: '', semesterGuids: [], batchGuids: [], sponsorCategoryGuid: '', payTypes: [], showCancelled: false,
 }
 
 // The student picker's search runs from 2 characters (vetted-registered-search
@@ -91,6 +92,7 @@ function toFilters(f: FormState): TransactionReportFilters {
     batchGuids: f.batchGuids.length ? f.batchGuids : undefined,
     sponsorCategoryGuid: f.sponsorCategoryGuid || undefined,
     payTypes: f.payTypes.length ? f.payTypes.map(Number).sort() : undefined,
+    showCancelled: f.showCancelled || undefined,
   }
 }
 
@@ -243,6 +245,8 @@ export default function TransactionReportPage() {
   const totalCount = pages[0]?.rows.totalCount ?? 0
   const hasResult = pages.length > 0
   const isEmpty = hasResult && totalCount === 0
+  // Cancelled payments (showCancelled), from page 1 only. Never in any total.
+  const cancelledRows = pages[0]?.cancelledRows ?? null
   const firstPageFailed = preview.isError && !hasResult
   const nextPageFailed = preview.isFetchNextPageError
 
@@ -384,7 +388,11 @@ export default function TransactionReportPage() {
                 )}
               </div>
             </div>
-            <div className="flex items-center justify-end gap-2 mt-4">
+            <div className="flex items-center justify-end gap-2 mt-4 flex-wrap">
+              <label className="flex items-center gap-[7px] cursor-pointer" style={{ fontSize: 13 }} title="Lists cancelled payments in their own table and adds a Cancelled Transactions sheet to the Excel file. They are never counted in any total.">
+                <input type="checkbox" checked={form.showCancelled} onChange={e => setField('showCancelled', e.target.checked)} />
+                <span>Show cancelled</span>
+              </label>
               <span className="text-g400 mr-auto" style={{ fontSize: 'var(--fs-sm)' }}>
                 {form.campusGuid || form.batchGuids.length || form.sponsorCategoryGuid
                   ? 'Campus, Batches and Sponsor use the student’s current record, so payments by people who aren’t students yet are left out.'
@@ -554,6 +562,57 @@ export default function TransactionReportPage() {
           </>
         )}
       </div>
+
+      {/* Cancelled payments (Show cancelled): their own table, kept out of
+          the rows above and out of every total, so a missing receipt number
+          can be explained. */}
+      {saved?.showCancelled && hasResult && cancelledRows && (
+        <div className="card">
+          <div className="card-hdr">
+            <div className="card-title">
+              <span className="ctitle-icon"><i className="lni lni-ban" aria-hidden="true" /></span> Cancelled transactions
+              <span className="badge badge-red ml-2">{fmtReportCount(cancelledRows.totalCount)}</span>
+            </div>
+            <span className="text-g400" style={{ fontSize: 'var(--fs-sm)' }}>Not counted in any total</span>
+          </div>
+          {cancelledRows.items.length === 0 ? (
+            <div className="text-g400 text-center" style={{ padding: 16, fontSize: 12.5 }}>No cancelled payments match these filters.</div>
+          ) : (
+            <>
+              <ScrollTable className="rpt-scroll">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Date</th><th>Receipt</th><th>Receipt Book</th><th>Student No</th><th>Student Name</th>
+                      <th>Ledger</th><th>Source</th><th className="num">Amount</th>
+                      <th>Cancelled On</th><th>Cancelled By</th><th>Reason</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {cancelledRows.items.map((r, i) => (
+                      <tr key={`${r.receipt ?? 'c'}-${r.ledgerCode ?? ''}-${r.semCode ?? ''}-${i}`}>
+                        <td>{fmtReportDate(r.payDate)}</td>
+                        <td className="rpt-mono">{dash(r.receipt)}</td>
+                        <td className="rpt-mono">{dash(r.receiptBook)}</td>
+                        <td className="rpt-mono">{r.studentNumber}</td>
+                        <td>{r.studentName}</td>
+                        <td>{r.ledgerCode ? `${r.ledgerCode} - ${r.ledgerName}` : r.ledgerName}</td>
+                        <td>
+                          <span className={`badge ${SOURCE_BADGE[r.source.value] ?? 'badge-grey'}`}>{REPORT_SOURCE_LABEL[r.source.value] ?? r.source.name}</span>
+                        </td>
+                        <td className="num"><span className="rpt-amt">{fmtReportAmount(r.amount)}</span><span className="rpt-cur">{r.currencyCode}</span></td>
+                        <td>{r.cancelledDate ? fmtReportDate(r.cancelledDate) : '—'}</td>
+                        <td>{dash(r.cancelledByName)}</td>
+                        <td style={{ minWidth: 200, whiteSpace: 'normal' }}>{dash(r.cancelReason)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </ScrollTable>
+            </>
+          )}
+        </div>
+      )}
     </div>
   )
 }

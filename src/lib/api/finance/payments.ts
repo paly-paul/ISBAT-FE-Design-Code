@@ -1,5 +1,6 @@
 import { apiGet } from '../client'
 import type { TotalPaid } from './totalPaid'
+import type { CancelledFields } from './paymentCancel'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
@@ -102,8 +103,9 @@ export async function getAllPaymentsForApplication(applicationGuid: string): Pro
 // looked at (only per-application balance existed then, via
 // paymentConsole.ts's getAdvanceBalance-shaped endpoint, never wired up).
 // `balance` is what's still undrawn; `baseAmount`/`baseCurrency` are frozen
-// at creation, not live-converted.
-export interface PaymentAdvance {
+// at creation, not live-converted. Cancelled deposits stay in the list with
+// CancelledFields set (2026-11-26).
+export interface PaymentAdvance extends CancelledFields {
   paymentAdvanceGuid: string
   advPaymentCode: string
   applicationGuid: string
