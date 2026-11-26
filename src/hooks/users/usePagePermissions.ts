@@ -160,3 +160,22 @@ export function usePagePermissions(
     return fallback
   }, [data, isLoading, isError, pathname, fallback])
 }
+
+// Raw un-normalized permissions bag for pages that need to distinguish
+// omitted keys from explicit grants without normalizePermissions' fallbacks
+// (e.g. `print` falling back to `get` on Hall Ticket).
+export function useRawPagePermissions(overridePath?: string): MenuPermissions | null {
+  const routerPathname = usePathname()
+  const pathname = overridePath || routerPathname
+  const { data, isLoading, isError } = useMenu()
+
+  return useMemo(() => {
+    if (isError) return NO_ACCESS
+    if (isLoading || !data) return FULL_ACCESS
+    for (const moduleNode of data.menu) {
+      const found = findNode(moduleNode.children, moduleNode.name.toLowerCase(), pathname)
+      if (found) return found.permissions ?? FULL_ACCESS
+    }
+    return FULL_ACCESS
+  }, [data, isLoading, isError, pathname])
+}
