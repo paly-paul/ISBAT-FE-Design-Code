@@ -158,7 +158,8 @@ async function decodeIfText(blob: Blob): Promise<string | null> {
 
 function typeFromExtension(url: string): string {
   try {
-    const ext = new URL(url).pathname.split('.').pop()?.toLowerCase() ?? ''
+    // Base only matters for relative backend paths (/api/…).
+    const ext = new URL(url, 'http://localhost').pathname.split('.').pop()?.toLowerCase() ?? ''
     return EXTENSION_TYPES[ext] ?? ''
   } catch {
     return ''
@@ -176,6 +177,18 @@ async function sniffType(blob: Blob): Promise<string> {
 
 function isUsefulType(t: string) {
   return !!t && t !== 'application/octet-stream' && t !== 'binary/octet-stream'
+}
+
+// A URL to try in an <img>, or null when the URL itself says the file is not
+// an image (content-type param or a known non-image extension; no fetch).
+// Files whose type can't be told from the URL — e.g. S3 keys stored without
+// an extension — are still tried; the caller's onError falls back. Backend-
+// hosted files are reduced to their same-origin /api path so the login
+// cookie goes with the request; presigned S3 URLs load as-is.
+export function imageSrcFor(url: string): string | null {
+  const type = [extractContentType(url), typeFromExtension(url)].find(isUsefulType) ?? ''
+  if (type && !type.startsWith('image/')) return null
+  return backendPath(url) ?? url
 }
 
 // Throws only if the document can't be fetched at all (expired presign, CORS,

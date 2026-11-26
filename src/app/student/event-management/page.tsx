@@ -7,6 +7,7 @@ import { Toast } from '@/components/Toast'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { EventFormModal } from '@/components/modals/student/EventFormModal'
+import { EventViewModal } from '@/components/modals/student/EventViewModal'
 import { useEvents, useCreateEvent, useUpdateEvent, useDeleteEvent, EventItem } from '@/hooks/student/useEventManagement'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { formatDate } from '@/lib/date'
@@ -17,6 +18,7 @@ export default function Page() {
   const [toast, setToast]       = useState<{ msg: string; type: string } | null>(null)
   const [search, setSearch]     = useState('')
   const [editingEventGuid, setEditingEventGuid] = useState<string | null>(null)
+  const [viewingEventGuid, setViewingEventGuid] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<EventItem | null>(null)
 
   function openModal(id: string)  { setOpenModals(prev => new Set(prev).add(id)) }
@@ -55,6 +57,11 @@ export default function Page() {
   function openEditModal(guid: string) {
     setEditingEventGuid(guid)
     openModal('edit-event-modal')
+  }
+
+  function openViewModal(guid: string) {
+    setViewingEventGuid(guid)
+    openModal('view-event-modal')
   }
 
   function confirmDeleteEvent() {
@@ -110,8 +117,12 @@ export default function Page() {
                 {!isLoading && filteredRows.map(e => (
                   <tr key={e.eventGuid}>
                     <td>
-                      {(permissions.edit || permissions.delete) && (
-                        <ActionMenu>
+                      {/* View needs only the page's own access, so the menu
+                          always shows; Edit/Delete follow their permissions. */}
+                      <ActionMenu>
+                          <button className="btn btn-neu btn-sm" onClick={() => openViewModal(e.eventGuid)}>
+                            <i className="lni lni-eye"></i> View
+                          </button>
                           {permissions.edit && (
                             <button className="btn btn-neu btn-sm" onClick={() => openEditModal(e.eventGuid)}>
                               <i className="lni lni-pencil"></i> Edit
@@ -122,8 +133,7 @@ export default function Page() {
                               <i className="lni lni-trash-can"></i> Delete
                             </button>
                           )}
-                        </ActionMenu>
-                      )}
+                      </ActionMenu>
                     </td>
                     <td><strong>{e.subject || <span className="text-muted">— Untitled —</span>}</strong></td>
                     <td className="text-muted">{formatDate(e.eventDate)}</td>
@@ -153,6 +163,13 @@ export default function Page() {
         eventGuid={editingEventGuid}
         createEvent={createEvent}
         updateEvent={updateEvent}
+      />
+      <EventViewModal
+        isOpen={openModals.has('view-event-modal')}
+        onClose={() => closeModal('view-event-modal')}
+        showToast={showToast}
+        eventGuid={viewingEventGuid}
+        onEdit={permissions.edit ? guid => { closeModal('view-event-modal'); openEditModal(guid) } : undefined}
       />
       <Toast toast={toast} />
 

@@ -30,7 +30,6 @@ import {
   useUpdateProgramMasterStep1, ProgramMasterUpdateStep1Input,
 } from '@/hooks/academic/useProgramMaster'
 import {
-  useProgramCourseUnits,
   useAddProgramCourseUnitsBulk,
   useUpdateProgramCourseUnits,
   ProgramCourseUnitBulkItem,
@@ -294,7 +293,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   const appliedCopyRef = useRef<string | null>(null)
   // Guards the fullDetails prefill effect below against running more than
   // once per open-session for a given programme. Neither
-  // useProgramMasterFullDetails nor useProgramCourseUnits overrides the
+  // useProgramMasterFullDetails overrides the
   // global QueryClient's defaults (staleTime: 0, refetchOnWindowFocus:
   // true), so a plain alt-tab/refocus while the user is mid-edit on Step
   // 2/3 can trigger a background refetch; if that refetch's result isn't
@@ -636,40 +635,18 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   // ProgramMasterFullDetails in lib/api/academic/programMaster.ts.
   const { data: fullDetails } = useProgramMasterFullDetails(programGuid ?? null, isOpen && mode === 'edit' && !!programGuid)
 
-  // Real per-semester course-unit rows from program-course-units — kept only
-  // as a fallback now (see the fullDetails effect below): fullDetails.semesters
-  // is the primary, more complete source since it covers every semester the
-  // programme has, including ones with zero units assigned yet, which this
-  // endpoint silently omits (confirmed via a real programme: semCount=6 but
-  // program-course-units only returned rows for 1 of them).
-  const { data: programCourseUnitRows = [] } = useProgramCourseUnits(programGuid ?? null, isOpen && mode === 'edit' && !!programGuid)
+  // Semesters (with semesterGuid, since 2026-08-17) and units both come from
+  // full-details, so GET /program-course-units is no longer called here: it
+  // was only a backup for a programme with no semesters, which has no unit
+  // rows there either.
 
-  function getSemesterGuid(si: number, cuGuid?: string): string {
+  function getSemesterGuid(si: number): string {
     if (semGuids[si]) return semGuids[si]
-    if (cuGuid) {
-      const match = programCourseUnitRows.find(r => r.courseUnitGuid === cuGuid)
-      if (match?.semesterGuid) return match.semesterGuid
-    }
-    const unitsInThisSem = semUnits[si] ?? []
-    for (const u of unitsInThisSem) {
-      const match = programCourseUnitRows.find(r => r.courseUnitGuid === u.guid)
-      if (match?.semesterGuid) return match.semesterGuid
-    }
-    const label = semLabels[si]
-    if (label) {
-      const match = programCourseUnitRows.find(r => r.semName && r.semName.trim().toLowerCase() === label.trim().toLowerCase())
-      if (match?.semesterGuid) return match.semesterGuid
-    }
     const semFromFull = (fullDetails?.semesters as any[])?.find((s: any) => s.semCode === si + 1) || (fullDetails?.semesters as any[])?.[si]
     if (semFromFull?.semesterGuid) return semFromFull.semesterGuid
     if (semFromFull?.guid) return semFromFull.guid
     const fromCreated = createdSemesters.find(s => s.semCode === si + 1)
     if (fromCreated?.semesterGuid) return fromCreated.semesterGuid
-    const fallbackSemesters: { semesterGuid: string; semName: string }[] = []
-    programCourseUnitRows.forEach(r => {
-      if (!fallbackSemesters.some(s => s.semesterGuid === r.semesterGuid)) fallbackSemesters.push({ semesterGuid: r.semesterGuid, semName: r.semName })
-    })
-    if (fallbackSemesters[si]?.semesterGuid) return fallbackSemesters[si].semesterGuid
     return ''
   }
 
@@ -679,7 +656,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
 
   useEffect(() => {
     // isOpen has to gate this (not just be an input to it) — react-query
-    // keeps the same `fullDetails`/`programCourseUnitRows` object references
+    // keeps the same `fullDetails` object reference
     // across a close+reopen of the SAME programme when the cached data is
     // still around (structural sharing means even a background refetch
     // returning identical data won't produce a new reference). Without
@@ -691,8 +668,8 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     // fields aren't populated after closing and reopening Edit" bug.
     if (!isOpen || mode !== 'edit' || !fullDetails) return
     // Prefill exactly once per (open session, programme) — a later
-    // reference change on fullDetails/programCourseUnitRows (a background
-    // refetch on window focus, since neither query overrides the default
+    // reference change on fullDetails (a background
+    // refetch on window focus, since the query doesn't override the default
     // staleTime/refetchOnWindowFocus) must NOT re-run this and stomp on
     // Step 2/3 edits the user has made since the initial prefill. See the
     // prefilledForRef comment above.
@@ -727,15 +704,8 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     setPgmStatus(fullDetails.pgmStatus)
     setNoIa(fullDetails.noIa)
 
-    // Semester list for this programme, three-tier fallback, best source first:
-    //
-    // 1. fullDetails.semesters — confirmed real, covers every semester the
-    //    programme has (semCount total) including empty ones. Primary source.
-    // 2. program-course-units' real semesterGuid/semName grouping — only
-    //    used if #1 comes back empty; still an incomplete picture since it
-    //    only lists semesters that already have a course unit on them.
-    // 3. Highest semCode seen on programUnits, generic "Semester N" labels —
-    //    last resort if both real sources are empty.
+    // Semester list: fullDetails.semesters (every semester, empty ones too).
+    // If it's ever empty, "Semester 1…N" from the highest semCode on the units.
     const realSemesters = [...fullDetails.semesters].sort((a, b) => a.semCode - b.semCode)
 
     let semCount: number
@@ -749,21 +719,13 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
       guids = realSemesters.map((s, idx) => {
         if ((s as any).semesterGuid) return (s as any).semesterGuid
         if ((s as any).guid) return (s as any).guid
-        const fromRow = programCourseUnitRows.find(r => r.semName && r.semName.trim().toLowerCase() === s.semName?.trim().toLowerCase())
-        if (fromRow?.semesterGuid) return fromRow.semesterGuid
         return ''
       })
       units = Array.from({ length: semCount }, () => [])
-      // programUnits' own semCode already lines up 1:1 with these semesters
-      // (both are position-based against the same programme), so no need to
-      // merge against program-course-units at all here.
+      // programUnits' own semCode lines up 1:1 with these semesters.
       fullDetails.programUnits.forEach(u => {
         const si = u.semCode - 1
         if (si < 0 || si >= semCount) return
-        if (!guids[si]) {
-          const fromRow = programCourseUnitRows.find(r => r.courseUnitGuid === u.courseUnitGuid)
-          if (fromRow?.semesterGuid) guids[si] = fromRow.semesterGuid
-        }
         units[si].push({
           id: nextCUId++,
           guid: u.courseUnitGuid,
@@ -782,35 +744,6 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
         })
       })
     } else {
-      const fallbackSemesters: { semesterGuid: string; semName: string }[] = []
-      programCourseUnitRows.forEach(r => {
-        if (!fallbackSemesters.some(s => s.semesterGuid === r.semesterGuid)) fallbackSemesters.push({ semesterGuid: r.semesterGuid, semName: r.semName })
-      })
-
-      if (fallbackSemesters.length > 0) {
-        semCount = fallbackSemesters.length
-        labels = fallbackSemesters.map(s => s.semName)
-        guids = fallbackSemesters.map(s => s.semesterGuid)
-        units = Array.from({ length: semCount }, () => [])
-        // program-course-units doesn't carry unitType/unitCat/streamGuid —
-        // pull those in from fullDetails.programUnits by courseUnitGuid.
-        programCourseUnitRows.forEach(r => {
-          const si = fallbackSemesters.findIndex(s => s.semesterGuid === r.semesterGuid)
-          if (si < 0) return
-          const detail = fullDetails.programUnits.find(u => u.courseUnitGuid === r.courseUnitGuid)
-          units[si].push({
-            id: nextCUId++,
-            guid: r.courseUnitGuid,
-            code: r.courseUnitCode,
-            name: r.courseUnitName,
-            credits: null,
-            unitType: detail?.unitTypeGuid ?? '',
-            unitCat: detail?.unitCatGuid ?? '',
-            // Same "only for a real Specialization category" guard as the primary path above.
-            streamGuid: isSpecializationCategory(detail?.unitCatGuid ?? '') ? (detail?.streamGuid ?? '') : '',
-          })
-        })
-      } else {
         const fallbackSemCount = fullDetails.programUnits.reduce((max, u) => Math.max(max, u.semCode), 0)
         semCount = Math.max(fallbackSemCount, 1)
         labels = Array.from({ length: semCount }, (_, i) => `Semester ${i + 1}`)
@@ -831,7 +764,6 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
             streamGuid: isSpecializationCategory(u.unitCatGuid ?? '') ? (u.streamGuid ?? '') : '',
           })
         })
-      }
     }
     setSemUnits(units)
     setSemLabels(labels)
@@ -876,7 +808,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
     setActiveAcc(0)
     setBaselinePending(true)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, fullDetails, programCourseUnitRows, mode])
+  }, [isOpen, fullDetails, mode])
 
   // Edit mode: each step's Update only calls its API when that step's values
   // differ from what was prefilled (or last saved). The snapshots hold just
@@ -1094,7 +1026,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
 
     const unitsPayload = semUnits.flatMap((units, si) =>
       units.map(u => {
-        const semGuid = getSemesterGuid(si, u.guid)
+        const semGuid = getSemesterGuid(si)
         return {
           semesterGuid: semGuid,
           courseUnitGuid: u.guid,
