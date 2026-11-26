@@ -234,8 +234,8 @@ export function CompleteRegistrationModal({ isOpen, onClose, showToast, applicat
               <section className="vd-panel">
                 <h3 className="vd-panel-title"><i className="lni lni-user" aria-hidden="true" /> Personal Information</h3>
                 <div className="vd-fields">
-                  <Field label="First Name" value={orDash(detail.firstName)} />
-                  <Field label="Last Name" value={orDash(detail.lastName)} />
+                  {/* The name is captured as one value, so show it as one field. */}
+                  <Field label="Full Name" value={[detail.firstName, detail.lastName].map(v => v?.trim()).filter(Boolean).join(' ') || '—'} />
                   <Field label="Date of Birth" value={formatDate(detail.dob)} />
                   <Field label="Gender" value={orDash(detail.gender)} />
                   <Field label="Nationality" value={orDash(detail.nationality)} />

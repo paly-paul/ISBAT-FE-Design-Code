@@ -91,8 +91,6 @@ function ApplicantProfileContent() {
     return <div id="page-applicant-profile">{header}<PageState icon="lni-warning" title="Couldn’t load this applicant" sub={(error as Error | null)?.message || 'Please try again later.'} /></div>
   }
 
-  const firstName = orDash(detail.firstName)
-  const lastName = orDash(detail.lastName)
   const fullName = [detail.firstName, detail.lastName].map(v => orDash(v)).filter(v => v !== '—').join(' ') || '—'
   const initials = fullName !== '—' ? fullName.split(' ').slice(0, 2).map(p => p[0]).join('').toUpperCase() : '—'
   const intake = orDash(String(detail.intakeName || detail.intakeCode || ''))
@@ -150,8 +148,8 @@ function ApplicantProfileContent() {
         <div key={activeTab} className="p-5 tab-panel-in">
           {activeTab === 'personal' && (
             <div className="g3">
-              <ReadOnly label="First Name" value={firstName} />
-              <ReadOnly label="Last Name" value={lastName} />
+              {/* The name is captured as one value, so show it as one field. */}
+              <ReadOnly label="Full Name" value={fullName} />
               <ReadOnly label="Date of Birth" value={detail.dob ? formatDate(detail.dob) : '—'} />
               <ReadOnly label="Gender" value={genderText(detail.gender) || '—'} />
               <ReadOnly label="Nationality" value={orDash(detail.nationality)} />

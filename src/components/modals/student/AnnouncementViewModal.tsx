@@ -1,9 +1,10 @@
 'use client'
+import { useState } from 'react'
 import { ModalProps } from '../types'
 import { FailurePopup } from '../shared/FailurePopup'
+import { DocumentPreviewModal } from '../shared/DocumentPreviewModal'
 import { RichTextDisplay } from '@/components/RichTextEditor'
 import { useAnnouncement } from '@/hooks/student/useAnnouncementManagement'
-import { openDocumentForViewing } from '@/lib/documentViewer'
 import { formatDate } from '@/lib/date'
 import { AuthError } from '@/lib/api/client'
 
@@ -24,10 +25,16 @@ function isStillVisible(announceDate: string): boolean {
   return announceDate.slice(0, 10) >= ymd
 }
 
-export function AnnouncementViewModal({ isOpen, onClose, showToast, announcementGuid, onEdit }: AnnouncementViewModalProps) {
+export function AnnouncementViewModal({ isOpen, onClose, announcementGuid, onEdit }: AnnouncementViewModalProps) {
   const { data: a, isLoading, isError, error } = useAnnouncement(announcementGuid, isOpen)
+  const [previewOpen, setPreviewOpen] = useState(false)
 
   if (!isOpen) return null
+
+  function handleClose() {
+    setPreviewOpen(false)
+    onClose()
+  }
 
   if (isError) {
     return (
@@ -43,18 +50,15 @@ export function AnnouncementViewModal({ isOpen, onClose, showToast, announcement
     )
   }
 
-  function viewAttachment(url: string) {
-    openDocumentForViewing(url).catch(() => showToast('Failed to open attachment', 'error'))
-  }
-
   const visible = a ? isStillVisible(a.announceDate) : false
 
   return (
+    <>
     <div className="modal-overlay open" id="view-announcement-modal">
       <div className="modal modal-lg modal-flex ann-view" role="dialog" aria-modal="true" aria-labelledby="ann-view-title" onClick={e => e.stopPropagation()}>
         <div className="modal-hdr modal-hdr-blue">
           <div className="modal-title" id="ann-view-title"><i className="lni lni-bullhorn"></i> Announcement</div>
-          <button className="modal-close" onClick={onClose} aria-label="Close"><i className="lni lni-close"></i></button>
+          <button className="modal-close" onClick={handleClose} aria-label="Close"><i className="lni lni-close"></i></button>
         </div>
 
         <div className="modal-scroll">
@@ -86,7 +90,7 @@ export function AnnouncementViewModal({ isOpen, onClose, showToast, announcement
               </div>
 
               {a.attachmentUrl && (
-                <button type="button" className="ann-view-attach" onClick={() => viewAttachment(a.attachmentUrl as string)}>
+                <button type="button" className="ann-view-attach" onClick={() => setPreviewOpen(true)}>
                   <i className="lni lni-paperclip" aria-hidden="true"></i>
                   <span>View attachment</span>
                   <i className="lni lni-arrow-right ann-view-attach-go" aria-hidden="true"></i>
@@ -97,7 +101,7 @@ export function AnnouncementViewModal({ isOpen, onClose, showToast, announcement
         </div>
 
         <div className="modal-footer">
-          <button className="btn btn-neu" onClick={onClose}>Close</button>
+          <button className="btn btn-neu" onClick={handleClose}>Close</button>
           {onEdit && a && (
             <button className="btn btn-primary" onClick={() => onEdit(a.announcementGuid)}>
               <i className="lni lni-pencil"></i> Edit
@@ -106,5 +110,13 @@ export function AnnouncementViewModal({ isOpen, onClose, showToast, announcement
         </div>
       </div>
     </div>
+    {/* Opens over this modal; the attachment URL is this GET's fresh presign. */}
+    <DocumentPreviewModal
+      isOpen={previewOpen && !!a?.attachmentUrl}
+      onClose={() => setPreviewOpen(false)}
+      url={a?.attachmentUrl ?? null}
+      title={a?.subject ? `Attachment — ${a.subject}` : 'Attachment'}
+    />
+    </>
   )
 }

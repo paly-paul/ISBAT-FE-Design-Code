@@ -6,13 +6,18 @@ import { TableSearch } from '@/components/TableSearch'
 import { Toast } from '@/components/Toast'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
+import { Pagination } from '@/components/Pagination'
+import { usePagination } from '@/hooks/usePagination'
+
+const PAGE_SIZE = 10
 import { AnnouncementFormModal } from '@/components/modals/student/AnnouncementFormModal'
 import { AnnouncementViewModal } from '@/components/modals/student/AnnouncementViewModal'
 import {
   useAnnouncements, useCreateAnnouncement, useUpdateAnnouncement, useDeleteAnnouncement, AnnouncementItem,
 } from '@/hooks/student/useAnnouncementManagement'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
-import { openDocumentForViewing } from '@/lib/documentViewer'
+import { DocumentPreviewModal } from '@/components/modals/shared/DocumentPreviewModal'
+import { imageSrcFor } from '@/lib/documentViewer'
 import { formatDate } from '@/lib/date'
 
 // programName is null both for global announcements and for ones whose
@@ -39,6 +44,21 @@ function bodyPreview(html: string | null): { text: string; imageSrc: string | nu
   return { text, imageSrc: img ? img[1].replace(/&amp;/g, '&') : null }
 }
 
+// Thumbnail tile: the image, or the "No image" tile when there is none or it
+// fails to load (e.g. an expired attachment presign).
+function AnnouncementThumb({ src, label, onClick }: { src: string | null; label: string; onClick: () => void }) {
+  const [failedSrc, setFailedSrc] = useState<string | null>(null)
+  const shown = src && src !== failedSrc ? src : null
+  return (
+    <button type="button" className={`ann-thumb${shown ? '' : ' is-text'}`} onClick={onClick} aria-label={label}>
+      {shown
+        // eslint-disable-next-line @next/next/no-img-element -- body images are arbitrary external/data URLs
+        ? <img src={shown} alt="" loading="lazy" onError={() => setFailedSrc(shown)} />
+        : <><i className="lni lni-image" aria-hidden="true"></i><span>No image</span></>}
+    </button>
+  )
+}
+
 export default function Page() {
   const permissions = usePagePermissions()
   const [openModals, setOpenModals] = useState<Set<string>>(new Set())
@@ -47,6 +67,7 @@ export default function Page() {
   const [editingAnnouncementGuid, setEditingAnnouncementGuid] = useState<string | null>(null)
   const [viewingAnnouncementGuid, setViewingAnnouncementGuid] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<AnnouncementItem | null>(null)
+  const [attachmentPreview, setAttachmentPreview] = useState<{ url: string; title: string } | null>(null)
 
   function openModal(id: string)  { setOpenModals(prev => new Set(prev).add(id)) }
   function closeModal(id: string) { setOpenModals(prev => { const s = new Set(prev); s.delete(id); return s }) }
@@ -55,7 +76,7 @@ export default function Page() {
   // Unpaginated — the endpoint returns every announcement in one response
   // (see get-admin-announcements.md), so search/sort run client-side.
   const { data, isLoading } = useAnnouncements()
-  const allAnnouncements = data ?? []
+  const allAnnouncements = useMemo(() => data ?? [], [data])
 
   const searchTrimmed = search.trim().toLowerCase()
   const filteredRows = useMemo(() => {
@@ -69,6 +90,9 @@ export default function Page() {
     // Newest Visible Upto first — matches the endpoint's own ordering.
     return [...base].sort((a, b) => b.announceDate.localeCompare(a.announceDate))
   }, [allAnnouncements, searchTrimmed])
+
+  // Client-side pages over the full list; resets to page 1 on a new search.
+  const { page, setPage, totalPages, totalCount, pageItems } = usePagination(filteredRows, PAGE_SIZE)
 
   const searchMatches = useMemo(
     () => (searchTrimmed ? filteredRows.slice(0, 8) : []),
@@ -89,8 +113,8 @@ export default function Page() {
     openModal('view-announcement-modal')
   }
 
-  function viewAttachment(url: string) {
-    openDocumentForViewing(url).catch(() => showToast('Failed to open attachment', 'error'))
+  function viewAttachment(a: AnnouncementItem) {
+    if (a.attachmentUrl) setAttachmentPreview({ url: a.attachmentUrl, title: a.subject ? `Attachment — ${a.subject}` : 'Attachment' })
   }
 
   function confirmDeleteAnnouncement() {
@@ -121,7 +145,7 @@ export default function Page() {
               className="w-56"
               placeholder="Search subject, programme or content…"
               value={search}
-              onChange={v => setSearch(v)}
+              onChange={v => { setSearch(v); setPage(1) }}
               results={searchMatches.map(a => ({ id: a.announcementGuid, primary: a.subject || 'Untitled announcement', secondary: programLabel(a) }))}
               minChars={1}
               onSelect={() => {}}
@@ -142,9 +166,9 @@ export default function Page() {
                 {isLoading
                   ? <TableLoadingState colSpan={999} />
                   : filteredRows.length === 0
-                    ? <EmptyState colSpan={999} hasFilters={!!search} onClearFilters={() => setSearch('')} />
+                    ? <EmptyState colSpan={999} hasFilters={!!search} onClearFilters={() => { setSearch(''); setPage(1) }} />
                     : null}
-                {!isLoading && filteredRows.map(a => (
+                {!isLoading && pageItems.map(a => (
                   <tr key={a.announcementGuid}>
                     <td>
                       {/* View needs only the page's own access, so the menu
@@ -167,17 +191,15 @@ export default function Page() {
                     </td>
                     <td className="ann-cell">
                       {(() => {
-                        const { text, imageSrc } = bodyPreview(a.announcementBody)
+                        const { text, imageSrc: bodyImageSrc } = bodyPreview(a.announcementBody)
+                        // The form has no inline-image tool, so new announcements
+                        // carry their picture as the attachment — fall back to it.
+                        const imageSrc = bodyImageSrc ?? (a.attachmentUrl ? imageSrcFor(a.attachmentUrl) : null)
                         return (
                           <div className="ann-row">
                             {/* Every row has the same thumbnail slot — an image, or
                                 a text tile — so subjects line up in one column. */}
-                            <button type="button" className={`ann-thumb${imageSrc ? '' : ' is-text'}`} onClick={() => openViewModal(a.announcementGuid)} aria-label={`View ${a.subject || 'announcement'}`}>
-                              {imageSrc
-                                // eslint-disable-next-line @next/next/no-img-element -- body images are arbitrary external/data URLs
-                                ? <img src={imageSrc} alt="" loading="lazy" />
-                                : <><i className="lni lni-image" aria-hidden="true"></i><span>No image</span></>}
-                            </button>
+                            <AnnouncementThumb src={imageSrc} label={`View ${a.subject || 'announcement'}`} onClick={() => openViewModal(a.announcementGuid)} />
                             <div className="ann-text">
                               <strong>{a.subject || <span className="text-muted">— Untitled —</span>}</strong>
                               {text
@@ -196,7 +218,8 @@ export default function Page() {
                           type="button"
                           className="btn btn-neu btn-sm"
                           title="View attachment"
-                          onClick={() => viewAttachment(a.attachmentUrl as string)}
+                          aria-label={`View attachment for ${a.subject || 'announcement'}`}
+                          onClick={() => viewAttachment(a)}
                         >
                           <i className="lni lni-paperclip"></i>
                         </button>
@@ -209,6 +232,7 @@ export default function Page() {
               </tbody>
             </table>
           </ScrollTable>
+          {!isLoading && <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="announcements" onPageChange={setPage} />}
         </div>
       </div>
 
@@ -236,6 +260,12 @@ export default function Page() {
         showToast={showToast}
         announcementGuid={viewingAnnouncementGuid}
         onEdit={permissions.edit ? guid => { closeModal('view-announcement-modal'); openEditModal(guid) } : undefined}
+      />
+      <DocumentPreviewModal
+        isOpen={!!attachmentPreview}
+        onClose={() => setAttachmentPreview(null)}
+        url={attachmentPreview?.url ?? null}
+        title={attachmentPreview?.title}
       />
       <Toast toast={toast} />
 
