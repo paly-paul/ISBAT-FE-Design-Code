@@ -4,6 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "menu:routes": "node scripts/menu-routes.mjs generate menu-response.txt",
+    "prebuild": "npm run menu:routes",
     "build": "next build",
     "start": "next start",
     "lint": "eslint src",

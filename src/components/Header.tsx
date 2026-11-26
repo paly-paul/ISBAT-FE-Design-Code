@@ -9,7 +9,7 @@ import { notificationHref, notificationVisual, NotificationItem } from '@/lib/ap
 import { endNotificationsSession } from '@/lib/notificationsHub'
 import { timeAgo } from '@/lib/date'
 import { HeaderDownloads } from '@/components/HeaderDownloads'
-import { useCurrentAcademicIntake } from '@/hooks/academic/useIntakes'
+import { useCurrentAcademicIntake, useCurrentAdmissionIntake } from '@/hooks/academic/useIntakes'
 import { useMyProfile } from '@/hooks/users/useMyProfile'
 import { sameOriginApiUrl } from '@/lib/apiFileUrl'
 
@@ -32,6 +32,7 @@ const MODULE_CONFIG: Record<string, { label: string; icon: string; pillClass: st
   employee: { label: 'Employee', icon: 'lni-briefcase', pillClass: 'adm' },
   config: { label: 'Configuration', icon: 'lni-cog', pillClass: 'home' },
   'activity-log': { label: 'Activity Log', icon: 'lni-list', pillClass: 'home' },
+  analytics: { label: 'Analytics', icon: 'lni-bar-chart', pillClass: 'home' },
   profile: { label: 'Profile', icon: 'lni-user', pillClass: 'home' },
 }
 
@@ -81,10 +82,11 @@ export function Header({ panelOpen, setPanelOpen, profileOpen, setProfileOpen, p
   const queryClient = useQueryClient()
   const router = useRouter()
 
-  // Whichever intake is flagged current in Intake Master — left out of the
-  // header until it loads (or if none is flagged) rather than showing a
-  // hardcoded one.
+  // The intakes flagged current (academic) and current admission in Intake
+  // Master — each left out of the header until it loads (or if none is
+  // flagged) rather than showing a hardcoded one.
   const { data: currentIntake } = useCurrentAcademicIntake()
+  const { data: currentAdmissionIntake } = useCurrentAdmissionIntake()
 
   const { data: unreadCount = 0 } = useUnreadCount()
   const markRead = useMarkNotificationRead()
@@ -150,8 +152,16 @@ export function Header({ panelOpen, setPanelOpen, profileOpen, setProfileOpen, p
           <img className="hdr-logo" src="/isbat-university-logo.png" alt="" width={768} height={252} />
         </button>
         <div className="hdr-right">
-          <div className={`hdr-module-pill ${currentModule.pillClass}`}><i className={`lni ${currentModule.icon}`}></i> {currentModule.label}</div>
-          {currentIntake && <div className="hdr-intake">{currentIntake.description} ({currentIntake.intakeCode})</div>}
+          {currentIntake && (
+            <div className="hdr-intake" title="Current academic intake">
+              <span className="hdr-intake-lbl">Academic</span> {currentIntake.description} ({currentIntake.intakeCode})
+            </div>
+          )}
+          {currentAdmissionIntake && (
+            <div className="hdr-intake" title="Current admission intake">
+              <span className="hdr-intake-lbl">Admission</span> {currentAdmissionIntake.description} ({currentAdmissionIntake.intakeCode})
+            </div>
+          )}
           <HeaderDownloads />
           <div
             className="hdr-bell-wrap"

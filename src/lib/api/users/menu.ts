@@ -1,4 +1,5 @@
 import { apiGet } from '../client'
+import { applyMenuRouteMoves, canonicalPath } from '@/lib/menuRoutes'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
@@ -593,7 +594,7 @@ export function flattenMenuPages(menu: MenuNode[]): AppPage[] {
 let catalogCache: { modules: Set<string>; pages: Map<string, AppPage> } | null = null
 function menuCatalog() {
   if (!catalogCache) {
-    const pages = flattenMenuPages(stripUnintegratedPages(stripLectureMaster(renameIaCreation(mockMenu))))
+    const pages = flattenMenuPages(applyMenuRouteMoves(stripUnintegratedPages(stripLectureMaster(renameIaCreation(mockMenu)))))
     catalogCache = {
       modules: new Set(pages.map(p => p.url.split('/')[1])),
       pages: new Map(pages.map(p => [p.url, p])),
@@ -605,7 +606,7 @@ function menuCatalog() {
 // The catalog entry for `pathname` (name, module, section), whether or not
 // the user can open it — for naming the page on the access-denied screen.
 export function findCatalogPage(pathname: string): AppPage | undefined {
-  return menuCatalog().pages.get(pathname.replace(/\/+$/, '') || '/')
+  return menuCatalog().pages.get(canonicalPath(pathname))
 }
 
 // Multi-tab pages (e.g. Resit Scheduling with View Resit Class Test / Coursework
@@ -630,7 +631,8 @@ function hasExplicitViewPermission(permissions: MenuPermissions): boolean {
 // menu items (profile, detail pages like /student/profile, dashboards not in
 // the catalog) are allowed — the backend still authorizes each call.
 export function isRouteAllowed(menu: MenuNode[], pathname: string): boolean {
-  const path = pathname.replace(/\/+$/, '') || '/'
+  // An old folder address of a moved page is checked as its new address.
+  const path = canonicalPath(pathname)
   const catalog = menuCatalog()
   const moduleSeg = path.split('/')[1]
   if (!catalog.modules.has(moduleSeg)) return true
@@ -710,13 +712,15 @@ function renameIaCreation(menu: MenuNode[]): MenuNode[] {
 // A failed /me/menu call rejects (no fallback menu): the sidebar shows its
 // "Couldn't load menu" state, RouteGuard blocks the page and
 // usePagePermissions grants nothing, until the user retries.
+// Pages listed under another module than their folder get their menu
+// module's address (applyMenuRouteMoves, src/lib/menuRoutes.ts).
 export function getMenu(): Promise<MenuResult> {
-  if (MOCK_MENU) return Promise.resolve({ menu: stripUnintegratedPages(stripLectureMaster(renameIaCreation(mockMenu))) })
+  if (MOCK_MENU) return Promise.resolve({ menu: applyMenuRouteMoves(stripUnintegratedPages(stripLectureMaster(renameIaCreation(mockMenu)))) })
   return apiGet<MenuNode[] | null>('/api/v1/users/me/menu')
     .then(data => {
       // Taken as-is apart from the remove/rename steps — see the note above
       // cleanStudentSections.
       const menu = removeBatchSummary(cleanStudentSections(data ?? []))
-      return { menu: stripUnintegratedPages(stripLectureMaster(mergeHallTicketNodes(renameIaCreation(menu)))) }
+      return { menu: applyMenuRouteMoves(stripUnintegratedPages(stripLectureMaster(mergeHallTicketNodes(renameIaCreation(menu))))) }
     })
 }

@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useMenu } from '@/hooks/users/useMenu'
 import { MenuNode } from '@/lib/api/users/menu'
+import { canonicalPath } from '@/lib/menuRoutes'
 
 export type RailId = 'student' | 'finance' | 'academic' | 'admission' | 'employee' | 'attendance' | 'assessment' | 'analytics' | 'configuration'
 
@@ -125,16 +126,18 @@ export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSection
   const { data, isLoading, isError, refetch } = useMenu()
   const router = useRouter()
   const pathname = usePathname()
-  const currentPath = normPath(pathname ?? '')
+  // canonicalPath: on a moved page's old folder address, highlight its menu
+  // entry, which now holds the new address (src/lib/menuRoutes.ts).
+  const currentPath = canonicalPath(pathname ?? '')
   const menu = data?.menu
 
-  // At ≤900px the panel lies over the page instead of pushing it aside (see
-  // the 900px block in globals.css), so starting open — every module layout
+  // At ≤1024px the panel lies over the page instead of pushing it aside (see
+  // the 1024px block in globals.css), so starting open — every module layout
   // defaults panelOpen to true — covered most of a phone screen on load,
   // and it stayed over the new page after picking an item. Close it on
   // arrival and after each navigation there; desktop keeps its default.
   // Same breakpoint as the CSS.
-  const isOverlayWidth = () => typeof window !== 'undefined' && window.matchMedia('(max-width: 900px)').matches
+  const isOverlayWidth = () => typeof window !== 'undefined' && window.matchMedia('(max-width: 1024px)').matches
   useEffect(() => {
     if (isOverlayWidth()) setPanelOpen(false)
   }, [currentPage, setPanelOpen])
@@ -391,7 +394,7 @@ export function Sidebar({ panelOpen, setPanelOpen, currentPage, collapsedSection
 
   return (
     <>
-    {/* ≤900px only (CSS hides it above): dims the page under the open
+    {/* ≤1024px only (CSS hides it above): dims the page under the open
         panel, and a tap on it closes the panel. */}
     {panelOpen && <div className="sb-backdrop" onClick={() => setPanelOpen(false)} aria-hidden="true" />}
     <div className="sidebar">
