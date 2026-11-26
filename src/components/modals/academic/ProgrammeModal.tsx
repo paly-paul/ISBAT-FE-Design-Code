@@ -15,7 +15,7 @@ import { ProgramMasterInput } from '@/lib/api/academic/programMaster'
 import { useProgramLevelsDropdown, useProgramLevel } from '@/hooks/academic/useProgramLevels'
 import { useProgramGroupsDropdown } from '@/hooks/academic/useProgramGroups'
 import { useCurrenciesDropdown } from '@/hooks/finance/useCurrencies'
-import { useCourseUnit, useCourseUnitsByGuids } from '@/hooks/academic/useCourseUnits'
+import { useCourseUnit } from '@/hooks/academic/useCourseUnits'
 import { CourseUnitSearchPicker, CourseUnitPickOption } from '@/components/CourseUnitSearchPicker'
 import { useIntakesDropdown, useCurrentAcademicIntake } from '@/hooks/academic/useIntakes'
 import { IntakeSearchPicker } from '@/components/IntakeSearchPicker'
@@ -83,7 +83,10 @@ type SemFees     = FeeItem[][]
 // (and only editable) when unitCat resolves to a "Specialization" category;
 // otherwise Step 1's first specialization pick is what gets sent (see
 // streamGuid fallback in handleFinalSubmit).
-type CUItem      = { id: number; guid: string; code: string; name: string; credits: number; unitType: string; unitCat: string; streamGuid: string }
+// credits: null for a saved unit loaded into Edit — full-details' programUnits
+// carries no maxCredits (asked of backend), and fetching every unit one by one
+// just for this label was dropped. Display only: never sent on save.
+type CUItem      = { id: number; guid: string; code: string; name: string; credits: number | null; unitType: string; unitCat: string; streamGuid: string }
 type SemUnits    = CUItem[][]
 // type SpecRow     = { id: number; value: string } — only used by the commented-out multi-specialization list below
 // All fields here map onto FeeStructureInput on submit (see
@@ -641,16 +644,6 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
   // program-course-units only returned rows for 1 of them).
   const { data: programCourseUnitRows = [] } = useProgramCourseUnits(programGuid ?? null, isOpen && mode === 'edit' && !!programGuid)
 
-  // maxCredits isn't carried on fullDetails.programUnits/programCourseUnitRows
-  // (they only have courseUnitCode/courseUnitName) — resolved here via a
-  // small batched by-guid lookup scoped to exactly this programme's own
-  // course units, not a full-table preload. See useCourseUnitsByGuids' own
-  // comment for why that distinction matters.
-  const courseUnitsByGuid = useCourseUnitsByGuids([
-    ...fullDetails?.programUnits.map(u => u.courseUnitGuid) ?? [],
-    ...programCourseUnitRows.map(r => r.courseUnitGuid),
-  ])
-
   function getSemesterGuid(si: number, cuGuid?: string): string {
     if (semGuids[si]) return semGuids[si]
     if (cuGuid) {
@@ -771,13 +764,12 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
           const fromRow = programCourseUnitRows.find(r => r.courseUnitGuid === u.courseUnitGuid)
           if (fromRow?.semesterGuid) guids[si] = fromRow.semesterGuid
         }
-        const cu = courseUnitsByGuid.get(u.courseUnitGuid)
         units[si].push({
           id: nextCUId++,
           guid: u.courseUnitGuid,
           code: u.courseUnitCode,
           name: u.courseUnitName,
-          credits: cu?.maxCredits ?? 0,
+          credits: null,
           unitType: u.unitTypeGuid ?? '',
           unitCat: u.unitCatGuid ?? '',
           // Only carry a specialization through for a unit whose category is
@@ -805,14 +797,13 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
         programCourseUnitRows.forEach(r => {
           const si = fallbackSemesters.findIndex(s => s.semesterGuid === r.semesterGuid)
           if (si < 0) return
-          const cu = courseUnitsByGuid.get(r.courseUnitGuid)
           const detail = fullDetails.programUnits.find(u => u.courseUnitGuid === r.courseUnitGuid)
           units[si].push({
             id: nextCUId++,
             guid: r.courseUnitGuid,
             code: r.courseUnitCode,
             name: r.courseUnitName,
-            credits: cu?.maxCredits ?? 0,
+            credits: null,
             unitType: detail?.unitTypeGuid ?? '',
             unitCat: detail?.unitCatGuid ?? '',
             // Same "only for a real Specialization category" guard as the primary path above.
@@ -828,13 +819,12 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
         fullDetails.programUnits.forEach(u => {
           const si = u.semCode - 1
           if (si < 0 || si >= semCount) return
-          const cu = courseUnitsByGuid.get(u.courseUnitGuid)
-          units[si].push({
+            units[si].push({
             id: nextCUId++,
             guid: u.courseUnitGuid,
             code: u.courseUnitCode,
             name: u.courseUnitName,
-            credits: cu?.maxCredits ?? 0,
+            credits: null,
             unitType: u.unitTypeGuid ?? '',
             unitCat: u.unitCatGuid ?? '',
             // Same "only for a real Specialization category" guard as the primary path above.
@@ -2428,7 +2418,8 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                 </div>
                 <div style={{ flex: 1, overflowY: 'auto', padding: '4px 8px' }}>
                   {semUnits.map((semUnitsForSem, i) => {
-                    const totalCredits = semUnitsForSem.reduce((s, u) => s + u.credits, 0)
+                    // Only when every unit's credits are known (see CUItem.credits).
+                    const totalCredits = semUnitsForSem.every(u => u.credits != null) ? semUnitsForSem.reduce((s, u) => s + (u.credits ?? 0), 0) : null
                     return (
                       <div
                         key={i}
@@ -2446,7 +2437,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                         </div>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontWeight: 600, fontSize: 13, lineHeight: 1.3 }}>{semLabels[i] ?? `Semester ${i + 1}`}</div>
-                          <div style={{ fontSize: 11, opacity: .65, lineHeight: 1.3 }}>{semUnitsForSem.length} unit{semUnitsForSem.length !== 1 ? 's' : ''} · {totalCredits} credit{totalCredits !== 1 ? 's' : ''}</div>
+                          <div style={{ fontSize: 11, opacity: .65, lineHeight: 1.3 }}>{semUnitsForSem.length} unit{semUnitsForSem.length !== 1 ? 's' : ''}{totalCredits != null && <> · {totalCredits} credit{totalCredits !== 1 ? 's' : ''}</>}</div>
                         </div>
                         {semUnits.length > 1 && (
                           <button
@@ -2479,6 +2470,31 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                   </div>
                 )}
                 <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--b700)', marginBottom: 10 }}>{semLabels[si] ?? `Semester ${si + 1}`}</div>
+                {/* Add picker first, so it stays in reach however many units the
+                    semester has; new units still go to the end of the list. */}
+                {(() => {
+                  const gap = firstEmptySemesterBefore(si)
+                  const gapLabel = semLabels[gap] ?? `Semester ${gap + 1}`
+                  return (
+                    <>
+                      {gap >= 0 && (
+                        <div className="warn-box mb-2" role="alert">
+                          <i className="lni lni-warning" style={{ color: 'var(--amber)', fontSize: 15, flexShrink: 0 }} />
+                          <div style={{ fontSize: 12.5 }}>
+                            <strong>{gapLabel}</strong> has no course units. Add units to it first — semesters must be filled in order.
+                          </div>
+                        </div>
+                      )}
+                      <CourseUnitSearchPicker
+                        placeholder={gap >= 0 ? `Add units to ${gapLabel} first` : 'Search course units to add…'}
+                        excludeCodes={assignedCodes}
+                        onSelect={opt => addUnit(si, opt)}
+                        disabled={gap >= 0}
+                      />
+                      <div style={{ marginBottom: 12 }} />
+                    </>
+                  )
+                })()}
                 {units.length === 0 && (
                   <div style={{ fontSize: 12.5, color: 'var(--g400)', fontStyle: 'italic', marginBottom: 8 }}>
                     No course units assigned yet
@@ -2494,7 +2510,7 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                           <span className="badge badge-blue" style={{ flexShrink: 0 }}>Unit {ui + 1}</span>
                           <span className="font-mono font-bold text-b700" style={{ fontSize: 12, minWidth: 50 }}>{u.code}</span>
                           <span style={{ flex: 1, fontSize: 14, fontWeight: 700, color: 'var(--g900)' }}>{u.name}</span>
-                          <span className="badge badge-grey">{u.credits} credit{u.credits !== 1 ? 's' : ''}</span>
+                          {u.credits != null && <span className="badge badge-grey">{u.credits} credit{u.credits !== 1 ? 's' : ''}</span>}
                           {/* Syllabus/Outline/Taught By — Step 2's "Additional Feature", opened
                               in a popup (see the fixed overlay near the end of this component)
                               rather than expanded inline, so browsing several units' details in a
@@ -2536,28 +2552,6 @@ export function ProgrammeModal({ isOpen, onClose, showToast, mode, programGuid, 
                     })}
                   </div>
                 )}
-                {(() => {
-                  const gap = firstEmptySemesterBefore(si)
-                  const gapLabel = semLabels[gap] ?? `Semester ${gap + 1}`
-                  return (
-                    <>
-                      {gap >= 0 && (
-                        <div className="warn-box mb-2" role="alert">
-                          <i className="lni lni-warning" style={{ color: 'var(--amber)', fontSize: 15, flexShrink: 0 }} />
-                          <div style={{ fontSize: 12.5 }}>
-                            <strong>{gapLabel}</strong> has no course units. Add units to it first — semesters must be filled in order.
-                          </div>
-                        </div>
-                      )}
-                      <CourseUnitSearchPicker
-                        placeholder={gap >= 0 ? `Add units to ${gapLabel} first` : 'Search course units to add…'}
-                        excludeCodes={assignedCodes}
-                        onSelect={opt => addUnit(si, opt)}
-                        disabled={gap >= 0}
-                      />
-                    </>
-                  )
-                })()}
               </div>
             </div>
             </>

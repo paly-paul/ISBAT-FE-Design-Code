@@ -46,8 +46,17 @@ export const REFERENCE_FIELD: Record<PaymentCategory, { label: string; placehold
   },
 }
 
-// Same rule as the server: trimmed, so spaces only counts as empty.
-export function validateReference(category: PaymentCategory, value: string): string | null {
+// NCHE PNR number: digits 0–9 only, up to 20 (post/put-payment-nche.md,
+// 2026-11-26). The field drops anything else as it's typed.
+export const PNR_DIGITS_ONLY = 'PNR number must contain digits only.'
+export function digitsOnly(value: string) { return value.replace(/\D/g, '') }
+
+// Same rule as the server: trimmed, so spaces only counts as empty. On edit,
+// pass the saved value as `original`: an unchanged old PNR with letters or
+// slashes is accepted as it is; a changed one must be digits only.
+export function validateReference(category: PaymentCategory, value: string, original?: string | null): string | null {
+  const t = value.trim()
+  if (category === 'nche' && t && !/^\d+$/.test(t) && t !== (original ?? '').trim()) return PNR_DIGITS_ONLY
   if (!REFERENCE_REQUIRED) return null
   const v = value.trim()
   if (!v) return REFERENCE_FIELD[category].required

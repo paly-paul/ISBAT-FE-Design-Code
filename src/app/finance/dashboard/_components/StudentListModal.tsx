@@ -133,7 +133,6 @@ export function StudentListModal({ kind, intakeGuid, intakeLabel, onClose }: {
   function set<K extends keyof Filters>(k: K, v: Filters[K]) { setFilters(prev => ({ ...prev, [k]: v })) }
 
   const totalPages = data ? Math.max(1, Math.ceil(data.totalCount / (data.pageSize || PAGE_SIZE))) : 1
-  const base = data?.baseCurrencyCode ?? ''
 
   const title = kind === 'cleared' ? 'Students Fully Cleared' : 'Access Blocked'
   const icon = kind === 'cleared' ? 'lni-checkmark-circle' : 'lni-lock-alt'
@@ -194,7 +193,7 @@ export function StudentListModal({ kind, intakeGuid, intakeLabel, onClose }: {
         </div>
         )}
 
-        {/* Summary: how many, and what they add up to (whole filtered list, …InBase only). */}
+        {/* Summary: how many, and what they add up to (whole filtered list, per currency). */}
         <div className="fd-sl-summary" role="status">
           <span className="fd-sl-count">
             <span className="fd-sl-count-main">
@@ -204,21 +203,24 @@ export function StudentListModal({ kind, intakeGuid, intakeLabel, onClose }: {
             </span>
             <span className="fd-sl-count-sub">{intakeLabel}{blocked && ' · lowest clearance first'}</span>
           </span>
-          {data && data.totalCount > 0 && (
-            <dl className="fd-sl-stats" title={`Totals for all ${fmtReportCount(data.totalCount)} ${filtered ? 'matching ' : ''}students, in ${base}`}>
-              <div><dt>Fee</dt><dd>{fmtReportAmount(data.totalFeeInBase)}</dd></div>
-              <div><dt>Discount</dt><dd>{fmtReportAmount(data.totalDiscountInBase)}</dd></div>
-              <div><dt>Collected</dt><dd>{fmtReportAmount(data.totalCollectedInBase)}</dd></div>
-              {blocked && <div className="fd-sl-owed"><dt>Total owed</dt><dd>{fmtReportAmount(blocked.totalOutstandingInBase)}</dd></div>}
-              <span className="fd-sl-stats-cur">{base}</span>
-            </dl>
+          {/* One row per currency, never added together (totalsByCurrency). */}
+          {data && data.totalCount > 0 && data.totalsByCurrency.length > 0 && (
+            <div className="fd-sl-totals">
+              {data.totalsByCurrency.map(t => {
+                const owed = blocked?.totalsByCurrency.find(b => b.currencyCode === t.currencyCode)
+                return (
+                  <dl key={t.currencyCode} className="fd-sl-stats" title={`Totals in ${t.currencyCode} for all ${fmtReportCount(data.totalCount)} ${filtered ? 'matching ' : ''}students`}>
+                    <div><dt>Fee</dt><dd>{fmtReportAmount(t.fee)}</dd></div>
+                    <div><dt>Discount</dt><dd>{fmtReportAmount(t.discount)}</dd></div>
+                    <div><dt>Collected</dt><dd>{fmtReportAmount(t.collected)}</dd></div>
+                    {owed && <div className="fd-sl-owed"><dt>Total owed</dt><dd>{fmtReportAmount(owed.totalOutstanding)}</dd></div>}
+                    <span className="fd-sl-stats-cur">{t.currencyCode}</span>
+                  </dl>
+                )
+              })}
+            </div>
           )}
         </div>
-        {data?.hasMissingRates && (
-          <div className="fd-sl-warn" role="status">
-            <i className="lni lni-warning" aria-hidden="true" /> Some amounts have no exchange rate, so the {base} totals leave them out.
-          </div>
-        )}
 
         {/* List */}
         {/* The table fills the rest of the modal and scrolls inside itself, so the

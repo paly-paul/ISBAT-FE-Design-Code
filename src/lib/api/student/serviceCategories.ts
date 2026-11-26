@@ -38,6 +38,14 @@ export function getServiceCategories(page = 1, pageSize = 25): Promise<PagedResu
     .then(data => data ?? { items: [], totalCount: 0, page, pageSize })
 }
 
+// GET /students/service-categories/dropdown (get-service-categories-dropdown.md):
+// every active category, guid + name, alphabetical. For pickers; the paged
+// list above is only for the master page.
+export function getServiceCategoryDropdown(): Promise<ServiceCategoryDto[]> {
+  if (MOCK_AUTH) return Promise.resolve([...mockCategories])
+  return apiGet<ServiceCategoryDto[] | null>('/api/v1/students/service-categories/dropdown').then(data => data ?? [])
+}
+
 export function createServiceCategory(payload: ServiceCategoryRequest): Promise<ServiceCategoryDto> {
   if (MOCK_AUTH) {
     const row: ServiceCategoryDto = { serviceCategoryGuid: `svc-mock-${Date.now()}`, categoryName: payload.categoryName }
