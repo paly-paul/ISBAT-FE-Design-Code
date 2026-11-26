@@ -6,11 +6,14 @@ import { TableSearch } from '@/components/TableSearch'
 import { Toast } from '@/components/Toast'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
+import { Pagination } from '@/components/Pagination'
 import { EventFormModal } from '@/components/modals/student/EventFormModal'
 import { EventViewModal } from '@/components/modals/student/EventViewModal'
 import { useEvents, useCreateEvent, useUpdateEvent, useDeleteEvent, EventItem } from '@/hooks/student/useEventManagement'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { formatDate } from '@/lib/date'
+
+const PAGE_SIZE = 10
 
 export default function Page() {
   const permissions = usePagePermissions()
@@ -25,25 +28,22 @@ export default function Page() {
   function closeModal(id: string) { setOpenModals(prev => { const s = new Set(prev); s.delete(id); return s }) }
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
 
-  // The endpoint returns every event in one response, unpaginated — no
-  // pageNumber/pageSize/totalCount on the wire (see get-events.md) — so the
-  // whole list is rendered as-is, just filtered and re-sorted client-side.
-  const { data, isLoading } = useEvents()
-  const allEvents = data ?? []
+  // Server-side pages of PAGE_SIZE (?page=&pageSize=). The endpoint has no
+  // search param, so search filters only the rows of the page on screen.
+  const [page, setPage] = useState(1)
+  const { data, isLoading } = useEvents(page, PAGE_SIZE)
+  const pageEvents = useMemo(() => data?.events ?? [], [data])
+  const totalCount = data?.totalCount ?? 0
+  const totalPages = data?.totalPages ?? 0
 
   const searchTrimmed = search.trim().toLowerCase()
   const filteredRows = useMemo(() => {
-    const base = searchTrimmed
-      ? allEvents.filter(e =>
-          (e.subject ?? '').toLowerCase().includes(searchTrimmed) ||
-          (e.eventBody ?? '').toLowerCase().includes(searchTrimmed),
-        )
-      : allEvents
-    // Newest event date first — matches the real endpoint's own ordering,
-    // re-applied client-side so a freshly added/edited event sorts correctly
-    // without waiting on a refetch.
-    return [...base].sort((a, b) => (b.eventDate ?? '').localeCompare(a.eventDate ?? ''))
-  }, [allEvents, searchTrimmed])
+    if (!searchTrimmed) return pageEvents
+    return pageEvents.filter(e =>
+      (e.subject ?? '').toLowerCase().includes(searchTrimmed) ||
+      (e.eventBody ?? '').toLowerCase().includes(searchTrimmed),
+    )
+  }, [pageEvents, searchTrimmed])
 
   const searchMatches = useMemo(
     () => (searchTrimmed ? filteredRows.slice(0, 8) : []),
@@ -67,7 +67,12 @@ export default function Page() {
   function confirmDeleteEvent() {
     if (!deleteTarget) return
     deleteEvent.mutate(deleteTarget.eventGuid, {
-      onSuccess: () => { setDeleteTarget(null); showToast('Event deleted successfully', 'success') },
+      onSuccess: () => {
+        // Deleting the only row on a later page would leave an empty page.
+        if (pageEvents.length === 1 && page > 1) setPage(page - 1)
+        setDeleteTarget(null)
+        showToast('Event deleted successfully', 'success')
+      },
       onError: (error: Error) => showToast(error.message || 'Failed to delete event', 'error'),
     })
   }
@@ -143,6 +148,7 @@ export default function Page() {
               </tbody>
             </table>
           </ScrollTable>
+          {!isLoading && <Pagination page={page} totalPages={totalPages} totalCount={totalCount} itemLabel="events" onPageChange={setPage} />}
         </div>
       </div>
 

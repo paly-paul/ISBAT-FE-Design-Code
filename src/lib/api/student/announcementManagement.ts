@@ -106,13 +106,38 @@ function applyMockInput(target: AnnouncementItem, input: AnnouncementUpdateInput
   }
 }
 
-export function getAnnouncements(): Promise<AnnouncementItem[]> {
+export interface AnnouncementPage {
+  announcements: AnnouncementItem[]
+  totalCount: number
+  totalPages: number
+}
+
+// Server-side paged with page/pageSize — the same params and response fields
+// as the student portal endpoint (get-student-announcements.md); the admin
+// doc (get-admin-announcements.md) hasn't been updated yet. If the response
+// comes back without totalCount (an older backend returning every row), the
+// requested page is sliced from the full list so the table still pages.
+export function getAnnouncements(page: number, pageSize: number): Promise<AnnouncementPage> {
+  const toPage = (all: AnnouncementItem[]): AnnouncementPage => ({
+    announcements: all.slice((page - 1) * pageSize, page * pageSize),
+    totalCount: all.length,
+    totalPages: Math.ceil(all.length / pageSize),
+  })
   if (MOCK_AUTH) {
     const sorted = [...mockAnnouncements].sort((a, b) => b.announceDate.localeCompare(a.announceDate))
-    return withMockProgramNames(sorted)
+    return withMockProgramNames(sorted).then(toPage)
   }
-  return apiGet<{ announcements: AnnouncementItem[] } | null>('/api/v1/students/announcements')
-    .then(data => data?.announcements ?? [])
+  return apiGet<{ announcements: AnnouncementItem[]; totalCount?: number; totalPages?: number } | null>(
+    `/api/v1/students/announcements?page=${page}&pageSize=${pageSize}`,
+  ).then(data => {
+    const rows = data?.announcements ?? []
+    if (typeof data?.totalCount !== 'number') return toPage(rows)
+    return {
+      announcements: rows,
+      totalCount: data.totalCount,
+      totalPages: data.totalPages ?? Math.ceil(data.totalCount / pageSize),
+    }
+  })
 }
 
 export function getAnnouncementById(guid: string): Promise<AnnouncementItem> {

@@ -1,5 +1,6 @@
-import { apiGet, apiPost, apiPut, del } from '../client'
+import { apiGet, apiPost, apiPut } from '../client'
 import type { TotalPaid } from './totalPaid'
+import type { CancelledFields } from './paymentCancel'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
@@ -122,8 +123,9 @@ export type RegulatoryPaymentUpdateInput = Pick<RegulatoryPaymentInput, 'amount'
 // Payment-history rows carry more resolved fields (studentName/intakeCode/
 // receipt on Guild's side) than the create/update result does — union of
 // both categories' shapes, with the fields that don't apply to a given
-// category simply left undefined.
-export interface RegulatoryPaymentHistoryEntry {
+// category simply left undefined. Cancelled payments stay in the history with
+// CancelledFields set; totalPaid leaves them out (2026-11-26).
+export interface RegulatoryPaymentHistoryEntry extends CancelledFields {
   paymentGuid: string
   applicationGuid: string
   studentGuid: string | null
@@ -142,7 +144,7 @@ export interface RegulatoryPaymentHistoryEntry {
 // nche/get-payment-history.md ("paymentNcheGuid", no studentName/intakeCode/
 // receipt at all on NCHE's side) and guild/get-payment-history.md
 // ("paymentGuildGuid", with studentName/intakeCode/receipt on Guild's side).
-interface RawPaymentHistoryEntry {
+interface RawPaymentHistoryEntry extends CancelledFields {
   paymentNcheGuid?: string
   paymentGuildGuid?: string
   applicationGuid: string
@@ -203,16 +205,8 @@ export function updateRegulatoryPayment(category: PaymentCategory, paymentGuid: 
   return apiPut<RawPaymentResult>(`${basePath(category)}/payment-${category}/${paymentGuid}`, input).then(normalizePaymentResult)
 }
 
-// Response 200 is the bare boolean `true` (confirmed via
-// nche/delete-payment-nche.md and guild/delete-payment-guild.md), not the
-// app's standard `{ success, data, ... }` envelope apiDelete assumes — that
-// mismatch made apiDelete throw on every successful delete here (see del()'s
-// own comment in client.ts), so this goes through the plain, non-enveloped
-// variant instead.
-export function deleteRegulatoryPayment(category: PaymentCategory, paymentGuid: string): Promise<boolean> {
-  if (MOCK_AUTH) return Promise.resolve(true)
-  return del<boolean>(`${basePath(category)}/payment-${category}/${paymentGuid}`)
-}
+// The DELETE routes were removed on 2026-11-26 and replaced by cancel
+// (post-payment-{nche,guild}-cancel.md), see paymentCancel.ts.
 
 export interface RegulatoryPaymentHistory {
   items: RegulatoryPaymentHistoryEntry[]

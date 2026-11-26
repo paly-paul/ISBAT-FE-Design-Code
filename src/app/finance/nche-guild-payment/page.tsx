@@ -9,7 +9,9 @@ import { PaymentSuccessModal } from '@/components/modals/finance/PaymentSuccessM
 import { ViewRegulatoryPaymentModal } from '@/components/modals/finance/ViewRegulatoryPaymentModal'
 import { EditRegulatoryPaymentModal } from '@/components/modals/finance/EditRegulatoryPaymentModal'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
-import { SuccessPopup } from '@/components/modals/shared/SuccessPopup'
+import { CancelPaymentModal } from '@/components/modals/finance/CancelPaymentModal'
+import { CancelledBadge } from '@/components/finance/CancelledBadge'
+import { useCancelPayment, useCancelPermissions } from '@/hooks/finance/usePaymentCancel'
 import DatePicker from '@/components/DatePicker'
 import {
   useSearchStudentsInfinite,
@@ -17,7 +19,6 @@ import {
 } from '@/hooks/finance/usePaymentConsole'
 import {
   useCreateRegulatoryPayment,
-  useDeleteRegulatoryPayment,
   useRegulatoryPaymentHistory,
   useRegulatorySemesterStatus,
   useNcheStudentSearchInfinite,
@@ -77,18 +78,6 @@ interface SearchHit {
   subtitle: string
 }
 
-// Delete on a Payment History row goes through the same confirm-then-success
-// flow used elsewhere in the app (employee-approve/bulk-intake-edit:
-// confirm-modal-overlay/confirm-modal-pop + modal-hdr-blue, swapping the same
-// modal's body over to the shared SuccessPopup on success) instead of a bare
-// window.confirm + toast — per request (2026-09-01). Edit now opens its own
-// modal (EditRegulatoryPaymentModal) instead of routing through this same
-// confirm step — correcting a payment isn't the irreversible operation
-// Delete is, so a plain Save is enough there. Create (a brand-new payment)
-// is unchanged and still goes straight to PaymentSuccessModal.
-interface ConfirmDelete {
-  entry: RegulatoryPaymentHistoryEntry
-}
 function initialsFor(name: string) {
   const parts = name.trim().split(/\s+/)
   return ((parts[0]?.[0] ?? '') + (parts[1]?.[0] ?? '')).toUpperCase() || '—'
@@ -156,12 +145,12 @@ export default function NcheGuildPaymentPage() {
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
   const [successModal, setSuccessModal] = useState<{ title: string; rows: [string, string][] } | null>(null)
 
-  // Delete confirm step — see ConfirmDelete's own comment above.
-  // successInfo set once the delete mutation actually succeeds swaps the
-  // same modal from the confirm view over to SuccessPopup, same "stay
-  // open, swap to success" convention as employee-approve/bulk-intake-edit.
-  const [confirmAction, setConfirmAction] = useState<ConfirmDelete | null>(null)
-  const [successInfo, setSuccessInfo] = useState<{ title: string; subtitle: string } | null>(null)
+  // Cancel (post-payment-{nche,guild}-cancel.md) replaced Delete on
+  // 2026-11-26: the DELETE routes are gone, and a cancelled payment stays in
+  // the history marked Cancelled. Needs finance.ncheguildpayment.cancel.
+  const cancelPerms = useCancelPermissions()
+  const cancelPayment = useCancelPayment()
+  const [cancelEntry, setCancelEntry] = useState<RegulatoryPaymentHistoryEntry | null>(null)
 
   // View/Edit modals (get-payment-nches.md's category-agnostic pair,
   // put-payment-nche.md/put-payment-guild.md) — same convention as Payment
@@ -296,7 +285,6 @@ export default function NcheGuildPaymentPage() {
   }
 
   const createPayment = useCreateRegulatoryPayment(category)
-  const deletePayment = useDeleteRegulatoryPayment(category)
 
   function resetForm() {
     setAmount('')
@@ -329,38 +317,8 @@ export default function NcheGuildPaymentPage() {
     setCommittedSearch('')
     resetForm()
     setSuccessModal(null)
-    closeConfirm()
+    setCancelEntry(null)
     showToast('Form cleared.', 'warn')
-  }
-
-  // Opens the shared confirm modal instead of deleting straight away —
-  // confirmDeletePayment below does the actual mutate once the cashier
-  // confirms.
-  function handleDelete(entry: RegulatoryPaymentHistoryEntry) {
-    if (!selectedApplicationGuid) return
-    setConfirmAction({ entry })
-  }
-
-  function confirmDeletePayment() {
-    if (!confirmAction || !selectedApplicationGuid) return
-    const { entry } = confirmAction
-    deletePayment.mutate(
-      { paymentGuid: entry.paymentGuid, applicationGuid: selectedApplicationGuid, studentGuid },
-      {
-        onSuccess: () => {
-          setSuccessInfo({ title: `${CATEGORY_LABEL[category]} Payment Deleted!`, subtitle: `The ${entry.amount.toLocaleString()} payment dated ${entry.payDate.slice(0, 10)} has been removed.` })
-        },
-        // Left on the confirm view (not closed) so the error is visible
-        // right next to the retry button, same as bulk-intake-edit's own
-        // confirm popup does on a failed PATCH.
-        onError: (error: Error) => showToast(error.message || 'Failed to delete payment.', 'error'),
-      },
-    )
-  }
-
-  function closeConfirm() {
-    setConfirmAction(null)
-    setSuccessInfo(null)
   }
 
   // The create validator (post-payment-nche.md / post-payment-guild.md ›
@@ -655,18 +613,21 @@ export default function NcheGuildPaymentPage() {
                                       <i className="lni lni-eye"></i> View
                                     </button>
                                     {permissions.edit && (
-                                      <button className="btn btn-neu btn-sm" onClick={() => setEditTarget(h)}>
+                                      <button className="btn btn-neu btn-sm" disabled={!!h.isCancelled} onClick={() => setEditTarget(h)}>
                                         <i className="lni lni-pencil-alt"></i> Edit
                                       </button>
                                     )}
-                                    {permissions.delete && (
-                                      <button className="btn btn-neu btn-sm" onClick={() => handleDelete(h)}>
-                                        <i className="lni lni-trash-can"></i> Delete
+                                    {cancelPerms.canCancel(category === 'nche' ? 3 : 4) && !h.isCancelled && (
+                                      <button className="btn btn-neu btn-sm" onClick={() => setCancelEntry(h)}>
+                                        <i className="lni lni-ban"></i> Cancel
                                       </button>
                                     )}
                                   </ActionMenu>
                                 </td>
-                                <td>{h.payDate.slice(0, 10)}</td>
+                                <td>
+                                  {h.payDate.slice(0, 10)}
+                                  {h.isCancelled && <div className="mt-1"><CancelledBadge row={h} /></div>}
+                                </td>
                                 {category === 'nche' ? (
                                   <td className="font-mono text-blue">{h.pnrNumber ?? '—'}</td>
                                 ) : (
@@ -860,36 +821,15 @@ export default function NcheGuildPaymentPage() {
         studentGuid={studentGuid}
       />
 
-      {/* Delete confirm step — same confirm-modal-overlay/confirm-
-          modal-pop + modal-hdr-blue markup as employee-approve/
-          bulk-intake-edit, swapping this same modal's body over to the
-          shared SuccessPopup once the mutation actually succeeds instead
-          of closing outright. */}
-      {confirmAction && (
-        <div className="modal-overlay open confirm-modal-overlay">
-          <div className="modal modal-sm confirm-modal-pop" onClick={e => e.stopPropagation()}>
-            {successInfo ? (
-              <SuccessPopup title={successInfo.title} subtitle={successInfo.subtitle} onClose={closeConfirm} />
-            ) : (
-              <>
-                <div className="modal-hdr modal-hdr-blue">
-                  <div className="modal-title">Confirm Delete</div>
-                  <button className="modal-close" onClick={closeConfirm}><i className="lni lni-close"></i></button>
-                </div>
-                <div style={{ padding: '18px 20px', fontSize: 13.5, color: 'var(--g700)', lineHeight: 1.6 }}>
-                  Delete this {CATEGORY_LABEL[category]} payment of <strong>{confirmAction.entry.amount.toLocaleString()}</strong> dated <strong>{confirmAction.entry.payDate.slice(0, 10)}</strong>? This cannot be undone.
-                </div>
-                <div className="modal-footer">
-                  <button className="btn btn-neu" onClick={closeConfirm}>Cancel</button>
-                  <button className="btn btn-danger" disabled={deletePayment.isPending} onClick={confirmDeletePayment}>
-                    <i className="lni lni-trash-can"></i> {deletePayment.isPending ? 'Deleting…' : 'Confirm & Delete'}
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      )}
+      <CancelPaymentModal
+        target={cancelEntry && {
+          label: `${CATEGORY_LABEL[category]} payment of ${cancelEntry.amount.toLocaleString()} dated ${cancelEntry.payDate.slice(0, 10)}`,
+        }}
+        onClose={() => setCancelEntry(null)}
+        showToast={showToast}
+        isPending={cancelPayment.isPending}
+        onConfirm={reason => cancelPayment.mutateAsync({ category: category === 'nche' ? 3 : 4, guid: cancelEntry!.paymentGuid, reason })}
+      />
 
       <Toast toast={toast} />
     </>

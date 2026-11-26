@@ -1,15 +1,15 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { EventInput, EventItem, createEvent, deleteEvent, getEventById, getEvents, updateEvent } from '@/lib/api/student/eventManagement'
 
 const EVENTS_KEY = ['student-events']
 
-// The endpoint returns the full unpaginated list (see get-events.md) — no
-// page/search params to forward, unlike most other list hooks in this app.
-// Search/pagination are handled client-side by the page itself.
-export function useEvents() {
+// Server-side paged (page/pageSize). keepPreviousData keeps the current rows
+// on screen while the next page loads.
+export function useEvents(page: number, pageSize: number) {
   return useQuery({
-    queryKey: EVENTS_KEY,
-    queryFn: () => getEvents(),
+    queryKey: [...EVENTS_KEY, 'list', page, pageSize],
+    queryFn: () => getEvents(page, pageSize),
+    placeholderData: keepPreviousData,
   })
 }
 

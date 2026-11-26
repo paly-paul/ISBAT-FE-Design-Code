@@ -13,6 +13,10 @@ import { getStudentProfile } from '@/lib/api/finance/paymentConsole'
 import { PAY_TYPE_LABELS } from '@/hooks/finance/usePaymentConsole'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { formatDate } from '@/lib/date'
+import { ActionMenu } from '@/components/ActionMenu'
+import { CancelPaymentModal } from '@/components/modals/finance/CancelPaymentModal'
+import { CancelledBadge } from '@/components/finance/CancelledBadge'
+import { useCancelPayment, useCancelPermissions } from '@/hooks/finance/usePaymentCancel'
 
 const PAGE_SIZE = 10
 // Don't narrow the table (or open the search dropdown) until the user's
@@ -48,6 +52,12 @@ export default function Page() {
   const [page, setPage] = useState(1)
   const [showNewDeposit, setShowNewDeposit] = useState(false)
   function showToast(msg: string, type = '') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
+
+  // Cancel a deposit (post-advance-deposit-cancel.md). Needs
+  // finance.advancedpayments.cancel.
+  const cancelPerms = useCancelPermissions()
+  const cancelPayment = useCancelPayment()
+  const [cancelTarget, setCancelTarget] = useState<PaymentAdvance | null>(null)
 
   const { data, isLoading } = usePaymentAdvances(page, PAGE_SIZE)
   const rows = data?.items ?? []
@@ -144,9 +154,10 @@ export default function Page() {
             <table>
               <thead>
                 <tr>
+                  {cancelPerms.advance && <th style={{ width: 48 }}></th>}
                   {/* Left-aligned explicitly: globals.css centres the first
                       column for the usual Actions column, which this table
-                      doesn't have. */}
+                      only has when the user may cancel deposits. */}
                   <th style={{ textAlign: 'left' }}>Student</th><th>Deposit Code</th><th>Deposit Date</th>
                   <th>Deposited</th><th>Cur.</th><th>Method</th>
                   {/* Base Value (baseCurrency/baseAmount) commented out, not
@@ -177,9 +188,21 @@ export default function Page() {
                   const status = depositStatus(r.balance, r.amount)
                   return (
                     <tr key={r.paymentAdvanceGuid}>
+                      {cancelPerms.advance && (
+                        <td>
+                          {!r.isCancelled && (
+                            <ActionMenu>
+                              <button className="btn btn-neu btn-sm" onClick={() => setCancelTarget(r)}>
+                                <i className="lni lni-ban"></i> Cancel
+                              </button>
+                            </ActionMenu>
+                          )}
+                        </td>
+                      )}
                       <td style={{ textAlign: 'left' }}>
                         <strong>{s.name}</strong>
                         <div className="font-mono text-blue" style={{ fontSize: 11 }}>{s.ref}</div>
+                        {r.isCancelled && <div className="mt-1"><CancelledBadge row={r} /></div>}
                       </td>
                       <td className="font-mono text-blue" style={{ fontSize: 12 }}>{r.advPaymentCode}</td>
                       <td>{formatDate(r.payDate)}</td>
@@ -212,6 +235,15 @@ export default function Page() {
         </div>
       </div>
       <NewAdvanceDepositModal isOpen={showNewDeposit} onClose={() => setShowNewDeposit(false)} showToast={showToast} />
+      <CancelPaymentModal
+        target={cancelTarget && {
+          label: `Advance deposit ${cancelTarget.advPaymentCode} · ${cancelTarget.receipt ?? 'no receipt'} · ${fmtAmount(cancelTarget.amount)} ${cancelTarget.currency?.currencyCode ?? ''} · ${studentLabel(cancelTarget).name}`,
+        }}
+        onClose={() => setCancelTarget(null)}
+        showToast={showToast}
+        isPending={cancelPayment.isPending}
+        onConfirm={reason => cancelPayment.mutateAsync({ category: 5, guid: cancelTarget!.paymentAdvanceGuid, reason })}
+      />
       <Toast toast={toast} />
     </>
   )

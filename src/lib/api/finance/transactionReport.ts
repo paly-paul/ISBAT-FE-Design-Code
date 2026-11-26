@@ -1,5 +1,6 @@
 import { apiGet, apiPostWithMessage } from '../client'
 import { mockQueueReportJob, normalizeReportJob, type ReportJob } from './discountReport'
+import type { CancelledFields } from './paymentCancel'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
@@ -33,6 +34,10 @@ export interface TransactionReportFilters {
   programGuid?: string
   semesterGuids?: string[]     // max 20
   payTypes?: number[]          // 1 Cash, 2 Cheque, 3 Bank, 4 DemandDraft, 5 Online; hides refunds
+  // Also list cancelled payments matching the same filters, separately
+  // (cancelledRows / a "Cancelled Transactions" Excel sheet). Never counted in
+  // any total. Sent on page 1 and the export only.
+  showCancelled?: boolean
 }
 
 // GET /finance/enums/payment-types. `name` is the raw enum member.
@@ -98,9 +103,15 @@ export interface TransactionReportSummary {
   byCurrency: TransactionReportCurrencyTotal[]
 }
 
+export type TransactionReportCancelledRow = TransactionReportRow & CancelledFields
+
 export interface TransactionReportPreview {
   summary: TransactionReportSummary | null   // null when includeSummary=false
   rows: { items: TransactionReportRow[]; totalCount: number; pageNumber: number; pageSize: number }
+  // Only when showCancelled=true (page 1): every matching cancelled payment,
+  // newest first, up to 5,000 items (totalCount is the real count). Not part
+  // of rows, the summary or any total.
+  cancelledRows?: { items: TransactionReportCancelledRow[]; totalCount: number; pageNumber: number; pageSize: number } | null
 }
 
 // ── Mocks ──────────────────────────────────────────────────────────────────
@@ -196,10 +207,13 @@ export function getTransactionReportPreview(filters: TransactionReportFilters, p
     return new Promise(resolve => setTimeout(() => resolve({
       summary: includeSummary ? mockSummary(rows) : null,
       rows: { items: rows.slice(start, start + pageSize), totalCount: rows.length, pageNumber, pageSize },
+      cancelledRows: includeSummary && filters.showCancelled ? { items: [], totalCount: 0, pageNumber: 1, pageSize: 0 } : null,
     }), 450))
   }
   const params = new URLSearchParams({ pageNumber: String(pageNumber), pageSize: String(pageSize) })
   if (!includeSummary) params.set('includeSummary', 'false')
+  // Only the first call returns cancelledRows; later pages leave it out.
+  if (includeSummary && filters.showCancelled) params.set('showCancelled', 'true')
   if (filters.fromDate) params.set('fromDate', filters.fromDate)
   if (filters.toDate) params.set('toDate', filters.toDate)
   if (filters.intakeGuid) params.set('intakeGuid', filters.intakeGuid)
@@ -237,6 +251,7 @@ export function exportTransactionReport(filters: TransactionReportFilters): Prom
     semesterGuids: filters.semesterGuids ?? [],
     batchGuids: filters.batchGuids ?? [],
     sponsorCategoryGuid: filters.sponsorCategoryGuid ?? null,
+    showCancelled: !!filters.showCancelled,
   }
   return apiPostWithMessage<Parameters<typeof normalizeReportJob>[0]>('/api/v1/finance/reports/transaction/export', body)
     .then(({ data, message }) => ({ job: normalizeReportJob(data), message }))

@@ -1,5 +1,6 @@
 import { apiGet, apiGetBlob } from '../client'
 import type { TotalPaid } from './totalPaid'
+import type { CancelledFields } from './paymentCancel'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
@@ -13,7 +14,9 @@ const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 // category, not just Other — whenever the Other Payment tab was active).
 // This is what that card now calls instead once that tab is active, so it
 // only ever lists this application's Other-category payments.
-export interface PaymentOtherDto {
+// Cancelled payments stay in the list with CancelledFields set; totalPaid
+// leaves them out (2026-11-26).
+export interface PaymentOtherDto extends CancelledFields {
   paymentOtherGuid: string
   paymentCode: string
   applicationGuid: string
