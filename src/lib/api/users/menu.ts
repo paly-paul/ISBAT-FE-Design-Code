@@ -216,8 +216,6 @@ const mockMenu: MenuNode[] = [
       leaf('Question Paper Vetting', 'upload', '/assessment/qp-vetting'),
       leaf('UE Practical QBank', 'upload', '/assessment/question-bank-practical'),
       leaf('Hall Ticket Issuance', 'ticket', '/assessment/hall-ticket'),
-      leaf('Hall Ticket Print', 'printer', '/assessment/hall-print'),
-      leaf('Hall Ticket Print All', 'printer', '/assessment/hall-ticket-print-all'),
       leaf('UE Material Print', 'printer', '/assessment/university-exam-material-print'),
       leaf('UE QP/Booklet Print', 'printer', '/assessment/university-exam-qp-booklet-print'),
       leaf('UE Practical QP Print', 'printer', '/assessment/university-exam-practical-qp-print'),
@@ -419,6 +417,103 @@ function stripLectureMaster(menu: MenuNode[]): MenuNode[] {
   })
 }
 
+// Merges Hall Ticket Issuance (/assessment/hall-ticket), Hall Ticket Print
+// (/assessment/hall-print), and Hall Ticket Print All
+// (/assessment/hall-ticket-print-all) into a single /assessment/hall-ticket
+// sidebar leaf while preserving each node's view/action permissions as scoped
+// flags (`hallticketprint.*`, `hallticketprintall.*`). Runs before
+// stripUnintegratedPages hides the two print leaves so:
+//  - An Issuance-only user does NOT see Print tabs or buttons.
+//  - A Print-only / Print-All-only user still gets the sidebar link and can open
+//    the merged page directly on their permitted tab.
+function mergeHallTicketNodes(menu: MenuNode[]): MenuNode[] {
+  const acadUrl = (modBase: string, url: string | null) =>
+    url ? (url.startsWith('/') ? url : `${modBase}/${url}`) : null
+
+  const ISSUE_URL = '/assessment/hall-ticket'
+  const PRINT_ONE_URL = '/assessment/hall-print'
+  const PRINT_ALL_URL = '/assessment/hall-ticket-print-all'
+
+  const assessmentIdx = menu.findIndex(m => m.name === 'Assessment')
+  if (assessmentIdx === -1) return menu
+
+  const mod = menu[assessmentIdx]
+  const modBase = '/assessment'
+
+  let issueNode: MenuNode | null = null
+  let printOneNode: MenuNode | null = null
+  let printAllNode: MenuNode | null = null
+
+  for (const sec of mod.children) {
+    for (const leafNode of sec.children) {
+      const full = acadUrl(modBase, leafNode.url)
+      if (full === ISSUE_URL) issueNode = leafNode
+      else if (full === PRINT_ONE_URL) printOneNode = leafNode
+      else if (full === PRINT_ALL_URL) printAllNode = leafNode
+    }
+  }
+
+  if (!issueNode && !printOneNode && !printAllNode) return menu
+
+  const issuePerms = issueNode?.permissions ?? null
+  const backendAlreadyMerged =
+    !printOneNode &&
+    !printAllNode &&
+    !!issuePerms &&
+    Object.keys(issuePerms).some(k => /^(hallticketprint|hallticketprintall|print)/i.test(k))
+  if (backendAlreadyMerged) return menu
+
+  const hasPrintView = (n: MenuNode | null) => {
+    if (!n) return false
+    if (n.permissions === null) return true
+    return n.permissions.get === true || n.permissions.view === true || (n.permissions.get !== false && n.permissions.print === true)
+  }
+  const hasPrintAction = (n: MenuNode | null) => {
+    if (!n) return false
+    if (n.permissions === null) return true
+    return n.permissions.print === true
+  }
+
+  const basePerms: MenuPermissions = issueNode
+    ? { ...(issueNode.permissions ?? {}) }
+    : { get: false, view: false, issue: false, add: false, edit: false }
+
+  const mergedPermissions: MenuPermissions = {
+    ...basePerms,
+    'hallticketprint.get': hasPrintView(printOneNode),
+    'hallticketprint.print': hasPrintAction(printOneNode),
+    'hallticketprintall.get': hasPrintView(printAllNode),
+    'hallticketprintall.print': hasPrintAction(printAllNode),
+  }
+
+  let placed = false
+  const sections = mod.children.map(sec => ({
+    ...sec,
+    children: sec.children.map(leafNode => {
+      const full = acadUrl(modBase, leafNode.url)
+      if (issueNode && full === ISSUE_URL) {
+        placed = true
+        return { ...leafNode, permissions: mergedPermissions }
+      }
+      if (!issueNode && !placed && (full === PRINT_ONE_URL || full === PRINT_ALL_URL)) {
+        placed = true
+        return {
+          name: 'Hall Ticket Issuance',
+          icon: leafNode.icon ?? 'lni lni-ticket',
+          url: ISSUE_URL,
+          permissions: mergedPermissions,
+          children: [],
+        }
+      }
+      return leafNode
+    }),
+  }))
+
+  const mergedMenu = [...menu]
+  mergedMenu[assessmentIdx] = { ...mod, children: sections }
+  return mergedMenu
+}
+
 function stripUnintegratedPages(menu: MenuNode[]): MenuNode[] {
   const hiddenUrls = [
     '/assessment/resit-calendar',
@@ -430,6 +525,10 @@ function stripUnintegratedPages(menu: MenuNode[]): MenuNode[] {
     '/assessment/schedule',
     // Hidden from the sidebar per request, 2026-10-29 — page still exists.
     '/academic/student-lookup',
+    // Merged into /assessment/hall-ticket tabs (2026-11-26) — /hall-print
+    // and /hall-ticket-print-all remain as redirects for old links/bookmarks.
+    '/assessment/hall-print',
+    '/assessment/hall-ticket-print-all',
     // Page deleted 2026-11-11 (static mock figures, no API). The backend's
     // /me/menu still sends it, so strip it until the menu API drops it —
     // otherwise the sidebar would link to a 404.
@@ -618,6 +717,6 @@ export function getMenu(): Promise<MenuResult> {
       // Taken as-is apart from the remove/rename steps — see the note above
       // cleanStudentSections.
       const menu = removeBatchSummary(cleanStudentSections(data ?? []))
-      return { menu: stripUnintegratedPages(stripLectureMaster(renameIaCreation(menu))) }
+      return { menu: stripUnintegratedPages(stripLectureMaster(mergeHallTicketNodes(renameIaCreation(menu)))) }
     })
 }
