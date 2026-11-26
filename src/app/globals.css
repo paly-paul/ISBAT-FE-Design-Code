@@ -339,7 +339,7 @@ body {
   align-items: center;
 }
 
-/* Holds only the menu button, which shows at ≤900px — hidden above that so
+/* Holds only the menu button, which shows at ≤1024px — hidden above that so
    the logo starts the bar instead of sitting beside an empty square. */
 .hdr-brand {
   width: var(--rail-w);
@@ -439,6 +439,21 @@ body {
   font-size: 12px;
   font-weight: 600;
   color: var(--b700);
+  white-space: nowrap;
+}
+
+/* "Academic" / "Admission" prefix inside each intake pill. */
+.hdr-intake-lbl {
+  font-weight: 500;
+  color: var(--g500);
+  margin-right: 2px;
+}
+
+/* Two intake pills don't fit beside the header's icons on narrow screens. */
+@media(max-width:900px) {
+  .hdr-intake {
+    display: none
+  }
 }
 
 .hdr-user {
@@ -1009,7 +1024,7 @@ body {
   width: var(--panel-w)
 }
 
-/* Behind the open panel at ≤900px, where it overlays the page. */
+/* Behind the open panel at ≤1024px, where it overlays the page. */
 .sb-backdrop {
   display: none;
   position: fixed;
@@ -1018,7 +1033,7 @@ body {
   background: rgba(15, 23, 42, .32);
 }
 
-@media(max-width:900px) {
+@media(max-width:1024px) {
   .sb-backdrop { display: block }
 }
 
@@ -7741,35 +7756,19 @@ html:hover::-webkit-scrollbar-thumb {
   }
 }
 
-@media(max-width:900px) {
+/* Sidebar overlay mode, ≤1024px (same breakpoint as isOverlayWidth in
+   Sidebar.tsx and .sb-backdrop above). */
+@media(max-width:1024px) {
   /* Rail stays visible (it's the only way to switch modules) — only the
      wider slide-out panel becomes an overlay instead of pushing content,
      so .main keeps rail-w of margin but never adds panel-w here. */
   .main {
     margin-left: var(--rail-w) !important;
-    padding: 18px 20px
   }
 
   .hdr-brand,
   .hdr-menu-btn {
     display: flex
-  }
-
-  .g2,
-  .g3 {
-    grid-template-columns: 1fr
-  }
-
-  .g4 {
-    grid-template-columns: 1fr 1fr
-  }
-
-  .stats-row {
-    grid-template-columns: 1fr 1fr
-  }
-
-  .card {
-    padding: 16px 18px
   }
 
   .sb-close-btn {
@@ -7792,6 +7791,29 @@ html:hover::-webkit-scrollbar-thumb {
   .sb-close-btn:hover {
     background: var(--g100);
     color: var(--g900)
+  }
+}
+
+@media(max-width:900px) {
+  .main {
+    padding: 18px 20px
+  }
+
+  .g2,
+  .g3 {
+    grid-template-columns: 1fr
+  }
+
+  .g4 {
+    grid-template-columns: 1fr 1fr
+  }
+
+  .stats-row {
+    grid-template-columns: 1fr 1fr
+  }
+
+  .card {
+    padding: 16px 18px
   }
 }
 
@@ -13984,6 +14006,54 @@ body:has(.drawer-overlay) {
 .tbl-wrap table tr.rpt-foot-row td { position: static; text-align: left; box-shadow: none; }
 .tbl-wrap table tr.rpt-foot-row td > * { display: inline-flex; position: sticky; left: 50%; transform: translateX(-50%); white-space: nowrap; }
 .rpt-foot-row:hover td { background: var(--white); }
+
+/* ── Batch Lifecycle Report ──
+   Started leads each row (every outcome is a share of it), the rate columns
+   sit behind a hairline divider, and zero counts recede so real counts read
+   first. The first column holds programme names, so it reads left-aligned
+   rather than centred like the usual Actions column. */
+.tbl-wrap.bl-table table th:first-child,
+.tbl-wrap.bl-table table td.bl-prog { text-align: left; }
+.tbl-wrap.bl-table td.bl-prog { min-width: 260px; max-width: 420px; white-space: normal; line-height: 1.4; color: var(--g900); font-weight: 500; }
+.tbl-wrap.bl-table td.bl-started { font-weight: 700; color: var(--g900); }
+.tbl-wrap.bl-table .bl-rate-start { border-left: 1px solid var(--g200); }
+.tbl-wrap.bl-table td.bl-zero { color: var(--g400); }
+
+/* Semester / Batch note above the table. */
+.bl-note {
+  display: flex; align-items: flex-start; gap: 8px;
+  margin-bottom: 12px; padding: 10px 12px;
+  background: var(--b50); border: 1px solid var(--b100); border-radius: var(--rsm);
+  font-size: 13px; line-height: 1.5; color: var(--g700);
+}
+.bl-note i { color: var(--b700); margin-top: 2px; }
+
+/* Pinned summary: label over value, wrapping on narrow screens. */
+.bl-summary { padding: 10px 16px 12px; }
+.bl-summary-title { margin: 0 0 8px; }
+/* Counts and rates are two groups that wrap as whole units; spacing comes
+   from gap, so a wrapped line starts flush left, never indented. */
+/* Stacked by default (rates under the counts, divided by a rule); side by
+   side once the summary itself is wide enough for one line. */
+.bl-summary { container-type: inline-size; }
+.bl-summary-list { display: flex; flex-direction: column; gap: 12px; margin: 0; }
+.bl-summary-group { display: flex; flex-wrap: wrap; gap: 12px 28px; }
+.bl-summary-rates { padding-top: 12px; border-top: 1px solid var(--g200); }
+@container (min-width: 920px) {
+  .bl-summary-list { flex-direction: row; align-items: flex-start; gap: 32px; }
+  .bl-summary-rates { padding-top: 0; border-top: 0; padding-left: 32px; border-left: 1px solid var(--g200); }
+}
+.bl-summary-list dt { font-size: 11px; font-weight: 600; letter-spacing: .03em; text-transform: uppercase; color: var(--g500); }
+.bl-summary-list dd { margin: 2px 0 0; font-size: 15px; font-weight: 600; color: var(--g700); font-variant-numeric: tabular-nums; }
+.bl-summary-list .bl-summary-key dd { color: var(--g900); font-weight: 700; }
+
+/* How it's counted, under the summary. */
+/* Bullets restored (the base styles strip them) so each note reads as its
+   own point. */
+.bl-footnotes { margin: 14px 0 0; padding-left: 18px; list-style: disc; font-size: 12.5px; line-height: 1.55; color: var(--g500); max-width: 80ch; }
+.bl-footnotes li { padding-left: 2px; }
+.bl-footnotes li + li { margin-top: 6px; }
+.bl-footnotes li::marker { color: var(--g400); }
 
 .rpt-summary {
   display: flex; flex-wrap: wrap; gap: 10px 28px; align-items: center;

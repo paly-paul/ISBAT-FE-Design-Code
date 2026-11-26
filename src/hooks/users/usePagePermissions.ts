@@ -2,6 +2,7 @@ import { usePathname } from 'next/navigation'
 import { useMemo } from 'react'
 import { useMenu } from './useMenu'
 import { MenuNode, MenuPermissions } from '@/lib/api/users/menu'
+import { canonicalPath } from '@/lib/menuRoutes'
 
 // Used while the menu is loading, or when the current route isn't present in
 // the tree at all (non-menu routes such as detail pages). Hiding an action
@@ -55,7 +56,9 @@ function normalizeHref(url: string, railId: string): string {
 }
 
 function matchesPath(url: string, railId: string, pathname: string): boolean {
-  const normPath = pathname.trim().split('?')[0].replace(/\/+$/, '').toLowerCase()
+  // An old folder address of a page moved to its menu module's address
+  // (src/lib/menuRoutes.ts) is looked up as the new one, which the menu holds.
+  const normPath = canonicalPath(pathname.trim())
   // A full path is matched as-is: centralized modules (Analytics,
   // Configuration) and Academic's Events list pages from other route
   // folders (/finance/exchange-rates under Configuration), so prefixing the
