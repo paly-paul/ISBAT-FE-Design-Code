@@ -15,6 +15,9 @@ import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
 import { useStudentsFilter, useStudentsFilterMulti, getStudentsFilterCombinations, mergeStudentFilterOptions, useStudentsInfinite } from '@/hooks/student/useStudents'
+import { useProgramDropdown } from '@/hooks/academic/useProgramMaster'
+import { useBatchesForIntakes } from '@/hooks/academic/useBatches'
+import { useSemesterCodeGroups } from '@/hooks/academic/useSemesters'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
@@ -48,17 +51,15 @@ interface ColumnFilterState {
 }
 const EMPTY_COLUMN_FILTERS: ColumnFilterState = { programGuid: [], semCode: [], batchGuid: [], intakeGuid: [], academicIntake: [], regStatus: [] }
 
-// Filter options cascade (get-students-filter.md, 2026-11-27): Programme's
-// come with an Academic Intake picked, Semester's with a Programme, Batch's
-// with a Semester. So a column whose parent is empty is dropped, and changing
-// a parent clears the columns below it — their picks may not exist under the
-// new parent.
-function cascadeFilters(next: ColumnFilterState, prev?: ColumnFilterState): ColumnFilterState {
-  const changed = (k: 'academicIntake' | 'programGuid' | 'semCode') => !!prev && prev[k].join(',') !== next[k].join(',')
-  const programGuid = next.academicIntake.length && !changed('academicIntake') ? next.programGuid : []
-  const semCode = programGuid.length && !changed('programGuid') ? next.semCode : []
-  const batchGuid = semCode.length && !changed('semCode') ? next.batchGuid : []
-  return { ...next, programGuid, semCode, batchGuid }
+// Every column filter works on its own. On top of that, Programme →
+// Semester → Batch cascade: a picked parent narrows the child's options (see
+// the options block in the page). Semester picks are semester codes, valid
+// under any programme, so they're kept when the Programme changes. Batches
+// belong to one programme + semester, so a Programme or Semester change
+// clears the Batch pick.
+function cascadeFilters(next: ColumnFilterState, prev: ColumnFilterState): ColumnFilterState {
+  const changed = (k: 'programGuid' | 'semCode') => prev[k].join(',') !== next[k].join(',')
+  return changed('programGuid') || changed('semCode') ? { ...next, batchGuid: [] } : next
 }
 
 // regStatus codes from get-students-filter.md. The filter sends the code;
@@ -96,7 +97,7 @@ function listStateFromUrl(params: URLSearchParams | ReadonlyURLSearchParams, def
   return {
     page: Math.max(1, Number(params.get('page')) || 1),
     search: params.get('q') ?? '',
-    colFilters: cascadeFilters({ programGuid: list('prog'), semCode: list('sem'), batchGuid: list('batch'), intakeGuid: list('joined'), academicIntake, regStatus: list('status') }),
+    colFilters: { programGuid: list('prog'), semCode: list('sem'), batchGuid: list('batch'), intakeGuid: list('joined'), academicIntake, regStatus: list('status') } as ColumnFilterState,
     // No intake in the URL and the current intake isn't known yet.
     awaitingDefault: intakeParam === null && !defaultIntakeCode,
   }
@@ -243,19 +244,60 @@ function StudentMasterContent() {
   // combination's first page × PAGE_SIZE rows and merges them into one
   // name-sorted list (see that hook's comment in useStudents.ts).
   const normalizedSearch = (search || '').trim()
-  const combos = getStudentsFilterCombinations(colFilters, normalizedSearch || undefined)
+  const hasProgramme = colFilters.programGuid.length > 0
+  const hasSemester = colFilters.semCode.length > 0
+
+  // A Semester picked without a Programme is resolved to every programme's
+  // semesterGuid for that code (see getStudentsFilterCombinations), from
+  // GET /academic/semesters/filter/by-semcode — also the Semester column's
+  // options when no Programme is picked. Fetched only once needed.
+  const needSemCodes = !hasProgramme && (openColFilter === 'semCode' || hasSemester)
+  const { groups: semCodeGroups, isLoading: semCodesLoading } = useSemesterCodeGroups(needSemCodes)
+  const semesterRowsByCode = new Map(semCodeGroups.map(g => [g.semCode, g.semesters]))
+  const awaitingSemesters = hasSemester && !hasProgramme && semCodesLoading
+
+  const combos = getStudentsFilterCombinations(colFilters, semesterRowsByCode, normalizedSearch || undefined)
   const isMultiCombo = combos.length > 1
+  const noCombos = combos.length === 0
 
-  const singleQuery = useStudentsFilter(page, PAGE_SIZE, combos[0], !isMultiCombo && !awaitingDefault)
-  const multi = useStudentsFilterMulti(combos, page, PAGE_SIZE, isMultiCombo && !awaitingDefault)
+  const singleQuery = useStudentsFilter(page, PAGE_SIZE, combos[0] ?? {}, !isMultiCombo && !noCombos && !awaitingDefault && !awaitingSemesters)
+  const multi = useStudentsFilterMulti(combos, page, PAGE_SIZE, isMultiCombo && !awaitingDefault && !awaitingSemesters)
 
-  const items = isMultiCombo ? multi.items : (singleQuery.data?.students.items ?? [])
-  const totalCount = isMultiCombo ? multi.totalCount : (singleQuery.data?.students.totalCount ?? 0)
+  const items = noCombos ? [] : isMultiCombo ? multi.items : (singleQuery.data?.students.items ?? [])
+  const totalCount = noCombos ? 0 : isMultiCombo ? multi.totalCount : (singleQuery.data?.students.totalCount ?? 0)
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
-  const isLoading = awaitingDefault || (isMultiCombo ? multi.isLoading : singleQuery.isLoading)
-  // Programme / Semester / Batch options ride along on the list response(s)
-  // (see cascadeFilters above and mergeStudentFilterOptions).
-  const filterOptions = isMultiCombo ? multi.options : mergeStudentFilterOptions([singleQuery.data])
+  const isLoading = awaitingDefault || awaitingSemesters || (!noCombos && (isMultiCombo ? multi.isLoading : singleQuery.isLoading))
+
+  // Filter options. The list response carries cascade options — Programmes
+  // for the picked Academic Intake, Semesters for the picked Programme,
+  // Batches for the picked Programme + Semester (get-students-filter.md).
+  // Where that parent isn't picked, the column falls back to its own
+  // catalogue so it still works on its own: every programme, every semester
+  // code, and the batches of the filtered intakes (or, with none, the current
+  // admission intake).
+  const cascadeOptions = isMultiCombo ? multi.options : mergeStudentFilterOptions([singleQuery.data])
+  const { data: allPrograms = [] } = useProgramDropdown()
+  const programOptions = colFilters.academicIntake.length
+    ? cascadeOptions.programs
+    : allPrograms.map(p => ({ value: p.programGuid, label: p.programName.trim() }))
+  const semesterOptions = hasProgramme
+    ? cascadeOptions.semesters
+    : semCodeGroups.map(g => ({ value: g.semCode, label: g.semName }))
+
+  const cascadeBatches = hasProgramme && hasSemester
+  const filteredIntakeGuids = [
+    ...intakes.filter(i => colFilters.academicIntake.includes(String(i.intakeCode))).map(i => i.intakeGuid),
+    ...colFilters.intakeGuid,
+  ]
+  const currentAdmissionIntakeGuid = intakes.find(i => i.currentAdmissionIntake)?.intakeGuid
+  const batchIntakeGuids = filteredIntakeGuids.length
+    ? filteredIntakeGuids
+    : currentAdmissionIntakeGuid ? [currentAdmissionIntakeGuid] : []
+  const needIntakeBatches = !cascadeBatches && (openColFilter === 'batchGuid' || colFilters.batchGuid.length > 0)
+  const { batches: intakeBatches, isLoading: intakeBatchesLoading } = useBatchesForIntakes(batchIntakeGuids, needIntakeBatches)
+  const batchOptions = cascadeBatches
+    ? cascadeOptions.batches
+    : intakeBatches.map(b => ({ value: b.batchGuid, label: b.batchCode }))
 
   // Dedicated, infinite-scroll query for the search dropdown — its matches
   // aren't filtered by the guid columns above, so it's suppressed the
@@ -329,10 +371,8 @@ function StudentMasterContent() {
                   />
                   <GuidColumnFilter
                     label="Programme"
-                    options={filterOptions.programs}
-                    isLoading={isLoading}
-                    disabled={!colFilters.academicIntake.length}
-                    disabledHint="Pick an Academic Intake first"
+                    options={programOptions}
+                    isLoading={colFilters.academicIntake.length > 0 && isLoading}
                     isOpen={openColFilter === 'programGuid'}
                     activeFilter={colFilters.programGuid}
                     onToggle={e => { e.stopPropagation(); setOpenColFilter(v => v === 'programGuid' ? null : 'programGuid') }}
@@ -342,10 +382,8 @@ function StudentMasterContent() {
                   />
                   <GuidColumnFilter
                     label="Semester"
-                    options={filterOptions.semesters}
-                    isLoading={isLoading}
-                    disabled={!colFilters.programGuid.length}
-                    disabledHint="Pick a Programme first"
+                    options={semesterOptions}
+                    isLoading={hasProgramme ? isLoading : semCodesLoading}
                     isOpen={openColFilter === 'semCode'}
                     activeFilter={colFilters.semCode}
                     onToggle={e => { e.stopPropagation(); setOpenColFilter(v => v === 'semCode' ? null : 'semCode') }}
@@ -355,10 +393,8 @@ function StudentMasterContent() {
                   />
                   <GuidColumnFilter
                     label="Batch"
-                    options={filterOptions.batches}
-                    isLoading={isLoading}
-                    disabled={!colFilters.semCode.length}
-                    disabledHint="Pick a Semester first"
+                    options={batchOptions}
+                    isLoading={cascadeBatches ? isLoading : intakeBatchesLoading}
                     isOpen={openColFilter === 'batchGuid'}
                     activeFilter={colFilters.batchGuid}
                     onToggle={e => { e.stopPropagation(); setOpenColFilter(v => v === 'batchGuid' ? null : 'batchGuid') }}
