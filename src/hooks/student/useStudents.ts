@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useInfiniteQuery, useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
-import { StudentDto, StudentDetailDto, StudentListFilters, StudentColumnFilters, getStudentByGuid, getStudents, getStudentTimeline, getStudentsFilter, updateStudentPhoto } from '@/lib/api/student/student'
+import { StudentDto, StudentDetailDto, StudentListFilters, StudentColumnFilters, getStudentByGuid, getStudents, getStudentTimeline, getStudentsFilter, updateStudentPhoto, StudentsFilterResult } from '@/lib/api/student/student'
 
 const STUDENTS_LIST_KEY = ['students-list']
 const STUDENT_DETAIL_KEY = ['student-detail']
@@ -56,45 +56,60 @@ export function useStudentsFilter(page: number, pageSize: number, filters: Stude
 // The page falls back to plain useStudentsFilter above whenever there's
 // only a single combination (no filter, or one value per dimension).
 
-// /students/filter has no semCode param (get-students-filter.md only takes
-// semesterGuid), so a picked semCode is turned into the real semesterGuids
-// from GET /academic/semesters/filter/by-semcode/{semCode} — one per
-// programme that has that semester. With Programme also picked, only those
-// programmes' semesters are kept (a semesterGuid already implies its
-// programme, so programGuid is sent alongside it only then). A semCode whose
-// rows haven't loaded yet, or that matches none of the picked programmes,
-// yields no combination at all — the page treats that as "no results".
+// A picked semester is sent as semCode, which the server resolves within
+// each combination's programGuid (get-students-filter.md, 2026-11-27). The
+// page's cascade guarantees a semCode only ever comes with a programme.
 export function getStudentsFilterCombinations(
   colFilters: { programGuid: string[]; semCode: string[]; batchGuid: string[]; intakeGuid: string[]; academicIntake: string[]; regStatus: string[] },
-  semesterRowsByCode: Map<string, { semesterGuid: string; programGuid: string }[]>,
   searchTerm?: string,
 ): StudentColumnFilters[] {
-  let progSems: { programGuid?: string; semesterGuid?: string }[]
-  if (colFilters.semCode.length) {
-    const pickedPrograms = new Set(colFilters.programGuid)
-    progSems = colFilters.semCode.flatMap(code => (semesterRowsByCode.get(code) ?? [])
-      .filter(row => !pickedPrograms.size || pickedPrograms.has(row.programGuid))
-      .map(row => ({ programGuid: pickedPrograms.size ? row.programGuid : undefined, semesterGuid: row.semesterGuid })))
-  } else {
-    progSems = (colFilters.programGuid.length ? colFilters.programGuid : [undefined]).map(programGuid => ({ programGuid }))
-  }
-  const batches = colFilters.batchGuid.length ? colFilters.batchGuid : [undefined]
-  const joinedIntakes = colFilters.intakeGuid.length ? colFilters.intakeGuid : [undefined]
-  const intakes = colFilters.academicIntake.length ? colFilters.academicIntake : [undefined]
-  const statuses = colFilters.regStatus.length ? colFilters.regStatus : [undefined]
+  const each = (values: string[]) => values.length ? values : [undefined]
   const combos: StudentColumnFilters[] = []
-  for (const { programGuid, semesterGuid } of progSems) {
-    for (const batchGuid of batches) {
-      for (const intakeGuid of joinedIntakes) {
-        for (const academicIntake of intakes) {
-          for (const regStatus of statuses) {
-            combos.push({ programGuid, semesterGuid, batchGuid, intakeGuid, academicIntake, regStatus, searchTerm })
+  for (const academicIntake of each(colFilters.academicIntake)) {
+    for (const programGuid of each(colFilters.programGuid)) {
+      for (const semCode of each(colFilters.semCode)) {
+        for (const batchGuid of each(colFilters.batchGuid)) {
+          for (const intakeGuid of each(colFilters.intakeGuid)) {
+            for (const regStatus of each(colFilters.regStatus)) {
+              combos.push({ academicIntake, programGuid, semCode, batchGuid, intakeGuid, regStatus, searchTerm })
+            }
           }
         }
       }
     }
   }
   return combos
+}
+
+// Filter column options, merged across every combination's response: each
+// one carries the programmes of its own academicIntake, the semesters of its
+// own programme and the batches of its own programme + semester, so the
+// union is exactly the options for everything picked. Semesters are keyed by
+// semCode (that's what the Semester column filters on).
+export interface StudentFilterOptions {
+  programs: { value: string; label: string }[]
+  semesters: { value: string; label: string }[]
+  batches: { value: string; label: string }[]
+}
+
+const byLabel = (a: { label: string }, b: { label: string }) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' })
+
+export function mergeStudentFilterOptions(results: (StudentsFilterResult | undefined)[]): StudentFilterOptions {
+  const programs = new Map<string, string>()
+  const semesters = new Map<number, string>()
+  const batches = new Map<string, string>()
+  for (const r of results) {
+    if (!r) continue
+    r.programs.forEach(p => { if (!programs.has(p.guid)) programs.set(p.guid, p.label.trim()) })
+    r.semesters.forEach(s => { if (!semesters.has(s.semCode)) semesters.set(s.semCode, s.label.trim()) })
+    r.semCodes.forEach(code => { if (!semesters.has(code)) semesters.set(code, `Semester ${code}`) })
+    r.batches.forEach(b => { if (!batches.has(b.guid)) batches.set(b.guid, b.label.trim()) })
+  }
+  return {
+    programs: Array.from(programs, ([value, label]) => ({ value, label })).sort(byLabel),
+    semesters: Array.from(semesters).sort(([a], [b]) => a - b).map(([code, label]) => ({ value: String(code), label })),
+    batches: Array.from(batches, ([value, label]) => ({ value, label })).sort(byLabel),
+  }
 }
 
 // Server-paged across combinations, sorted by name as one list. A student
@@ -128,14 +143,15 @@ export function useStudentsFilterMulti(combos: StudentColumnFilters[], page: num
   })
 
   const ready = enabled && results.length > 0 && results.every(r => r.data)
-  const totalCount = results.reduce((sum, r) => sum + (r.data?.totalCount ?? 0), 0)
+  const totalCount = results.reduce((sum, r) => sum + (r.data?.students.totalCount ?? 0), 0)
   const items = ready
-    ? results.flatMap(r => r.data!.items).sort(compareByName).slice((page - 1) * pageSize, needed)
+    ? results.flatMap(r => r.data!.students.items).sort(compareByName).slice((page - 1) * pageSize, needed)
     : []
   const isError = results.some(r => r.isError)
   return {
     items,
     totalCount,
+    options: mergeStudentFilterOptions(results.map(r => r.data)),
     isLoading: !isError && !ready,
     isError,
   }

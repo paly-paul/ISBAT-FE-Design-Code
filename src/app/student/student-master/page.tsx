@@ -14,10 +14,7 @@ import { Toast } from '@/components/Toast'
 import { EmptyState } from '@/components/EmptyState'
 import { TableLoadingState } from '@/components/TableLoadingState'
 import { Pagination } from '@/components/Pagination'
-import { useStudentsFilter, useStudentsFilterMulti, getStudentsFilterCombinations, useStudentsInfinite } from '@/hooks/student/useStudents'
-import { useProgramDropdown } from '@/hooks/academic/useProgramMaster'
-import { useBatchesForIntakes } from '@/hooks/academic/useBatches'
-import { useSemesterCodeGroups } from '@/hooks/academic/useSemesters'
+import { useStudentsFilter, useStudentsFilterMulti, getStudentsFilterCombinations, mergeStudentFilterOptions, useStudentsInfinite } from '@/hooks/student/useStudents'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 
 const PAGE_SIZE = 10
@@ -50,6 +47,19 @@ interface ColumnFilterState {
   regStatus: string[]
 }
 const EMPTY_COLUMN_FILTERS: ColumnFilterState = { programGuid: [], semCode: [], batchGuid: [], intakeGuid: [], academicIntake: [], regStatus: [] }
+
+// Filter options cascade (get-students-filter.md, 2026-11-27): Programme's
+// come with an Academic Intake picked, Semester's with a Programme, Batch's
+// with a Semester. So a column whose parent is empty is dropped, and changing
+// a parent clears the columns below it — their picks may not exist under the
+// new parent.
+function cascadeFilters(next: ColumnFilterState, prev?: ColumnFilterState): ColumnFilterState {
+  const changed = (k: 'academicIntake' | 'programGuid' | 'semCode') => !!prev && prev[k].join(',') !== next[k].join(',')
+  const programGuid = next.academicIntake.length && !changed('academicIntake') ? next.programGuid : []
+  const semCode = programGuid.length && !changed('programGuid') ? next.semCode : []
+  const batchGuid = semCode.length && !changed('semCode') ? next.batchGuid : []
+  return { ...next, programGuid, semCode, batchGuid }
+}
 
 // regStatus codes from get-students-filter.md. The filter sends the code;
 // the list items carry the matching name in regStatusName, which is what
@@ -86,7 +96,7 @@ function listStateFromUrl(params: URLSearchParams | ReadonlyURLSearchParams, def
   return {
     page: Math.max(1, Number(params.get('page')) || 1),
     search: params.get('q') ?? '',
-    colFilters: { programGuid: list('prog'), semCode: list('sem'), batchGuid: list('batch'), intakeGuid: list('joined'), academicIntake, regStatus: list('status') } as ColumnFilterState,
+    colFilters: cascadeFilters({ programGuid: list('prog'), semCode: list('sem'), batchGuid: list('batch'), intakeGuid: list('joined'), academicIntake, regStatus: list('status') }),
     // No intake in the URL and the current intake isn't known yet.
     awaitingDefault: intakeParam === null && !defaultIntakeCode,
   }
@@ -200,36 +210,8 @@ function StudentMasterContent() {
   // Closes whichever column popover is open — every call site here is a
   // committed choice (OK or Reset inside GuidColumnFilter), same as
   // FilterTh's own onSelect/onClear handlers closing the filter themselves.
-  function updateColFilters(patch: Partial<ColumnFilterState>) { setColFilters(prev => ({ ...prev, ...patch })); setPage(1); setOpenColFilter(null) }
+  function updateColFilters(patch: Partial<ColumnFilterState>) { setColFilters(prev => cascadeFilters({ ...prev, ...patch }, prev)); setPage(1); setOpenColFilter(null) }
   function clearColFilters() { setColFilters(EMPTY_COLUMN_FILTERS); setPage(1); setOpenColFilter(null) }
-
-  const { data: programs = [] } = useProgramDropdown()
-  // Semester options come from GET /academic/semesters/filter/by-semcode —
-  // one option per semCode ("Year One - Semester One", …), usable without a
-  // Programme picked. /students/filter only filters by semesterGuid, so a
-  // picked code is sent as each programme's own semesterGuid for that code
-  // (see getStudentsFilterCombinations).
-  // Fetched only once needed — the Semester filter opened, or a semester
-  // already picked (e.g. from the URL) — not on every page load. Cached for
-  // the session afterwards, so closing the filter keeps the options.
-  const needSemCodes = openColFilter === 'semCode' || colFilters.semCode.length > 0
-  const { groups: semCodeGroups, isLoading: semCodesLoading } = useSemesterCodeGroups(needSemCodes)
-  const semesterRowsByCode = new Map(semCodeGroups.map(g => [g.semCode, g.semesters]))
-
-  // Batch filter options: the batches of whichever intakes the list is
-  // filtered to (Academic Intake codes mapped to guids, plus any joined
-  // intake). With no intake filter it shows the current admission intake's
-  // batches. Fetched only once the Batch filter is opened or used.
-  const filteredIntakeGuids = [
-    ...intakes.filter(i => colFilters.academicIntake.includes(String(i.intakeCode))).map(i => i.intakeGuid),
-    ...colFilters.intakeGuid,
-  ]
-  const currentAdmissionIntakeGuid = intakes.find(i => i.currentAdmissionIntake)?.intakeGuid
-  const batchIntakeGuids = filteredIntakeGuids.length
-    ? filteredIntakeGuids
-    : currentAdmissionIntakeGuid ? [currentAdmissionIntakeGuid] : []
-  const needBatches = openColFilter === 'batchGuid' || colFilters.batchGuid.length > 0
-  const { batches, isLoading: batchesLoading } = useBatchesForIntakes(batchIntakeGuids, needBatches)
 
   // Academic Intake column funnel options (by intake code), and the label
   // lookup for the header joined-intake dropdown's trigger (by intakeGuid —
@@ -261,21 +243,19 @@ function StudentMasterContent() {
   // combination's first page × PAGE_SIZE rows and merges them into one
   // name-sorted list (see that hook's comment in useStudents.ts).
   const normalizedSearch = (search || '').trim()
-  const combos = getStudentsFilterCombinations(colFilters, semesterRowsByCode, normalizedSearch || undefined)
+  const combos = getStudentsFilterCombinations(colFilters, normalizedSearch || undefined)
   const isMultiCombo = combos.length > 1
-  // A Semester pick waits for its by-semcode rows before querying; if it then
-  // matches no semester (e.g. none of the picked programmes has it), there's
-  // nothing to ask the server for — the result is simply empty.
-  const awaitingSemesters = colFilters.semCode.length > 0 && semCodesLoading
-  const noCombos = combos.length === 0
 
-  const singleQuery = useStudentsFilter(page, PAGE_SIZE, combos[0] ?? {}, !isMultiCombo && !noCombos && !awaitingDefault && !awaitingSemesters)
-  const multi = useStudentsFilterMulti(combos, page, PAGE_SIZE, isMultiCombo && !awaitingDefault && !awaitingSemesters)
+  const singleQuery = useStudentsFilter(page, PAGE_SIZE, combos[0], !isMultiCombo && !awaitingDefault)
+  const multi = useStudentsFilterMulti(combos, page, PAGE_SIZE, isMultiCombo && !awaitingDefault)
 
-  const items = noCombos ? [] : isMultiCombo ? multi.items : (singleQuery.data?.items ?? [])
-  const totalCount = noCombos ? 0 : isMultiCombo ? multi.totalCount : (singleQuery.data?.totalCount ?? 0)
+  const items = isMultiCombo ? multi.items : (singleQuery.data?.students.items ?? [])
+  const totalCount = isMultiCombo ? multi.totalCount : (singleQuery.data?.students.totalCount ?? 0)
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
-  const isLoading = awaitingDefault || awaitingSemesters || (!noCombos && (isMultiCombo ? multi.isLoading : singleQuery.isLoading))
+  const isLoading = awaitingDefault || (isMultiCombo ? multi.isLoading : singleQuery.isLoading)
+  // Programme / Semester / Batch options ride along on the list response(s)
+  // (see cascadeFilters above and mergeStudentFilterOptions).
+  const filterOptions = isMultiCombo ? multi.options : mergeStudentFilterOptions([singleQuery.data])
 
   // Dedicated, infinite-scroll query for the search dropdown — its matches
   // aren't filtered by the guid columns above, so it's suppressed the
@@ -338,8 +318,21 @@ function StudentMasterContent() {
                       useStudentsFilterMulti in useStudents.ts for how a
                       multi-value pick here turns into real results. */}
                   <GuidColumnFilter
+                    label="Academic Intake"
+                    options={intakeOptions}
+                    isOpen={openColFilter === 'academicIntake'}
+                    activeFilter={colFilters.academicIntake}
+                    onToggle={e => { e.stopPropagation(); setOpenColFilter(v => v === 'academicIntake' ? null : 'academicIntake') }}
+                    onSelect={vals => updateColFilters({ academicIntake: vals })}
+                    onClear={() => updateColFilters({ academicIntake: [] })}
+                    onClose={() => setOpenColFilter(null)}
+                  />
+                  <GuidColumnFilter
                     label="Programme"
-                    options={programs.map(p => ({ value: p.programGuid, label: p.programName }))}
+                    options={filterOptions.programs}
+                    isLoading={isLoading}
+                    disabled={!colFilters.academicIntake.length}
+                    disabledHint="Pick an Academic Intake first"
                     isOpen={openColFilter === 'programGuid'}
                     activeFilter={colFilters.programGuid}
                     onToggle={e => { e.stopPropagation(); setOpenColFilter(v => v === 'programGuid' ? null : 'programGuid') }}
@@ -349,8 +342,10 @@ function StudentMasterContent() {
                   />
                   <GuidColumnFilter
                     label="Semester"
-                    options={semCodeGroups.map(g => ({ value: g.semCode, label: g.semName }))}
-                    isLoading={semCodesLoading}
+                    options={filterOptions.semesters}
+                    isLoading={isLoading}
+                    disabled={!colFilters.programGuid.length}
+                    disabledHint="Pick a Programme first"
                     isOpen={openColFilter === 'semCode'}
                     activeFilter={colFilters.semCode}
                     onToggle={e => { e.stopPropagation(); setOpenColFilter(v => v === 'semCode' ? null : 'semCode') }}
@@ -360,23 +355,15 @@ function StudentMasterContent() {
                   />
                   <GuidColumnFilter
                     label="Batch"
-                    options={batches.map(b => ({ value: b.batchGuid, label: b.batchCode }))}
-                    isLoading={batchesLoading}
+                    options={filterOptions.batches}
+                    isLoading={isLoading}
+                    disabled={!colFilters.semCode.length}
+                    disabledHint="Pick a Semester first"
                     isOpen={openColFilter === 'batchGuid'}
                     activeFilter={colFilters.batchGuid}
                     onToggle={e => { e.stopPropagation(); setOpenColFilter(v => v === 'batchGuid' ? null : 'batchGuid') }}
                     onSelect={vals => updateColFilters({ batchGuid: vals })}
                     onClear={() => updateColFilters({ batchGuid: [] })}
-                    onClose={() => setOpenColFilter(null)}
-                  />
-                  <GuidColumnFilter
-                    label="Academic Intake"
-                    options={intakeOptions}
-                    isOpen={openColFilter === 'academicIntake'}
-                    activeFilter={colFilters.academicIntake}
-                    onToggle={e => { e.stopPropagation(); setOpenColFilter(v => v === 'academicIntake' ? null : 'academicIntake') }}
-                    onSelect={vals => updateColFilters({ academicIntake: vals })}
-                    onClear={() => updateColFilters({ academicIntake: [] })}
                     onClose={() => setOpenColFilter(null)}
                   />
                   <GuidColumnFilter
@@ -413,10 +400,10 @@ function StudentMasterContent() {
                     </td>
                     <td className="font-mono">{r.studentRegNo}</td>
                     <td><strong>{r.studentName}</strong></td>
+                    <td className="font-mono">{r.academicIntake || '—'}</td>
                     <td>{r.programName || '—'}</td>
                     <td>{r.semesterName || '—'}</td>
                     <td>{r.batchCode || '—'}</td>
-                    <td className="font-mono">{r.academicIntake || '—'}</td>
                     <td>{r.regStatusName ? <span className={`badge ${regStatusBadge(r.regStatusName).badge}`}>{regStatusBadge(r.regStatusName).label}</span> : '—'}</td>
                   </tr>
                 ))}
