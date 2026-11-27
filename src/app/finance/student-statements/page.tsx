@@ -842,7 +842,7 @@ export default function StudentStatementPage() {
                 <section className="card pcx-student" aria-label="Student">
                   <div className="pcx-student-top">
                     <div className="pcx-student-id">
-                      <StudentAvatar className="pcx-avatar" photoUrl={header.photoUrl} initials={initials} />
+                      <StudentAvatar className="pcx-avatar" photoUrl={header.photoUrl} initials={initials} name={name} />
                       <div className="min-w-0">
                         <div className="pcx-name-row">
                           <h2 className="pcx-name">{name}</h2>

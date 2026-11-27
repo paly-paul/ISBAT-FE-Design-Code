@@ -52,8 +52,8 @@ import {
   CurrentSemesterPayableTotal,
   PaymentHistoryEntry,
 } from '@/hooks/finance/usePaymentConsole'
-import { useGrievanceFee, usePaymentOthersList, useResitFee, type ResitFee, type ResitFeeSemester } from '@/hooks/finance/usePaymentOthers'
-import { findGrievanceLedger, getPaymentReceiptPdf, isResitLedger, isSelfPaidStudent, refugeeLabel, sponsorCategoryLabel } from '@/lib/api/finance/paymentConsole'
+import { useGrievanceFee, usePaymentOthersList, usePenaltyFee, useResitFee, type ResitFee, type ResitFeeSemester } from '@/hooks/finance/usePaymentOthers'
+import { findGrievanceLedger, findPenaltyLedger, getPaymentReceiptPdf, isResitLedger, isSelfPaidStudent, refugeeLabel, sponsorCategoryLabel } from '@/lib/api/finance/paymentConsole'
 import { downloadBlob } from '@/lib/downloadBlob'
 import { formatDate, formatDateTime } from '@/lib/date'
 import { formatTotalAmount } from '@/lib/api/finance/totalPaid'
@@ -501,6 +501,7 @@ export default function PaymentConsolePage() {
       return { ...r, ledgerOthersGuid: value, amount: touchesResit || offGrievance ? '' : r.amount }
     }))
     setGrievanceRowError(null)
+    setPenaltyRowError(null)
   }
   // Sum of every row's amount, in the one shared Currency picked below —
   // drives both the Total row under the table and the "Amount to Collect"
@@ -1172,6 +1173,41 @@ export default function PaymentConsolePage() {
   const isGrievanceMultiple = (amount: number) =>
     !grievanceUnitFee || (amount > 0 && Math.abs(amount / grievanceUnitFee - Math.round(amount / grievanceUnitFee)) < 1e-9)
 
+  // Penalty fee preview (step 3b, get-penalty-fee.md) — picking the class
+  // test or coursework penalty ledger shows its price, the cap, what the
+  // student has paid and the most that can be entered now, as returned. The
+  // amount stays editable: a multiple of unitAmount, at most maxPayableNow.
+  // maxPayableNow 0 means the cap is reached, so Save is not offered.
+  const ctLedgerGuid = findPenaltyLedger(ledgerOthers, 'ClassTest')?.ledgerOthersGuid ?? null
+  const cwLedgerGuid = findPenaltyLedger(ledgerOthers, 'Coursework')?.ledgerOthersGuid ?? null
+  const hasCtRow = !!ctLedgerGuid && otherLedgerRows.some(r => r.ledgerOthersGuid === ctLedgerGuid)
+  const hasCwRow = !!cwLedgerGuid && otherLedgerRows.some(r => r.ledgerOthersGuid === cwLedgerGuid)
+  const ctPenalty = usePenaltyFee('ClassTest', studentGuid, activePayTab === 'other' && hasCtRow)
+  const cwPenalty = usePenaltyFee('Coursework', studentGuid, activePayTab === 'other' && hasCwRow)
+  // A rejected penalty amount, shown under that row (client check or the
+  // server's 400). Cleared on any edit to the ledger rows.
+  const [penaltyRowError, setPenaltyRowError] = useState<{ rowId: number; msg: string } | null>(null)
+  function penaltyFor(ledgerOthersGuid: string) {
+    if (ctLedgerGuid && ledgerOthersGuid === ctLedgerGuid) return { label: 'Class test', query: ctPenalty }
+    if (cwLedgerGuid && ledgerOthersGuid === cwLedgerGuid) return { label: 'Coursework', query: cwPenalty }
+    return null
+  }
+  // The client-side form of the server's rule, so the cashier fixes the
+  // amount in place: null when it's fine (or the preview isn't in yet).
+  function penaltyAmountError(ledgerOthersGuid: string, amount: number): string | null {
+    const fee = penaltyFor(ledgerOthersGuid)?.query.data
+    if (!fee) return null
+    const fmt = (n: number) => n.toLocaleString('en-US')
+    if (fee.maxPayableNow <= 0) return `The student has reached the UGX ${fmt(fee.cap)} cap. No payment is needed.`
+    if (fee.unitAmount > 0 && Math.abs(amount / fee.unitAmount - Math.round(amount / fee.unitAmount)) >= 1e-9) return `Enter a multiple of ${fmt(fee.unitAmount)}.`
+    if (amount > fee.maxPayableNow) return `The most you can enter now is ${fmt(fee.maxPayableNow)}.`
+    return null
+  }
+  const penaltyCapReached = otherLedgerRows.some(r => {
+    const fee = penaltyFor(r.ledgerOthersGuid)?.query.data
+    return !!fee && fee.maxPayableNow <= 0
+  })
+
   function handleSearchClick() {
     const term = search.trim()
     if (!term) { showToast('Please enter a student number or name.', 'warn'); return }
@@ -1310,6 +1346,11 @@ export default function PaymentConsolePage() {
       setGrievanceRowError({ rowId: badGrievanceRow.id, msg: `Enter a multiple of ${grievanceUnitFee.toLocaleString('en-US')} (one unit is UGX ${grievanceUnitFee.toLocaleString('en-US')}).` })
       return
     }
+    // Penalty rows: a multiple of unitAmount, at most maxPayableNow.
+    for (const r of validRows) {
+      const msg = penaltyAmountError(r.ledgerOthersGuid, parseFloat(r.amount))
+      if (msg) { setPenaltyRowError({ rowId: r.id, msg }); return }
+    }
     if (!otherCurrencyGuid) { showToast('Please select a currency.', 'warn'); return }
     if (!otherPayDate) { showToast('Please select a payment date.', 'warn'); return }
     const payTypeNum = Number(otherPayType)
@@ -1333,6 +1374,7 @@ export default function PaymentConsolePage() {
 
     setIsSavingOtherBatch(true)
     setGrievanceRowError(null)
+    setPenaltyRowError(null)
     const successRows: [string, string][] = []
     const otherReceipts: OtherReceiptRef[] = []
     const succeededIds: number[] = []
@@ -1863,7 +1905,7 @@ export default function PaymentConsolePage() {
             <section className="card pcx-student" aria-label="Student" ref={mainAreaRef}>
               <div className="pcx-student-top">
                 <div className="pcx-student-id">
-                  <StudentAvatar className="pcx-avatar" photoUrl={profile.photoUrl} initials={initialsFor(fullName)} />
+                  <StudentAvatar className="pcx-avatar" photoUrl={profile.photoUrl} initials={initialsFor(fullName)} name={fullName} />
                   <div className="min-w-0">
                     <div className="pcx-name-row">
                       <h2 className="pcx-name">{fullName}</h2>
@@ -2250,7 +2292,20 @@ export default function PaymentConsolePage() {
                         : isGrievanceFeeError ? { text: grievanceFeeErrorMsg, color: 'var(--red)' }
                         : grievanceUnitFee ? { text: `Grievance fee is UGX ${unitFeeText} per unit. Enter a multiple of ${unitFeeText} if paying for more than one unit.`, color: 'var(--g500)' }
                         : null
-                      const rowNote = resitNote ?? grievanceNote
+                      // Penalty row (step 3b): the rule and the most that can
+                      // be entered now, as returned, or this row's rejection.
+                      const penalty = penaltyFor(row.ledgerOthersGuid)
+                      const penaltyError = penaltyRowError?.rowId === row.id ? penaltyRowError.msg : null
+                      const pf = penalty?.query.data
+                      const n = (v: number) => v.toLocaleString('en-US')
+                      const penaltyNote = !penalty ? null
+                        : penaltyError ? { text: penaltyError, color: 'var(--red)' }
+                        : penalty.query.error ? { text: penalty.query.error.message, color: 'var(--red)' }
+                        : pf && pf.maxPayableNow <= 0 ? { text: `${penalty.label} penalty is UGX ${n(pf.unitAmount)} per late submission, up to UGX ${n(pf.cap)}. The student has paid ${n(pf.paidTotal)} and reached the cap: no payment is needed.`, color: 'var(--amber)' }
+                        : pf ? { text: `${penalty.label} penalty is UGX ${n(pf.unitAmount)} per late submission, up to UGX ${n(pf.cap)}. The student has paid ${n(pf.paidTotal)}; the most you can enter now is ${n(pf.maxPayableNow)}.`, color: 'var(--g500)' }
+                        : null
+                      const rowNote = resitNote ?? grievanceNote ?? penaltyNote
+                      const rowError = grievanceError ?? penaltyError
                       return (
                       <div className="recgrid-row recgrid-body" key={row.id}>
                         <span style={{ textAlign: 'left' }}>
@@ -2275,9 +2330,9 @@ export default function PaymentConsolePage() {
                               value={row.amount}
                               disabled={isResitRow}
                               title={isResitRow ? 'Resit fee is set automatically and cannot be edited' : undefined}
-                              aria-invalid={grievanceError ? true : undefined}
+                              aria-invalid={rowError ? true : undefined}
                               aria-label={`Amount for ${ledgerOthers.find(l => l.ledgerOthersGuid === row.ledgerOthersGuid)?.ledgerName ?? 'this row'}`}
-                              style={{ textAlign: 'right', ...(grievanceError ? { borderColor: 'var(--red)' } : {}) }}
+                              style={{ textAlign: 'right', ...(rowError ? { borderColor: 'var(--red)' } : {}) }}
                               onChange={e => updateOtherLedgerRow(row.id, 'amount', stripLeadingZeros(e.target.value))}
                             />
                             {otherLedgerRows.length > 1 && (
@@ -2293,7 +2348,7 @@ export default function PaymentConsolePage() {
                             )}
                           </div>
                           {rowNote && (
-                            <div role={grievanceError ? 'alert' : undefined} style={{ fontSize: 'var(--fs-xs)', color: rowNote.color, textAlign: 'right', marginTop: 4 }}>{rowNote.text}</div>
+                            <div role={rowError ? 'alert' : undefined} style={{ fontSize: 'var(--fs-xs)', color: rowNote.color, textAlign: 'right', marginTop: 4 }}>{rowNote.text}</div>
                           )}
                         </span>
                       </div>
@@ -2521,7 +2576,12 @@ export default function PaymentConsolePage() {
                     <button type="button" className="btn btn-neu btn-lg" onClick={resetOtherForm} disabled={isSavingOtherBatch}>
                       Cancel
                     </button>
-                    <button type="button" className="btn btn-primary btn-lg pcx-submit" disabled={isSavingOtherBatch} onClick={otherSaveEntry}>
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-lg pcx-submit"
+                      disabled={isSavingOtherBatch || penaltyCapReached}
+                      onClick={otherSaveEntry}
+                    >
                       <i className="lni lni-save"></i> {isSavingOtherBatch ? 'Saving…' : 'Save Payment'}
                     </button>
                   </div>

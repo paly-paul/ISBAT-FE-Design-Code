@@ -17,6 +17,7 @@ import { AuthError } from '@/lib/api/client'
 import { EMPLOYEE_GENDERS, EmployeeListItem, formatEmployeeGender } from '@/lib/api/employee/employee'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { sameOriginApiUrl } from '@/lib/apiFileUrl'
+import { PhotoZoom } from '@/components/PhotoLightbox'
 
 const PAGE_SIZE = 10
 const MIN_SEARCH_CHARS = 2
@@ -30,7 +31,12 @@ function EmployeeAvatar({ photoUrl, firstName, surname }: { photoUrl?: string | 
   const base: React.CSSProperties = { width: size, height: size, borderRadius: '50%', flexShrink: 0 }
   const src = sameOriginApiUrl(photoUrl)
   if (src && !failed) {
-    return <img src={src} alt="" loading="lazy" onError={() => setFailed(true)} style={{ ...base, objectFit: 'cover', objectPosition: 'center 20%', border: '1px solid var(--g200)' }} />
+    const name = [firstName, surname].filter(Boolean).join(' ')
+    return (
+      <PhotoZoom src={src} name={name || 'Employee'} style={{ ...base, display: 'inline-flex' }}>
+        <img src={src} alt="" loading="lazy" onError={() => setFailed(true)} style={{ ...base, objectFit: 'cover', objectPosition: 'center 20%', border: '1px solid var(--g200)' }} />
+      </PhotoZoom>
+    )
   }
   return (
     <span aria-hidden="true" style={{ ...base, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'var(--b50)', color: 'var(--b700)', fontSize: 12, fontWeight: 700 }}>

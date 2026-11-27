@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { getGrievanceFee, getPaymentOther, getPaymentOthers, getResitFee, PaymentOtherListParams } from '@/lib/api/finance/paymentOthers'
+import { getGrievanceFee, getPaymentOther, getPaymentOthers, getPenaltyFee, getResitFee, PaymentOtherListParams, PenaltyKind } from '@/lib/api/finance/paymentOthers'
 
 // Exported (not just used internally) so useCreatePaymentOther in
 // usePaymentConsole.ts can invalidate this list too — a newly-added Other
@@ -48,5 +48,16 @@ export function useGrievanceFee(enabled: boolean) {
   })
 }
 
-export type { GrievanceFee } from '@/lib/api/finance/paymentOthers'
+// Penalty fee preview (step 3b) — per student, since it carries what they've
+// already paid. Under PAYMENT_OTHERS_KEY so a new or edited other payment
+// refetches it (paidTotal / maxPayableNow move).
+export function usePenaltyFee(kind: PenaltyKind, studentGuid: string | null, enabled: boolean) {
+  return useQuery({
+    queryKey: [...PAYMENT_OTHERS_KEY, 'penalty-fee', kind, studentGuid],
+    queryFn: () => getPenaltyFee(kind, studentGuid),
+    enabled,
+  })
+}
+
+export type { GrievanceFee, PenaltyFee, PenaltyKind } from '@/lib/api/finance/paymentOthers'
 export type { PaymentOtherDto, PaymentOtherListResponse, PaymentOtherListParams, ResitFee, ResitFeeUnit, ResitFeeSemester } from '@/lib/api/finance/paymentOthers'

@@ -1,7 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { ModalProps } from '../types'
-import { CANCEL_REASON_MAX } from '@/lib/api/finance/paymentCancel'
+import { CANCEL_REASON_MAX, isRetryableVerifyError } from '@/lib/api/finance/paymentCancel'
 
 export interface CancelPaymentTarget {
   // Shown in the title line, e.g. "Receipt R-1042 · 450,000 UGX".
@@ -25,6 +25,10 @@ export function CancelPaymentModal({ target, onClose, showToast, isPending, onCo
   const [error, setError] = useState<string | null>(null)
 
   if (!target) return null
+
+  // "…could not be verified. Please try again." — nothing was changed, so
+  // the button becomes Try Again and resends with the same reason.
+  const canRetry = isRetryableVerifyError(error)
 
   function handleClose() {
     if (isPending) return
@@ -81,7 +85,7 @@ export function CancelPaymentModal({ target, onClose, showToast, isPending, onCo
         <div className="modal-footer">
           <button className="btn btn-neu" disabled={isPending} onClick={handleClose}>Keep Payment</button>
           <button className="btn btn-danger" disabled={isPending || !reason.trim()} onClick={handleConfirm}>
-            <i className="lni lni-ban"></i> {isPending ? 'Cancelling…' : 'Cancel Payment'}
+            <i className={`lni ${canRetry ? 'lni-reload' : 'lni-ban'}`}></i> {isPending ? 'Cancelling…' : canRetry ? 'Try Again' : 'Cancel Payment'}
           </button>
         </div>
       </div>

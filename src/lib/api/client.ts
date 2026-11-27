@@ -192,7 +192,10 @@ export async function post<T>(path: string, body: unknown, retried = false): Pro
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({ code: 'unknown' }))
-    throw new AuthError(err.code ?? 'unknown', err.message)
+    // Envelope refusals carry their text in errors[0] (e.g. the NCHE / Guild
+    // cancel guards); the older plain format only has `message`.
+    const firstError = Array.isArray(err.errors) ? err.errors.find((e: unknown) => typeof e === 'string' && e.trim()) : undefined
+    throw new AuthError(err.code ?? 'unknown', firstError ?? err.message)
   }
 
   if (res.status === 204) return undefined as T

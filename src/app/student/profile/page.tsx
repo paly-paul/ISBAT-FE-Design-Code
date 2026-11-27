@@ -8,6 +8,7 @@ import { StudentTimeline } from '@/components/student/StudentTimeline'
 import { StudentAcademicRecord } from '@/components/student/StudentAcademicRecord'
 import { useStudent, useStudentTimeline, useUpdateStudentPhoto } from '@/hooks/student/useStudents'
 import { ChangePhotoModal } from '@/components/modals/shared/ChangePhotoModal'
+import { PhotoLightbox } from '@/components/PhotoLightbox'
 import { StudentDto, StudentDetailDto, normalizeStudentDetail } from '@/lib/api/student/student'
 import { oneSemesterDiscountInForce } from '@/lib/api/student/studentDiscount'
 import { useIdCard, useIssueOrRenewIdCard, useUpdateIdCardDates, getIdCardQrImageUrl, currentCardIssue } from '@/hooks/student/useIdCards'
@@ -193,6 +194,8 @@ function StudentProfileContent() {
   // PUT /students/{guid}/photo — the hero avatar opens the same Change Photo
   // popup as My Profile (upload or camera).
   const [photoModalOpen, setPhotoModalOpen] = useState(false)
+  const [photoViewOpen, setPhotoViewOpen] = useState(false)
+  const hasHeroPhoto = !!photoUrl && !heroPhotoError
   const updatePhoto = useUpdateStudentPhoto(effectiveStudentGuid ?? null)
 
   // Rejects on failure so the photo popup stays open for another try.
@@ -464,8 +467,17 @@ function StudentProfileContent() {
                 link out to the page that manages them. */}
             <section className="mp-hero" aria-label="Student summary">
               <div className="mp-hero-top">
+                {/* With a photo, the avatar opens it full size (PhotoLightbox,
+                    whose "Change photo" button leads to the same popup);
+                    without one, it goes straight to Change Photo. */}
                 {permissions.edit ? (
-                  <button type="button" className="mp-avatar" title="Change photo" aria-label={`Change ${student.studentName}'s photo`} onClick={() => setPhotoModalOpen(true)}>
+                  <button
+                    type="button"
+                    className="mp-avatar"
+                    title={hasHeroPhoto ? 'View photo' : 'Add photo'}
+                    aria-label={hasHeroPhoto ? `View ${student.studentName}'s photo` : `Add ${student.studentName}'s photo`}
+                    onClick={() => hasHeroPhoto ? setPhotoViewOpen(true) : setPhotoModalOpen(true)}
+                  >
                     {photoUrl && !heroPhotoError ? (
                       <img src={photoUrl} alt="" onError={() => setHeroPhotoError(true)} />
                     ) : (
@@ -473,13 +485,13 @@ function StudentProfileContent() {
                     )}
                     <span className="mp-avatar-cam" aria-hidden="true"><i className="lni lni-camera"></i></span>
                   </button>
+                ) : hasHeroPhoto && photoUrl ? (
+                  <button type="button" className="mp-avatar photo-zoom" title="View photo" aria-label={`View ${student.studentName}'s photo`} onClick={() => setPhotoViewOpen(true)}>
+                    <img src={photoUrl} alt="" onError={() => setHeroPhotoError(true)} />
+                  </button>
                 ) : (
                   <div className="mp-avatar sp-hero-av" aria-hidden="true">
-                    {photoUrl && !heroPhotoError ? (
-                      <img src={photoUrl} alt="" onError={() => setHeroPhotoError(true)} />
-                    ) : (
-                      <span>{initials(student.studentName) || <i className="lni lni-user"></i>}</span>
-                    )}
+                    <span>{initials(student.studentName) || <i className="lni lni-user"></i>}</span>
                   </div>
                 )}
                 <div className="mp-hero-id">
@@ -908,6 +920,15 @@ function StudentProfileContent() {
         )}
       </div>
 
+      {photoViewOpen && student && photoUrl && (
+        <PhotoLightbox
+          src={photoUrl}
+          name={student.studentName}
+          subtitle={`${studentNo} · ${programme}`}
+          onClose={() => setPhotoViewOpen(false)}
+          action={permissions.edit ? { label: 'Change photo', icon: 'lni-camera', onClick: () => { setPhotoViewOpen(false); setPhotoModalOpen(true) } } : undefined}
+        />
+      )}
       <ChangePhotoModal isOpen={photoModalOpen && !!student} onClose={() => setPhotoModalOpen(false)} showToast={showToast} onPhoto={handlePhoto} />
       <Toast toast={toast} />
     </>

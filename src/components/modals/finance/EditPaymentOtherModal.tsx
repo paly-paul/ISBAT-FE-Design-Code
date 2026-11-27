@@ -6,6 +6,7 @@ import DatePicker from '@/components/DatePicker'
 import { ProcBankSearchSelect } from '@/components/ProcBankSearchSelect'
 import { useUpdatePaymentOther } from '@/hooks/finance/usePaymentConsole'
 import { AuthError } from '@/lib/api/client'
+import { isRetryableVerifyError } from '@/lib/api/finance/paymentCancel'
 
 // Deliberately much narrower than EditPaymentModal (tuition's own edit) —
 // put-payment-other.md's request body is just amount/payDate/bankGuid/
@@ -43,7 +44,9 @@ export function EditPaymentOtherModal({ isOpen, onClose, showToast, target }: Ed
   const [payDate, setPayDate] = useState('')
   const [bankGuid, setBankGuid] = useState('')
   const [remarks, setRemarks] = useState('')
-
+  // "The usage of this payment could not be verified. Please try again." —
+  // shown inline with a Try Again button instead of a toast.
+  const [retryError, setRetryError] = useState<string | null>(null)
 
   useEffect(() => {
     if (isOpen && target) {
@@ -51,6 +54,7 @@ export function EditPaymentOtherModal({ isOpen, onClose, showToast, target }: Ed
       setPayDate(isoToYmd(target.payDate))
       setBankGuid(target.bankGuid ?? '')
       setRemarks('')
+      setRetryError(null)
     }
   }, [isOpen, target])
 
@@ -69,6 +73,7 @@ export function EditPaymentOtherModal({ isOpen, onClose, showToast, target }: Ed
     // "0 or greater" like tuition's own edit; see put-payment-other.md).
     if (!amount.trim() || isNaN(amt) || amt <= 0) { showToast('Amount must be greater than 0.', 'warn'); return }
     if (!payDate) { showToast('Please select a payment date.', 'warn'); return }
+    setRetryError(null)
 
     updatePaymentOther.mutate(
       {
@@ -87,8 +92,10 @@ export function EditPaymentOtherModal({ isOpen, onClose, showToast, target }: Ed
         },
         onError: (error: Error) => {
           // Business-rule rejections (advance-funded, bank not found,
-          // receipt book no longer active, …) all come back as a plain
+          // receipt book no longer active, grievances / penalties already
+          // used, penalty multiple or cap, …) all come back as a plain
           // message on the generic-failure branch — surface it as-is.
+          if (isRetryableVerifyError(error.message)) { setRetryError(error.message); return }
           showToast(error instanceof AuthError ? error.message : (error.message || 'Failed to update payment. Please try again.'), 'error')
         },
       },
@@ -128,6 +135,14 @@ export function EditPaymentOtherModal({ isOpen, onClose, showToast, target }: Ed
             <div className="lbl">Remarks <span className="text-g400" style={{ fontWeight: 500 }}>(blank clears it)</span></div>
             <textarea className="ctrl" rows={2} placeholder="Reason for this correction" value={remarks} onChange={e => setRemarks(e.target.value)} />
           </div>
+
+          {retryError && (
+            <div className="warn-box" role="alert" style={{ alignItems: 'center' }}>
+              <i className="lni lni-warning" aria-hidden="true" style={{ color: 'var(--amber)', flexShrink: 0 }}></i>
+              <div style={{ flex: 1 }}>{retryError}</div>
+              <button className="btn btn-neu btn-sm" disabled={updatePaymentOther.isPending} onClick={handleSave}><i className="lni lni-reload"></i> Try again</button>
+            </div>
+          )}
         </div>
         <div className="modal-footer">
           <button className="btn btn-neu" onClick={handleClose}>Cancel</button>
