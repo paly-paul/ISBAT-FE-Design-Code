@@ -17,7 +17,7 @@ import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { useActionGuard } from '@/hooks/users/useActionGuard'
 import { CancelPaymentModal } from '@/components/modals/finance/CancelPaymentModal'
 import { CancelledBadge } from '@/components/finance/CancelledBadge'
-import { useCancelPayment, useCancelPermissions } from '@/hooks/finance/usePaymentCancel'
+import { useCancelPayment /* , useCancelPermissions */ } from '@/hooks/finance/usePaymentCancel'
 import { CancellableCategory, isCancellableCategory } from '@/lib/api/finance/paymentCancel'
 
 const PAGE_SIZE = 10
@@ -90,7 +90,11 @@ export default function Page() {
 
   // Cancel (post-*-cancel.md): every category in this register has its own
   // cancel route, keyed by the row's category + paymentGuid.
-  const cancelPerms = useCancelPermissions()
+  // Cancel permission check commented out for now (2026-11-27): /me/menu
+  // doesn't send `cancel` on Payment Console / NCHE & Guild / Advanced
+  // Payments yet, which hid the button on every row. Restore it, and the
+  // canCancel condition on the button below, once the menu sends it.
+  // const cancelPerms = useCancelPermissions()
   const cancelPayment = useCancelPayment()
   const [cancelTarget, setCancelTarget] = useState<{ category: CancellableCategory; guid: string; label: string } | null>(null)
 
@@ -241,7 +245,7 @@ export default function Page() {
                             <i className="lni lni-pencil-alt"></i> Edit
                           </button>
                         )}
-                        {isCancellableCategory(r.category) && cancelPerms.canCancel(r.category) && !r.isCancelled && (
+                        {isCancellableCategory(r.category) /* && cancelPerms.canCancel(r.category) */ && !r.isCancelled && (
                           <button
                             className="btn btn-neu btn-sm"
                             onClick={() => setCancelTarget({
