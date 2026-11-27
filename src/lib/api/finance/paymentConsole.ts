@@ -886,18 +886,17 @@ export function findGrievanceLedger<T extends Pick<LedgerOthersDto, 'ledgerCode'
   return matches.length === 1 ? matches[0] : null
 }
 
-// The class test (CTL) and coursework (CW1L) late-submission penalty ledgers
-// have no flag either, so like the grievance ledger they're recognised by
-// name/code: "class test" / "coursework" together with "penalty" or "late".
-// Only a single match counts.
-const PENALTY_RE = /penalt|late/i
-const PENALTY_KIND_RE: Record<'ClassTest' | 'Coursework', RegExp> = {
-  ClassTest: /class\s*test/i,
-  Coursework: /course\s*work/i,
+// The class test (CTL) and coursework (CW1L) late-submission penalty ledgers,
+// as named in post-payment-other.md (Penalty fees, 2026-11-27): CTL points to
+// "PENALTY-CBT" (code CBT) and CW1L to "Penalty for Coursework" (code CW1P —
+// only a label, not the CW1P price setting). Only a single match counts.
+const PENALTY_LEDGER: Record<'ClassTest' | 'Coursework', { name: string; code: string }> = {
+  ClassTest: { name: 'penalty-cbt', code: 'cbt' },
+  Coursework: { name: 'penalty for coursework', code: 'cw1p' },
 }
 export function findPenaltyLedger<T extends Pick<LedgerOthersDto, 'ledgerCode' | 'ledgerName'>>(ledgers: T[], kind: 'ClassTest' | 'Coursework'): T | null {
-  const text = (l: T) => `${l.ledgerName ?? ''} ${l.ledgerCode ?? ''}`
-  const matches = ledgers.filter(l => PENALTY_RE.test(text(l)) && PENALTY_KIND_RE[kind].test(text(l)))
+  const { name, code } = PENALTY_LEDGER[kind]
+  const matches = ledgers.filter(l => (l.ledgerName ?? '').trim().toLowerCase() === name || (l.ledgerCode ?? '').trim().toLowerCase() === code)
   return matches.length === 1 ? matches[0] : null
 }
 
