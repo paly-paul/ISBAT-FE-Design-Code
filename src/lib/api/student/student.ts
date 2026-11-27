@@ -1,4 +1,4 @@
-import { apiGet } from '../client'
+import { apiGet, apiPutForm } from '../client'
 
 const MOCK_AUTH = process.env.NEXT_PUBLIC_AUTH_MOCK === 'true'
 
@@ -225,8 +225,15 @@ export function getStudentsFilter(page: number, pageSize: number, filters: Stude
   if (filters.searchTerm?.trim()) params.set('searchTerm', filters.searchTerm.trim())
   params.set('page', String(page))
   params.set('pageSize', String(pageSize))
-  return apiGet<PagedResult<StudentDto> | null>(`/api/v1/students/filter?${params.toString()}`)
-    .then(data => data ?? { items: [], totalCount: 0, pageNumber: page, pageSize })
+  // The backend now nests the paged list under `students`, alongside filter
+  // option lists (programs/semesters/semCodes/batches) this page doesn't use
+  // (seen live 2026-11-27; get-students-filter.md not yet updated). The bare
+  // PagedResult shape is still accepted in case an environment lags behind.
+  return apiGet<{ students?: PagedResult<StudentDto> | null } | PagedResult<StudentDto> | null>(`/api/v1/students/filter?${params.toString()}`)
+    .then(data => {
+      const paged = data && 'students' in data ? data.students : (data as PagedResult<StudentDto> | null)
+      return paged ?? { items: [], totalCount: 0, pageNumber: page, pageSize }
+    })
 }
 
 export function getStudentByGuid(guid: string): Promise<StudentDetailDto> {
@@ -248,6 +255,16 @@ export function getStudentByGuid(guid: string): Promise<StudentDetailDto> {
     })
   }
   return apiGet<StudentDetailDto>(`/api/v1/students/${guid}`)
+}
+
+// PUT /api/v1/students/{guid}/photo (put-update-student-photo.md) —
+// multipart, single `photo` field. Empty data on success; the new signed
+// photoUrl comes from re-reading GET /students/{guid}.
+export function updateStudentPhoto(guid: string, photo: File): Promise<null> {
+  if (MOCK_AUTH) return Promise.resolve(null)
+  const formData = new FormData()
+  formData.append('photo', photo)
+  return apiPutForm<null>(`/api/v1/students/${guid}/photo`, formData)
 }
 
 // GET /api/v1/students/{guid}/timeline (get-student-timeline.md). Names are

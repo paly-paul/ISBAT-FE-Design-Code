@@ -6,7 +6,8 @@ import { ActionMenu } from '@/components/ActionMenu'
 import { StudentLookup } from '@/components/student/StudentLookup'
 import { StudentTimeline } from '@/components/student/StudentTimeline'
 import { StudentAcademicRecord } from '@/components/student/StudentAcademicRecord'
-import { useStudent, useStudentTimeline } from '@/hooks/student/useStudents'
+import { useStudent, useStudentTimeline, useUpdateStudentPhoto } from '@/hooks/student/useStudents'
+import { ChangePhotoModal } from '@/components/modals/shared/ChangePhotoModal'
 import { StudentDto, StudentDetailDto, normalizeStudentDetail } from '@/lib/api/student/student'
 import { oneSemesterDiscountInForce } from '@/lib/api/student/studentDiscount'
 import { useIdCard, useIssueOrRenewIdCard, useUpdateIdCardDates, getIdCardQrImageUrl, currentCardIssue } from '@/hooks/student/useIdCards'
@@ -188,6 +189,22 @@ function StudentProfileContent() {
     setHeroPhotoError(false)
     setIdPhotoError(false)
   }, [rawPhotoUrl])
+
+  // PUT /students/{guid}/photo — the hero avatar opens the same Change Photo
+  // popup as My Profile (upload or camera).
+  const [photoModalOpen, setPhotoModalOpen] = useState(false)
+  const updatePhoto = useUpdateStudentPhoto(effectiveStudentGuid ?? null)
+
+  // Rejects on failure so the photo popup stays open for another try.
+  function handlePhoto(file: File) {
+    return updatePhoto.mutateAsync(file).then(
+      () => showToast('Photo updated', 'ok'),
+      (err: any) => {
+        showToast(err?.message || 'Couldn’t save the photo. Please try again.', 'err')
+        throw err
+      },
+    )
+  }
 
   // Sponsor is read-only here (assign/change lives in Student Master's
   // StudentSponsorModal). Never fetched from this page (per 2026-09-01, no
@@ -447,13 +464,24 @@ function StudentProfileContent() {
                 link out to the page that manages them. */}
             <section className="mp-hero" aria-label="Student summary">
               <div className="mp-hero-top">
-                <div className="mp-avatar sp-hero-av" aria-hidden="true">
-                  {photoUrl && !heroPhotoError ? (
-                    <img src={photoUrl} alt="" onError={() => setHeroPhotoError(true)} />
-                  ) : (
-                    <span>{initials(student.studentName) || <i className="lni lni-user"></i>}</span>
-                  )}
-                </div>
+                {permissions.edit ? (
+                  <button type="button" className="mp-avatar" title="Change photo" aria-label={`Change ${student.studentName}'s photo`} onClick={() => setPhotoModalOpen(true)}>
+                    {photoUrl && !heroPhotoError ? (
+                      <img src={photoUrl} alt="" onError={() => setHeroPhotoError(true)} />
+                    ) : (
+                      <span>{initials(student.studentName) || <i className="lni lni-user"></i>}</span>
+                    )}
+                    <span className="mp-avatar-cam" aria-hidden="true"><i className="lni lni-camera"></i></span>
+                  </button>
+                ) : (
+                  <div className="mp-avatar sp-hero-av" aria-hidden="true">
+                    {photoUrl && !heroPhotoError ? (
+                      <img src={photoUrl} alt="" onError={() => setHeroPhotoError(true)} />
+                    ) : (
+                      <span>{initials(student.studentName) || <i className="lni lni-user"></i>}</span>
+                    )}
+                  </div>
+                )}
                 <div className="mp-hero-id">
                   <h1 className="mp-hero-name" title={student.studentName}>{student.studentName}</h1>
                   <div className="mp-hero-sub">
@@ -880,6 +908,7 @@ function StudentProfileContent() {
         )}
       </div>
 
+      <ChangePhotoModal isOpen={photoModalOpen && !!student} onClose={() => setPhotoModalOpen(false)} showToast={showToast} onPhoto={handlePhoto} />
       <Toast toast={toast} />
     </>
   )

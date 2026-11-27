@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
-import { useInfiniteQuery, useQueries, useQuery } from '@tanstack/react-query'
-import { StudentDto, StudentDetailDto, StudentListFilters, StudentColumnFilters, getStudentByGuid, getStudents, getStudentTimeline, getStudentsFilter } from '@/lib/api/student/student'
+import { useInfiniteQuery, useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
+import { StudentDto, StudentDetailDto, StudentListFilters, StudentColumnFilters, getStudentByGuid, getStudents, getStudentTimeline, getStudentsFilter, updateStudentPhoto } from '@/lib/api/student/student'
 
 const STUDENTS_LIST_KEY = ['students-list']
 const STUDENT_DETAIL_KEY = ['student-detail']
@@ -169,6 +169,20 @@ export function useStudent(studentGuid: string | null, enabled: boolean) {
     queryKey: [...STUDENT_DETAIL_KEY, studentGuid],
     queryFn: () => getStudentByGuid(studentGuid as string),
     enabled: enabled && !!studentGuid,
+  })
+}
+
+// The photo is stored against the student's application, which both the
+// student detail and the ID card read their photoUrl from — so both are
+// re-read to pick up the new signed link.
+export function useUpdateStudentPhoto(studentGuid: string | null) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (photo: File) => updateStudentPhoto(studentGuid as string, photo),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [...STUDENT_DETAIL_KEY, studentGuid] })
+      queryClient.invalidateQueries({ queryKey: ['id-card', studentGuid] })
+    },
   })
 }
 

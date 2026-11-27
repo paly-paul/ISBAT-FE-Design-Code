@@ -15712,7 +15712,7 @@ button.mp-avatar { padding: 0; font-family: inherit; }
    what a student record has and a staff one doesn't: the banner's link-out
    row, the credential dispatch cards, and the printable ID card preview.
 ═══════════════════════════════════════ */
-/* No photo on a student record, so the avatar isn't a control here. */
+/* Read-only avatar (no edit permission) isn't a control. */
 .sp-hero-av { cursor: default; }
 
 /* Pinned to the navy band; the name block starts below it. */
