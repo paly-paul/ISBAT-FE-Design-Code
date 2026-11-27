@@ -56,23 +56,33 @@ export function useStudentsFilter(page: number, pageSize: number, filters: Stude
 // The page falls back to plain useStudentsFilter above whenever there's
 // only a single combination (no filter, or one value per dimension).
 
-// A picked semester is sent as semCode, which the server resolves within
-// each combination's programGuid (get-students-filter.md, 2026-11-27). The
-// page's cascade guarantees a semCode only ever comes with a programme.
+// A picked semester (a semCode) is sent two ways:
+// - with a Programme picked, as semCode — the server resolves it within that
+//   combination's programGuid (get-students-filter.md, 2026-11-27);
+// - on its own, semCode has no programme to resolve against, so it's turned
+//   into every programme's semesterGuid for that code (from GET
+//   /academic/semesters/filter/by-semcode/{semCode}), one combination each.
+//   A code whose rows haven't loaded, or that has none, yields no
+//   combination — the page treats that as "no results".
 export function getStudentsFilterCombinations(
   colFilters: { programGuid: string[]; semCode: string[]; batchGuid: string[]; intakeGuid: string[]; academicIntake: string[]; regStatus: string[] },
+  semesterRowsByCode: Map<string, { semesterGuid: string }[]>,
   searchTerm?: string,
 ): StudentColumnFilters[] {
   const each = (values: string[]) => values.length ? values : [undefined]
+  const progSems: Pick<StudentColumnFilters, 'programGuid' | 'semCode' | 'semesterGuid'>[] = []
+  for (const programGuid of each(colFilters.programGuid)) {
+    if (!colFilters.semCode.length) progSems.push({ programGuid })
+    else if (programGuid) colFilters.semCode.forEach(semCode => progSems.push({ programGuid, semCode }))
+    else colFilters.semCode.forEach(code => (semesterRowsByCode.get(code) ?? []).forEach(r => progSems.push({ semesterGuid: r.semesterGuid })))
+  }
   const combos: StudentColumnFilters[] = []
   for (const academicIntake of each(colFilters.academicIntake)) {
-    for (const programGuid of each(colFilters.programGuid)) {
-      for (const semCode of each(colFilters.semCode)) {
-        for (const batchGuid of each(colFilters.batchGuid)) {
-          for (const intakeGuid of each(colFilters.intakeGuid)) {
-            for (const regStatus of each(colFilters.regStatus)) {
-              combos.push({ academicIntake, programGuid, semCode, batchGuid, intakeGuid, regStatus, searchTerm })
-            }
+    for (const progSem of progSems) {
+      for (const batchGuid of each(colFilters.batchGuid)) {
+        for (const intakeGuid of each(colFilters.intakeGuid)) {
+          for (const regStatus of each(colFilters.regStatus)) {
+            combos.push({ academicIntake, ...progSem, batchGuid, intakeGuid, regStatus, searchTerm })
           }
         }
       }
