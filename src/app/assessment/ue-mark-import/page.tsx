@@ -6,7 +6,7 @@ import { useProgramDropdown } from '@/hooks/academic/useProgramMaster'
 import type { ProgramDropdownItem } from '@/lib/api/academic/programMaster'
 import { SuccessPopup } from '@/components/modals/shared/SuccessPopup'
 import { Toast } from '@/components/Toast'
-import { usePagePermissions } from '@/hooks/users/usePagePermissions'
+import { usePagePermissions, useRawPagePermissions } from '@/hooks/users/usePagePermissions'
 import { useSemestersForProgram } from '@/hooks/academic/useSemesters'
 import { useIntakesDropdown, useCurrentAcademicIntake } from '@/hooks/academic/useIntakes'
 import {
@@ -22,6 +22,12 @@ import { hasTheoryMarks } from '@/lib/api/assessment/ueMarks'
 
 export default function UeMarkImportPage() {
   const permissions = usePagePermissions()
+  const rawPermissions = useRawPagePermissions()
+  const canImport = Boolean(permissions.import || permissions.add)
+  const hasExplicitPreview = rawPermissions != null && 'preview' in rawPermissions
+  const hasExplicitDownload = rawPermissions != null && 'download' in rawPermissions
+  const canPreview = hasExplicitPreview ? Boolean(rawPermissions.preview) : canImport
+  const canDownloadTemplate = hasExplicitDownload ? Boolean(rawPermissions.download) : canImport
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null)
   const toastTimerRef = useRef<NodeJS.Timeout | null>(null)
   const showToast = (msg: string, type = 'success') => {
@@ -176,6 +182,7 @@ export default function UeMarkImportPage() {
   }
 
   const handleFilePicked = (pickedFile: File) => {
+    if (!canPreview && !canImport) return
     if (!pickedFile.name.toLowerCase().endsWith('.xlsx')) {
       showToast('Please upload an Excel workbook (.xlsx format)', 'danger')
       return
@@ -212,6 +219,7 @@ export default function UeMarkImportPage() {
   }
 
   const handlePreview = () => {
+    if (!canPreview) return
     if (!file || !examInfo?.universityExamGuid) {
       showToast('Please select a file and ensure exam info is loaded.', 'warn')
       return
@@ -241,6 +249,7 @@ export default function UeMarkImportPage() {
   }
 
   const handleImport = () => {
+    if (!canImport) return
     if (!file || !examInfo?.universityExamGuid) {
       showToast('Missing required fields', 'warn')
       return
@@ -267,6 +276,7 @@ export default function UeMarkImportPage() {
   }
 
   const handleDownloadTemplate = () => {
+    if (!canDownloadTemplate) return
     if (!examInfo?.universityExamGuid) {
       showToast('Please select Course Unit to resolve exam first.', 'warn')
       return
@@ -414,87 +424,104 @@ export default function UeMarkImportPage() {
 
       <div className="card mb-5 p-5">
         <div className="card-title mb-4">File Upload</div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
-          <div className="fg mb-0">
-            <label className="lbl">Select File <span className="text-red-500">*</span></label>
-            <div className="flex gap-2 items-center">
-              <input
-                type="file"
-                ref={fileInputRef}
-                accept=".xlsx"
-                onChange={handleFileInputChange}
-                className="ctrl flex-1 min-w-0"
-                disabled={!examInfo || examInfo.isVerified}
-              />
-              {/* Same reset as Cancel: clears the file, sheet list and preview. */}
-              {file && (
+        {!canPreview && !canImport && !canDownloadTemplate ? (
+          <div className="warn-box text-sm">
+            <i className="lni lni-lock mt-0.5"></i>
+            <span>You have view-only access — downloading templates, previewing, or importing marks requires permission.</span>
+          </div>
+        ) : (
+          <>
+            {(canPreview || canImport) && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+                <div className="fg mb-0">
+                  <label className="lbl">Select File <span className="text-red-500">*</span></label>
+                  <div className="flex gap-2 items-center">
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      accept=".xlsx"
+                      onChange={handleFileInputChange}
+                      className="ctrl flex-1 min-w-0"
+                      disabled={!examInfo || examInfo.isVerified}
+                    />
+                    {/* Same reset as Cancel: clears the file, sheet list and preview. */}
+                    {file && (
+                      <button
+                        type="button"
+                        className="btn btn-neu btn-sm"
+                        onClick={handleClearFile}
+                        disabled={previewMut.isPending || importMut.isPending}
+                        aria-label={`Remove ${file.name}`}
+                        title="Remove file"
+                      >
+                        <i className="lni lni-close"></i> Remove
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <div className="fg mb-0">
+                  <label className="lbl">Select Sheet <span className="text-red-500">*</span></label>
+                  <SearchSelect
+                    options={sheetNames.map(s => ({ value: s, label: s }))}
+                    value={selectedSheet}
+                    onChange={setSelectedSheet}
+                    disabled={!file || sheetNames.length === 0}
+                    placeholder={!file ? 'Upload file first' : 'Select Sheet'}
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className={`${canPreview || canImport ? 'mt-5 ' : ''}flex gap-2`}>
+              {canPreview && (
                 <button
                   type="button"
-                  className="btn btn-neu btn-sm"
-                  onClick={handleClearFile}
-                  disabled={previewMut.isPending || importMut.isPending}
-                  aria-label={`Remove ${file.name}`}
-                  title="Remove file"
+                  className="btn btn-primary bg-indigo-600 text-white"
+                  onClick={handlePreview}
+                  disabled={!file || !selectedSheet || previewMut.isPending || isTheoryNoRule}
+                  title={isTheoryNoRule ? "The exam rule has no section marks configured for this exam." : undefined}
                 >
-                  <i className="lni lni-close"></i> Remove
+                  {previewMut.isPending ? 'Previewing...' : 'Preview'}
+                </button>
+              )}
+
+              {canImport && (
+                <button
+                  type="button"
+                  className="btn btn-success"
+                  onClick={handleImport}
+                  disabled={!previewRows || previewMut.isPending || importMut.isPending}
+                >
+                  {importMut.isPending ? 'Saving...' : 'Save & Import'}
+                </button>
+              )}
+
+              {(canPreview || canImport) && (
+                <button
+                  type="button"
+                  className="btn btn-neu"
+                  onClick={handleClearFile}
+                  disabled={!file}
+                >
+                  Cancel
+                </button>
+              )}
+
+              {canDownloadTemplate && (
+                <button
+                  type="button"
+                  className="btn btn-neu ml-auto text-blue-600 flex items-center gap-1.5"
+                  onClick={handleDownloadTemplate}
+                  disabled={!examInfo || downloadMut.isPending || isTheoryNoRule}
+                  title={isTheoryNoRule ? 'The exam rule has no section marks configured for this exam.' : undefined}
+                >
+                  <i className={`lni ${downloadMut.isPending ? 'lni-spinner animate-spin' : 'lni-download'}`} />
+                  {downloadMut.isPending ? 'Downloading...' : 'Template Download'}
                 </button>
               )}
             </div>
-          </div>
-          <div className="fg mb-0">
-            <label className="lbl">Select Sheet <span className="text-red-500">*</span></label>
-            <SearchSelect
-              options={sheetNames.map(s => ({ value: s, label: s }))}
-              value={selectedSheet}
-              onChange={setSelectedSheet}
-              disabled={!file || sheetNames.length === 0}
-              placeholder={!file ? 'Upload file first' : 'Select Sheet'}
-            />
-          </div>
-        </div>
-
-        <div className="mt-5 flex gap-2">
-          <button
-            type="button"
-            className="btn btn-primary bg-indigo-600 text-white"
-            onClick={handlePreview}
-            disabled={!file || !selectedSheet || previewMut.isPending || isTheoryNoRule}
-            title={isTheoryNoRule ? "The exam rule has no section marks configured for this exam." : undefined}
-          >
-            {previewMut.isPending ? 'Previewing...' : 'Preview'}
-          </button>
-
-          {(permissions.import || permissions.add) && (
-          <button
-            type="button"
-            className="btn btn-success"
-            onClick={handleImport}
-            disabled={!previewRows || previewMut.isPending || importMut.isPending}
-          >
-            {importMut.isPending ? 'Saving...' : 'Save & Import'}
-          </button>
-          )}
-
-          <button
-            type="button"
-            className="btn btn-neu"
-            onClick={handleClearFile}
-            disabled={!file}
-          >
-            Cancel
-          </button>
-
-          <button
-            type="button"
-            className="btn btn-neu ml-auto text-blue-600 flex items-center gap-1.5"
-            onClick={handleDownloadTemplate}
-            disabled={!examInfo || downloadMut.isPending || isTheoryNoRule}
-            title={isTheoryNoRule ? 'The exam rule has no section marks configured for this exam.' : undefined}
-          >
-            <i className={`lni ${downloadMut.isPending ? 'lni-spinner animate-spin' : 'lni-download'}`} />
-            {downloadMut.isPending ? 'Downloading...' : 'Template Download'}
-          </button>
-        </div>
+          </>
+        )}
       </div>
 
       {validationError && (

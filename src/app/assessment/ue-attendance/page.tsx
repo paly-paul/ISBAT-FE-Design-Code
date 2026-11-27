@@ -23,6 +23,10 @@ import {
 
 export default function UeAttendancePage() {
   const permissions = usePagePermissions()
+  // POST /api/v1/assessment/ue-attendance enforces assessment.ueattendance.save;
+  // gate save & edit controls on `permissions.save` (never `permissions.edit`,
+  // which can be granted separately without save access).
+  const canSave = Boolean(permissions.save)
   const queryClient = useQueryClient()
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null)
 
@@ -163,7 +167,7 @@ export default function UeAttendancePage() {
   })
 
   const handleSave = () => {
-    if (!students) return
+    if (!canSave || !students) return
     const payload = {
       programGuid,
       semesterGuid,
@@ -192,7 +196,7 @@ export default function UeAttendancePage() {
   }
 
   const handleSingleSave = (studentGuid: string, newStatus: boolean) => {
-    if (!students) return
+    if (!canSave || !students) return
     
     // Remember previous status for safe rollback on refusal
     const previousStatus = !!attendanceState[studentGuid]
@@ -231,6 +235,7 @@ export default function UeAttendancePage() {
   }
 
   const handleToggleAttendance = (studentGuid: string) => {
+    if (!canSave) return
     setAttendanceState(prev => ({
       ...prev,
       [studentGuid]: !prev[studentGuid]
@@ -238,7 +243,7 @@ export default function UeAttendancePage() {
   }
 
   const handleMarkAll = (status: boolean) => {
-    if (!students) return
+    if (!canSave || !students) return
     const newState = { ...attendanceState }
     students.forEach(s => {
       newState[s.studentGuid] = status
@@ -386,7 +391,7 @@ export default function UeAttendancePage() {
             <span className="ctitle-icon"><i className="lni lni-users"></i></span> Eligible Students
           </div>
           <div className="card-hdr-actions">
-            {permissions.edit && (
+            {canSave && (
             <button 
               className="btn btn-primary" 
               disabled={!isReadyForData || !students || students.length === 0 || saving || examScheduleStatus?.noSchedule} 
@@ -401,7 +406,7 @@ export default function UeAttendancePage() {
         </div>
         
         <div className="p-4 border-b border-slate-200 bg-slate-50 flex flex-col md:flex-row items-center justify-between gap-4">
-          {permissions.edit && (
+          {canSave && (
           <div className="flex gap-2">
             <button className="btn btn-neu btn-sm" onClick={() => handleMarkAll(true)} disabled={isLoadingData || !students}>Mark All Present</button>
             <button className="btn btn-neu btn-sm" onClick={() => handleMarkAll(false)} disabled={isLoadingData || !students}>Mark All Absent</button>
@@ -444,7 +449,7 @@ export default function UeAttendancePage() {
                   return (
                     <tr key={student.studentGuid}>
                       <td>
-                        {permissions.edit && (
+                        {canSave && (
                         <ActionMenu>
                           <button className="btn btn-neu btn-sm" onClick={() => setConfirmStudent({
                                 studentGuid: student.studentGuid,
@@ -461,7 +466,7 @@ export default function UeAttendancePage() {
                       <td className="font-mono text-slate-700">{student.studentRegNo}</td>
                       <td className="font-medium text-slate-900">{student.studentName}</td>
                       <td>
-                        {permissions.edit ? (
+                        {canSave ? (
                         <button 
                           onClick={() => handleToggleAttendance(student.studentGuid)}
                           className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[12px] font-bold transition-colors ${
@@ -495,7 +500,7 @@ export default function UeAttendancePage() {
         </ScrollTable>
       </div>
 
-      {confirmStudent && (
+      {canSave && confirmStudent && (
         <div className="modal-overlay open">
           <div className="modal" style={{ maxWidth: 400 }}>
             <div className="modal-hdr modal-hdr-blue">

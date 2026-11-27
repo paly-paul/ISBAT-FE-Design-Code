@@ -6,7 +6,7 @@ import { Toast } from '@/components/Toast'
 import { usePagePermissions } from '@/hooks/users/usePagePermissions'
 import { SearchSelect } from '@/components/SearchSelect'
 import { useIntakesDropdown } from '@/hooks/academic/useIntakes'
-import { getProgramCourseUnits } from '@/lib/api/academic/programCourseUnits'
+import { getProgramCourseUnitsDropdown } from '@/lib/api/academic/programCourseUnits'
 import {
   useUePracticalPrintPrograms as useUeProjectPrintPrograms,
   useUePracticalPrintSemesters as useUeProjectPrintSemesters,
@@ -59,8 +59,8 @@ export default function UniversityExamProjectBookletPrintPage() {
   // Own query (not the shared Practical hook, which turns a failure into an
   // empty list): a failed load must say so, not look like "no Project units".
   const unitsQuery = useQuery({
-    queryKey: ['ue-project-program-course-units', selectedProgramGuid],
-    queryFn: () => getProgramCourseUnits(selectedProgramGuid),
+    queryKey: ['ue-project-program-course-units-dropdown', selectedProgramGuid],
+    queryFn: () => getProgramCourseUnitsDropdown(selectedProgramGuid),
     enabled: !!selectedProgramGuid,
     retry: false,
   })
@@ -75,11 +75,18 @@ export default function UniversityExamProjectBookletPrintPage() {
     }
   }, [intakes, selectedIntakeGuid])
 
-  // Filter Project units for the selected semester
+  // Filter Project units for the selected semester (deduped by courseUnitGuid across stream mappings)
   const courseUnits = useMemo(() => {
     if (!allProgramUnits || !selectedSemesterGuid) return []
-    // Case/space-insensitive: the type name isn't guaranteed to be exactly "Project".
-    return allProgramUnits.filter((u: any) => u.semesterGuid === selectedSemesterGuid && String(u.unitTypeName ?? '').trim().toLowerCase() === 'project')
+    const seen = new Set<string>()
+    return allProgramUnits.filter((u: any) => {
+      if (u.semesterGuid !== selectedSemesterGuid) return false
+      // Case/space-insensitive: the type name isn't guaranteed to be exactly "Project".
+      if (String(u.unitTypeName ?? '').trim().toLowerCase() !== 'project') return false
+      if (!u.courseUnitGuid || seen.has(u.courseUnitGuid)) return false
+      seen.add(u.courseUnitGuid)
+      return true
+    })
   }, [allProgramUnits, selectedSemesterGuid])
   const selectedUnit = courseUnits.find((u: any) => u.courseUnitGuid === selectedCourseUnitGuid) as any
 
