@@ -15,7 +15,7 @@ import { EditPaymentModal, EditablePaymentTarget } from '@/components/modals/fin
 import { EditPaymentOtherModal, EditablePaymentOtherTarget } from '@/components/modals/finance/EditPaymentOtherModal'
 import { CancelPaymentModal } from '@/components/modals/finance/CancelPaymentModal'
 import { CancelledBadge } from '@/components/finance/CancelledBadge'
-import { useCancelAdvanceAdjustment, useCancelPayment, useCancelPermissions } from '@/hooks/finance/usePaymentCancel'
+import { useCancelAdvanceAdjustment, useCancelPayment /* , useCancelPermissions */ } from '@/hooks/finance/usePaymentCancel'
 import DatePicker from '@/components/DatePicker'
 import { SearchSelect } from '@/components/SearchSelect'
 import { ProcBankSearchSelect } from '@/components/ProcBankSearchSelect'
@@ -1008,7 +1008,10 @@ export default function PaymentConsolePage() {
   // Cancel (post-payment-cancel.md, post-payment-other-cancel.md,
   // post-adjustment-cancel.md): tuition and other history rows, and the
   // selected deposit's adjustments. Each needs its own cancel permission.
-  const cancelPerms = useCancelPermissions()
+  // Permission check commented out for now (2026-11-27): /me/menu doesn't
+  // send `cancel` yet, which hid the button. Restore it, and the three
+  // cancelPerms conditions on the Cancel buttons, once the menu sends it.
+  // const cancelPerms = useCancelPermissions()
   const cancelPayment = useCancelPayment()
   const cancelAdjustment = useCancelAdvanceAdjustment()
   const [cancelTarget, setCancelTarget] = useState<{ category: 1 | 2 | 'adjustment'; guid: string; label: string } | null>(null)
@@ -2068,7 +2071,7 @@ export default function PaymentConsolePage() {
                                         <i className="lni lni-printer"></i> {printingGuid === h.paymentGuid ? 'Loading…' : 'Print / Reprint'}
                                       </button>
                                     )}
-                                    {cancelPerms.canCancel(1) && !h.isCancelled && (
+                                    {/* cancelPerms.canCancel(1) && */ !h.isCancelled && (
                                       <button
                                         className="btn btn-neu btn-sm"
                                         onClick={() => setCancelTarget({ category: 1, guid: h.paymentGuid, label: `Tuition payment ${h.paymentCode} · ${h.receipt ?? 'no receipt'} · ${h.amount.toLocaleString()} ${h.currencyName ?? ''}` })}
@@ -2156,7 +2159,7 @@ export default function PaymentConsolePage() {
                                     >
                                       <i className="lni lni-pencil-alt"></i> Edit
                                     </button>
-                                    {cancelPerms.canCancel(2) && !h.isCancelled && (
+                                    {/* cancelPerms.canCancel(2) && */ !h.isCancelled && (
                                       <button
                                         className="btn btn-neu btn-sm"
                                         onClick={() => setCancelTarget({ category: 2, guid: h.paymentOtherGuid, label: `Other payment ${h.paymentCode} · ${h.receipt ?? 'no receipt'} · ${h.amount.toLocaleString()} ${h.currency.currencyCode}` })}
@@ -3264,7 +3267,7 @@ export default function PaymentConsolePage() {
                                 <button className="btn btn-neu btn-sm" onClick={() => setBreakdownGuid(a.adjustmentGuid)}>
                                   <i className="lni lni-eye"></i> View
                                 </button>
-                                {cancelPerms.advance && !a.isCancelled && (
+                                {/* cancelPerms.advance && */ !a.isCancelled && (
                                   <button
                                     className="btn btn-neu btn-sm"
                                     onClick={() => setCancelTarget({ category: 'adjustment', guid: a.adjustmentGuid, label: `Advance adjustment ${a.adjustmentCode ?? ''} · ${fmtAmt(a.adjustedAmount)} ${a.currencyName ?? ''}` })}
