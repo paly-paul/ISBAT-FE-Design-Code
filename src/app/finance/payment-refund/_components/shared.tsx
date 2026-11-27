@@ -48,7 +48,7 @@ export function RefundStudentCard({ name, status, subtitle, chips, facts, photoU
     <section className="card pcx-student" aria-label="Student">
       <div className="pcx-student-top">
         <div className="pcx-student-id">
-          <StudentAvatar className="pcx-avatar" photoUrl={photoUrl} initials={initialsFor(name)} />
+          <StudentAvatar className="pcx-avatar" photoUrl={photoUrl} initials={initialsFor(name)} name={name} subtitle={subtitle} />
           <div className="min-w-0">
             <div className="pcx-name-row">
               <h2 className="pcx-name">{name}</h2>

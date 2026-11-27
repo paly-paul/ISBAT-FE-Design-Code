@@ -16341,6 +16341,69 @@ button.sp-link:hover .sp-link-go { color: var(--b700); transform: translateX(3px
 .att-who { display: inline-flex; align-items: center; gap: 10px; min-width: 0 }
 .att-who-name { font-weight: 600; color: var(--g900) }
 
+/* ═══════════════════════════════════════
+   PHOTO VIEWER — PhotoLightbox.tsx. Clicking a person's avatar opens their
+   photo full size over a light blur of the page (no dark scrim), so the
+   caption and controls are on white surfaces of their own. z-index sits
+   above .modal-overlay (500) so it also works from inside a modal, and
+   below toasts (9999).
+═══════════════════════════════════════ */
+/* Avatar trigger. Resets are :where() (zero specificity) so the avatar's
+   own class keeps its border, background and size. */
+:where(.photo-zoom) { padding: 0; border: 0; background: none; font: inherit; color: inherit; }
+.photo-zoom { cursor: zoom-in; }
+.photo-zoom img { transition: filter var(--tr); }
+.photo-zoom:hover img { filter: brightness(1.06) saturate(1.05); }
+.photo-zoom:focus-visible { outline: 2px solid var(--b500); outline-offset: 3px; }
+
+.photo-lb {
+  position: fixed; inset: 0; z-index: 2000;
+  display: grid; place-items: center; padding: 76px 20px 32px; overflow-y: auto;
+  background: transparent; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  animation: photo-lb-fade .24s ease-out both;
+}
+body:has(.photo-lb) { overflow: hidden; }
+.photo-lb-figure {
+  margin: 0; display: flex; flex-direction: column; align-items: center; gap: 16px; max-width: 100%;
+  animation: photo-lb-in .46s cubic-bezier(.16, 1, .3, 1) both;
+}
+.photo-lb-frame {
+  padding: 6px; background: var(--white); border-radius: calc(var(--radius) + 6px);
+  border: 1px solid var(--g200);
+  box-shadow: 0 32px 64px -24px rgba(15, 30, 61, .45), 0 10px 24px -10px rgba(15, 30, 61, .3);
+}
+.photo-lb-frame img {
+  display: block; width: auto; height: auto;
+  max-width: min(calc(100vw - 52px), 560px); max-height: min(68vh, 640px);
+  border-radius: var(--radius); object-fit: contain; background: var(--g100);
+}
+.photo-lb-error { padding: 56px 36px; color: var(--g500); font-size: var(--fs-base); }
+.photo-lb-caption { padding: 12px 12px 8px; text-align: center; max-width: min(calc(100vw - 52px), 560px); }
+.photo-lb-name { font-size: 16px; font-weight: 700; color: var(--g900); letter-spacing: -0.01em; text-wrap: balance; }
+.photo-lb-sub { margin-top: 2px; font-size: 13px; color: var(--g500); }
+.photo-lb-close, .photo-lb-action {
+  color: var(--g700); background: var(--white); border: 1px solid var(--g200);
+  box-shadow: 0 8px 20px -10px rgba(15, 30, 61, .4);
+  cursor: pointer; font: inherit; transition: background var(--tr), color var(--tr), transform var(--tr);
+}
+.photo-lb-close:hover, .photo-lb-action:hover { background: var(--b50); color: var(--b800); }
+.photo-lb-close:active, .photo-lb-action:active { transform: scale(.96); }
+.photo-lb-close:focus-visible, .photo-lb-action:focus-visible { outline: 2px solid var(--b500); outline-offset: 3px; }
+.photo-lb-close {
+  position: fixed; top: 18px; right: 18px; width: 44px; height: 44px; border-radius: 50%;
+  display: grid; place-items: center; font-size: 16px;
+}
+.photo-lb-action {
+  display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 18px;
+  border-radius: 20px; font-size: 13px; font-weight: 600;
+}
+@keyframes photo-lb-fade { from { opacity: 0; } }
+@keyframes photo-lb-in { from { opacity: 0; transform: translateY(10px) scale(.92); filter: blur(6px); } }
+@media (prefers-reduced-motion: reduce) {
+  .photo-lb, .photo-lb-figure { animation: none; }
+  .photo-zoom img, .photo-lb-close, .photo-lb-action { transition: none; }
+}
+
 .att-avatar {
   width: 30px;
   height: 30px;

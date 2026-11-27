@@ -8,6 +8,7 @@ import { useMenuPagePermissions } from '@/hooks/users/usePagePermissions'
 import { sameOriginApiUrl } from '@/lib/apiFileUrl'
 import { documentTitle, genderText, orDash } from '@/lib/admission/applicantDisplay'
 import { DocumentPreviewModal } from '@/components/modals/shared/DocumentPreviewModal'
+import { PhotoZoom } from '@/components/PhotoLightbox'
 import { QualificationCard } from '@/components/admission/QualificationCard'
 
 // Read-only profile opened from "View Full Profile" (Vetting Desk review, View
@@ -107,13 +108,15 @@ function ApplicantProfileContent() {
       <div className="card mb-6">
         <div className="flex items-center gap-4">
           {photoUrl && !photoError ? (
-            <img
-              src={photoUrl}
-              alt={fullName}
-              onError={() => setPhotoError(true)}
-              className="rounded-full object-cover shrink-0"
-              style={{ width: 64, height: 64, objectPosition: 'center 20%' }}
-            />
+            <PhotoZoom src={photoUrl} name={fullName} subtitle={orDash(detail.programName) !== '—' ? detail.programName : null} className="rounded-full shrink-0">
+              <img
+                src={photoUrl}
+                alt=""
+                onError={() => setPhotoError(true)}
+                className="rounded-full object-cover block"
+                style={{ width: 64, height: 64, objectPosition: 'center 20%' }}
+              />
+            </PhotoZoom>
           ) : (
             <div className="flex items-center justify-center rounded-full font-bold text-white shrink-0" style={{ width: 64, height: 64, background: 'var(--b500)', fontSize: 22 }}>
               {initials}

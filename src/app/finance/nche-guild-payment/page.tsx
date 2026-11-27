@@ -532,7 +532,7 @@ export default function NcheGuildPaymentPage() {
             <section className="card pcx-student" aria-label="Student">
               <div className="pcx-student-top">
                 <div className="pcx-student-id">
-                  <StudentAvatar className="pcx-avatar" photoUrl={profile?.photoUrl} initials={initialsFor(fullName)} />
+                  <StudentAvatar className="pcx-avatar" photoUrl={profile?.photoUrl} initials={initialsFor(fullName)} name={fullName} />
                   <div className="min-w-0">
                     <div className="pcx-name-row">
                       <h2 className="pcx-name">{fullName}</h2>

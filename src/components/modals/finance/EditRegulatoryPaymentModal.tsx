@@ -5,6 +5,7 @@ import { ModalProps } from '../types'
 import DatePicker from '@/components/DatePicker'
 import { useUpdateRegulatoryPayment, PaymentCategory, RegulatoryPaymentHistoryEntry } from '@/hooks/finance/useNcheGuildPayment'
 import { digitsOnly, REFERENCE_FIELD, REFERENCE_MAX, REFERENCE_REQUIRED, regulatoryErrorField, validateReference } from '@/lib/api/finance/ncheGuildPayment'
+import { isRetryableVerifyError } from '@/lib/api/finance/paymentCancel'
 
 interface EditRegulatoryPaymentModalProps extends ModalProps {
   target: RegulatoryPaymentHistoryEntry | null
@@ -34,6 +35,9 @@ export function EditRegulatoryPaymentModal({ isOpen, onClose, showToast, target,
   const [remarks, setRemarks] = useState('')
   const [bankDeposit, setBankDeposit] = useState('')
   const [referenceError, setReferenceError] = useState<string | null>(null)
+  // "The student's semesters could not be verified. Please try again." —
+  // shown inline with a Try Again button instead of a toast.
+  const [retryError, setRetryError] = useState<string | null>(null)
 
   useEffect(() => {
     if (isOpen && target) {
@@ -43,6 +47,7 @@ export function EditRegulatoryPaymentModal({ isOpen, onClose, showToast, target,
       setRemarks(target.remarks ?? '')
       setBankDeposit(target.bankDeposit ?? '')
       setReferenceError(null)
+      setRetryError(null)
     }
   }, [isOpen, target])
 
@@ -68,6 +73,7 @@ export function EditRegulatoryPaymentModal({ isOpen, onClose, showToast, target,
     const categoryFields = category === 'nche'
       ? { pnrNumber: pnrNumber.trim() || null, remarks: remarks.trim() || null }
       : { bankDeposit: bankDeposit.trim() || null }
+    setRetryError(null)
 
     updatePayment.mutate(
       { paymentGuid: target.paymentGuid, input: { amount: amt, payDate, ...categoryFields }, applicationGuid, studentGuid },
@@ -78,9 +84,11 @@ export function EditRegulatoryPaymentModal({ isOpen, onClose, showToast, target,
         },
         onError: (error: Error) => {
           // Same "not a multiple of the configured rate"/"exceeds
-          // outstanding balance" business errors post/put-payment-{category}.md
-          // describe — surfaced as-is. A bad reference goes under its field.
+          // outstanding balance" / "would leave semester N unpaid" business
+          // errors post/put-payment-{category}.md describe — surfaced as-is.
+          // A bad reference goes under its field.
           if (regulatoryErrorField(error.message || '') === 'reference') { setReferenceError(error.message); return }
+          if (isRetryableVerifyError(error.message)) { setRetryError(error.message); return }
           showToast(error.message || `Failed to update ${CATEGORY_LABEL[category]} payment. Please try again.`, 'error')
         },
       },
@@ -125,6 +133,14 @@ export function EditRegulatoryPaymentModal({ isOpen, onClose, showToast, target,
             <div className="fg mb-[14px]">
               <div className="lbl">Remarks</div>
               <textarea className="ctrl" rows={2} placeholder="Optional notes" value={remarks} onChange={e => setRemarks(e.target.value)} />
+            </div>
+          )}
+
+          {retryError && (
+            <div className="warn-box" role="alert" style={{ alignItems: 'center' }}>
+              <i className="lni lni-warning" aria-hidden="true" style={{ color: 'var(--amber)', flexShrink: 0 }}></i>
+              <div style={{ flex: 1 }}>{retryError}</div>
+              <button className="btn btn-neu btn-sm" disabled={updatePayment.isPending} onClick={handleSave}><i className="lni lni-reload"></i> Try again</button>
             </div>
           )}
         </div>

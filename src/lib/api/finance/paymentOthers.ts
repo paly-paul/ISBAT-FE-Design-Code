@@ -170,3 +170,24 @@ export function getGrievanceFee(): Promise<GrievanceFee> {
   return apiGet<GrievanceFee | null>('/api/v1/finance/other-payment/grievance-fee')
     .then(data => ({ unitFeeAmount: data?.unitFeeAmount ?? 0 }))
 }
+
+// GET /other-payment/penalty-fee (get-penalty-fee.md, 2026-11-27) — the
+// late-submission penalty rule for the class test (CTL ledger) or coursework
+// (CW1L ledger) penalty, and how much this student can still pay towards it.
+// Shown as returned; the page never works out the maximum itself. A 400 means
+// the penalty ledger, price or cap setting is missing (an admin problem).
+export type PenaltyKind = 'ClassTest' | 'Coursework'
+
+export interface PenaltyFee {
+  unitAmount: number     // price of one late submission (CTP / CW1P)
+  cap: number            // the most a student pays in an intake (CTM / CW1M)
+  paidTotal: number      // already paid on the ledger this intake
+  maxPayableNow: number  // largest amount allowed now; 0 = cap reached
+}
+
+export function getPenaltyFee(kind: PenaltyKind, studentGuid: string | null): Promise<PenaltyFee> {
+  if (MOCK_AUTH) return Promise.resolve({ unitAmount: 10000, cap: 50000, paidTotal: 40000, maxPayableNow: 10000 })
+  const params = new URLSearchParams({ kind })
+  if (studentGuid) params.set('studentGuid', studentGuid)
+  return apiGet<PenaltyFee>(`/api/v1/finance/other-payment/penalty-fee?${params.toString()}`)
+}

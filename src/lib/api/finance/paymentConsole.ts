@@ -886,6 +886,21 @@ export function findGrievanceLedger<T extends Pick<LedgerOthersDto, 'ledgerCode'
   return matches.length === 1 ? matches[0] : null
 }
 
+// The class test (CTL) and coursework (CW1L) late-submission penalty ledgers
+// have no flag either, so like the grievance ledger they're recognised by
+// name/code: "class test" / "coursework" together with "penalty" or "late".
+// Only a single match counts.
+const PENALTY_RE = /penalt|late/i
+const PENALTY_KIND_RE: Record<'ClassTest' | 'Coursework', RegExp> = {
+  ClassTest: /class\s*test/i,
+  Coursework: /course\s*work/i,
+}
+export function findPenaltyLedger<T extends Pick<LedgerOthersDto, 'ledgerCode' | 'ledgerName'>>(ledgers: T[], kind: 'ClassTest' | 'Coursework'): T | null {
+  const text = (l: T) => `${l.ledgerName ?? ''} ${l.ledgerCode ?? ''}`
+  const matches = ledgers.filter(l => PENALTY_RE.test(text(l)) && PENALTY_KIND_RE[kind].test(text(l)))
+  return matches.length === 1 ? matches[0] : null
+}
+
 export function getLedgerOthers(): Promise<LedgerOthersDto[]> {
   if (MOCK_AUTH) return Promise.resolve(mockLedgerOthers)
   return apiGet<LedgerOthersDto[] | null>('/api/v1/finance/payment-console/ledger-others').then(data => data ?? [])

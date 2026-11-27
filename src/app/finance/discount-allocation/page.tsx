@@ -540,7 +540,7 @@ function DiscountAllocationContent() {
               <div className="card p-0 overflow-hidden">
                 <div className="pc-hero">
                   <div className="pc-hero-top">
-                    <StudentAvatar className="pc-hero-avatar" photoUrl={profile.photoUrl} initials={initialsFor(applicantName(profile))} />
+                    <StudentAvatar className="pc-hero-avatar" photoUrl={profile.photoUrl} initials={initialsFor(applicantName(profile))} name={applicantName(profile)} subtitle={programName} />
                     <div className="flex-1 min-w-0">
                       <div className="pc-hero-name truncate">{applicantName(profile)}</div>
                       <div className="pc-hero-sub truncate">{programName ?? '—'}</div>

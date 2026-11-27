@@ -6,6 +6,7 @@ import { SearchSelect } from '@/components/SearchSelect'
 import { applicantProfileHref } from '@/lib/applicantProfileLink'
 import { useRegistrationDetail, useRegisterStudent, RegisterStudentResponse } from '@/hooks/admission/useRegistrarDesk'
 import { sameOriginApiUrl } from '@/lib/apiFileUrl'
+import { PhotoZoom } from '@/components/PhotoLightbox'
 import { AuthError } from '@/lib/api/client'
 import { scrollToFirstError } from '@/lib/scrollToFirstError'
 import { formatDate } from '@/lib/date'
@@ -182,13 +183,13 @@ export function CompleteRegistrationModal({ isOpen, onClose, showToast, applicat
         <div className="modal-scroll">
           {/* Who is being registered, before any detail. */}
           <div className="vd-hero">
-            <div className="vd-avatar overflow-hidden" aria-hidden="true">
-              {photoUrl && !photoError ? (
+            {photoUrl && !photoError ? (
+              <PhotoZoom src={photoUrl} name={orDash(detail.studentName)} subtitle={orDash(detail.appRefNo) !== '—' ? detail.appRefNo : null} className="vd-avatar overflow-hidden">
                 <img src={photoUrl} alt="" onError={() => setPhotoError(true)} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 20%' }} />
-              ) : (
-                initials
-              )}
-            </div>
+              </PhotoZoom>
+            ) : (
+              <div className="vd-avatar overflow-hidden" aria-hidden="true">{initials}</div>
+            )}
             <div className="vd-hero-main">
               <div className="vd-hero-name">{orDash(detail.studentName)}</div>
               <div className="vd-hero-meta">

@@ -3,6 +3,7 @@ import { useRef, useState, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import { Toast } from '@/components/Toast'
 import { ChangePhotoModal } from '@/components/modals/shared/ChangePhotoModal'
+import { PhotoLightbox } from '@/components/PhotoLightbox'
 import { validatePassword } from '@/lib/errorMessages'
 import { AuthError, RATE_LIMIT_CODE } from '@/lib/api/client'
 import type { SignInActivity } from '@/lib/auth'
@@ -316,6 +317,7 @@ export default function ProfilePage() {
   const [tab, setTab] = useState<TabId>('info')
 
   const [photoModalOpen, setPhotoModalOpen] = useState(false)
+  const [photoViewOpen, setPhotoViewOpen] = useState(false)
   const updatePhoto = useUpdateMyPhoto()
   // photoUrl is a signed link that expires after ~1 hour. If it fails to
   // load, GET /me once for a fresh link (once per page view, not a retry
@@ -435,7 +437,16 @@ export default function ProfilePage() {
             {/* Identity banner */}
             <section className="mp-hero" aria-label="Account summary">
               <div className="mp-hero-top">
-                <button type="button" className="mp-avatar" title="Change photo" aria-label="Change profile photo" onClick={() => setPhotoModalOpen(true)}>
+                {/* With a photo, opens it full size (PhotoLightbox, whose
+                    "Change photo" leads on to the popup); without, goes
+                    straight to Change Photo. */}
+                <button
+                  type="button"
+                  className="mp-avatar"
+                  title={photoUrl ? 'View photo' : 'Add photo'}
+                  aria-label={photoUrl ? 'View your profile photo' : 'Add a profile photo'}
+                  onClick={() => photoUrl ? setPhotoViewOpen(true) : setPhotoModalOpen(true)}
+                >
                   {photoUrl
                     ? <img src={photoUrl} alt="" onError={handlePhotoError} />
                     : <span>{initials(name) || <i className="lni lni-user"></i>}</span>}
@@ -650,6 +661,15 @@ export default function ProfilePage() {
           </>
         )}
       </div>
+      {photoViewOpen && photoUrl && (
+        <PhotoLightbox
+          src={photoUrl}
+          name={name || 'Your profile'}
+          subtitle={[profile?.shortCode, profile?.account.userTypeName].filter(Boolean).join(' · ') || null}
+          onClose={() => setPhotoViewOpen(false)}
+          action={{ label: 'Change photo', icon: 'lni-camera', onClick: () => { setPhotoViewOpen(false); setPhotoModalOpen(true) } }}
+        />
+      )}
       <ChangePhotoModal isOpen={photoModalOpen} onClose={() => setPhotoModalOpen(false)} showToast={showToast} onPhoto={handlePhoto} />
       <Toast toast={toast} />
     </>

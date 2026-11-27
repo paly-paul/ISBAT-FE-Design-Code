@@ -16,6 +16,15 @@ export interface CancelledFields {
 // Same rule on every cancel route: required, trimmed, at most 200 characters.
 export const CANCEL_REASON_MAX = 200
 
+// The two cancel/edit refusals the backend marks as retryable (2026-11-27
+// handoff): "The usage of this payment could not be verified. Please try
+// again." (other payment) and "The student's semesters could not be verified.
+// Please try again." (NCHE / Guild). Nothing was changed, so the same request
+// can simply be sent again; every other refusal is final.
+export function isRetryableVerifyError(message: string | null | undefined): boolean {
+  return !!message && /could not be verified\.\s*Please try again\.?\s*$/i.test(message.trim())
+}
+
 // PaymentHistoryCategory, as tagged on every payment-history and receipt
 // register row (get-payment-history.md, get-payment-receipts.md):
 // 1 Tuition, 2 Other, 3 NCHE, 4 Guild, 5 Advance deposit. Each row's

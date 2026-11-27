@@ -12,6 +12,7 @@ import { useCurrentAdmissionIntake } from '@/hooks/academic/useIntakes'
 import { AuthError } from '@/lib/api/client'
 import { formatDate } from '@/lib/date'
 import { sameOriginApiUrl } from '@/lib/apiFileUrl'
+import { PhotoZoom } from '@/components/PhotoLightbox'
 import { documentTitle, genderText, orDash } from '@/lib/admission/applicantDisplay'
 
 // Read-only value, same label/value treatment as ViewApplicantModal — the
@@ -222,13 +223,13 @@ export function VettingReviewModal({ isOpen, onClose, showToast, applicationGuid
         <div className="modal-scroll">
           {/* Who is applying, for what — before any detail. */}
           <div className="vd-hero">
-            <div className="vd-avatar overflow-hidden" aria-hidden="true">
-              {photoUrl && !photoError ? (
+            {photoUrl && !photoError ? (
+              <PhotoZoom src={photoUrl} name={fullName} subtitle={orDash(detail.appRefNo) !== '—' ? detail.appRefNo : null} className="vd-avatar overflow-hidden">
                 <img src={photoUrl} alt="" onError={() => setPhotoError(true)} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 20%' }} />
-              ) : (
-                initials
-              )}
-            </div>
+              </PhotoZoom>
+            ) : (
+              <div className="vd-avatar overflow-hidden" aria-hidden="true">{initials}</div>
+            )}
             <div className="vd-hero-main">
               <div className="vd-hero-name flex items-center gap-2 flex-wrap">
                 {fullName}

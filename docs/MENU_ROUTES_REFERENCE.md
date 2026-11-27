@@ -3,10 +3,13 @@
 Reference for the permission-driven sidebar menu API, `GET /api/v1/users/me/menu`.
 Each node has the shape `{ name, icon, url, permissions, children }`.
 
-**Last updated: 2026-11-17.** The tree below matches the frontend's mock menu
-(`mockMenu` in `src/lib/api/users/menu.ts`), so it lists every page that is in the
-sidebar today. The events on each page come from reading the buttons and actions in
-that page's code.
+**Last updated: 2026-11-27.** The tree below matches the frontend's mock menu
+(`mockMenu` in `src/lib/api/users/menu.ts`), which follows the v7 menu hierarchy
+(`ERP_Menu_Hierarchy_Verified_v7.md`): module order, section names and page order are
+the menu API's, including the **General** section that holds each module's dashboard,
+and the two central modules **Analytics** (every report) and **Configuration** (every
+master). It lists every page that is in the sidebar today. The events on each page
+come from reading the buttons and actions in that page's code.
 
 **The frontend no longer adds pages to the menu (since 2026-10-28).** In real mode the
 sidebar shows exactly what `/me/menu` returns. A page that isn't in the response is
@@ -14,9 +17,8 @@ hidden from the sidebar, and opening its URL shows the Access Denied screen. Eve
 in this doc must be registered in the menu API for a role to reach it. The frontend
 still removes and renames a few entries itself (see
 [Pages hidden from the sidebar](#pages-hidden-from-the-sidebar) and the change notes).
-One temporary exception: if the response has no **Assessment › Reports › Exam Schedule
-Report**, the frontend adds it under Assessment with full permissions until the menu API
-sends it (see the 2026-11-17 change notes).
+The last two pages it used to add itself (ODeL Application and Exam Schedule Report)
+are no longer added (2026-11-20), so nothing is added client-side any more.
 
 ## Node shapes
 
@@ -36,8 +38,14 @@ Icon library: **[LineIcons 4.0](https://lineicons.com/icons)**, loaded from a CD
 
 Full path from the app root (`/config/faculty-master`). The frontend also accepts a
 bare slug (`payment-console`), which it resolves against the module name
-(`/finance/payment-console`). Finance's Payment Collection and Reports & Statements
-pages are bare slugs in the frontend mock menu. Full paths are preferred.
+(`/finance/payment-console`). Every page in this doc now uses a full path. Full paths
+are preferred.
+
+Send each page's URL **as listed here**, even for a page that sits under a different
+module than its URL (for example Discount Report under Analytics keeps
+`/finance/reports/discount`). The frontend shows those pages at an address under their
+menu module itself; see
+[Pages shown under their menu module's address](#pages-shown-under-their-menu-modules-address).
 
 ## `permissions` — page events
 
@@ -135,106 +143,211 @@ each API.
 
 | Rail | Icon class |
 |---|---|
-| Admission | `lni lni-clipboard` |
-| Academic | `lni lni-graduation` |
-| Finance | `lni lni-dollar` |
 | Student | `lni lni-user` |
-| Attendance | `lni lni-alarm-clock` |
+| Finance | `lni lni-dollar` |
+| Academic | `lni lni-graduation` |
+| Admission | `lni lni-clipboard` |
 | Employee | `lni lni-briefcase` |
+| Attendance | `lni lni-alarm-clock` |
 | Assessment | `lni lni-pencil-alt` |
-| Config | `lni lni-cog` |
-| Activity Log | `lni lni-list` |
+| Analytics | `lni lni-bar-chart` |
+| Configuration | `lni lni-cog` |
 
 ---
 
-## Admission
+## Student
 
 | Section | Page | URL | Events | Frontend checks today | Notes |
 |---|---|---|---|---|---|
-| Enquiry | Online Enquiry | `/admission/online-enquiry` | `get` `add` | `add` |  |
-| Enquiry | Self-Service Kiosk | `/admission/kiosk-enquiry` | `get` `add` | `add` |  |
-| Enquiry | On-Desk Enquiry | `/admission/ondesk-enquiry` | `get` `add` | `add` |  |
-| Enquiry | Enquiry List | `/admission/enquiry-list` | `get` `add` `edit` `assign` `verify` | `add` `edit` | `assign` = assign counsellor; `verify` = verify enquirer email |
-| Enquiry | Enquiry Followup Master | `/admission/enquiry-followup-master` | `get` `add` `edit` `assign` | `add` `edit` | `add` = log follow-up; `assign` = assign counsellor |
-| Enquiry | Enquiry Followup | `/admission/enquiry-followup` | `get` `edit` `assign` | `edit` | `assign` = assign counsellor |
-| Enquiry | Enquiry Report | `/admission/reports/enquiry` | `get` `export` | `export` | Preview + Excel export; exports land in the shared Downloads list |
-| Admission Flow | Dashboard | `/admission/dashboard` | `get` | none |  |
-| Admission Flow | Application Payment | `/admission/payment` | `get` `add` `import` `print` | `add` | `import` = from Enquiry / ODeL / CRM; `print` = receipt PDF after saving (normal payments only, not exemptions) |
-| Admission Flow | Application Filing | `/admission/filing` | `get` `add` `delete` `submit` | `add` `delete` | `submit` = submit application for vetting |
-| Admission Flow | Vetting Desk | `/admission/vetting` | `get` `approve` `reject` `hold` | `edit` | `hold` = Wait (awaiting original documents) |
-| Admission Flow | Registrar's Desk | `/admission/registration` | `get` `register` `print` | `add` | `print` = onboarding print-out |
-| Records | All Applicants | `/admission/applicants` | `get` `export` | none |  |
-| Records | Application Status Report | `/admission/reports/application-status` | `get` `export` | `export` | Preview with count per stage + Excel export; exports land in the shared Downloads list |
-| Records | Paid Students | `/admission/paid-students` | `get` `print` | none | Paid / exempted applicants per intake with their application stage; `print` = reprint the application payment receipt PDF (paid rows with a receipt only) |
-| Records | Receipts | *(none)* | — | — | no page yet |
-| Records | Reports | *(none)* | — | — | no page yet |
+| Student Records | Student Master | `/student/student-master` | `get` `view` `learningmode` `refugee` `sponsor` | `get` `view` `edit` `learningmode` `refugee` `sponsor` | row actions use their own flags: View, Learning Mode, Refugee Status, Sponsor |
+| Student Records | Student Profile | `/student/profile` | `get` `edit` `send` `print` `download` | `edit` | `print`/`download` = ID card; `send` = credentials via email/WhatsApp |
+| Transfers | Batch Transfer | `/student/batch-transfer` | `get` `execute` | `edit` |  |
+| Transfers | Programme Transfer | `/student/prog-transfer` | `get` `execute` | `edit` |  |
+| Transfers | Dropout Rejoin | `/student/intake-transfer` | `get` `execute` | `edit` | `execute` = rejoin student |
+| Transfers | Fee Structure Transfer | `/student/fee-structure-transfer` | `get` `execute` | `edit` |  |
+| Approvals | Learning Mode Approval | `/student/learning-mode-approval` | `get` `approve` `download` | `edit` |  |
+| Approvals | Refugee Status Approval | `/student/refugee-approval` | `get` `approve` `download` | `edit` |  |
+| Approvals | Passout Confirmation | `/student/passout-confirmation` | `get` `approve` | `edit` | `approve` = confirm passout |
+| Operations | Learning Mode | `/student/learning-mode` | `get` `submit` | `edit` | `submit` = raise change request for approval |
+| Operations | Terminate Student | `/student/terminate-student` | `get` `execute` | `add` | `execute` = terminate |
+| Student Services | Service Tickets | `/student/service-tickets` | `get` `edit` | — | Staff triage of student service tickets: change a ticket's category or status and write a response (`edit`). The page doesn't check menu events itself; its APIs check `students.serviceticket.manage`. Section must not be named `Services` (the frontend drops a Student section with that name) |
+| Communications | Send Communication | `/student/communications` | `get` `send` | `add` |  |
 
 ```json
 {
-  "name": "Admission",
-  "icon": "lni lni-clipboard",
+  "name": "Student",
+  "icon": "lni lni-user",
   "url": null,
   "permissions": null,
   "children": [
     {
-      "name": "Enquiry",
+      "name": "Student Records",
       "icon": null,
       "url": null,
       "permissions": null,
       "children": [
         {
-          "name": "Online Enquiry",
-          "icon": "lni lni-display",
-          "url": "/admission/online-enquiry",
-          "permissions": { "get": true, "add": true },
+          "name": "Student Master",
+          "icon": "lni lni-graduation",
+          "url": "/student/student-master",
+          "permissions": { "get": true, "view": true, "learningmode": true, "refugee": true, "sponsor": true },
           "children": []
         },
         {
-          "name": "Self-Service Kiosk",
-          "icon": "lni lni-tab",
-          "url": "/admission/kiosk-enquiry",
-          "permissions": { "get": true, "add": true },
-          "children": []
-        },
-        {
-          "name": "On-Desk Enquiry",
-          "icon": "lni lni-pencil-alt",
-          "url": "/admission/ondesk-enquiry",
-          "permissions": { "get": true, "add": true },
-          "children": []
-        },
-        {
-          "name": "Enquiry List",
-          "icon": "lni lni-folder",
-          "url": "/admission/enquiry-list",
-          "permissions": { "get": true, "add": true, "edit": true, "assign": true, "verify": true },
-          "children": []
-        },
-        {
-          "name": "Enquiry Followup Master",
-          "icon": "lni lni-calendar",
-          "url": "/admission/enquiry-followup-master",
-          "permissions": { "get": true, "add": true, "edit": true, "assign": true },
-          "children": []
-        },
-        {
-          "name": "Enquiry Followup",
-          "icon": "lni lni-phone",
-          "url": "/admission/enquiry-followup",
-          "permissions": { "get": true, "edit": true, "assign": true },
-          "children": []
-        },
-        {
-          "name": "Enquiry Report",
-          "icon": "lni lni-bar-chart",
-          "url": "/admission/reports/enquiry",
-          "permissions": { "get": true, "export": true },
+          "name": "Student Profile",
+          "icon": "lni lni-user",
+          "url": "/student/profile",
+          "permissions": { "get": true, "edit": true, "send": true, "print": true, "download": true },
           "children": []
         }
       ]
     },
     {
-      "name": "Admission Flow",
+      "name": "Transfers",
+      "icon": null,
+      "url": null,
+      "permissions": null,
+      "children": [
+        {
+          "name": "Batch Transfer",
+          "icon": "lni lni-shuffle",
+          "url": "/student/batch-transfer",
+          "permissions": { "get": true, "execute": true },
+          "children": []
+        },
+        {
+          "name": "Programme Transfer",
+          "icon": "lni lni-graduation",
+          "url": "/student/prog-transfer",
+          "permissions": { "get": true, "execute": true },
+          "children": []
+        },
+        {
+          "name": "Dropout Rejoin",
+          "icon": "lni lni-calendar",
+          "url": "/student/intake-transfer",
+          "permissions": { "get": true, "execute": true },
+          "children": []
+        },
+        {
+          "name": "Fee Structure Transfer",
+          "icon": "lni lni-dollar",
+          "url": "/student/fee-structure-transfer",
+          "permissions": { "get": true, "execute": true },
+          "children": []
+        }
+      ]
+    },
+    {
+      "name": "Approvals",
+      "icon": null,
+      "url": null,
+      "permissions": null,
+      "children": [
+        {
+          "name": "Learning Mode Approval",
+          "icon": "lni lni-checkmark-circle",
+          "url": "/student/learning-mode-approval",
+          "permissions": { "get": true, "approve": true, "download": true },
+          "children": []
+        },
+        {
+          "name": "Refugee Status Approval",
+          "icon": "lni lni-checkmark-circle",
+          "url": "/student/refugee-approval",
+          "permissions": { "get": true, "approve": true, "download": true },
+          "children": []
+        },
+        {
+          "name": "Passout Confirmation",
+          "icon": "lni lni-graduation",
+          "url": "/student/passout-confirmation",
+          "permissions": { "get": true, "approve": true },
+          "children": []
+        }
+      ]
+    },
+    {
+      "name": "Operations",
+      "icon": null,
+      "url": null,
+      "permissions": null,
+      "children": [
+        {
+          "name": "Learning Mode",
+          "icon": "lni lni-display",
+          "url": "/student/learning-mode",
+          "permissions": { "get": true, "submit": true },
+          "children": []
+        },
+        {
+          "name": "Terminate Student",
+          "icon": "lni lni-shield",
+          "url": "/student/terminate-student",
+          "permissions": { "get": true, "execute": true },
+          "children": []
+        }
+      ]
+    },
+    {
+      "name": "Student Services",
+      "icon": null,
+      "url": null,
+      "permissions": null,
+      "children": [
+        {
+          "name": "Service Tickets",
+          "icon": "lni lni-ticket",
+          "url": "/student/service-tickets",
+          "permissions": { "get": true, "edit": true },
+          "children": []
+        }
+      ]
+    },
+    {
+      "name": "Communications",
+      "icon": null,
+      "url": null,
+      "permissions": null,
+      "children": [
+        {
+          "name": "Send Communication",
+          "icon": "lni lni-envelope",
+          "url": "/student/communications",
+          "permissions": { "get": true, "send": true },
+          "children": []
+        }
+      ]
+    }
+  ]
+}
+```
+
+---
+
+## Finance
+
+| Section | Page | URL | Events | Frontend checks today | Notes |
+|---|---|---|---|---|---|
+| General | Dashboard | `/finance/dashboard` | `get` | none |  |
+| General | Student Statement | `/finance/student-statements` | `get` `print` | `print` |  |
+| Payment Collection | Payment Console | `/finance/payment-console` | `get` `add` `edit` `print` | `add` `edit` `print` | `add` = save payment / apply advance; `edit` = edit a saved payment |
+| Payment Collection | Payment Refund | `/finance/payment-refund` | `get` `add` | `add` | `add` = submit refund |
+| Payment Collection | NCHE & Guild Payment | `/finance/nche-guild-payment` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
+| Payment Collection | Discount Allocation | `/finance/discount-allocation` | `get` `add` `edit` `cancel` | `add` `edit` `cancel` | `cancel` = cancel discount (now or from next semester) |
+| Payment Collection | Refugee Status | `/finance/refugee-status` | `get` `add` `edit` `delete` | `add` `edit` `delete` | `add` = grant status; `delete` = remove status |
+| Payment Collection | Ledger Adjustments | `/finance/ledger-adjustments` | `get` `edit` | `edit` | `edit` = adjust ledger line |
+| Payment Collection | Advanced Payments | `/finance/advanced-payments` | `get` `add` | `create` (same as `add`) | `add` = new deposit |
+
+```json
+{
+  "name": "Finance",
+  "icon": "lni lni-dollar",
+  "url": null,
+  "permissions": null,
+  "children": [
+    {
+      "name": "General",
       "icon": null,
       "url": null,
       "permissions": null,
@@ -242,79 +355,72 @@ each API.
         {
           "name": "Dashboard",
           "icon": "lni lni-dashboard",
-          "url": "/admission/dashboard",
+          "url": "/finance/dashboard",
           "permissions": { "get": true },
           "children": []
         },
         {
-          "name": "Application Payment",
-          "icon": "lni lni-credit-cards",
-          "url": "/admission/payment",
-          "permissions": { "get": true, "add": true, "import": true, "print": true },
-          "children": []
-        },
-        {
-          "name": "Application Filing",
-          "icon": "lni lni-pencil-alt",
-          "url": "/admission/filing",
-          "permissions": { "get": true, "add": true, "delete": true, "submit": true },
-          "children": []
-        },
-        {
-          "name": "Vetting Desk",
-          "icon": "lni lni-search-alt",
-          "url": "/admission/vetting",
-          "permissions": { "get": true, "approve": true, "reject": true, "hold": true },
-          "children": []
-        },
-        {
-          "name": "Registrar's Desk",
-          "icon": "lni lni-graduation",
-          "url": "/admission/registration",
-          "permissions": { "get": true, "register": true, "print": true },
+          "name": "Student Statement",
+          "icon": "lni lni-files",
+          "url": "/finance/student-statements",
+          "permissions": { "get": true, "print": true },
           "children": []
         }
       ]
     },
     {
-      "name": "Records",
+      "name": "Payment Collection",
       "icon": null,
       "url": null,
       "permissions": null,
       "children": [
         {
-          "name": "All Applicants",
-          "icon": "lni lni-users",
-          "url": "/admission/applicants",
-          "permissions": { "get": true, "export": true },
+          "name": "Payment Console",
+          "icon": "lni lni-credit-cards",
+          "url": "/finance/payment-console",
+          "permissions": { "get": true, "add": true, "edit": true, "print": true },
           "children": []
         },
         {
-          "name": "Application Status Report",
-          "icon": "lni lni-bar-chart",
-          "url": "/admission/reports/application-status",
-          "permissions": { "get": true, "export": true },
+          "name": "Payment Refund",
+          "icon": "lni lni-reload",
+          "url": "/finance/payment-refund",
+          "permissions": { "get": true, "add": true },
           "children": []
         },
         {
-          "name": "Paid Students",
+          "name": "NCHE & Guild Payment",
+          "icon": "lni lni-graduation",
+          "url": "/finance/nche-guild-payment",
+          "permissions": { "get": true, "add": true, "edit": true, "delete": true },
+          "children": []
+        },
+        {
+          "name": "Discount Allocation",
+          "icon": "lni lni-tag",
+          "url": "/finance/discount-allocation",
+          "permissions": { "get": true, "add": true, "edit": true, "cancel": true },
+          "children": []
+        },
+        {
+          "name": "Refugee Status",
+          "icon": "lni lni-shield",
+          "url": "/finance/refugee-status",
+          "permissions": { "get": true, "add": true, "edit": true, "delete": true },
+          "children": []
+        },
+        {
+          "name": "Ledger Adjustments",
+          "icon": "lni lni-lock",
+          "url": "/finance/ledger-adjustments",
+          "permissions": { "get": true, "edit": true },
+          "children": []
+        },
+        {
+          "name": "Advanced Payments",
           "icon": "lni lni-wallet",
-          "url": "/admission/paid-students",
-          "permissions": { "get": true, "print": true },
-          "children": []
-        },
-        {
-          "name": "Receipts",
-          "icon": "lni lni-files",
-          "url": null,
-          "permissions": {},
-          "children": []
-        },
-        {
-          "name": "Reports",
-          "icon": "lni lni-bar-chart",
-          "url": null,
-          "permissions": {},
+          "url": "/finance/advanced-payments",
+          "permissions": { "get": true, "add": true },
           "children": []
         }
       ]
@@ -329,27 +435,25 @@ each API.
 
 | Section | Page | URL | Events | Frontend checks today | Notes |
 |---|---|---|---|---|---|
-| Overview | Dashboard | `/academic/acad-dashboard` | `get` `export` | none |  |
+| General | Dashboard | `/academic/acad-dashboard` | `get` `export` | none |  |
 | Academic Core | Intake Master | `/academic/intake-master` | `get` `add` `edit` `delete` `export` | `get` `add` `edit` `delete` |  |
 | Academic Core | Bulk Intake Edit | `/academic/bulk-intake-edit` | `get` `edit` | `get` `edit` |  |
-| Academic Core | Skill Management | `/academic/skill-master` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
 | Academic Core | Batch Management | `/academic/batch-management` | `get` `add` `edit` `delete` | `add` `edit` `delete` | Includes the former Batch Summary (2026-10-21): head count is a column in the batch table (2026-10-28), with the summary stat tiles on top |
-| Academic Core | Room Management | `/academic/room-management` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
 | Academic Core | Session Movement | `/academic/session-movement` | `get` `execute` | none | `execute` = single and bulk Move Session |
 | Course Unit Master | Repetition Tag | `/academic/repetition-tag` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
 | Course Unit Master | Course Units | `/academic/course-units` | `get` `add` `edit` `delete` `export` | `add` `edit` `delete` |  |
 | Course Unit Master | Course Allocation | `/academic/course-allocation` | `get` `add` `edit` `delete` | `add` `edit` `delete` | `edit` = update an allocation; `delete` = remove allocation |
-| Programme Master | Programme Level | `/academic/programme-level` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
-| Programme Master | Programme Group | `/academic/programme-group` | `get` `add` `edit` `delete` `export` | `add` `edit` `delete` |  |
 | Programme Master | Programme Master | `/academic/programme-master` | `get` `add` `edit` `delete` `export` | `add` `edit` `delete` | `edit` also covers Renew; `add` covers New Version |
-| Programme Master | Programme Approval | `/academic/programme-approval` | `get` `delete` `approve` | `approve` `delete` |  |
 | Programme Master | Fee Structure | `/academic/fee-structure` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
+| Programme Master | Programme Approval | `/academic/programme-approval` | `get` `delete` `approve` | `approve` `delete` |  |
 | Timetable | Schedule Timetable | `/academic/timetable` | `get` `add` `edit` `delete` | `add` `edit` `delete` | Current or next intake only. Print uses the browser. Bulk Import is shown disabled (no API), so `import` is no longer used |
 | Timetable | Lecturer View | `/academic/timetable-lecturer` | `get` `export` | none | `export` = PDF (browser print) |
 | Timetable | Batch View | `/academic/timetable-batch` | `get` `export` | none | `export` = PDF (browser print) |
 | Timetable | Time Slot Audit | `/academic/timetable-slot-audit` | `get` `export` | none | `export` = PDF (browser print) and Excel (CSV built in the browser) |
 | ODL Applications | ODL Applications | `/academic/odl-applications` | `get` `export` | none |  |
 | ODL Applications | Payment Reconciliation | `/academic/odl-reconciliation` | `get` `approve` `reject` | `edit` `delete` | `approve` = confirm reconciliation |
+| Events and Announcements | Event Management | `/student/event-management` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
+| Events and Announcements | Announcement Management | `/student/announcement-management` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
 
 ```json
 {
@@ -359,7 +463,7 @@ each API.
   "permissions": null,
   "children": [
     {
-      "name": "Overview",
+      "name": "General",
       "icon": null,
       "url": null,
       "permissions": null,
@@ -394,23 +498,9 @@ each API.
           "children": []
         },
         {
-          "name": "Skill Management",
-          "icon": "lni lni-bulb",
-          "url": "/academic/skill-master",
-          "permissions": { "get": true, "add": true, "edit": true, "delete": true },
-          "children": []
-        },
-        {
           "name": "Batch Management",
           "icon": "lni lni-users",
           "url": "/academic/batch-management",
-          "permissions": { "get": true, "add": true, "edit": true, "delete": true },
-          "children": []
-        },
-        {
-          "name": "Room Management",
-          "icon": "lni lni-home",
-          "url": "/academic/room-management",
           "permissions": { "get": true, "add": true, "edit": true, "delete": true },
           "children": []
         },
@@ -459,20 +549,6 @@ each API.
       "permissions": null,
       "children": [
         {
-          "name": "Programme Level",
-          "icon": "lni lni-layers",
-          "url": "/academic/programme-level",
-          "permissions": { "get": true, "add": true, "edit": true, "delete": true },
-          "children": []
-        },
-        {
-          "name": "Programme Group",
-          "icon": "lni lni-folder",
-          "url": "/academic/programme-group",
-          "permissions": { "get": true, "add": true, "edit": true, "delete": true, "export": true },
-          "children": []
-        },
-        {
           "name": "Programme Master",
           "icon": "lni lni-graduation",
           "url": "/academic/programme-master",
@@ -480,17 +556,17 @@ each API.
           "children": []
         },
         {
-          "name": "Programme Approval",
-          "icon": "lni lni-check-box",
-          "url": "/academic/programme-approval",
-          "permissions": { "get": true, "delete": true, "approve": true },
-          "children": []
-        },
-        {
           "name": "Fee Structure",
           "icon": "lni lni-dollar",
           "url": "/academic/fee-structure",
           "permissions": { "get": true, "add": true, "edit": true, "delete": true },
+          "children": []
+        },
+        {
+          "name": "Programme Approval",
+          "icon": "lni lni-check-box",
+          "url": "/academic/programme-approval",
+          "permissions": { "get": true, "delete": true, "approve": true },
           "children": []
         }
       ]
@@ -552,431 +628,6 @@ each API.
           "children": []
         }
       ]
-    }
-  ]
-}
-```
-
----
-
-## Finance
-
-| Section | Page | URL | Events | Frontend checks today | Notes |
-|---|---|---|---|---|---|
-| Payment Collection | Dashboard | `/finance/dashboard` | `get` | none |  |
-| Payment Collection | Payment Console | `/finance/payment-console` | `get` `add` `edit` `print` | `add` `edit` `print` | `add` = save payment / apply advance; `edit` = edit a saved payment |
-| Payment Collection | Payment Refund | `/finance/payment-refund` | `get` `add` | `add` | `add` = submit refund |
-| Payment Collection | NCHE & Guild Payment | `/finance/nche-guild-payment` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
-| Payment Collection | Discount Allocation | `/finance/discount-allocation` | `get` `add` `edit` `cancel` | `add` `edit` `cancel` | `cancel` = cancel discount (now or from next semester) |
-| Payment Collection | Refugee Status | `/finance/refugee-status` | `get` `add` `edit` `delete` | `add` `edit` `delete` | `add` = grant status; `delete` = remove status |
-| Payment Collection | Payment History | `/finance/payment-history` | `get` `edit` `print` | `edit` `print` |  |
-| Payment Collection | Ledger Adjustments | `/finance/ledger-adjustments` | `get` `edit` | `edit` | `edit` = adjust ledger line |
-| Payment Collection | Exchange Rates | `/finance/exchange-rates` | `get` `add` `edit` `delete` | `add` `edit` `delete` | `edit` = save rates |
-| Payment Collection | Advanced Payments | `/finance/advanced-payments` | `get` `add` | `create` (same as `add`) | `add` = new deposit |
-| Reports & Statements | Discount Report | `/finance/reports/discount` | `get` `export` | `export` | Preview + Excel export; each user sees only their own exports. Downloads icon lives in the app header |
-| Reports & Statements | Transaction Report | `/finance/reports/transaction` | `get` `export` | `export` | Same preview + Excel export flow as Discount Report; exports land in the shared Downloads list |
-| Reports & Statements | Outstanding Report | `/finance/reports/outstanding` | `get` `export` | `export` | Same preview + Excel export flow as Discount Report; exports land in the shared Downloads list |
-| Reports & Statements | Student Statement | `/finance/student-statements` | `get` `print` | `print` |  |
-| Finance Core | Cooperates | `/finance/cooperates` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
-| Finance Core | Discounts | `/finance/discounts` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
-| Finance Core | Ledgers | `/finance/ledgers` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
-| Finance Core | Other Ledgers | `/finance/ledger-others` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
-| Finance Core | Currency Master | `/finance/currency-master` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
-| Finance Core | Receipt Books | `/finance/receipt-books` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
-| Finance Core | General Settings | `/finance/gen-sets` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
-| Banking | Banks | `/finance/banks` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
-| Banking | Bank Branches | `/finance/bank-branches` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
-| Banking | Proc Banks | `/finance/proc-banks` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
-| Banking | Proc GL Accounts | `/finance/proc-gl-accounts` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
-
-```json
-{
-  "name": "Finance",
-  "icon": "lni lni-dollar",
-  "url": null,
-  "permissions": null,
-  "children": [
-    {
-      "name": "Payment Collection",
-      "icon": null,
-      "url": null,
-      "permissions": null,
-      "children": [
-        {
-          "name": "Dashboard",
-          "icon": "lni lni-dashboard",
-          "url": "/finance/dashboard",
-          "permissions": { "get": true },
-          "children": []
-        },
-        {
-          "name": "Payment Console",
-          "icon": "lni lni-credit-cards",
-          "url": "/finance/payment-console",
-          "permissions": { "get": true, "add": true, "edit": true, "print": true },
-          "children": []
-        },
-        {
-          "name": "Payment Refund",
-          "icon": "lni lni-reload",
-          "url": "/finance/payment-refund",
-          "permissions": { "get": true, "add": true },
-          "children": []
-        },
-        {
-          "name": "NCHE & Guild Payment",
-          "icon": "lni lni-graduation",
-          "url": "/finance/nche-guild-payment",
-          "permissions": { "get": true, "add": true, "edit": true, "delete": true },
-          "children": []
-        },
-        {
-          "name": "Discount Allocation",
-          "icon": "lni lni-tag",
-          "url": "/finance/discount-allocation",
-          "permissions": { "get": true, "add": true, "edit": true, "cancel": true },
-          "children": []
-        },
-        {
-          "name": "Refugee Status",
-          "icon": "lni lni-shield",
-          "url": "/finance/refugee-status",
-          "permissions": { "get": true, "add": true, "edit": true, "delete": true },
-          "children": []
-        },
-        {
-          "name": "Payment History",
-          "icon": "lni lni-bar-chart",
-          "url": "/finance/payment-history",
-          "permissions": { "get": true, "edit": true, "print": true },
-          "children": []
-        },
-        {
-          "name": "Ledger Adjustments",
-          "icon": "lni lni-lock",
-          "url": "/finance/ledger-adjustments",
-          "permissions": { "get": true, "edit": true },
-          "children": []
-        },
-        {
-          "name": "Exchange Rates",
-          "icon": "lni lni-world",
-          "url": "/finance/exchange-rates",
-          "permissions": { "get": true, "add": true, "edit": true, "delete": true },
-          "children": []
-        },
-        {
-          "name": "Advanced Payments",
-          "icon": "lni lni-wallet",
-          "url": "/finance/advanced-payments",
-          "permissions": { "get": true, "add": true },
-          "children": []
-        }
-      ]
-    },
-    {
-      "name": "Reports & Statements",
-      "icon": null,
-      "url": null,
-      "permissions": null,
-      "children": [
-        {
-          "name": "Discount Report",
-          "icon": "lni lni-tag",
-          "url": "/finance/reports/discount",
-          "permissions": { "get": true, "export": true },
-          "children": []
-        },
-        {
-          "name": "Transaction Report",
-          "icon": "lni lni-list",
-          "url": "/finance/reports/transaction",
-          "permissions": { "get": true, "export": true },
-          "children": []
-        },
-        {
-          "name": "Outstanding Report",
-          "icon": "lni lni-alarm-clock",
-          "url": "/finance/reports/outstanding",
-          "permissions": { "get": true, "export": true },
-          "children": []
-        },
-        {
-          "name": "Student Statement",
-          "icon": "lni lni-files",
-          "url": "/finance/student-statements",
-          "permissions": { "get": true, "print": true },
-          "children": []
-        }
-      ]
-    },
-    {
-      "name": "Finance Core",
-      "icon": null,
-      "url": null,
-      "permissions": null,
-      "children": [
-        {
-          "name": "Cooperates",
-          "icon": "lni lni-handshake",
-          "url": "/finance/cooperates",
-          "permissions": { "get": true, "add": true, "edit": true, "delete": true },
-          "children": []
-        },
-        {
-          "name": "Discounts",
-          "icon": "lni lni-tag",
-          "url": "/finance/discounts",
-          "permissions": { "get": true, "add": true, "edit": true, "delete": true },
-          "children": []
-        },
-        {
-          "name": "Ledgers",
-          "icon": "lni lni-book",
-          "url": "/finance/ledgers",
-          "permissions": { "get": true, "add": true, "edit": true, "delete": true },
-          "children": []
-        },
-        {
-          "name": "Other Ledgers",
-          "icon": "lni lni-book",
-          "url": "/finance/ledger-others",
-          "permissions": { "get": true, "add": true, "edit": true, "delete": true },
-          "children": []
-        },
-        {
-          "name": "Currency Master",
-          "icon": "lni lni-dollar",
-          "url": "/finance/currency-master",
-          "permissions": { "get": true, "add": true, "edit": true, "delete": true },
-          "children": []
-        },
-        {
-          "name": "Receipt Books",
-          "icon": "lni lni-ticket",
-          "url": "/finance/receipt-books",
-          "permissions": { "get": true, "add": true, "edit": true, "delete": true },
-          "children": []
-        },
-        {
-          "name": "General Settings",
-          "icon": "lni lni-cog",
-          "url": "/finance/gen-sets",
-          "permissions": { "get": true, "add": true, "edit": true, "delete": true },
-          "children": []
-        }
-      ]
-    },
-    {
-      "name": "Banking",
-      "icon": null,
-      "url": null,
-      "permissions": null,
-      "children": [
-        {
-          "name": "Banks",
-          "icon": "lni lni-coin",
-          "url": "/finance/banks",
-          "permissions": { "get": true, "add": true, "edit": true, "delete": true },
-          "children": []
-        },
-        {
-          "name": "Bank Branches",
-          "icon": "lni lni-map-marker",
-          "url": "/finance/bank-branches",
-          "permissions": { "get": true, "add": true, "edit": true, "delete": true },
-          "children": []
-        },
-        {
-          "name": "Proc Banks",
-          "icon": "lni lni-wallet",
-          "url": "/finance/proc-banks",
-          "permissions": { "get": true, "add": true, "edit": true, "delete": true },
-          "children": []
-        },
-        {
-          "name": "Proc GL Accounts",
-          "icon": "lni lni-calculator",
-          "url": "/finance/proc-gl-accounts",
-          "permissions": { "get": true, "add": true, "edit": true, "delete": true },
-          "children": []
-        }
-      ]
-    }
-  ]
-}
-```
-
----
-
-## Student
-
-| Section | Page | URL | Events | Frontend checks today | Notes |
-|---|---|---|---|---|---|
-| Student Records | Student Master | `/student/student-master` | `get` `view` `learningmode` `refugee` `sponsor` | `get` `view` `edit` `learningmode` `refugee` `sponsor` | row actions use their own flags: View, Learning Mode, Refugee Status, Sponsor |
-| Operations | Student Profile | `/student/profile` | `get` `edit` `send` `print` `download` | `edit` | `print`/`download` = ID card; `send` = credentials via email/WhatsApp |
-| Operations | Batch Transfer | `/student/batch-transfer` | `get` `execute` | `edit` |  |
-| Operations | Programme Transfer | `/student/prog-transfer` | `get` `execute` | `edit` |  |
-| Operations | Learning Mode | `/student/learning-mode` | `get` `submit` | `edit` | `submit` = raise change request for approval |
-| Operations | Learning Mode Approval | `/student/learning-mode-approval` | `get` `approve` `download` | `edit` |  |
-| Operations | Refugee Status Approval | `/student/refugee-approval` | `get` `approve` `download` | `edit` |  |
-| Operations | Dropout Rejoin | `/student/intake-transfer` | `get` `execute` | `edit` | `execute` = rejoin student |
-| Operations | Fee Structure Transfer | `/student/fee-structure-transfer` | `get` `execute` | `edit` |  |
-| Operations | Terminate Student | `/student/terminate-student` | `get` `execute` | `add` | `execute` = terminate |
-| Operations | Passout Confirmation | `/student/passout-confirmation` | `get` `approve` | `edit` | `approve` = confirm passout |
-| Reports | Students in Programme Report | `/student/reports/students-in-programme` | `get` `export` | `export` | Every student of one programme, filtered by semester / intake / status; preview + Excel export; exports land in the shared Downloads list. The APIs check `student.studentsinprogrammereport.get` (preview) and `.export` |
-| Student Services | Service Tickets | `/student/service-tickets` | `get` `edit` | — | Staff triage of student service tickets: change a ticket's category or status and write a response (`edit`). The page doesn't check menu events itself; its APIs check `students.serviceticket.manage`. Section must not be named `Services` (the frontend drops a Student section with that name) |
-| Communications | Send Communication | `/student/communications` | `get` `send` | `add` |  |
-| Events and Announcements | Event Management | `/student/event-management` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
-| Events and Announcements | Announcement Management | `/student/announcement-management` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
-| Settings | Specialization Management | `/student/specialization` | `get` `assign` | `edit` | `assign` = assign specialization to students |
-| Settings | Termination Reason Master | `/student/termination-reasons` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
-| Settings | Feedback Master | `/student/feedback-master` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
-
-```json
-{
-  "name": "Student",
-  "icon": "lni lni-user",
-  "url": null,
-  "permissions": null,
-  "children": [
-    {
-      "name": "Student Records",
-      "icon": null,
-      "url": null,
-      "permissions": null,
-      "children": [
-        {
-          "name": "Student Master",
-          "icon": "lni lni-graduation",
-          "url": "/student/student-master",
-          "permissions": { "get": true, "view": true, "learningmode": true, "refugee": true, "sponsor": true },
-          "children": []
-        }
-      ]
-    },
-    {
-      "name": "Operations",
-      "icon": null,
-      "url": null,
-      "permissions": null,
-      "children": [
-        {
-          "name": "Student Profile",
-          "icon": "lni lni-user",
-          "url": "/student/profile",
-          "permissions": { "get": true, "edit": true, "send": true, "print": true, "download": true },
-          "children": []
-        },
-        {
-          "name": "Batch Transfer",
-          "icon": "lni lni-shuffle",
-          "url": "/student/batch-transfer",
-          "permissions": { "get": true, "execute": true },
-          "children": []
-        },
-        {
-          "name": "Programme Transfer",
-          "icon": "lni lni-graduation",
-          "url": "/student/prog-transfer",
-          "permissions": { "get": true, "execute": true },
-          "children": []
-        },
-        {
-          "name": "Learning Mode",
-          "icon": "lni lni-display",
-          "url": "/student/learning-mode",
-          "permissions": { "get": true, "submit": true },
-          "children": []
-        },
-        {
-          "name": "Learning Mode Approval",
-          "icon": "lni lni-checkmark-circle",
-          "url": "/student/learning-mode-approval",
-          "permissions": { "get": true, "approve": true, "download": true },
-          "children": []
-        },
-        {
-          "name": "Refugee Status Approval",
-          "icon": "lni lni-checkmark-circle",
-          "url": "/student/refugee-approval",
-          "permissions": { "get": true, "approve": true, "download": true },
-          "children": []
-        },
-        {
-          "name": "Dropout Rejoin",
-          "icon": "lni lni-calendar",
-          "url": "/student/intake-transfer",
-          "permissions": { "get": true, "execute": true },
-          "children": []
-        },
-        {
-          "name": "Fee Structure Transfer",
-          "icon": "lni lni-dollar",
-          "url": "/student/fee-structure-transfer",
-          "permissions": { "get": true, "execute": true },
-          "children": []
-        },
-        {
-          "name": "Terminate Student",
-          "icon": "lni lni-shield",
-          "url": "/student/terminate-student",
-          "permissions": { "get": true, "execute": true },
-          "children": []
-        },
-        {
-          "name": "Passout Confirmation",
-          "icon": "lni lni-graduation",
-          "url": "/student/passout-confirmation",
-          "permissions": { "get": true, "approve": true },
-          "children": []
-        }
-      ]
-    },
-    {
-      "name": "Reports",
-      "icon": null,
-      "url": null,
-      "permissions": null,
-      "children": [
-        {
-          "name": "Students in Programme Report",
-          "icon": "lni lni-bar-chart",
-          "url": "/student/reports/students-in-programme",
-          "permissions": { "get": true, "export": true },
-          "children": []
-        }
-      ]
-    },
-    {
-      "name": "Student Services",
-      "icon": null,
-      "url": null,
-      "permissions": null,
-      "children": [
-        {
-          "name": "Service Tickets",
-          "icon": "lni lni-ticket",
-          "url": "/student/service-tickets",
-          "permissions": { "get": true, "edit": true },
-          "children": []
-        }
-      ]
-    },
-    {
-      "name": "Communications",
-      "icon": null,
-      "url": null,
-      "permissions": null,
-      "children": [
-        {
-          "name": "Send Communication",
-          "icon": "lni lni-envelope",
-          "url": "/student/communications",
-          "permissions": { "get": true, "send": true },
-          "children": []
-        }
-      ]
     },
     {
       "name": "Events and Announcements",
@@ -999,31 +650,238 @@ each API.
           "children": []
         }
       ]
-    },
+    }
+  ]
+}
+```
+
+---
+
+## Admission
+
+| Section | Page | URL | Events | Frontend checks today | Notes |
+|---|---|---|---|---|---|
+| General | Dashboard | `/admission/dashboard` | `get` | none |  |
+| Enquiry | On-Desk Enquiry | `/admission/ondesk-enquiry` | `get` `add` | `add` |  |
+| Enquiry | Enquiry List | `/admission/enquiry-list` | `get` `add` `edit` `assign` `verify` | `add` `edit` | `assign` = assign counsellor; `verify` = verify enquirer email |
+| Enquiry | Enquiry Followup Master | `/admission/enquiry-followup-master` | `get` `add` `edit` `assign` | `add` `edit` | `add` = log follow-up; `assign` = assign counsellor |
+| Enquiry | Enquiry Status | `/config/enquiry-status` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
+| Enquiry | Isbat Enquiry Source | `/config/enquiry-source` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
+| Enquiry | Enquiry Followup | `/admission/enquiry-followup` | `get` `edit` `assign` | `edit` | `assign` = assign counsellor |
+| Other | Online Enquiry | `/admission/online-enquiry` | `get` `add` | `add` |  |
+| Other | Self-Service Kiosk | `/admission/kiosk-enquiry` | `get` `add` | `add` |  |
+| Admission Flow | Application Payment | `/admission/payment` | `get` `add` `import` `print` | `add` | `import` = from Enquiry / ODeL / CRM; `print` = receipt PDF after saving (normal payments only, not exemptions) |
+| Admission Flow | Application Filing | `/admission/filing` | `get` `add` `delete` `submit` | `add` `delete` | `submit` = submit application for vetting |
+| Admission Flow | Vetting Desk | `/admission/vetting` | `get` `approve` `reject` `hold` | `edit` | `hold` = Wait (awaiting original documents) |
+| Admission Flow | Registrar's Desk | `/admission/registration` | `get` `register` `print` | `add` | `print` = onboarding print-out |
+| Records | All Applicants | `/admission/applicants` | `get` `export` | none |  |
+| Records | Paid Students | `/admission/paid-students` | `get` `print` | none | Paid / exempted applicants per intake with their application stage; `print` = reprint the application payment receipt PDF (paid rows with a receipt only) |
+
+```json
+{
+  "name": "Admission",
+  "icon": "lni lni-clipboard",
+  "url": null,
+  "permissions": null,
+  "children": [
     {
-      "name": "Settings",
+      "name": "General",
       "icon": null,
       "url": null,
       "permissions": null,
       "children": [
         {
-          "name": "Specialization Management",
-          "icon": "lni lni-graduation",
-          "url": "/student/specialization",
-          "permissions": { "get": true, "assign": true },
+          "name": "Dashboard",
+          "icon": "lni lni-dashboard",
+          "url": "/admission/dashboard",
+          "permissions": { "get": true },
+          "children": []
+        }
+      ]
+    },
+    {
+      "name": "Enquiry",
+      "icon": null,
+      "url": null,
+      "permissions": null,
+      "children": [
+        {
+          "name": "On-Desk Enquiry",
+          "icon": "lni lni-pencil-alt",
+          "url": "/admission/ondesk-enquiry",
+          "permissions": { "get": true, "add": true },
           "children": []
         },
         {
-          "name": "Termination Reason Master",
-          "icon": "lni lni-shield",
-          "url": "/student/termination-reasons",
+          "name": "Enquiry List",
+          "icon": "lni lni-folder",
+          "url": "/admission/enquiry-list",
+          "permissions": { "get": true, "add": true, "edit": true, "assign": true, "verify": true },
+          "children": []
+        },
+        {
+          "name": "Enquiry Followup Master",
+          "icon": "lni lni-calendar",
+          "url": "/admission/enquiry-followup-master",
+          "permissions": { "get": true, "add": true, "edit": true, "assign": true },
+          "children": []
+        },
+        {
+          "name": "Enquiry Status",
+          "icon": "lni lni-flag",
+          "url": "/config/enquiry-status",
           "permissions": { "get": true, "add": true, "edit": true, "delete": true },
           "children": []
         },
         {
-          "name": "Feedback Master",
-          "icon": "lni lni-comments",
-          "url": "/student/feedback-master",
+          "name": "Isbat Enquiry Source",
+          "icon": "lni lni-compass",
+          "url": "/config/enquiry-source",
+          "permissions": { "get": true, "add": true, "edit": true, "delete": true },
+          "children": []
+        },
+        {
+          "name": "Enquiry Followup",
+          "icon": "lni lni-phone",
+          "url": "/admission/enquiry-followup",
+          "permissions": { "get": true, "edit": true, "assign": true },
+          "children": []
+        }
+      ]
+    },
+    {
+      "name": "Other",
+      "icon": null,
+      "url": null,
+      "permissions": null,
+      "children": [
+        {
+          "name": "Online Enquiry",
+          "icon": "lni lni-display",
+          "url": "/admission/online-enquiry",
+          "permissions": { "get": true, "add": true },
+          "children": []
+        },
+        {
+          "name": "Self-Service Kiosk",
+          "icon": "lni lni-tab",
+          "url": "/admission/kiosk-enquiry",
+          "permissions": { "get": true, "add": true },
+          "children": []
+        }
+      ]
+    },
+    {
+      "name": "Admission Flow",
+      "icon": null,
+      "url": null,
+      "permissions": null,
+      "children": [
+        {
+          "name": "Application Payment",
+          "icon": "lni lni-credit-cards",
+          "url": "/admission/payment",
+          "permissions": { "get": true, "add": true, "import": true, "print": true },
+          "children": []
+        },
+        {
+          "name": "Application Filing",
+          "icon": "lni lni-pencil-alt",
+          "url": "/admission/filing",
+          "permissions": { "get": true, "add": true, "delete": true, "submit": true },
+          "children": []
+        },
+        {
+          "name": "Vetting Desk",
+          "icon": "lni lni-search-alt",
+          "url": "/admission/vetting",
+          "permissions": { "get": true, "approve": true, "reject": true, "hold": true },
+          "children": []
+        },
+        {
+          "name": "Registrar's Desk",
+          "icon": "lni lni-graduation",
+          "url": "/admission/registration",
+          "permissions": { "get": true, "register": true, "print": true },
+          "children": []
+        }
+      ]
+    },
+    {
+      "name": "Records",
+      "icon": null,
+      "url": null,
+      "permissions": null,
+      "children": [
+        {
+          "name": "All Applicants",
+          "icon": "lni lni-users",
+          "url": "/admission/applicants",
+          "permissions": { "get": true, "export": true },
+          "children": []
+        },
+        {
+          "name": "Paid Students",
+          "icon": "lni lni-wallet",
+          "url": "/admission/paid-students",
+          "permissions": { "get": true, "print": true },
+          "children": []
+        }
+      ]
+    }
+  ]
+}
+```
+
+---
+
+## Employee
+
+| Section | Page | URL | Events | Frontend checks today | Notes |
+|---|---|---|---|---|---|
+| Employee Records | Employee Master | `/employee/employee-master` | `get` `add` `edit` `assign` | `add` `edit` `assign` | `assign` = assign/edit employee permissions |
+| Employee Records | Employee Approvals | `/employee/employee-approve` | `get` `approve` | `approve` |  |
+| Access Control | Permission Master | `/config/permission-master` | `get` `add` `edit` `delete` | `add` `edit` `delete` | `delete` = delete a permission group |
+
+```json
+{
+  "name": "Employee",
+  "icon": "lni lni-briefcase",
+  "url": null,
+  "permissions": null,
+  "children": [
+    {
+      "name": "Employee Records",
+      "icon": null,
+      "url": null,
+      "permissions": null,
+      "children": [
+        {
+          "name": "Employee Master",
+          "icon": "lni lni-user",
+          "url": "/employee/employee-master",
+          "permissions": { "get": true, "add": true, "edit": true, "assign": true },
+          "children": []
+        },
+        {
+          "name": "Employee Approvals",
+          "icon": "lni lni-checkmark-circle",
+          "url": "/employee/employee-approve",
+          "permissions": { "get": true, "approve": true },
+          "children": []
+        }
+      ]
+    },
+    {
+      "name": "Access Control",
+      "icon": null,
+      "url": null,
+      "permissions": null,
+      "children": [
+        {
+          "name": "Permission Master",
+          "icon": "lni lni-lock",
+          "url": "/config/permission-master",
           "permissions": { "get": true, "add": true, "edit": true, "delete": true },
           "children": []
         }
@@ -1037,16 +895,11 @@ each API.
 
 ## Attendance
 
-New module (2026-10-28). Its rail sits between Student and Employee.
-
 | Section | Page | URL | Events | Frontend checks today | Notes |
 |---|---|---|---|---|---|
 | Class Attendance | Record Attendance | `/attendance/record` | `get` `add` `edit` | `add` `edit` | `add` = save attendance for a new session (or skip it with a reason); `edit` = change an already recorded session |
 | Class Attendance | Pending Outlines | `/attendance/pending-outlines` | `get` | none | Sessions still waiting for attendance; each row links to Record Attendance |
 | Management | Attendance Sessions | `/attendance/sessions` | `get` `edit` `delete` | `edit` `delete` | `edit` opens the session in Record Attendance; automated and cancelled sessions can't be edited |
-| Reports | Attendance by Date | `/attendance/reports/by-date` | `get` `export` | `export` | Sessions of one timetable slot with summary + Download PDF (`export`). Wired to `/attendance/reports/by-date/{preview,pdf}`; the API itself checks `assessment.attendancereport.get` |
-| Reports | Student Attendance % | `/attendance/reports/student-pct` | `get` `export` | `export` | Students' attendance for an intake + term, optionally by lecturer / course unit, + Download PDF (`export`). Wired to `/attendance/reports/*-pct/{preview,pdf}`; the API itself checks `assessment.attendancereport.get` |
-| Reports | Faculty Attendance % | `/attendance/reports/faculty-pct` | `get` `export` | `export` | Sessions conducted vs scheduled per lecturer and course unit for an intake + term, optionally one lecturer, + Download PDF (`export`). Wired to `/attendance/reports/*-pct/{preview,pdf}`; the API itself checks `assessment.attendancereport.get` |
 
 ```json
 {
@@ -1091,77 +944,6 @@ New module (2026-10-28). Its rail sits between Student and Employee.
           "children": []
         }
       ]
-    },
-    {
-      "name": "Reports",
-      "icon": null,
-      "url": null,
-      "permissions": null,
-      "children": [
-        {
-          "name": "Attendance by Date",
-          "icon": "lni lni-bar-chart",
-          "url": "/attendance/reports/by-date",
-          "permissions": { "get": true, "export": true },
-          "children": []
-        },
-        {
-          "name": "Student Attendance %",
-          "icon": "lni lni-users",
-          "url": "/attendance/reports/student-pct",
-          "permissions": { "get": true, "export": true },
-          "children": []
-        },
-        {
-          "name": "Faculty Attendance %",
-          "icon": "lni lni-briefcase",
-          "url": "/attendance/reports/faculty-pct",
-          "permissions": { "get": true, "export": true },
-          "children": []
-        }
-      ]
-    }
-  ]
-}
-```
-
----
-
-## Employee
-
-| Section | Page | URL | Events | Frontend checks today | Notes |
-|---|---|---|---|---|---|
-| Employee Records | Employee Master | `/employee/employee-master` | `get` `add` `edit` `assign` | `add` `edit` `assign` | `assign` = assign/edit employee permissions |
-| Employee Records | Employee Approvals | `/employee/employee-approve` | `get` `approve` | `approve` |  |
-
-```json
-{
-  "name": "Employee",
-  "icon": "lni lni-briefcase",
-  "url": null,
-  "permissions": null,
-  "children": [
-    {
-      "name": "Employee Records",
-      "icon": null,
-      "url": null,
-      "permissions": null,
-      "children": [
-        {
-          "name": "Employee Master",
-          "icon": "lni lni-user",
-          "url": "/employee/employee-master",
-          "permissions": { "get": true, "add": true, "edit": true, "assign": true },
-          "children": []
-        },
-        {
-          "name": "Employee Approvals",
-          "icon": "lni lni-checkmark-circle",
-          "url": "/employee/employee-approve",
-          "permissions": { "get": true, "approve": true },
-          "children": []
-        }
-      ]
     }
   ]
 }
@@ -1173,50 +955,44 @@ New module (2026-10-28). Its rail sits between Student and Employee.
 
 | Section | Page | URL | Events | Frontend checks today | Notes |
 |---|---|---|---|---|---|
-| Overview | Assessment Dashboard | `/assessment/dashboard` | `get` `export` | none |  |
-| Assessment Structure | Fee Clearance Master | `/assessment/assessment-master` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
-| Assessment Structure | Exam Rules Master | `/assessment/exam-rules` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
-| Assessment Structure | Question FAQs | `/assessment/question-faqs` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
+| General | Assessment Dashboard | `/assessment/dashboard` | `get` `export` | none |  |
+| Assessment Structure | Question Bank Upload | `/assessment/cw-qbank` | `get` `add` `edit` `delete` `import` `download` | none | `import` = Excel import; `download` = template |
 | Assessment Structure | Bulk Exam Scheduler | `/assessment/bulk-exam-scheduler` | `get` `add` | none |  |
 | Assessment Structure | Assessment Scheduler | `/assessment/ia-creation` | `get` `add` `edit` | none | Formerly IA Creation. `add` = create structure; `edit` = edit CW/CT/UE schedule |
-| Assessment Structure | IA Evaluation | `/assessment/ia-evaluation` | `get` `edit` `submit` | none | `edit` = save marks; `submit` = finalize |
-| Coursework (CW) | Question Bank Upload | `/assessment/cw-qbank` | `get` `add` `edit` `delete` `import` `download` | none | `import` = Excel import; `download` = template |
-| Coursework (CW) | CW Rectification | `/assessment/cw-rectify` | `get` `edit` `delete` | none | `edit` = reopen / re-evaluate attempt |
-| Coursework (CW) | Project Proposals | `/assessment/project-proposals` | `get` `add` `edit` `delete` | none |  |
-| Coursework (CW) | Project Reviews | `/assessment/project-reviews` | `get` `add` `edit` `delete` | none |  |
-| Class Test (CBT) | Exam Cancel | `/assessment/exam-cancel` | `get` `edit` `cancel` | none | `cancel` = cancel attempt; `edit` = extra time |
+| IA Internal Assessment | IA Evaluation | `/assessment/ia-evaluation` | `get` `edit` `submit` | none | `edit` = save marks; `submit` = finalize |
+| IA Internal Assessment | CW Rectification | `/assessment/cw-rectify` | `get` `edit` `delete` | none | `edit` = reopen / re-evaluate attempt |
+| IA Internal Assessment | Project Proposals | `/assessment/project-proposals` | `get` `add` `edit` `delete` | none |  |
+| IA Internal Assessment | Project Reviews | `/assessment/project-reviews` | `get` `add` `edit` `delete` | none |  |
+| IA Internal Assessment | Exam Cancel | `/assessment/exam-cancel` | `get` `edit` `cancel` | none | `cancel` = cancel attempt; `edit` = extra time |
 | University Exam (UE) | Question Paper Vetting | `/assessment/qp-vetting` | `get` `add` `edit` `approve` | none | `approve` = vetting committee sign-off |
 | University Exam (UE) | UE Practical QBank | `/assessment/question-bank-practical` | `get` `delete` `import` `download` | none |  |
-| University Exam (UE) | Hall Ticket Issuance | `/assessment/hall-ticket` | `get` `add` | none | `add` = issue (single or bulk) |
-| University Exam (UE) | Hall Ticket Print | `/assessment/hall-print` | `get` `print` | none |  |
-| University Exam (UE) | Hall Ticket Print All | `/assessment/hall-ticket-print-all` | `get` `print` | none |  |
+| University Exam (UE) | Hall Ticket Issuance | `/assessment/hall-ticket` | `get` `add` `hallticketprint.get` `hallticketprint.print` `hallticketprintall.get` `hallticketprintall.print` | `get` `add` `edit` and the four `hallticketprint*` keys | One page with three tabs: Issue, Print and Print All. `add` = issue (single or bulk). The scoped keys gate the Print and Print All tabs and their buttons; see the 2026-11-27 change notes for the two ways to send them |
 | University Exam (UE) | UE Material Print | `/assessment/university-exam-material-print` | `get` `print` | `add` |  |
 | University Exam (UE) | UE QP/Booklet Print | `/assessment/university-exam-qp-booklet-print` | `get` `print` `generate` `delete` | `add` `delete` | `delete` = delete a Practical QP; both print buttons check `add` today |
 | University Exam (UE) | UE Practical QP Print | `/assessment/university-exam-practical-qp-print` | `get` `delete` `print` `download` `generate` | none |  |
 | University Exam (UE) | UE Project Booklet Print | `/assessment/university-exam-project-booklet-print` | `get` `print` `download` | none |  |
-| University Exam (UE) | Resit Question Print | `/assessment/resit-question-print` | `get` `delete` `print` `generate` | none |  |
 | University Exam (UE) | UE Attendance | `/assessment/ue-attendance` | `get` `edit` | none |  |
 | University Exam (UE) | UE Mark Import | `/assessment/ue-mark-import` | `get` `import` | none |  |
-| Mark Entry & Results | Mark Entry — UE | `/assessment/mark-ue` | `get` `edit` | `get` `edit` | `edit` = save a student's marks |
-| Mark Entry & Results | Mark Verify — UE | `/assessment/mark-ue-verify` | `get` `edit` `verify` | `get` `edit` | `edit` = correct a mark; `verify` = verify the exam (locks it for mark entry) |
-| Mark Entry & Results | Result & Moderation | `/assessment/moderation` | `get` `edit` | none |  |
-| Mark Entry & Results | Exam Mark Import | `/assessment/exam-mark-import` | `get` `import` `download` `publish` | none |  |
-| Mark Entry & Results | Generate Result | `/assessment/generate-result` | `get` `generate` `publish` `withdraw` `delete` | `get` `generate` `publish` `withdraw` `delete` | Per programme / semester / batch. `withdraw` = take published results back. A missing `generate`, `publish` or `withdraw` key counts as allowed, so send `false` to deny; a missing `delete` follows `edit` |
-| Mark Entry & Results | Transcript Print | `/assessment/transcript-print` | `get` `print` | none |  |
-| Mark Entry & Results | Graduate Transcript | `/assessment/graduate-transcript` | `get` `generate` | none |  |
-| Mark Entry & Results | HEC Graduate Transcript | `/assessment/hec-graduate-transcript` | `get` `generate` | none |  |
-| Mark Entry & Results | Transcript Collection | `/assessment/graduate-transcript/collection` | `get` `add` | none | `add` = record collection |
-| Mark Entry & Results | Gown Collection | `/assessment/gown-collection` | `get` `add` | none | `add` = record collection |
-| Resit & Disputes | Resit Master | `/assessment/resit-configs` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
-| Resit & Disputes | Resit Applications | `/assessment/resit-applications` | `get` | none |  |
-| Resit & Disputes | Resit Apply | `/assessment/resit-apply` | `get` `add` `edit` `delete` | none |  |
-| Resit & Disputes | Resit Scheduling | `/assessment/resit-scheduling` | `get` `add` `edit` | none |  |
-| Resit & Disputes | Resit IA Evaluation | `/assessment/resit-evaluation` | `get` `submit` | none | `submit` = submit evaluation |
-| Resit & Disputes | Resit IA Result | `/assessment/resit-ia-results` | `get` `export` | none |  |
-| Resit & Disputes | Resit UE Mark Import | `/assessment/resit-ue-mark-import` | `get` `import` `download` | none |  |
-| Resit & Disputes | Resit Mark Update | `/assessment/resit-mark-update` | `get` `publish` | none | `publish` = push marks |
-| Resit & Disputes | Exam Grievances | `/assessment/exam-grievances` | `get` `edit` | none | `edit` = respond (save & email) |
-| Reports | Exam Schedule Report | `/assessment/reports/exam-schedule` | `get` `export` | `export` | Scheduled UE, coursework, test, mock and resit exams, filtered by type, intake, dates, programme, semester, course unit, status and mode; preview + Excel export; exports land in the shared Downloads list. The APIs check `assessment.examschedulereport.get` (preview) |
+| University Exam (UE) | Mark Entry — UE | `/assessment/mark-ue` | `get` `edit` | `get` `edit` | `edit` = save a student's marks |
+| University Exam (UE) | Mark Verify — UE | `/assessment/mark-ue-verify` | `get` `edit` `verify` | `get` `edit` | `edit` = correct a mark; `verify` = verify the exam (locks it for mark entry) |
+| University Exam (UE) | Exam Mark Import | `/assessment/exam-mark-import` | `get` `import` `download` `publish` | none |  |
+| Results & Graduation | Result & Moderation | `/assessment/moderation` | `get` `edit` | none |  |
+| Results & Graduation | Generate Result | `/assessment/generate-result` | `get` `generate` `publish` `withdraw` `delete` | `get` `generate` `publish` `withdraw` `delete` | Per programme / semester / batch. `withdraw` = take published results back. A missing `generate`, `publish` or `withdraw` key counts as allowed, so send `false` to deny; a missing `delete` follows `edit` |
+| Results & Graduation | Transcript Print | `/assessment/transcript-print` | `get` `print` | none |  |
+| Results & Graduation | Graduate Transcript | `/assessment/graduate-transcript` | `get` `generate` | none |  |
+| Results & Graduation | HEC Graduate Transcript | `/assessment/hec-graduate-transcript` | `get` `generate` | none |  |
+| Results & Graduation | Transcript Collection | `/assessment/graduate-transcript/collection` | `get` `add` | none | `add` = record collection |
+| Results & Graduation | Gown Collection | `/assessment/gown-collection` | `get` `add` | none | `add` = record collection |
+| Resit | Resit Master | `/assessment/resit-configs` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
+| Resit | Resit Question Print | `/assessment/resit-question-print` | `get` `delete` `print` `generate` | none |  |
+| Resit | Resit Applications | `/assessment/resit-applications` | `get` | none |  |
+| Resit | Resit Apply | `/assessment/resit-apply` | `get` `add` `edit` `delete` | none |  |
+| Resit | Resit Scheduling | `/assessment/resit-scheduling` | `get` `add` `edit` | none |  |
+| Resit | Resit IA Evaluation | `/assessment/resit-evaluation` | `get` `submit` | none | `submit` = submit evaluation |
+| Resit | Resit IA Result | `/assessment/resit-ia-results` | `get` `export` | none |  |
+| Resit | Resit UE Mark Import | `/assessment/resit-ue-mark-import` | `get` `import` `download` | none |  |
+| Resit | Resit Mark Update | `/assessment/resit-mark-update` | `get` `publish` | none | `publish` = push marks |
+| Exam Grievances | Exam Grievances | `/assessment/exam-grievances` | `get` `edit` | none | `edit` = respond (save & email) |
 
 ```json
 {
@@ -1226,7 +1002,7 @@ New module (2026-10-28). Its rail sits between Student and Employee.
   "permissions": null,
   "children": [
     {
-      "name": "Overview",
+      "name": "General",
       "icon": null,
       "url": null,
       "permissions": null,
@@ -1247,24 +1023,10 @@ New module (2026-10-28). Its rail sits between Student and Employee.
       "permissions": null,
       "children": [
         {
-          "name": "Fee Clearance Master",
-          "icon": "lni lni-list",
-          "url": "/assessment/assessment-master",
-          "permissions": { "get": true, "add": true, "edit": true, "delete": true },
-          "children": []
-        },
-        {
-          "name": "Exam Rules Master",
-          "icon": "lni lni-files",
-          "url": "/assessment/exam-rules",
-          "permissions": { "get": true, "add": true, "edit": true, "delete": true },
-          "children": []
-        },
-        {
-          "name": "Question FAQs",
-          "icon": "lni lni-comments",
-          "url": "/assessment/question-faqs",
-          "permissions": { "get": true, "add": true, "edit": true, "delete": true },
+          "name": "Question Bank Upload",
+          "icon": "lni lni-upload",
+          "url": "/assessment/cw-qbank",
+          "permissions": { "get": true, "add": true, "edit": true, "delete": true, "import": true, "download": true },
           "children": []
         },
         {
@@ -1280,27 +1042,20 @@ New module (2026-10-28). Its rail sits between Student and Employee.
           "url": "/assessment/ia-creation",
           "permissions": { "get": true, "add": true, "edit": true },
           "children": []
-        },
-        {
-          "name": "IA Evaluation",
-          "icon": "lni lni-checkmark-circle",
-          "url": "/assessment/ia-evaluation",
-          "permissions": { "get": true, "edit": true, "submit": true },
-          "children": []
         }
       ]
     },
     {
-      "name": "Coursework (CW)",
+      "name": "IA Internal Assessment",
       "icon": null,
       "url": null,
       "permissions": null,
       "children": [
         {
-          "name": "Question Bank Upload",
-          "icon": "lni lni-upload",
-          "url": "/assessment/cw-qbank",
-          "permissions": { "get": true, "add": true, "edit": true, "delete": true, "import": true, "download": true },
+          "name": "IA Evaluation",
+          "icon": "lni lni-checkmark-circle",
+          "url": "/assessment/ia-evaluation",
+          "permissions": { "get": true, "edit": true, "submit": true },
           "children": []
         },
         {
@@ -1323,15 +1078,7 @@ New module (2026-10-28). Its rail sits between Student and Employee.
           "url": "/assessment/project-reviews",
           "permissions": { "get": true, "add": true, "edit": true, "delete": true },
           "children": []
-        }
-      ]
-    },
-    {
-      "name": "Class Test (CBT)",
-      "icon": null,
-      "url": null,
-      "permissions": null,
-      "children": [
+        },
         {
           "name": "Exam Cancel",
           "icon": "lni lni-timer",
@@ -1365,21 +1112,7 @@ New module (2026-10-28). Its rail sits between Student and Employee.
           "name": "Hall Ticket Issuance",
           "icon": "lni lni-ticket",
           "url": "/assessment/hall-ticket",
-          "permissions": { "get": true, "add": true },
-          "children": []
-        },
-        {
-          "name": "Hall Ticket Print",
-          "icon": "lni lni-printer",
-          "url": "/assessment/hall-print",
-          "permissions": { "get": true, "print": true },
-          "children": []
-        },
-        {
-          "name": "Hall Ticket Print All",
-          "icon": "lni lni-printer",
-          "url": "/assessment/hall-ticket-print-all",
-          "permissions": { "get": true, "print": true },
+          "permissions": { "get": true, "add": true, "hallticketprint.get": true, "hallticketprint.print": true, "hallticketprintall.get": true, "hallticketprintall.print": true },
           "children": []
         },
         {
@@ -1411,13 +1144,6 @@ New module (2026-10-28). Its rail sits between Student and Employee.
           "children": []
         },
         {
-          "name": "Resit Question Print",
-          "icon": "lni lni-printer",
-          "url": "/assessment/resit-question-print",
-          "permissions": { "get": true, "delete": true, "print": true, "generate": true },
-          "children": []
-        },
-        {
           "name": "UE Attendance",
           "icon": "lni lni-users",
           "url": "/assessment/ue-attendance",
@@ -1430,15 +1156,7 @@ New module (2026-10-28). Its rail sits between Student and Employee.
           "url": "/assessment/ue-mark-import",
           "permissions": { "get": true, "import": true },
           "children": []
-        }
-      ]
-    },
-    {
-      "name": "Mark Entry & Results",
-      "icon": null,
-      "url": null,
-      "permissions": null,
-      "children": [
+        },
         {
           "name": "Mark Entry — UE",
           "icon": "lni lni-pencil-alt",
@@ -1454,17 +1172,25 @@ New module (2026-10-28). Its rail sits between Student and Employee.
           "children": []
         },
         {
-          "name": "Result & Moderation",
-          "icon": "lni lni-bar-chart",
-          "url": "/assessment/moderation",
-          "permissions": { "get": true, "edit": true },
-          "children": []
-        },
-        {
           "name": "Exam Mark Import",
           "icon": "lni lni-upload",
           "url": "/assessment/exam-mark-import",
           "permissions": { "get": true, "import": true, "download": true, "publish": true },
+          "children": []
+        }
+      ]
+    },
+    {
+      "name": "Results & Graduation",
+      "icon": null,
+      "url": null,
+      "permissions": null,
+      "children": [
+        {
+          "name": "Result & Moderation",
+          "icon": "lni lni-bar-chart",
+          "url": "/assessment/moderation",
+          "permissions": { "get": true, "edit": true },
           "children": []
         },
         {
@@ -1512,7 +1238,7 @@ New module (2026-10-28). Its rail sits between Student and Employee.
       ]
     },
     {
-      "name": "Resit & Disputes",
+      "name": "Resit",
       "icon": null,
       "url": null,
       "permissions": null,
@@ -1522,6 +1248,13 @@ New module (2026-10-28). Its rail sits between Student and Employee.
           "icon": "lni lni-cogs",
           "url": "/assessment/resit-configs",
           "permissions": { "get": true, "add": true, "edit": true, "delete": true },
+          "children": []
+        },
+        {
+          "name": "Resit Question Print",
+          "icon": "lni lni-printer",
+          "url": "/assessment/resit-question-print",
+          "permissions": { "get": true, "delete": true, "print": true, "generate": true },
           "children": []
         },
         {
@@ -1572,27 +1305,20 @@ New module (2026-10-28). Its rail sits between Student and Employee.
           "url": "/assessment/resit-mark-update",
           "permissions": { "get": true, "publish": true },
           "children": []
-        },
-        {
-          "name": "Exam Grievances",
-          "icon": "lni lni-files",
-          "url": "/assessment/exam-grievances",
-          "permissions": { "get": true, "edit": true },
-          "children": []
         }
       ]
     },
     {
-      "name": "Reports",
+      "name": "Exam Grievances",
       "icon": null,
       "url": null,
       "permissions": null,
       "children": [
         {
-          "name": "Exam Schedule Report",
-          "icon": "lni lni-bar-chart",
-          "url": "/assessment/reports/exam-schedule",
-          "permissions": { "get": true, "export": true },
+          "name": "Exam Grievances",
+          "icon": "lni lni-files",
+          "url": "/assessment/exam-grievances",
+          "permissions": { "get": true, "edit": true },
           "children": []
         }
       ]
@@ -1603,44 +1329,255 @@ New module (2026-10-28). Its rail sits between Student and Employee.
 
 ---
 
-## Config
+## Analytics
 
 | Section | Page | URL | Events | Frontend checks today | Notes |
 |---|---|---|---|---|---|
-| Students | Student Category Master | `/config/student-category-master` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
-| Students | Service Category Master | `/config/service-category-master` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
-| Organization | Faculty Master | `/config/faculty-master` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
-| Organization | Department Master | `/config/department-master` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
-| Organization | Designation Master | `/config/designation-master` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
-| Organization | Campus Master | `/config/campus-master` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
-| Organization | Country Master | `/config/country-master` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
-| Academic Setup | Specialization | `/config/specialization` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
-| Academic Setup | Skill Master | `/config/skill` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
-| Academic Setup | Unit Type Master | `/config/unit-type` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
-| Academic Setup | Unit Category Master | `/config/unit-category` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
-| Academic Setup | Weekdays | `/config/weekdays` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
-| Academic Setup | Batch Times | `/config/batch-times` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
-| Admissions | Enquiry Status | `/config/enquiry-status` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
-| Admissions | Isbat Enquiry Source | `/config/enquiry-source` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
-| Admissions | Enquiry Source | `/config/enquiry-source-master` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
-| Admissions | Followup Status | `/config/followup-status` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
-| Admissions | Followup Mode | `/config/followup-mode` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
-| Admissions | Interest Level | `/config/interest-level` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
-| Access Control | Permission Master | `/config/permission-master` | `get` `add` `edit` `delete` | `add` `edit` `delete` | `delete` = delete a permission group |
+| Student | Students in Programme Report | `/student/reports/students-in-programme` | `get` `export` | `export` | Every student of one programme, filtered by semester / intake / status; preview + Excel export; exports land in the shared Downloads list. The APIs check `student.studentsinprogrammereport.get` (preview) and `.export` |
+| Finance | Payment History | `/finance/payment-history` | `get` `edit` `print` | `edit` `print` |  |
+| Finance | Discount Report | `/finance/reports/discount` | `get` `export` | `export` | Preview + Excel export; each user sees only their own exports. Downloads icon lives in the app header |
+| Finance | Transaction Report | `/finance/reports/transaction` | `get` `export` | `export` | Same preview + Excel export flow as Discount Report; exports land in the shared Downloads list |
+| Finance | Outstanding Report | `/finance/reports/outstanding` | `get` `export` | `export` | Same preview + Excel export flow as Discount Report; exports land in the shared Downloads list |
+| Admission | Enquiry Report | `/admission/reports/enquiry` | `get` `export` | `export` | Preview + Excel export; exports land in the shared Downloads list |
+| Admission | Application Status Report | `/admission/reports/application-status` | `get` `export` | `export` | Preview with count per stage + Excel export; exports land in the shared Downloads list |
+| Attendance | Attendance by Date | `/attendance/reports/by-date` | `get` `export` | `export` | Sessions of one timetable slot with summary + Download PDF (`export`). Wired to `/attendance/reports/by-date/{preview,pdf}`; the API itself checks `assessment.attendancereport.get` |
+| Attendance | Student Attendance % | `/attendance/reports/student-pct` | `get` `export` | `export` | Students' attendance for an intake + term, optionally by lecturer / course unit, + Download PDF (`export`). Wired to `/attendance/reports/*-pct/{preview,pdf}`; the API itself checks `assessment.attendancereport.get` |
+| Attendance | Faculty Attendance % | `/attendance/reports/faculty-pct` | `get` `export` | `export` | Sessions conducted vs scheduled per lecturer and course unit for an intake + term, optionally one lecturer, + Download PDF (`export`). Wired to `/attendance/reports/*-pct/{preview,pdf}`; the API itself checks `assessment.attendancereport.get` |
+| Assessment | Exam Schedule Report | `/assessment/reports/exam-schedule` | `get` `export` | `export` | Scheduled UE, coursework, test, mock and resit exams, filtered by type, intake, dates, programme, semester, course unit, status and mode; preview + Excel export; exports land in the shared Downloads list. The APIs check `assessment.examschedulereport.get` (preview) |
+| Assessment | IA Evaluation Report | `/assessment/reports/ia-evaluation` | `get` `export` | `export` | Preview + Excel export; the Export button is hidden without `export` |
+| Employee | Activity Log | `/activity-log/logs` | `get` | none |  |
 
 ```json
 {
-  "name": "Config",
+  "name": "Analytics",
+  "icon": "lni lni-bar-chart",
+  "url": null,
+  "permissions": null,
+  "children": [
+    {
+      "name": "Student",
+      "icon": null,
+      "url": null,
+      "permissions": null,
+      "children": [
+        {
+          "name": "Students in Programme Report",
+          "icon": "lni lni-bar-chart",
+          "url": "/student/reports/students-in-programme",
+          "permissions": { "get": true, "export": true },
+          "children": []
+        }
+      ]
+    },
+    {
+      "name": "Finance",
+      "icon": null,
+      "url": null,
+      "permissions": null,
+      "children": [
+        {
+          "name": "Payment History",
+          "icon": "lni lni-bar-chart",
+          "url": "/finance/payment-history",
+          "permissions": { "get": true, "edit": true, "print": true },
+          "children": []
+        },
+        {
+          "name": "Discount Report",
+          "icon": "lni lni-tag",
+          "url": "/finance/reports/discount",
+          "permissions": { "get": true, "export": true },
+          "children": []
+        },
+        {
+          "name": "Transaction Report",
+          "icon": "lni lni-list",
+          "url": "/finance/reports/transaction",
+          "permissions": { "get": true, "export": true },
+          "children": []
+        },
+        {
+          "name": "Outstanding Report",
+          "icon": "lni lni-alarm-clock",
+          "url": "/finance/reports/outstanding",
+          "permissions": { "get": true, "export": true },
+          "children": []
+        }
+      ]
+    },
+    {
+      "name": "Admission",
+      "icon": null,
+      "url": null,
+      "permissions": null,
+      "children": [
+        {
+          "name": "Enquiry Report",
+          "icon": "lni lni-bar-chart",
+          "url": "/admission/reports/enquiry",
+          "permissions": { "get": true, "export": true },
+          "children": []
+        },
+        {
+          "name": "Application Status Report",
+          "icon": "lni lni-bar-chart",
+          "url": "/admission/reports/application-status",
+          "permissions": { "get": true, "export": true },
+          "children": []
+        }
+      ]
+    },
+    {
+      "name": "Attendance",
+      "icon": null,
+      "url": null,
+      "permissions": null,
+      "children": [
+        {
+          "name": "Attendance by Date",
+          "icon": "lni lni-calendar",
+          "url": "/attendance/reports/by-date",
+          "permissions": { "get": true, "export": true },
+          "children": []
+        },
+        {
+          "name": "Student Attendance %",
+          "icon": "lni lni-users",
+          "url": "/attendance/reports/student-pct",
+          "permissions": { "get": true, "export": true },
+          "children": []
+        },
+        {
+          "name": "Faculty Attendance %",
+          "icon": "lni lni-library",
+          "url": "/attendance/reports/faculty-pct",
+          "permissions": { "get": true, "export": true },
+          "children": []
+        }
+      ]
+    },
+    {
+      "name": "Assessment",
+      "icon": null,
+      "url": null,
+      "permissions": null,
+      "children": [
+        {
+          "name": "Exam Schedule Report",
+          "icon": "lni lni-bar-chart",
+          "url": "/assessment/reports/exam-schedule",
+          "permissions": { "get": true, "export": true },
+          "children": []
+        },
+        {
+          "name": "IA Evaluation Report",
+          "icon": "lni lni-bar-chart",
+          "url": "/assessment/reports/ia-evaluation",
+          "permissions": { "get": true, "export": true },
+          "children": []
+        }
+      ]
+    },
+    {
+      "name": "Employee",
+      "icon": null,
+      "url": null,
+      "permissions": null,
+      "children": [
+        {
+          "name": "Activity Log",
+          "icon": "lni lni-list",
+          "url": "/activity-log/logs",
+          "permissions": { "get": true },
+          "children": []
+        }
+      ]
+    }
+  ]
+}
+```
+
+---
+
+## Configuration
+
+| Section | Page | URL | Events | Frontend checks today | Notes |
+|---|---|---|---|---|---|
+| Student | Specialization Management | `/student/specialization` | `get` `assign` | `edit` | `assign` = assign specialization to students |
+| Student | Termination Reason Master | `/student/termination-reasons` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
+| Student | Feedback Master | `/student/feedback-master` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
+| Student | Student Category Master | `/config/student-category-master` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
+| Student | Service Category Master | `/config/service-category-master` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
+| Finance | Exchange Rates | `/finance/exchange-rates` | `get` `add` `edit` `delete` | `add` `edit` `delete` | `edit` = save rates |
+| Finance | Cooperates | `/finance/cooperates` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
+| Finance | Discounts | `/finance/discounts` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
+| Finance | Ledgers | `/finance/ledgers` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
+| Finance | Other Ledgers | `/finance/ledger-others` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
+| Finance | Currency Master | `/finance/currency-master` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
+| Finance | Receipt Books | `/finance/receipt-books` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
+| Finance | General Settings | `/finance/gen-sets` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
+| Finance | Banks | `/finance/banks` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
+| Finance | Bank Branches | `/finance/bank-branches` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
+| Finance | Proc Banks | `/finance/proc-banks` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
+| Finance | Proc GL Accounts | `/finance/proc-gl-accounts` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
+| Academic | Faculty Master | `/config/faculty-master` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
+| Academic | Campus Master | `/config/campus-master` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
+| Academic | Skill Management | `/academic/skill-master` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
+| Academic | Room Management | `/academic/room-management` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
+| Academic | Programme Level | `/academic/programme-level` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
+| Academic | Programme Group | `/academic/programme-group` | `get` `add` `edit` `delete` `export` | `add` `edit` `delete` |  |
+| Academic | Specialization | `/config/specialization` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
+| Academic | Skill Master | `/config/skill` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
+| Academic | Unit Type Master | `/config/unit-type` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
+| Academic | Unit Category Master | `/config/unit-category` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
+| Academic | Weekdays | `/config/weekdays` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
+| Academic | Batch Times | `/config/batch-times` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
+| Admission | Enquiry Source | `/config/enquiry-source-master` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
+| Admission | Followup Status | `/config/followup-status` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
+| Admission | Followup Mode | `/config/followup-mode` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
+| Admission | Interest Level | `/config/interest-level` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
+| Assessment | Fee Clearance Master | `/assessment/assessment-master` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
+| Assessment | Exam Rules Master | `/assessment/exam-rules` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
+| Assessment | Question FAQs | `/assessment/question-faqs` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
+| General | Department Master | `/config/department-master` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
+| General | Designation Master | `/config/designation-master` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
+| General | Course Level Master | `/config/course-level-master` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
+| General | Country Master | `/config/country-master` | `get` `add` `edit` `delete` | `add` `edit` `delete` |  |
+
+```json
+{
+  "name": "Configuration",
   "icon": "lni lni-cog",
   "url": null,
   "permissions": null,
   "children": [
     {
-      "name": "Students",
+      "name": "Student",
       "icon": null,
       "url": null,
       "permissions": null,
       "children": [
+        {
+          "name": "Specialization Management",
+          "icon": "lni lni-graduation",
+          "url": "/student/specialization",
+          "permissions": { "get": true, "assign": true },
+          "children": []
+        },
+        {
+          "name": "Termination Reason Master",
+          "icon": "lni lni-shield",
+          "url": "/student/termination-reasons",
+          "permissions": { "get": true, "add": true, "edit": true, "delete": true },
+          "children": []
+        },
+        {
+          "name": "Feedback Master",
+          "icon": "lni lni-comments",
+          "url": "/student/feedback-master",
+          "permissions": { "get": true, "add": true, "edit": true, "delete": true },
+          "children": []
+        },
         {
           "name": "Student Category Master",
           "icon": "lni lni-users",
@@ -1658,7 +1595,99 @@ New module (2026-10-28). Its rail sits between Student and Employee.
       ]
     },
     {
-      "name": "Organization",
+      "name": "Finance",
+      "icon": null,
+      "url": null,
+      "permissions": null,
+      "children": [
+        {
+          "name": "Exchange Rates",
+          "icon": "lni lni-world",
+          "url": "/finance/exchange-rates",
+          "permissions": { "get": true, "add": true, "edit": true, "delete": true },
+          "children": []
+        },
+        {
+          "name": "Cooperates",
+          "icon": "lni lni-handshake",
+          "url": "/finance/cooperates",
+          "permissions": { "get": true, "add": true, "edit": true, "delete": true },
+          "children": []
+        },
+        {
+          "name": "Discounts",
+          "icon": "lni lni-tag",
+          "url": "/finance/discounts",
+          "permissions": { "get": true, "add": true, "edit": true, "delete": true },
+          "children": []
+        },
+        {
+          "name": "Ledgers",
+          "icon": "lni lni-book",
+          "url": "/finance/ledgers",
+          "permissions": { "get": true, "add": true, "edit": true, "delete": true },
+          "children": []
+        },
+        {
+          "name": "Other Ledgers",
+          "icon": "lni lni-book",
+          "url": "/finance/ledger-others",
+          "permissions": { "get": true, "add": true, "edit": true, "delete": true },
+          "children": []
+        },
+        {
+          "name": "Currency Master",
+          "icon": "lni lni-dollar",
+          "url": "/finance/currency-master",
+          "permissions": { "get": true, "add": true, "edit": true, "delete": true },
+          "children": []
+        },
+        {
+          "name": "Receipt Books",
+          "icon": "lni lni-ticket",
+          "url": "/finance/receipt-books",
+          "permissions": { "get": true, "add": true, "edit": true, "delete": true },
+          "children": []
+        },
+        {
+          "name": "General Settings",
+          "icon": "lni lni-cog",
+          "url": "/finance/gen-sets",
+          "permissions": { "get": true, "add": true, "edit": true, "delete": true },
+          "children": []
+        },
+        {
+          "name": "Banks",
+          "icon": "lni lni-coin",
+          "url": "/finance/banks",
+          "permissions": { "get": true, "add": true, "edit": true, "delete": true },
+          "children": []
+        },
+        {
+          "name": "Bank Branches",
+          "icon": "lni lni-map-marker",
+          "url": "/finance/bank-branches",
+          "permissions": { "get": true, "add": true, "edit": true, "delete": true },
+          "children": []
+        },
+        {
+          "name": "Proc Banks",
+          "icon": "lni lni-wallet",
+          "url": "/finance/proc-banks",
+          "permissions": { "get": true, "add": true, "edit": true, "delete": true },
+          "children": []
+        },
+        {
+          "name": "Proc GL Accounts",
+          "icon": "lni lni-calculator",
+          "url": "/finance/proc-gl-accounts",
+          "permissions": { "get": true, "add": true, "edit": true, "delete": true },
+          "children": []
+        }
+      ]
+    },
+    {
+      "name": "Academic",
       "icon": null,
       "url": null,
       "permissions": null,
@@ -1671,20 +1700,6 @@ New module (2026-10-28). Its rail sits between Student and Employee.
           "children": []
         },
         {
-          "name": "Department Master",
-          "icon": "lni lni-briefcase",
-          "url": "/config/department-master",
-          "permissions": { "get": true, "add": true, "edit": true, "delete": true },
-          "children": []
-        },
-        {
-          "name": "Designation Master",
-          "icon": "lni lni-tag",
-          "url": "/config/designation-master",
-          "permissions": { "get": true, "add": true, "edit": true, "delete": true },
-          "children": []
-        },
-        {
           "name": "Campus Master",
           "icon": "lni lni-home",
           "url": "/config/campus-master",
@@ -1692,20 +1707,33 @@ New module (2026-10-28). Its rail sits between Student and Employee.
           "children": []
         },
         {
-          "name": "Country Master",
-          "icon": "lni lni-world",
-          "url": "/config/country-master",
+          "name": "Skill Management",
+          "icon": "lni lni-bulb",
+          "url": "/academic/skill-master",
           "permissions": { "get": true, "add": true, "edit": true, "delete": true },
           "children": []
-        }
-      ]
-    },
-    {
-      "name": "Academic Setup",
-      "icon": null,
-      "url": null,
-      "permissions": null,
-      "children": [
+        },
+        {
+          "name": "Room Management",
+          "icon": "lni lni-home",
+          "url": "/academic/room-management",
+          "permissions": { "get": true, "add": true, "edit": true, "delete": true },
+          "children": []
+        },
+        {
+          "name": "Programme Level",
+          "icon": "lni lni-layers",
+          "url": "/academic/programme-level",
+          "permissions": { "get": true, "add": true, "edit": true, "delete": true },
+          "children": []
+        },
+        {
+          "name": "Programme Group",
+          "icon": "lni lni-folder",
+          "url": "/academic/programme-group",
+          "permissions": { "get": true, "add": true, "edit": true, "delete": true, "export": true },
+          "children": []
+        },
         {
           "name": "Specialization",
           "icon": "lni lni-certificate",
@@ -1751,25 +1779,11 @@ New module (2026-10-28). Its rail sits between Student and Employee.
       ]
     },
     {
-      "name": "Admissions",
+      "name": "Admission",
       "icon": null,
       "url": null,
       "permissions": null,
       "children": [
-        {
-          "name": "Enquiry Status",
-          "icon": "lni lni-flag",
-          "url": "/config/enquiry-status",
-          "permissions": { "get": true, "add": true, "edit": true, "delete": true },
-          "children": []
-        },
-        {
-          "name": "Isbat Enquiry Source",
-          "icon": "lni lni-compass",
-          "url": "/config/enquiry-source",
-          "permissions": { "get": true, "add": true, "edit": true, "delete": true },
-          "children": []
-        },
         {
           "name": "Enquiry Source",
           "icon": "lni lni-volume",
@@ -1801,15 +1815,65 @@ New module (2026-10-28). Its rail sits between Student and Employee.
       ]
     },
     {
-      "name": "Access Control",
+      "name": "Assessment",
       "icon": null,
       "url": null,
       "permissions": null,
       "children": [
         {
-          "name": "Permission Master",
-          "icon": "lni lni-lock",
-          "url": "/config/permission-master",
+          "name": "Fee Clearance Master",
+          "icon": "lni lni-list",
+          "url": "/assessment/assessment-master",
+          "permissions": { "get": true, "add": true, "edit": true, "delete": true },
+          "children": []
+        },
+        {
+          "name": "Exam Rules Master",
+          "icon": "lni lni-files",
+          "url": "/assessment/exam-rules",
+          "permissions": { "get": true, "add": true, "edit": true, "delete": true },
+          "children": []
+        },
+        {
+          "name": "Question FAQs",
+          "icon": "lni lni-comments",
+          "url": "/assessment/question-faqs",
+          "permissions": { "get": true, "add": true, "edit": true, "delete": true },
+          "children": []
+        }
+      ]
+    },
+    {
+      "name": "General",
+      "icon": null,
+      "url": null,
+      "permissions": null,
+      "children": [
+        {
+          "name": "Department Master",
+          "icon": "lni lni-briefcase",
+          "url": "/config/department-master",
+          "permissions": { "get": true, "add": true, "edit": true, "delete": true },
+          "children": []
+        },
+        {
+          "name": "Designation Master",
+          "icon": "lni lni-tag",
+          "url": "/config/designation-master",
+          "permissions": { "get": true, "add": true, "edit": true, "delete": true },
+          "children": []
+        },
+        {
+          "name": "Course Level Master",
+          "icon": "lni lni-graduation",
+          "url": "/config/course-level-master",
+          "permissions": { "get": true, "add": true, "edit": true, "delete": true },
+          "children": []
+        },
+        {
+          "name": "Country Master",
+          "icon": "lni lni-world",
+          "url": "/config/country-master",
           "permissions": { "get": true, "add": true, "edit": true, "delete": true },
           "children": []
         }
@@ -1820,48 +1884,71 @@ New module (2026-10-28). Its rail sits between Student and Employee.
 ```
 
 ---
+## Pages shown under their menu module's address
 
-## Activity Log
+These pages sit under a different module in the menu than their URL. The frontend shows
+each one at an address under its menu module, so the browser's address bar follows the
+menu (Discount Report, under Analytics, opens at `/analytics/reports/discount`). It
+rewrites the URL as the menu loads and checks permissions against the new address. The
+old address still opens the page.
 
-| Section | Page | URL | Events | Frontend checks today | Notes |
-|---|---|---|---|---|---|
-| Audit Trail | Activity Log | `/activity-log/logs` | `get` | none |  |
+**Nothing changes for the menu API.** Keep sending the URL in the **URL sent** column,
+as in the module tables above. The list is generated from the menu by
+`scripts/menu-routes.mjs` (`src/lib/menuRoutes.generated.ts`); if a page moves module
+in the menu, the frontend reruns it.
 
-```json
-{
-  "name": "Activity Log",
-  "icon": "lni lni-list",
-  "url": null,
-  "permissions": null,
-  "children": [
-    {
-      "name": "Audit Trail",
-      "icon": null,
-      "url": null,
-      "permissions": null,
-      "children": [
-        {
-          "name": "Activity Log",
-          "icon": "lni lni-list",
-          "url": "/activity-log/logs",
-          "permissions": { "get": true },
-          "children": []
-        }
-      ]
-    }
-  ]
-}
-```
-
----
+| Menu path | URL sent | Address in the app |
+|---|---|---|
+| Academic › Events and Announcements › Event Management | `/student/event-management` | `/academic/event-management` |
+| Academic › Events and Announcements › Announcement Management | `/student/announcement-management` | `/academic/announcement-management` |
+| Employee › Access Control › Permission Master | `/config/permission-master` | `/employee/permission-master` |
+| Analytics › Student › Students in Programme Report | `/student/reports/students-in-programme` | `/analytics/reports/students-in-programme` |
+| Analytics › Finance › Payment History | `/finance/payment-history` | `/analytics/payment-history` |
+| Analytics › Finance › Discount Report | `/finance/reports/discount` | `/analytics/reports/discount` |
+| Analytics › Finance › Transaction Report | `/finance/reports/transaction` | `/analytics/reports/transaction` |
+| Analytics › Finance › Outstanding Report | `/finance/reports/outstanding` | `/analytics/reports/outstanding` |
+| Analytics › Admission › Enquiry Report | `/admission/reports/enquiry` | `/analytics/reports/enquiry` |
+| Analytics › Admission › Application Status Report | `/admission/reports/application-status` | `/analytics/reports/application-status` |
+| Analytics › Attendance › Attendance by Date | `/attendance/reports/by-date` | `/analytics/reports/by-date` |
+| Analytics › Attendance › Student Attendance % | `/attendance/reports/student-pct` | `/analytics/reports/student-pct` |
+| Analytics › Attendance › Faculty Attendance % | `/attendance/reports/faculty-pct` | `/analytics/reports/faculty-pct` |
+| Analytics › Assessment › Exam Schedule Report | `/assessment/reports/exam-schedule` | `/analytics/reports/exam-schedule` |
+| Analytics › Assessment › IA Evaluation Report | `/assessment/reports/ia-evaluation` | `/analytics/reports/ia-evaluation` |
+| Analytics › Employee › Activity Log | `/activity-log/logs` | `/analytics/logs` |
+| Configuration › Student › Specialization Management | `/student/specialization` | `/config/specialization-management` |
+| Configuration › Student › Termination Reason Master | `/student/termination-reasons` | `/config/termination-reasons` |
+| Configuration › Student › Feedback Master | `/student/feedback-master` | `/config/feedback-master` |
+| Configuration › Finance › Exchange Rates | `/finance/exchange-rates` | `/config/exchange-rates` |
+| Configuration › Finance › Cooperates | `/finance/cooperates` | `/config/cooperates` |
+| Configuration › Finance › Discounts | `/finance/discounts` | `/config/discounts` |
+| Configuration › Finance › Ledgers | `/finance/ledgers` | `/config/ledgers` |
+| Configuration › Finance › Other Ledgers | `/finance/ledger-others` | `/config/ledger-others` |
+| Configuration › Finance › Currency Master | `/finance/currency-master` | `/config/currency-master` |
+| Configuration › Finance › Receipt Books | `/finance/receipt-books` | `/config/receipt-books` |
+| Configuration › Finance › General Settings | `/finance/gen-sets` | `/config/gen-sets` |
+| Configuration › Finance › Banks | `/finance/banks` | `/config/banks` |
+| Configuration › Finance › Bank Branches | `/finance/bank-branches` | `/config/bank-branches` |
+| Configuration › Finance › Proc Banks | `/finance/proc-banks` | `/config/proc-banks` |
+| Configuration › Finance › Proc GL Accounts | `/finance/proc-gl-accounts` | `/config/proc-gl-accounts` |
+| Configuration › Academic › Skill Management | `/academic/skill-master` | `/config/skill-master` |
+| Configuration › Academic › Room Management | `/academic/room-management` | `/config/room-management` |
+| Configuration › Academic › Programme Level | `/academic/programme-level` | `/config/programme-level` |
+| Configuration › Academic › Programme Group | `/academic/programme-group` | `/config/programme-group` |
+| Configuration › Assessment › Fee Clearance Master | `/assessment/assessment-master` | `/config/assessment-master` |
+| Configuration › Assessment › Exam Rules Master | `/assessment/exam-rules` | `/config/exam-rules` |
+| Configuration › Assessment › Question FAQs | `/assessment/question-faqs` | `/config/question-faqs` |
 
 ## Pages hidden from the sidebar
 
 These pages still exist in the code but are deliberately left out of the menu. Don't
 add them to the menu response. If they are sent, the frontend removes Student Lookup,
-Weight Configuration, Assessment Schedule and the four Resit & Disputes
-ones itself (`stripUnintegratedPages`, which also drops a section left empty), and
-removes any "Lecturer Master" / "Lecture Master" node (`stripLectureMaster`).
+Weight Configuration, Assessment Schedule, the four Resit pages and the two Hall
+Ticket print pages itself (`stripUnintegratedPages`, which also drops a section left
+empty), and removes any "Lecturer Master" / "Lecture Master" node
+(`stripLectureMaster`).
+
+The two Hall Ticket print pages are the exception to "don't send": their permissions
+are still read. See the 2026-11-27 change notes.
 
 | Module | Page | URL |
 |---|---|---|
@@ -1885,8 +1972,83 @@ removes any "Lecturer Master" / "Lecture Master" node (`stripLectureMaster`).
 | Assessment | CW Recheck Hub | `/assessment/recheck` |
 | Assessment | Pending QP Upload | `/assessment/rpt-pending-qp` |
 | Assessment | Faculty Summary | `/assessment/rpt-faculty` |
+| Assessment | Hall Ticket Print | `/assessment/hall-print` (now the Print tab of Hall Ticket Issuance; the URL redirects there) |
+| Assessment | Hall Ticket Print All | `/assessment/hall-ticket-print-all` (now the Print All tab of Hall Ticket Issuance; the URL redirects there) |
+| Admission | ODeL Application | `/admission/odel-application` (not in the v7 hierarchy) |
 
-## Changes since the previous version (2026-11-11)
+## Changes since the previous version (2026-11-17)
+
+**The menu now follows the v7 hierarchy.** Every module table above was rebuilt in v7
+order. Each page's events, frontend checks and permission bag carry over unchanged
+unless listed below; most pages only changed section or module.
+
+- **New modules Analytics and Configuration** (rail icons `lni lni-bar-chart` and
+  `lni lni-cog`). **Config** and **Activity Log** are gone as modules.
+  - **Analytics** holds every report: Student (Students in Programme), Finance
+    (Payment History, Discount, Transaction, Outstanding), Admission (Enquiry,
+    Application Status), Attendance (by Date, Student %, Faculty %), Assessment (Exam
+    Schedule, IA Evaluation) and Employee (Activity Log).
+  - **Configuration** holds every master: Student, Finance (the former Finance Core
+    and Banking pages, plus Exchange Rates), Academic (Faculty and Campus Master, the
+    former Academic Setup pages, plus Skill and Room Management, Programme Level and
+    Group), Admission (the enquiry masters),
+    Assessment (Fee Clearance, Exam Rules, Question FAQs) and General (Department,
+    Designation, Country, Course Level).
+- **Each module's dashboard is now under a General section** (Academic, Admission,
+  Finance, Assessment). Finance › General also holds Student Statement.
+- **Other moves within modules:**
+  - **Student:** split into Student Records, Transfers, Approvals and Operations.
+    Settings moved to Configuration › Student.
+  - **Academic:** gains Events and Announcements (from Student).
+  - **Admission:** Enquiry Status and Isbat Enquiry Source join Admission › Enquiry,
+    and Online Enquiry and Self-Service Kiosk move to a new Admission › Other section.
+  - **Employee:** gains Access Control › Permission Master (from Config).
+  - **Assessment:** sections are now General, Assessment Structure, IA Internal
+    Assessment, University Exam (UE), Results & Graduation, Resit and Exam Grievances.
+- **Finance URLs are full paths now** (`/finance/payment-console`), no longer bare
+  slugs (`payment-console`). Both still work.
+- **New pages, please register:**
+  - **Analytics › Assessment › IA Evaluation Report** (`/assessment/reports/ia-evaluation`):
+    events `get` `export`. The Export button is hidden without `export`.
+  - **Configuration › General › Course Level Master** (`/config/course-level-master`):
+    events `get` `add` `edit` `delete`.
+- **Hall Ticket Issuance now has three tabs: Issue, Print and Print All.** Hall Ticket
+  Print and Hall Ticket Print All are no longer separate sidebar pages, and their URLs
+  redirect to the tabs. Their permissions still matter. Either form works:
+  1. **Keep sending the three nodes as today** (the live menu does). The frontend
+     folds Print and Print All into Issuance's bag as `hallticketprint.get` /
+     `hallticketprint.print` and `hallticketprintall.get` / `hallticketprintall.print`
+     (from each node's `get` and `print`), and hides the two from the sidebar. A role
+     with only a print page still gets the Hall Ticket link, opening on its tab.
+  2. **Send one Hall Ticket Issuance node** with those four scoped keys in its bag,
+     next to `get` and `add`. When the bag has them and the two print nodes are
+     absent, the frontend uses it as-is.
+  Without any print keys, Print and Print All follow `add` (issue).
+- **Renamed (v7 names):** UE Theory QP Print → **UE Material Print**
+  (`/assessment/university-exam-material-print`); UE Material Print → **UE QP/Booklet
+  Print** (`/assessment/university-exam-qp-booklet-print`); Mark Entry UE / Mark Verify
+  UE → **Mark Entry — UE** / **Mark Verify — UE**. The sidebar still shows "Mark Entry
+  UE" and "Mark Verify UE".
+- **Icons:** Attendance by Date `lni lni-bar-chart` → `lni lni-calendar`; Faculty
+  Attendance % `lni lni-briefcase` → `lni lni-library`.
+- **Removed:** Admission › Records › Receipts and Reports (no page behind them), and
+  Admission › ODeL Application, which isn't in v7. The frontend no longer adds it, and
+  the page now appears under
+  [Pages hidden from the sidebar](#pages-hidden-from-the-sidebar).
+- **New section:** [Pages shown under their menu module's address](#pages-shown-under-their-menu-modules-address).
+  The menu API sends the same URLs as before.
+- **Where the live `/me/menu` (2026-11-26) still differs from this doc:**
+  - **Not sent yet:** Academic › ODL Applications (ODL Applications,
+    `/academic/odl-applications`, and Payment Reconciliation,
+    `/academic/odl-reconciliation`), Admission › Other (Online Enquiry and
+    Self-Service Kiosk) and Assessment › University Exam (UE) › UE Practical QBank
+    (`/assessment/question-bank-practical`). They show once the response includes them.
+  - **Sent elsewhere:** Enquiry Status and Isbat Enquiry Source come under
+    Configuration › Admission; v7 puts them in Admission › Enquiry.
+  - **Named differently:** Admission › Records › Paid Students
+    (`/admission/paid-students`) is sent as "Application Payment Status".
+
+## Changes in the 2026-11-17 version (since 2026-11-11)
 
 - **Added Assessment › Reports › Exam Schedule Report**
   (`/assessment/reports/exam-schedule`, icon `lni lni-bar-chart`), events `get`
