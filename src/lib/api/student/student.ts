@@ -158,9 +158,8 @@ export interface StudentListFilters {
 export interface StudentColumnFilters {
   programGuid?: string
   semesterGuid?: string
-  // Matches every programme's semester with this code in one request
-  // (e.g. 1 → each programme's "Year One - Semester One"). Requested from
-  // backend 2026-09-29 — not live yet; until it is, the param is ignored.
+  // Resolved server-side to the semester with this code within programGuid
+  // (get-students-filter.md, 2026-11-27) — only meaningful with programGuid.
   semCode?: string
   batchGuid?: string
   // Joined intake (T_STUDENT.INTAKEGUID) — Student Master's header intake
@@ -199,12 +198,25 @@ export function getStudents(page: number, pageSize: number, filters?: StudentLis
     .then(data => data ?? { items: [], totalCount: 0, pageNumber: page, pageSize })
 }
 
-// The response's own page-number field is named `page` per get-students-
-// filter.md's sample, not `pageNumber` like PagedResult declares elsewhere
-// in this file — neither this function nor its one consumer (Student
-// Master's column filters) reads that field back, so the mismatch is
-// harmless, but worth a note in case that ever changes.
-export function getStudentsFilter(page: number, pageSize: number, filters: StudentColumnFilters): Promise<PagedResult<StudentDto>> {
+// get-students-filter.md (2026-11-27): FilteredStudentsResultDto — the paged
+// list under `students`, plus the filter columns' options, each populated
+// only once its parent filter is sent (cascade academicIntake → programGuid
+// → semesterGuid/semCode → batchGuid; empty lists otherwise).
+export interface StudentFilterOption { guid: string; label: string }
+export interface StudentSemesterFilterOption extends StudentFilterOption { semCode: number }
+
+export interface StudentsFilterResult {
+  students: PagedResult<StudentDto>
+  programs: StudentFilterOption[]       // with academicIntake
+  semesters: StudentSemesterFilterOption[] // with programGuid
+  semCodes: number[]                    // with programGuid
+  batches: StudentFilterOption[]        // with programGuid + semesterGuid/semCode
+}
+
+// The students page-number field is named `page` in the response, not
+// `pageNumber` like PagedResult declares — nothing reads it back.
+export function getStudentsFilter(page: number, pageSize: number, filters: StudentColumnFilters): Promise<StudentsFilterResult> {
+  const emptyOptions = { programs: [], semesters: [], semCodes: [], batches: [] }
   if (MOCK_AUTH) {
     // The mock list's four rows carry no program/semester/batch guids at
     // all — mock mode only honors searchTerm here, same as getStudents.
@@ -212,7 +224,7 @@ export function getStudentsFilter(page: number, pageSize: number, filters: Stude
     const items = term
       ? mockStudents.filter(s => `${s.studentNum} ${s.studentRegNo} ${s.studentName}`.toLowerCase().includes(term))
       : mockStudents
-    return Promise.resolve({ items, totalCount: items.length, pageNumber: page, pageSize })
+    return Promise.resolve({ students: { items, totalCount: items.length, pageNumber: page, pageSize }, ...emptyOptions })
   }
   const params = new URLSearchParams()
   if (filters.programGuid) params.set('programGuid', filters.programGuid)
@@ -225,15 +237,14 @@ export function getStudentsFilter(page: number, pageSize: number, filters: Stude
   if (filters.searchTerm?.trim()) params.set('searchTerm', filters.searchTerm.trim())
   params.set('page', String(page))
   params.set('pageSize', String(pageSize))
-  // The backend now nests the paged list under `students`, alongside filter
-  // option lists (programs/semesters/semCodes/batches) this page doesn't use
-  // (seen live 2026-11-27; get-students-filter.md not yet updated). The bare
-  // PagedResult shape is still accepted in case an environment lags behind.
-  return apiGet<{ students?: PagedResult<StudentDto> | null } | PagedResult<StudentDto> | null>(`/api/v1/students/filter?${params.toString()}`)
-    .then(data => {
-      const paged = data && 'students' in data ? data.students : (data as PagedResult<StudentDto> | null)
-      return paged ?? { items: [], totalCount: 0, pageNumber: page, pageSize }
-    })
+  return apiGet<Partial<StudentsFilterResult> | null>(`/api/v1/students/filter?${params.toString()}`)
+    .then(data => ({
+      students: data?.students ?? { items: [], totalCount: 0, pageNumber: page, pageSize },
+      programs: data?.programs ?? [],
+      semesters: data?.semesters ?? [],
+      semCodes: data?.semCodes ?? [],
+      batches: data?.batches ?? [],
+    }))
 }
 
 export function getStudentByGuid(guid: string): Promise<StudentDetailDto> {
