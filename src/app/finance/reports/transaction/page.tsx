@@ -67,7 +67,7 @@ interface FormState {
 }
 const EMPTY_FORM: FormState = {
   fromDate: '', toDate: '', intakeGuid: '', applicationGuid: '', receiptBookGuids: [], ledgerGuids: [], otherLedgerGuids: [],
-  // Always on (transaction-report-page.md, 2026-11-27): the switch is locked.
+  // Show cancelled starts ticked; the cashier can untick it.
   campusGuid: '', programGuid: '', semesterGuids: [], batchGuids: [], sponsorCategoryGuid: '', payTypes: [], showCancelled: true,
 }
 
@@ -93,9 +93,9 @@ function toFilters(f: FormState): TransactionReportFilters {
     batchGuids: f.batchGuids.length ? f.batchGuids : undefined,
     sponsorCategoryGuid: f.sponsorCategoryGuid || undefined,
     payTypes: f.payTypes.length ? f.payTypes.map(Number).sort() : undefined,
-    // Always true on the step 2 preview and the export; the API layer leaves
-    // it off the infinite-scroll page calls.
-    showCancelled: true,
+    // Sent on the step 2 preview and the export when ticked; the API layer
+    // leaves it off the infinite-scroll page calls.
+    showCancelled: f.showCancelled || undefined,
   }
 }
 
@@ -392,8 +392,8 @@ export default function TransactionReportPage() {
               </div>
             </div>
             <div className="flex items-center justify-end gap-2 mt-4 flex-wrap">
-              <label className="flex items-center gap-[7px]" style={{ fontSize: 13 }} title="Lists cancelled payments in their own table and adds a Cancelled Transactions sheet to the Excel file. They are never counted in any total.">
-                <input type="checkbox" checked readOnly disabled />
+              <label className="flex items-center gap-[7px] cursor-pointer" style={{ fontSize: 13 }} title="Lists cancelled payments in their own table and adds a Cancelled Transactions sheet to the Excel file. They are never counted in any total.">
+                <input type="checkbox" checked={form.showCancelled} onChange={e => setField('showCancelled', e.target.checked)} />
                 <span>Show cancelled</span>
               </label>
               <span className="text-g400 mr-auto" style={{ fontSize: 'var(--fs-sm)' }}>
